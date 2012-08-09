@@ -366,7 +366,7 @@ struct CacheVC: public CacheVConnection
       @return The address of the start of the fragment table,
       or @c NULL if there is no fragment table.
   */
-  virtual Frag* get_frag_table();
+  virtual HTTPInfo::FragOffset* get_frag_table();
 
   // offsets from the base stat
 #define CACHE_STAT_ACTIVE  0
@@ -431,8 +431,8 @@ struct CacheVC: public CacheVConnection
   uint32_t write_len;     // for communicating with agg_copy
   uint32_t agg_len;       // for communicating with aggWrite
   uint32_t write_serial;  // serial of the final write for SYNC
-  Frag *frag;           // arraylist of fragment offset
-  Frag integral_frags[INTEGRAL_FRAGS];
+  //  Frag *frag;           // arraylist of fragment offset
+  //  Frag integral_frags[INTEGRAL_FRAGS];
   Vol *vol;
   Dir *last_collision;
   Event *trigger;
@@ -600,8 +600,8 @@ free_CacheVC(CacheVC *cont)
   cont->blocks.clear();
   cont->writer_buf.clear();
   cont->alternate_index = CACHE_ALT_INDEX_DEFAULT;
-  if (cont->frag && cont->frag != cont->integral_frags)
-    ats_free(cont->frag);
+  //  if (cont->frag && cont->frag != cont->integral_frags)
+  //    ats_free(cont->frag);
   if (cont->scan_vol_map)
     ats_free(cont->scan_vol_map);
   memset((char *) &cont->vio, 0, cont->size_to_init);
@@ -747,24 +747,22 @@ CacheVC::writer_done()
   return false;
 }
 
-TS_INLINE Frag*
-CacheVC::get_frag_table() {
-  if (frag)
-    return frag;
-  else if (first_buf)
-    return reinterpret_cast<Doc*>(first_buf->data())->frags();
-  return 0;
+TS_INLINE HTTPInfo::FragOffset*
+CacheVC::get_frag_table()
+{
+  ink_debug_assert(alternate.valid()); // temporary check
+  return alternate.valid() ? alternate.get_frag_table() : 0;
 }
 
 TS_INLINE bool
-CacheVC::is_pread_capable() {
+CacheVC::is_pread_capable()
+{
   return vector.count() <= 1;
 }
 
 TS_INLINE int
 Vol::close_write(CacheVC *cont)
 {
-
 #ifdef CACHE_STAT_PAGES
   ink_assert(stat_cache_vcs.head);
   stat_cache_vcs.remove(cont, cont->stat_link);

@@ -1648,7 +1648,8 @@ HTTPCacheAlt::HTTPCacheAlt():
 m_magic(CACHE_ALT_MAGIC_ALIVE), m_writeable(1),
 m_unmarshal_len(-1),
 m_id(-1), m_rid(-1), m_request_hdr(),
-m_response_hdr(), m_request_sent_time(0), m_response_received_time(0), m_ext_buffer(NULL)
+m_response_hdr(), m_request_sent_time(0), m_response_received_time(0), m_ext_buffer(NULL),
+m_frag_offset_len(0), m_frag_offset(0)
 {
 
   m_object_key[0] = 0;
@@ -1668,6 +1669,11 @@ HTTPCacheAlt::destroy()
   m_writeable = 0;
   m_request_hdr.destroy();
   m_response_hdr.destroy();
+  m_frag_offset_len = 0;
+  if (m_frag_offsets && m_frag_offsets != m_integral_frag_offsets) {
+    ats_free(m_frag_offsets);
+    m_frag_offsets = 0;
+  }
   httpCacheAltAllocator.free(this);
 }
 
@@ -1697,6 +1703,16 @@ HTTPCacheAlt::copy(HTTPCacheAlt *to_copy)
 
   m_request_sent_time = to_copy->m_request_sent_time;
   m_response_received_time = to_copy->m_response_received_time;
+
+  m_frag_offset_len = to_copy->m_frag_offset_len;
+  if (m_frag_offset_len > 0) {
+    if (m_frag_offset_len > N_INTEGRAL_FRAG_OFFSETS) {
+      m_frag_offsets = ats_malloc(sizof(FragOffset) * m_frag_offset_len);
+    } else {
+      m_frag_offsets = m_integral_frag_offsets;
+    }
+    memcpy(m_frag_offsets, to_copy->m_frag_offsets, sizeof(FragOffset) * m_frag_offset_len);
+  }
 }
 
 const int HTTP_ALT_MARSHAL_SIZE = ROUND(sizeof(HTTPCacheAlt), HDR_PTR_SIZE);
@@ -1733,6 +1749,11 @@ HTTPInfo::marshal_length()
     len += m_alt->m_response_hdr.m_heap->marshal_length();
   }
 
+  if (m_frag_offset_len > N_INTEGRAL_FRAG_OFFSETS) {
+    len -= sizeof(m_integral_frag_offsets);
+    len += sizeof(FragOffset) * m_frag_offset_len;
+  }
+
   return len;
 }
 
@@ -1742,12 +1763,23 @@ HTTPInfo::marshal(char *buf, int len)
   int tmp;
   int used = 0;
   HTTPCacheAlt *marshal_alt = (HTTPCacheAlt *) buf;
+  // non-zero only if the offsets are external. Otherwise they get
+  // marshalled along with the alt struct.
+  int frag_len = (0 == m_frag_offset_len || m_frag_offsets == m_integral_frag_offsets) ? 0 : sizeof(FragOffset) * m_frag_offset_len;
 
   ink_debug_assert(m_alt->m_magic == CACHE_ALT_MAGIC_ALIVE);
 
   // Make sure the buffer is aligned
 //    ink_debug_assert(((intptr_t)buf) & 0x3 == 0);
 
+  // If we have external fragment offsets, copy the initial ones
+  // into the integral data.
+  if (frag_len) {
+    memcpy(m_integral_frag_offsets, m_frag_offsets, sizeof(m_integral_frag_offsets));
+    frag_len -= sizeof(m_integral_frag_offsets);
+    // frag_len should never be non-zero at this point, as the offsets
+    // should be external only if too big for the internal table.
+  }
   // Memcpy the whole object so that we can use it
   //   live later.  This involves copying a few
   //   extra bytes now but will save copying any
@@ -1759,6 +1791,15 @@ HTTPInfo::marshal(char *buf, int len)
   marshal_alt->m_ext_buffer = NULL;
   buf += HTTP_ALT_MARSHAL_SIZE;
   used += HTTP_ALT_MARSHAL_SIZE;
+
+  if (frag_len) {
+    marshal_alt->m_frag_offsets = static_cast<FragOffset*>(static_cast<void*>(used));
+    memcpy(buf, m_frag_offsets + N_INTEGRAL_FRAG_OFFSETS, frag_len);
+    buf += frag_len;
+    used += frag_len;
+  } else {
+    marshal_alt->m_frag_offsets = 0;
+  }
 
   // The m_{request,response}_hdr->m_heap pointers are converted
   //    to zero based offsets from the start of the buffer we're
@@ -1813,6 +1854,21 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
   alt->m_magic = CACHE_ALT_MAGIC_ALIVE;
   ink_assert(alt->m_writeable == 0);
   len -= HTTP_ALT_MARSHAL_SIZE;
+
+  if (alt->m_frag_offset_len > N_INTEGRAL_FRAG_OFFSETS) {
+    // stuff that didn't fit in the integral slots.
+    int extra = sizeof(FragOffset) * alt->m_frag_offset_len - sizeof(m_integral_frag_offsets);
+    char* dst = buf + static_cast<intptr_t>(alt->m_frag_offsets);
+
+    alt->m_frag_offsets = ats_malloc(alt->m_frag_offset_len * sizeof(FragOffset));
+    memcpy(alt->m_frag_offsets, m_integral_frag_offsets, sizeof(m_integral_frag_offsets));
+    memcpy(alt->m_frag_offsets + N_INTEGRAL_FRAG_OFFSETS,, extra);
+    len -= extra;
+  } else if (alt->m_frag_offset_len > 0) {
+    alt->m_frag_offsets = alt->m_integral_frag_offsets;
+  } else {
+    alt->m_frag_offsets = 0; // should really already be zero.
+  }
 
   HdrHeap *heap = (HdrHeap *) (alt->m_request_hdr.m_heap ? (buf + (intptr_t) alt->m_request_hdr.m_heap) : 0);
   HTTPHdrImpl *hh = NULL;

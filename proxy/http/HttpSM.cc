@@ -4091,6 +4091,7 @@ HttpSM::do_range_setup_if_necessary()
        ) 
     {
           Debug("http_trans", "Unable to accelerate range request, fallback to transform");
+          Debug("amc", "Unable to accelerate range request, fallback to transform");
           content_type = t_state.cache_info.object_read->response_get()->value_get(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, &field_content_type_len);
           //create a Range: transform processor for requests of type Range: bytes=1-2,4-5,10-100 (eg. multiple ranges)
           range_trans = transformProcessor.range_transform(mutex, 
