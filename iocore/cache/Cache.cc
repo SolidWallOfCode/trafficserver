@@ -251,6 +251,13 @@ CacheVC::CacheVC():alternate_index(CACHE_ALT_INDEX_DEFAULT)
   //coverity[uninit_member]
 }
 
+HTTPInfo::FragOffset*
+CacheVC::get_frag_table()
+{
+  ink_debug_assert(alternate.valid()); // temporary check
+  return alternate.valid() ? alternate.get_frag_table() : 0;
+}
+
 VIO *
 CacheVC::do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *abuf)
 {
@@ -1835,6 +1842,13 @@ CacheVC::dead(int event, Event *e) {
   return EVENT_DONE;
 }
 
+bool
+CacheVC::is_pread_capable()
+{
+  Debug("amc", "pread check - %s", alternate.get_frag_offset_count() > 0 ? "true" : "false");
+  return alternate.get_frag_offset_count() > 0;
+}
+
 #define STORE_COLLISION 1
 
 #ifdef HTTP_CACHE
@@ -1895,11 +1909,11 @@ CacheVC::handleReadDone(int event, Event *e) {
     if (is_debug_tag_set("cache_read")) {
       char xt[33];
       Debug("cache_read"
-            , "Read fragment %s Length %d/%d/%"PRId64"[pre=%d] vc=%s doc=%s %d frags"
+            , "Read fragment %s Length %d/%d/%"PRId64"[pre=%d] vc=%s doc=%s frags=%d"
             , doc->key.toHexStr(xt), doc->data_len(), doc->len, doc->total_len, doc->prefix_len()
             , f.single_fragment ? "single" : "multi"
             , doc->single_fragment() ? "single" : "multi"
-            , doc->nfrags()
+            , alternate.get_frag_offset_count()
         );
     }
 

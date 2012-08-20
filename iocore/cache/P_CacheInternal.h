@@ -747,19 +747,6 @@ CacheVC::writer_done()
   return false;
 }
 
-TS_INLINE HTTPInfo::FragOffset*
-CacheVC::get_frag_table()
-{
-  ink_debug_assert(alternate.valid()); // temporary check
-  return alternate.valid() ? alternate.get_frag_table() : 0;
-}
-
-TS_INLINE bool
-CacheVC::is_pread_capable()
-{
-  return vector.count() <= 1;
-}
-
 TS_INLINE int
 Vol::close_write(CacheVC *cont)
 {

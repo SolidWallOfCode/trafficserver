@@ -1250,6 +1250,7 @@ struct HTTPCacheAlt
 {
   HTTPCacheAlt();
   void copy(HTTPCacheAlt *to_copy);
+  void copy_frag_offsets_from(HTTPCacheAlt* src);
   void destroy();
 
   uint32_t m_magic;
@@ -1276,7 +1277,7 @@ struct HTTPCacheAlt
 
   /// # of fragment offsets in this alternate.
   /// @note This is one less than the number of fragments.
-  int m_frag_offset_len;
+  int m_frag_offset_count;
   /// Type of offset for a fragment.
   typedef uint64_t FragOffset;
   /// Table of fragment offsets.
@@ -1317,13 +1318,14 @@ public:
   }
 
   void clear() { m_alt = NULL; }
-  bool valid() const { return (m_alt != NULL); }
+  bool valid() const { return m_alt != NULL; }
 
   void create();
   void destroy();
 
   void copy(HTTPInfo *to_copy);
   void copy_shallow(HTTPInfo *info) { m_alt = info->m_alt; }
+  void copy_frag_offsets_from(HTTPInfo* src);
   HTTPInfo & operator =(const HTTPInfo & m);
 
   inkcoreapi int marshal_length();
@@ -1365,6 +1367,10 @@ public:
 
   /// Get the fragment table.
   FragOffset* get_frag_table();
+  /// Get the # of fragment offsets
+  /// @note This is the size of the fragment offset table, and one less
+  /// than the actual # of fragments.
+  int get_frag_offset_count();
   /// Add an @a offset to the end of the fragment offset table.
   void push_frag_offset(FragOffset offset);
 
@@ -1465,6 +1471,11 @@ inline HTTPInfo::FragOffset*
 HTTPInfo::get_frag_table()
 {
   return m_alt ? m_alt->m_frag_offsets : 0;
+}
+
+inline int
+HTTPInfo::get_frag_offset_count() {
+  return m_alt ? m_alt->m_frag_offset_count : 0;
 }
 
 

@@ -37,7 +37,7 @@ get_alternate_index(CacheHTTPInfoVector *cache_vector, CacheKey key)
 {
   int alt_count = cache_vector->count();
   CacheHTTPInfo *obj;
-  Debug("amc", "get_alternate_index of %d", alt_count);
+  Debug("amc", "get_alternate_index of %d alts", alt_count);
   if (!alt_count)
     return -1;
   for (int i = 0; i < alt_count; i++) {
@@ -72,11 +72,11 @@ CacheVC::updateVector(int event, Event *e)
       VC_SCHED_LOCK_RETRY();
 
     int vec = alternate.valid();
-    Debug("amc", "update vector f.update=%s vec=%d", f.update ? "true" : "false", vec);
+    Debug("amc", "update vector f.update=%s vec=%d frags=%d", f.update ? "true" : "false", vec, vec ? alternate.get_frag_offset_count() : -1);
     if (f.update) {
       // all Update cases. Need to get the alternate index.
       alternate_index = get_alternate_index(write_vector, update_key);
-      Debug("cache_update", "updating alternate index %d", alternate_index);
+      Debug("cache_update", "updating alternate index %d frags %d", alternate_index, alternate_index >=0 ? write_vector->get(alternate_index)->get_frag_offset_count() : -1);
       // if its an alternate delete
       if (!vec) {
         ink_assert(!total_len);
@@ -101,8 +101,15 @@ CacheVC::updateVector(int event, Event *e)
         od->move_resident_alt = 0;
       write_vector->remove(0, true);
     }
-    if (vec)
+    if (vec) {
+      /* preserve fragment offset data from old info. This method is
+         called iff the update is a header only update so the fragment
+         data should remain valid.
+      */
+      if (alternate_index >= 0)
+        alternate.copy_frag_offsets_from(write_vector->get(alternate_index));
       alternate_index = write_vector->insert(&alternate, alternate_index);
+    }
 
     if (od->move_resident_alt && first_buf._ptr() && !od->has_multiple_writers()) {
       Doc *doc = (Doc *) first_buf->data();
@@ -760,7 +767,7 @@ agg_copy(char *p, CacheVC *vc)
     doc->len = len;
     doc->hlen = vc->header_len;
     doc->ftype = vc->frag_type;
-    doc->flen = vc->frag_len;
+    doc->_flen = 0;
     doc->total_len = vc->total_len;
     doc->first_key = vc->first_key;
     doc->sync_serial = vol->header->sync_serial;
@@ -773,7 +780,6 @@ agg_copy(char *p, CacheVC *vc)
       dir_set_pinned(&vc->dir, 0);
       doc->pinned = 0;
     }
-    Debug("amc", "agg_copy, !evac, flen=%d %susing first_key", doc->flen, vc->f.use_first_key ? "" : "not ");
 
     if (vc->f.use_first_key) {
       if (doc->data_len())
@@ -790,6 +796,7 @@ agg_copy(char *p, CacheVC *vc)
       doc->key = vc->key;
       dir_set_head(&vc->dir, !vc->fragment);
     }
+# if 0
     if (doc->flen) {
       // There's a fragment table to write.
       // If this was a cache fill, the frag table is internal.
@@ -797,6 +804,7 @@ agg_copy(char *p, CacheVC *vc)
       // stale object) then the frag table is in the first_buf.
       memcpy(doc->frags(), vc->get_frag_table(), doc->flen);
     }
+# endif
 
 #ifdef HTTP_CACHE
     if (vc->f.rewrite_resident_alt) {
@@ -875,7 +883,6 @@ agg_copy(char *p, CacheVC *vc)
     // for evacuated documents, copy the data, and update directory
     Doc *doc = (Doc *) vc->buf->data();
     int l = vc->vol->round_to_approx_size(doc->len);
-    Debug("amc", "agg_copy, evac, flen=%d", doc->flen);
     {
       ProxyMutex RELEASE_UNUSED *mutex = vc->vol->mutex;
       ink_debug_assert(mutex->thread_holding == this_ethread());
@@ -1107,7 +1114,6 @@ CacheVC::openWriteCloseDir(int event, Event *e)
       ink_debug_assert(!is_io_in_progress());
       VC_SCHED_LOCK_RETRY();
     }
-    Debug("amc", "openWriteCloseDir");
     vol->close_write(this);
     if (closed < 0 && fragment)
       dir_delete(&earliest_key, vol, &earliest_dir);
@@ -1246,6 +1252,8 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
       ink_assert(key == earliest_key);
       earliest_dir = dir;
     } else {
+      alternate.push_frag_offset(write_pos);
+# if 0
       if (!frag)
         frag = &integral_frags[0];
       else {
@@ -1258,6 +1266,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
         }
       }
       frag[fragment-1].offset = write_pos;
+# endif
     }
     fragment++;
     write_pos += write_len;
@@ -1291,7 +1300,6 @@ CacheVC::openWriteClose(int event, Event *e)
     if (!io.ok())
       return openWriteCloseDir(event, e);
   }
-  Debug("amc", "openWriteClose");
   if (closed > 0) {
     if (total_len == 0) {
 #ifdef HTTP_CACHE
@@ -1350,6 +1358,8 @@ CacheVC::openWriteWriteDone(int event, Event *e)
       ink_assert(key == earliest_key);
       earliest_dir = dir;
     } else {
+      alternate.push_frag_offset(write_pos);
+# if 0
       if (!frag)
         frag = &integral_frags[0];
       else {
@@ -1362,6 +1372,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
         }
       }
       frag[fragment-1].offset = write_pos;
+# endif
     }
     fragment++;
     write_pos += write_len;
@@ -1726,7 +1737,6 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
     return ACTION_RESULT_DONE;
   }
 
-  Debug("amc", "open_write HTTP");
   ink_assert(caches[type] == this);
   intptr_t err = 0;
   int if_writers = (uintptr_t) info == CACHE_ALLOW_MULTIPLE_WRITES;
