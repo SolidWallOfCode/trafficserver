@@ -431,8 +431,6 @@ struct CacheVC: public CacheVConnection
   uint32_t write_len;     // for communicating with agg_copy
   uint32_t agg_len;       // for communicating with aggWrite
   uint32_t write_serial;  // serial of the final write for SYNC
-  //  Frag *frag;           // arraylist of fragment offset
-  //  Frag integral_frags[INTEGRAL_FRAGS];
   Vol *vol;
   Dir *last_collision;
   Event *trigger;

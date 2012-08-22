@@ -784,27 +784,13 @@ agg_copy(char *p, CacheVC *vc)
     if (vc->f.use_first_key) {
       if (doc->data_len())
         doc->key = vc->earliest_key;
-      else {
-        // the vector is being written by itself
-        if (vc->f.update)
-          prev_CacheKey(&doc->key, &vc->update_key);
-        else
-          prev_CacheKey(&doc->key, &vc->earliest_key);
-      }
+      else // the vector is being written by itself
+        prev_CacheKey(&doc->key, &vc->earliest_key);
       dir_set_head(&vc->dir, true);
     } else {
       doc->key = vc->key;
       dir_set_head(&vc->dir, !vc->fragment);
     }
-# if 0
-    if (doc->flen) {
-      // There's a fragment table to write.
-      // If this was a cache fill, the frag table is internal.
-      // If it's a header update (e.g. 304 NOT MODIFIED return on
-      // stale object) then the frag table is in the first_buf.
-      memcpy(doc->frags(), vc->get_frag_table(), doc->flen);
-    }
-# endif
 
 #ifdef HTTP_CACHE
     if (vc->f.rewrite_resident_alt) {
@@ -1253,20 +1239,6 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
       earliest_dir = dir;
     } else {
       alternate.push_frag_offset(write_pos);
-# if 0
-      if (!frag)
-        frag = &integral_frags[0];
-      else {
-        if (fragment-1 >= INTEGRAL_FRAGS && IS_POWER_2((uint32)(fragment-1))) {
-          Frag *t = frag;
-          frag = (Frag*)ats_malloc(sizeof(Frag) * (fragment-1)*2);
-          memcpy(frag, t, sizeof(Frag) * (fragment-1));
-          if (t != integral_frags)
-            ats_free(t);
-        }
-      }
-      frag[fragment-1].offset = write_pos;
-# endif
     }
     fragment++;
     write_pos += write_len;
@@ -1359,22 +1331,8 @@ CacheVC::openWriteWriteDone(int event, Event *e)
       earliest_dir = dir;
     } else {
       alternate.push_frag_offset(write_pos);
-# if 0
-      if (!frag)
-        frag = &integral_frags[0];
-      else {
-        if (fragment-1 >= INTEGRAL_FRAGS && IS_POWER_2((uint32_t)(fragment-1))) {
-          Frag *t = frag;
-          frag = (Frag*)ats_malloc(sizeof(Frag) * (fragment-1)*2);
-          memcpy(frag, t, sizeof(Frag) * (fragment-1));
-          if (t != integral_frags)
-            ats_free(t);
-        }
-      }
-      frag[fragment-1].offset = write_pos;
-# endif
     }
-    fragment++;
+    ++fragment;
     write_pos += write_len;
     dir_insert(&key, vol, &dir);
     DDebug("cache_insert", "WriteDone: %X, %X, %d", key.word(0), first_key.word(0), write_len);

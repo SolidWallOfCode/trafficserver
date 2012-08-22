@@ -318,9 +318,7 @@ struct Doc
   uint32_t prefix_len();
   int single_fragment();
   int no_data_in_fragment();
-  //  uint32_t nfrags();
   char *hdr();
-  //  Frag *frags();
   char *data();
 };
 
@@ -432,19 +430,6 @@ Doc::single_fragment()
 {
   return (total_len && (data_len() == total_len));
 }
-
-# if 0
-TS_INLINE uint32_t
-Doc::nfrags() {
-  return flen / sizeof(Frag);
-}
-
-TS_INLINE Frag *
-Doc::frags()
-{
-  return (Frag*)(((char *) this) + sizeofDoc);
-}
-# endif
 
 TS_INLINE char *
 Doc::hdr()
