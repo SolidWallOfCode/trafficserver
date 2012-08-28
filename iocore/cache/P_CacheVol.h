@@ -292,11 +292,6 @@ struct CacheVol
   { }
 };
 
-// element of the fragment table in the head of a multi-fragment document
-struct Frag {
-  uint64_t offset; // start offset of data stored in this fragment
-};
-
 // Note : hdr() needs to be 8 byte aligned.
 // If you change this, change sizeofDoc above
 struct Doc
