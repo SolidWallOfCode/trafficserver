@@ -636,12 +636,9 @@ CacheVC::openReadMain(int event, Event * e)
     }
     /* Because single fragment objects can migrate to hang off an alt vector
        they can appear to the VC as multi-fragment when they are not really.
-       The essential difference is the existence of a fragment table. All
-       fragments past the header fragment have the same value for this check
-       and it's consistent with the existence of a frag table in first_doc.
-       f.single_fragment is not (it can be false when this check is true).
+       The essential difference is the existence of a fragment table.
     */
-    if (!doc->single_fragment()) {
+    if (frags) {
       int target = 0;
       HTTPInfo::FragOffset next_off = frags[target];
       int lfi = static_cast<int>(alternate.get_frag_offset_count()) - 1;
