@@ -1864,6 +1864,7 @@ AC_CONFIG_FILES([
   cmd/traffic_cop/Makefile
   cmd/traffic_line/Makefile
   cmd/traffic_top/Makefile
+  cmd/traffic_si/Makefile
   doc/Doxyfile
   doc/Makefile
   example/Makefile
