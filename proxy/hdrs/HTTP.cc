@@ -1518,11 +1518,12 @@ HTTPHdr::set_url_target_from_host_field(URL* url) {
 /// original values so they can be restored.
 class UrlPrintHack {
   friend class HTTPHdr;
+  char port_buff[10]; ///< Temporary storage for the port string, if needed.
+
   UrlPrintHack(HTTPHdr* hdr) {
     hdr->_test_and_fill_target_cache();
     if (hdr->m_url_cached.valid()) {
       URLImpl* ui = hdr->m_url_cached.m_url_impl;
-      char port_buff[10];
 
       m_hdr = hdr; // mark as potentially having modified values.
 
