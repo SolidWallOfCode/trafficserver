@@ -39,6 +39,9 @@
 
 class Http2HeaderTable;
 class MIOBuffer;
+namespace ts {
+  struct ConstBuffer;
+}
 
 enum HTTPStatus
   {
@@ -579,7 +582,7 @@ struct HTTPRangeSpec {
   /// The first range is copied here if there is more than one (to simplify).
   RangeBox _ranges;
 
-  /// Default constructor - invalid range
+  /// Default constructor - empty range
   HTTPRangeSpec();
 
   /// Reset to re-usable state.
@@ -592,14 +595,19 @@ struct HTTPRangeSpec {
 
   /** Parse a Content-Range field @a value.
 
-      @a range is set to the content range. If the content range is unsatisfied the @a range is
-      set to @c UNSATISFIABLE. If there is a parsing error the @a range is set to @c INVALID.
+      @a r is set to the content range. If the content range is unsatisfied or a parse error the @a range is
+      set to be invalid.
 
-      @note The content length return is ambiguous on its own, the state of @a this range must be checked.
+      @note The content length return is ambiguous on its own, the state of @a r must be checked.
+
+      - Multipart: @a boundary is not empty
+      - Parse error: @a CL == -1 and @a r is invalid
+      - Unsatisfiable: @a CL >= 0 and @a r is invalid
+      - Indeterminate: @c CL == -1 and @a r is valid
 
       @return The content length, or -1 if there is an error or the content length is indeterminate.
   */
-  int64_t parseContentRangeFieldValue(char const* value, int len);
+  static int64_t parseContentRangeFieldValue(char const* value, int len, Range& r, ts::ConstBuffer& boundary);
 
   /// Print the range specification.
   /// @return The number of characters printed.
@@ -607,6 +615,25 @@ struct HTTPRangeSpec {
              char* buff ///< Output buffer.
             , size_t len ///< Size of output buffer.
             ) const;
+
+  /// Print the range specification quantized.
+  /// @return The number of characters printed.
+  int print_quantized(
+		      char* buff ///< Output buffer.
+		      , size_t len ///< Size of output buffer.
+		      , int64_t quantum ///< Align ranges to multiples of this value.
+		      , int64_t interstitial ///< Require gaps to be at least this large.
+		      , int64_t initial ///< Require the initial gap to be at least this large.
+            ) const;
+
+  /// Print the @a ranges.
+  /// @return The number of characters printed.
+  static int print_array(
+			 char* buff ///< Output buffer.
+			 , size_t len ///< Size of output buffer.
+			 , Range const* ranges ///< Array of ranges
+			 , int count ///< # of ranges
+			 );
 
 # if 0
   /** Copy ranges from @a while applying them to the content @a length.

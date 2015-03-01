@@ -478,6 +478,7 @@ struct CacheVC: public CacheVConnection
   uint64_t total_len;             // total length written and available to write
   uint64_t doc_len;               // total_length (of the selected alternate for HTTP)
   uint64_t update_len;
+  HTTPRangeSpec::Range write_range; ///< Object based range for incoming partial content.
   /// The offset in the content of the first byte beyond the end of the current fragment.
   /// @internal This seems very weird but I couldn't figure out how to keep the more sensible
   /// lower bound correctly updated.

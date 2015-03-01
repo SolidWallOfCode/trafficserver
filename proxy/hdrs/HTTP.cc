@@ -2259,13 +2259,12 @@ HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
   ts::ConstBuffer src(v, len);
   size_t n;
 
-  _state = EMPTY;
+  _state = INVALID;
   src.skip(&ParseRules::is_ws);
 
   if (src.size() > sizeof(HTTP_LEN_BYTES)+1 &&
       0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) && '=' == src[HTTP_LEN_BYTES]
   ) {
-    _state = INVALID; // something, it needs to be correct.
     src += HTTP_LEN_BYTES+1;
     while (src) {
       ts::ConstBuffer max = src.splitOn(',');
@@ -2278,7 +2277,7 @@ HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
       ts::ConstBuffer min = max.splitOn('-');
 
       src.skip(&ParseRules::is_ws);
-      // Spec forbids whitspace anywhere in the range element.
+      // Spec forbids whitespace anywhere in the range element.
 
       if (min) {
         if (ParseRules::is_digit(*min) && min.size() <= MAX_DIGITS) {
@@ -2380,22 +2379,31 @@ HTTPRangeSpec::apply(uint64_t len)
   return this->isValid();
 }
 
+static ts::ConstBuffer const MULTIPART_BYTERANGE("multipart/byteranges", 20);
+static ts::ConstBuffer const MULTIPART_BOUNDARY("boundary", 9);
+
 int64_t
-HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len)
+HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len, Range& r, ts::ConstBuffer& boundary)
 {
+  // [amc] TBD - handle the multipart/byteranges syntax.
   ts::ConstBuffer src(v, len);
   int64_t zret = -1;
 
-  this->clear();
-  _state = INVALID;
+  r.invalidate();
   src.skip(&ParseRules::is_ws);
 
-  if (src.size() > sizeof(HTTP_LEN_BYTES)+1 &&
+  if (src.skipNoCase(MULTIPART_BYTERANGE)) {
+    while (src && (';' == *src || ParseRules::is_ws(*src))) ++src;
+    if (src.skipNoCase(MULTIPART_BOUNDARY)) {
+      src.trim(&ParseRules::is_ws);
+      boundary = src;
+    }
+  } else if (src.size() > sizeof(HTTP_LEN_BYTES)+1 &&
       0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
       ParseRules::is_ws(src[HTTP_LEN_BYTES]) // must have white space
     ) {
     uint64_t cl, low, high;
-    bool unsatisfied_p = false, indeterminate_p;
+    bool unsatisfied_p = false, indeterminate_p = false;
     ts::ConstBuffer min, max;
 
     src += HTTP_LEN_BYTES;
@@ -2416,8 +2424,7 @@ HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len)
          (indeterminate_p || integer::parse(src, cl)) &&
          (unsatisfied_p || (integer::parse(min, low) && integer::parse(max, high))
     )) {
-      if (unsatisfied_p) _state = UNSATISFIABLE;
-      else this->add(low, high);
+      if (!unsatisfied_p) r._min = low, r._max = high;
       if (!indeterminate_p) zret = static_cast<int64_t>(cl);
     }
   }
@@ -2513,7 +2520,7 @@ HTTPRangeSpec::writePartBoundary(MIOBuffer* out, char const* boundary_str, size_
 }
 
 int
-HTTPRangeSpec::print(char* buff, size_t len) const
+HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
 {
   size_t zret = 0;
   bool first = true;
@@ -2521,7 +2528,7 @@ HTTPRangeSpec::print(char* buff, size_t len) const
   // Can't possibly write a range in less than this size buffer.
   if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
 
-  for ( const_iterator spot = this->begin(), limit = this->end() ; spot != limit ; ++spot ) {
+  for ( int i = 0 ; i < count ; ++i ) {
     int n;
 
     if (first) {
@@ -2535,11 +2542,74 @@ HTTPRangeSpec::print(char* buff, size_t len) const
       buff[zret++] = ',';
     }
 
-    n = snprintf(buff, len - zret, "%" PRIu64 "-%" PRIu64 , spot->_min , spot->_max);
+    n = snprintf(buff + zret, len - zret, "%" PRIu64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
     if (n + zret >= len) break; // ran out of room
     else zret += n;
   }
   return zret;
+}
+
+int
+HTTPRangeSpec::print(char* buff, size_t len) const
+{
+  return this->hasRanges() ? this->print_array(buff, len, &(*(this->begin())), this->count()) : 0;
+}
+
+int
+HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, int64_t initial) const
+{
+  static const int MAX_R = 20; // this needs to be promoted
+  // We will want a max # of ranges, probably a build time constant, in the not so distant
+  // future anyway, so might as well start here.
+  int qrn = 0; // count of quantized ranges
+  Range qr[MAX_R]; // quantized ranges
+
+  // Can't possibly write a range in less than this size buffer.
+  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
+
+  // Avoid annoying "+1" in the adjacency checks.
+  if (interstitial < 1) interstitial = 1;
+  else ++interstitial;
+
+  for ( const_iterator spot = this->begin(), limit = this->end() ; spot != limit ; ++spot ) {
+    Range r(*spot);
+    int i;
+    if (quantum > 1) {
+      r._min = (r._min / quantum) * quantum;
+      r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
+    }
+    if (1 < initial && r._min < static_cast<uint64_t>(initial)) r._min = 0;
+    // blend in to the current ranges
+    for ( i = 0 ; i < qrn ; ++i ) {
+      Range& cr = qr[i];
+      if ((r._max + interstitial) < cr._min) {
+        memmove(qr, qr+1, sizeof(*qr) * qrn);
+        ++qrn;
+        qr[0] = r;
+        i = -1;
+        break;
+      } else if (cr._max + interstitial >= r._min) {
+        int j = i + 1;
+        cr._min = std::min(cr._min, r._min);
+        cr._max = std::max(cr._max, r._max);
+        while ( j < qrn) {
+          if (qr[j]._min < cr._max + interstitial)
+            cr._max = std::max(cr._max, qr[j]._max);
+          ++j;
+        }
+        if (j < qrn)
+          memmove(qr + i + 1, qr + j, sizeof(*qr) * qrn - j);
+        qrn -= j - i;
+        i = -1;
+        break;   
+      }
+    }
+    if (i >= qrn)
+      qr[qrn++] = r;
+    ink_assert(qrn <= MAX_R);
+  }
+
+  return this->print_array(buff, len, qr, qrn);
 }
 
 HTTPRangeSpec::Range

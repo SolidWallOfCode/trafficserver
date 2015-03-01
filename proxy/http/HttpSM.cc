@@ -1581,9 +1581,15 @@ HttpSM::handle_api_return()
 
        setup_blind_tunnel(true);
       } else {
-       HttpTunnelProducer *p = setup_server_transfer();
        perform_cache_write_action();
-       tunnel.tunnel_run(p);
+       if (t_state.hdr_info.request_range.hasRanges() &&
+           HttpTransact::CACHE_WRITE_IN_PROGRESS == t_state.cache_info.write_status
+       ) {
+         
+       } else {
+         HttpTunnelProducer *p = setup_server_transfer();
+         tunnel.tunnel_run(p);
+       }
       }
       break;
     }
@@ -2510,8 +2516,6 @@ HttpSM::setup_cache_lookup_complete_api()
 int
 HttpSM::state_cache_open_read(int event, void *data)
 {
-  HTTPRangeSpec range;
-
   STATE_ENTER(&HttpSM::state_cache_open_read, event);
   milestones.cache_open_read_end = ink_get_hrtime();
 
@@ -2553,6 +2557,54 @@ HttpSM::state_cache_open_read(int event, void *data)
     ink_assert(t_state.transact_return_point == NULL);
     t_state.transact_return_point = HttpTransact::HandleCacheOpenRead;
     setup_cache_lookup_complete_api();
+    break;
+
+  default:
+    ink_release_assert("!Unknown event");
+    break;
+  }
+
+  return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//
+//  HttpSM::state_cache_open_read_from_writer()
+//
+//  Handle the case where a partial request had a cache miss and we sent
+//  a request to the origin which has now come back successfully. We
+//  need to create a reader cache VC to handle the read side of the
+//  operation.
+//////////////////////////////////////////////////////////////////////////
+int
+HttpSM::state_cache_open_partial_read(int event, void *data)
+{
+  STATE_ENTER(&HttpSM::state_cache_open_read_from_writer, event);
+
+  ink_assert(NULL != cache_sm.cache_write_vc);
+
+  t_state.next_action = HttpTransact::SM_ACTION_SERVER_READ;
+
+  switch (event) {
+  case CACHE_EVENT_OPEN_READ:
+    pending_action = NULL;
+
+    DebugSM("http", "[%" PRId64 "] cache_open_read_from_writer - CACHE_EVENT_OPEN_READ", sm_id);
+
+    ink_assert(cache_sm.cache_read_vc != NULL);
+
+    cache_sm.cache_read_vc->get_http_info(&t_state.cache_info.object_read);
+    ink_assert(t_state.cache_info.object_read != 0);
+
+    call_transact_and_set_next_state(HttpTransact::HandleCacheOpenRead);
+    break;
+  case CACHE_EVENT_OPEN_READ_FAILED:
+    pending_action = NULL;
+
+    DebugSM("http", "[%" PRId64 "] cache_open_read_writer - " "CACHE_EVENT_OPEN_READ_FAILED", sm_id);
+
+    // Need to do more here - mainly fall back to bypass from origin.
+    set_next_state();
     break;
 
   default:
@@ -5545,8 +5597,6 @@ HttpSM::perform_transform_cache_write_action()
 void
 HttpSM::perform_cache_write_action()
 {
-  MIMEField* field;
-
   DebugSM("http", "[%" PRId64 "] perform_cache_write_action %s",
         sm_id, HttpDebugNames::get_cache_action_name(t_state.cache_info.action));
 
@@ -5595,34 +5645,21 @@ HttpSM::perform_cache_write_action()
 
   case HttpTransact::CACHE_DO_WRITE:
   {
-    HTTPRangeSpec& rs = cache_sm.cache_write_vc->get_http_range_spec();
     // Fix need to set up delete for after cache write has
     //   completed
 
-    // Get the incoming range to store from the origin.
-    if (NULL != (field = t_state.hdr_info.server_response.field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE))) {
-      int len;
-      char const* cr = field->value_get(&len);
-      int64_t cl = rs.parseContentRangeFieldValue(cr, len);
-      cache_sm.cache_write_vc->set_full_content_length(cl);
-      
-    } else if (t_state.hdr_info.request_content_length != HTTP_UNDEFINED_CL) {
-      rs.add(0, t_state.hdr_info.request_content_length - 1);
-    } else { // unknown length
-      rs.add(0, UINT64_MAX);
-    }
-
     if (transform_info.entry == NULL || t_state.api_info.cache_untransformed == true) {
+      t_state.cache_info.write_status = HttpTransact::CACHE_WRITE_IN_PROGRESS;
+      setup_cache_write_transfer(&cache_sm,
+                                 server_entry->vc,
+                                 &t_state.cache_info.object_store, client_response_hdr_bytes, "cache write");
+
       if (cache_sm.cache_read_vc && cache_sm.cache_read_vc->is_http_partial_content()) {
         HttpTunnelProducer *p = setup_cache_read_transfer();
         tunnel.tunnel_run(p);
       } else {
         cache_sm.close_read();
       }
-      t_state.cache_info.write_status = HttpTransact::CACHE_WRITE_IN_PROGRESS;
-      setup_cache_write_transfer(&cache_sm,
-                                 server_entry->vc,
-                                 &t_state.cache_info.object_store, client_response_hdr_bytes, "cache write");
     } else {
       // We are not caching the untransformed.  We might want to
       //  use the cache writevc to cache the transformed copy
@@ -5960,11 +5997,12 @@ HttpSM::setup_cache_write_transfer(HttpCacheSM * c_sm,
   store_info->request_sent_time_set(t_state.request_sent_time);
   store_info->response_received_time_set(t_state.response_received_time);
 
+  if (t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL && t_state.hdr_info.response_range.isValid())
+    store_info->object_size_set(t_state.hdr_info.response_content_size);
+                                 
   c_sm->cache_write_vc->set_http_info(store_info);
   store_info->clear();
 
-  int64_t cl = t_state.hdr_info.response_content_length;
-  if (cl != HTTP_UNDEFINED_CL) c_sm->cache_write_vc->set_full_content_length(cl);
 
   tunnel.add_consumer(c_sm->cache_write_vc,
                       source_vc, &HttpSM::tunnel_handler_cache_write, HT_CACHE_WRITE, name, skip_bytes);
@@ -7221,6 +7259,13 @@ HttpSM::set_next_state()
   case HttpTransact::SM_ACTION_INTERNAL_100_RESPONSE:
     {
       setup_100_continue_transfer();
+      break;
+    }
+
+  case HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ:
+    {
+      HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
+      pending_action = cache_sm.open_partial_read();
       break;
     }
 

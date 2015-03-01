@@ -85,6 +85,7 @@ struct CacheProcessor:public Processor
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                                CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
+
   Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key,
                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
 
@@ -156,6 +157,9 @@ struct CacheProcessor:public Processor
       If this returns @c false then the cache should be disabled as there is no storage available.
   */
   bool has_online_storage() const;
+
+  /** Get the target fragment size. */
+  int64_t get_fixed_fragment_size() const;
 
   static int IsCacheEnabled();
 

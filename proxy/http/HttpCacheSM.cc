@@ -267,6 +267,27 @@ HttpCacheSM::open_read(URL * url, HTTPHdr * hdr, CacheLookupHttpConfig * params,
   }
 }
 
+Action*
+HttpCacheSM::open_partial_read()
+{
+  // Simple because this requires an active write VC so we know the object is there (no retries).
+  ink_assert(NULL != cache_write_vc);
+  ink_assert(!open_read_cb);
+
+  SET_HANDLER(&HttpCacheSM::state_cache_open_read);
+
+  Action *action_handle = cacheProcessor.open_read(this
+                                                   , this->lookup_url
+                                                   , master_sm->t_state.cache_control.cluster_cache_local
+                                                   , this->read_request_hdr
+                                                   , this->read_config
+                                                   , this->read_pin_in_cache);
+
+  if (action_handle != ACTION_RESULT_DONE) pending_action = action_handle;
+
+  return open_read_cb ? ACTION_RESULT_DONE : &captive_action;
+}
+
 Action *
 HttpCacheSM::open_write(URL * url, HTTPHdr * request, CacheHTTPInfo * old_info, time_t pin_in_cache,
                         bool retry, bool allow_multiple)

@@ -372,6 +372,7 @@ protected:
   // Cache Handlers
   int state_cache_open_read(int event, void *data);
   int state_cache_open_write(int event, void *data);
+  int state_cache_open_partial_read(int event, void* data);
 
   // Http Server Handlers
   int state_http_server_open(int event, void *data);

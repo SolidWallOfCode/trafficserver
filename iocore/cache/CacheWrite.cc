@@ -81,6 +81,8 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
       if (!vec) {
         ink_assert(!total_len);
         if (alternate_index >= 0) {
+          MUTEX_TRY_LOCK(stripe_lock, vol->mutex, mutex->thread_holding);
+          if (!stripe_lock) VC_SCHED_LOCK_RETRY();
           write_vector->remove(alternate_index, true);
           alternate_index = CACHE_ALT_REMOVED;
           if (!write_vector->count())
@@ -132,7 +134,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
     od->writing_vec = 1;
     f.use_first_key = 1;
     SET_HANDLER(&CacheVC::openWriteCloseHeadDone);
-    ret = do_write_call();
+    ret = do_write_lock_call();
   }
   if (ret == EVENT_RETURN)
     return handleEvent(AIO_EVENT_DONE, 0);
@@ -1371,7 +1373,8 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   return openWriteMain(event, e);
 }
 
-static inline int target_fragment_size() {
+int64_t
+CacheProcessor::get_fixed_fragment_size() const {
   return cache_config_target_fragment_size - sizeofDoc;
 }
 
@@ -1413,6 +1416,7 @@ Lagain:
   int64_t total_avail = vio.buffer.reader()->read_avail();
   int64_t avail = total_avail;
   int64_t towrite = avail + length;
+  int64_t ffs = cacheProcessor.get_fixed_fragment_size();
 
   Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64, ntodo, avail, towrite);
 
@@ -1436,12 +1440,12 @@ Lagain:
   }
   length = (uint64_t)towrite;
   // [amc] Need to change this to be exactly the fixed fragment size for this alternate.
-  if (length > target_fragment_size() &&
-      (length < target_fragment_size() + target_fragment_size() / 4))
-    write_len = target_fragment_size();
+  if (length > ffs &&
+      (length < ffs + ffs / 4))
+    write_len = ffs;
   else
     write_len = length;
-  bool not_writing = towrite != ntodo && towrite < target_fragment_size();
+  bool not_writing = towrite != ntodo && towrite < ffs;
   if (!called_user) {
     if (not_writing) {
       called_user = 1;

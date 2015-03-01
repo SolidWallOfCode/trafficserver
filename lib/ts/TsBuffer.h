@@ -313,6 +313,14 @@ namespace ts {
     >
     bool skip(BOOL_EQUIV (*predicate)(char));
 
+    /** Remove an initial instance the string @a str.
+
+	If the initial characters of the buffer match @a str (ignoring case) then the buffer is advanced past @a str.
+
+	@return @c true if matched and skipped, @c false otherwise.
+    */
+    bool skipNoCase(self const& str);
+
     /** Remove trailing instances of @a c.
 
 	@return @c true if not all characters were trimmed, @c false if all characters matched @a c.
@@ -453,6 +461,17 @@ namespace ts {
     }
     return *this;
   }
+
+  inline bool ConstBuffer::skipNoCase(self const& str)
+  {
+    bool zret = true;
+    if (str._size <= _size && 0 == strncasecmp(_ptr, str._ptr, str._size))
+      *this += str._size;
+    else
+      zret = false;
+    return zret;
+  }
+
   inline bool ConstBuffer::trim(char c)
   {
     if (NULL != _ptr) {
