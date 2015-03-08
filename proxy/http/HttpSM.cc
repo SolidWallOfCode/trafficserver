@@ -301,6 +301,7 @@ history[pos].fileline = __FILE__ ":" _REMEMBER (__LINE__);
 #define HTTP_SM_SET_DEFAULT_HANDLER(_h) \
 { \
   REMEMBER(-1,reentrancy_count); \
+  Debug("amc", "SM %" PRId64 " default handler = %s", sm_id, handlerName(_h)); \
   default_handler = _h; }
 
 
@@ -1580,16 +1581,16 @@ HttpSM::handle_api_return()
        }
 
        setup_blind_tunnel(true);
-      } else {
-       perform_cache_write_action();
-       if (t_state.hdr_info.request_range.hasRanges() &&
-           HttpTransact::CACHE_WRITE_IN_PROGRESS == t_state.cache_info.write_status
-       ) {
-         
-       } else {
-         HttpTunnelProducer *p = setup_server_transfer();
-         tunnel.tunnel_run(p);
-       }
+      } else {  
+        if (t_state.hdr_info.request_range.hasRanges() &&
+            HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action
+          ) {
+          setup_server_transfer_to_cache_only();
+        } else {
+          setup_server_transfer();
+          perform_cache_write_action();
+        }
+        tunnel.tunnel_run(); // may have a read tunnel do, start everything.
       }
       break;
     }
@@ -2577,34 +2578,36 @@ HttpSM::state_cache_open_read(int event, void *data)
 //  operation.
 //////////////////////////////////////////////////////////////////////////
 int
-HttpSM::state_cache_open_partial_read(int event, void *data)
+HttpSM::state_cache_open_partial_read(int event, void* /* data */)
 {
-  STATE_ENTER(&HttpSM::state_cache_open_read_from_writer, event);
+  STATE_ENTER(&HttpSM::state_cache_open_partial_read, event);
 
   ink_assert(NULL != cache_sm.cache_write_vc);
 
+  t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
   t_state.next_action = HttpTransact::SM_ACTION_SERVER_READ;
 
   switch (event) {
   case CACHE_EVENT_OPEN_READ:
     pending_action = NULL;
 
-    DebugSM("http", "[%" PRId64 "] cache_open_read_from_writer - CACHE_EVENT_OPEN_READ", sm_id);
+    DebugSM("http", "[%" PRId64 "] cache_open_partial_read - CACHE_EVENT_OPEN_READ", sm_id);
 
     ink_assert(cache_sm.cache_read_vc != NULL);
 
     cache_sm.cache_read_vc->get_http_info(&t_state.cache_info.object_read);
     ink_assert(t_state.cache_info.object_read != 0);
 
-    call_transact_and_set_next_state(HttpTransact::HandleCacheOpenRead);
+    setup_cache_read_transfer();
+
     break;
   case CACHE_EVENT_OPEN_READ_FAILED:
     pending_action = NULL;
 
-    DebugSM("http", "[%" PRId64 "] cache_open_read_writer - " "CACHE_EVENT_OPEN_READ_FAILED", sm_id);
+    DebugSM("http", "[%" PRId64 "] cache_open_partial_read - " "CACHE_EVENT_OPEN_READ_FAILED", sm_id);
 
     // Need to do more here - mainly fall back to bypass from origin.
-    set_next_state();
+    // Although we've got a serious problem if we don't open in this situation.
     break;
 
   default:
@@ -2612,6 +2615,7 @@ HttpSM::state_cache_open_partial_read(int event, void *data)
     break;
   }
 
+  set_next_state();
   return 0;
 }
 
@@ -5654,12 +5658,7 @@ HttpSM::perform_cache_write_action()
                                  server_entry->vc,
                                  &t_state.cache_info.object_store, client_response_hdr_bytes, "cache write");
 
-      if (cache_sm.cache_read_vc && cache_sm.cache_read_vc->is_http_partial_content()) {
-        HttpTunnelProducer *p = setup_cache_read_transfer();
-        tunnel.tunnel_run(p);
-      } else {
-        cache_sm.close_read();
-      }
+      cache_sm.close_read();
     } else {
       // We are not caching the untransformed.  We might want to
       //  use the cache writevc to cache the transformed copy
@@ -6372,7 +6371,7 @@ HttpSM::setup_transfer_from_transform_to_cache_only()
   return p;
 }
 
-void
+HttpTunnelProducer*
 HttpSM::setup_server_transfer_to_cache_only()
 {
   TunnelChunkingAction_t action;
@@ -6403,6 +6402,7 @@ HttpSM::setup_server_transfer_to_cache_only()
   setup_cache_write_transfer(&cache_sm, server_entry->vc, &t_state.cache_info.object_store, 0, "cache write");
 
   server_entry->in_tunnel = true;
+  return p;
 }
 
 HttpTunnelProducer *
@@ -7265,6 +7265,7 @@ HttpSM::set_next_state()
   case HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ:
     {
       HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
+      t_state.source = HttpTransact::SOURCE_CACHE;
       pending_action = cache_sm.open_partial_read();
       break;
     }
@@ -7923,3 +7924,13 @@ HttpSM::is_redirect_required()
   }
   return redirect_required;
 }
+
+char const*
+HttpSM::handlerName(int (HttpSM::*ptm)(int, void*))
+{
+  char const* zret = "*method*";
+  if (ptm == &HttpSM::tunnel_handler) zret = "tunnel_handler";
+  else if (ptm == &HttpSM::state_cache_open_partial_read) zret = "state_cache_open_partial_read";
+  return zret;
+}
+

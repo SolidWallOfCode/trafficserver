@@ -3633,27 +3633,6 @@ CacheProcessor::open_read(Continuation *cont, URL *url, bool cluster_cache_local
   return caches[type]->open_read(cont, url, request, params, type);
 }
 
-
-//----------------------------------------------------------------------------
-CacheVConnection*
-CacheProcessor::open_read_from(CacheVConnection* writer)
-{
-  CacheVC* wvc = dynamic_cast<CacheVC*>(writer);
-  CacheVC* zret = NULL;
-  if (wvc && wvc->od) {
-    zret = new_CacheVC(cont);
-    SET_CONTINUATION_HANDLER(zret, &CacheVC::openReadStartHead);
-    zret->vio.op = VIO::READ;
-    zret->base_stat = cache_read_active_stat;
-    CACHE_INCREMENT_DYN_STAT(zret->base_stat + CACHE_STAT_ACTIVE);
-    zret->first_key = zret->key = zret->earliest_key = wvc->first_key;
-    zret->vol = wvc->vol;
-    zret->frag_type = wvc->type;
-    zret->dir = wvc->dir;
-    zret->od = wvc->od;
-  }
-  return zret;
-}
 //----------------------------------------------------------------------------
 Action *
 CacheProcessor::open_write(Continuation *cont, int expected_size, URL *url, bool cluster_cache_local,

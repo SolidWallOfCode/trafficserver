@@ -4368,6 +4368,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
     break;
   }
 
+
   /* If we plan to do a write and the request was partial, then we need to open a
      cache read to service the request and not just pass through.
   */
@@ -6215,6 +6216,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
   if (!s->txn_conf->negative_caching_enabled) {
     if ((response_code == HTTP_STATUS_OK) ||
         (response_code == HTTP_STATUS_NOT_MODIFIED) ||
+        (response_code == HTTP_STATUS_PARTIAL_CONTENT) ||
         (response_code == HTTP_STATUS_NON_AUTHORITATIVE_INFORMATION) ||
         (response_code == HTTP_STATUS_MOVED_PERMANENTLY) ||
         (response_code == HTTP_STATUS_MULTIPLE_CHOICES) || (response_code == HTTP_STATUS_GONE)) {

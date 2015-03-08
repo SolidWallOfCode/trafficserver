@@ -48,14 +48,14 @@ Cache::open_read(Continuation * cont, CacheKey * key, CacheFragType type, char *
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock.is_locked() || (od = vol->open_read(key)) || dir_probe(key, vol, &result, &last_collision)) {
       c = new_CacheVC(cont);
-      SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);
+      c->vol = vol;
+      c->first_key = c->key = c->earliest_key = *key;
       c->vio.op = VIO::READ;
       c->base_stat = cache_read_active_stat;
-      CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
-      c->first_key = c->key = c->earliest_key = *key;
-      c->vol = vol;
-      c->frag_type = type;
       c->od = od;
+      c->frag_type = type;
+      CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
+      SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);
     }
     if (!c)
       goto Lmiss;
@@ -89,6 +89,37 @@ Lcallreturn:
 }
 
 #ifdef HTTP_CACHE
+Action*
+Cache::open_read(Continuation* cont, CacheVConnection* vc)
+{
+  Action* zret = ACTION_RESULT_DONE;
+
+  CacheVC* write_vc = dynamic_cast<CacheVC*>(vc);
+  if (write_vc) {
+    Vol *vol = write_vc->vol;
+    ProxyMutex *mutex = cont->mutex; // needed for stat macros
+    CacheVC *c = new_CacheVC(cont);
+    c->vol = write_vc->vol;
+    c->first_key = c->key = c->earliest_key = write_vc->first_key;
+    c->vio.op = VIO::READ;
+    c->base_stat = cache_read_active_stat;
+    c->od = write_vc->od;
+    c->frag_type = write_vc->frag_type;
+    CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
+    c->request.copy_shallow(&write_vc->request);
+    c->params = write_vc->params;
+    c->dir = c->first_dir = write_vc->first_dir;
+    c->write_vc = write_vc;
+    SET_CONTINUATION_HANDLER(c, &CacheVC::openReadFromWriter);
+    zret = &c->_action; // default, override if needed.
+    CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
+    if (lock.is_locked() && c->handleEvent(EVENT_IMMEDIATE, 0) == EVENT_DONE) {
+      zret = ACTION_RESULT_DONE;
+    }
+  }
+  return zret;
+}
+
 Action *
 Cache::open_read(Continuation * cont, CacheKey * key, CacheHTTPHdr * request,
                  CacheLookupHttpConfig * params, CacheFragType type, char *hostname, int host_len)
@@ -110,15 +141,15 @@ Cache::open_read(Continuation * cont, CacheKey * key, CacheHTTPHdr * request,
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock.is_locked() || (od = vol->open_read(key)) || dir_probe(key, vol, &result, &last_collision)) {
       c = new_CacheVC(cont);
-      c->first_key = c->key = c->earliest_key = *key;
       c->vol = vol;
+      c->first_key = c->key = c->earliest_key = *key;
       c->vio.op = VIO::READ;
       c->base_stat = cache_read_active_stat;
+      c->od = od;
+      c->frag_type = CACHE_FRAG_TYPE_HTTP;
       CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
       c->request.copy_shallow(request);
-      c->frag_type = CACHE_FRAG_TYPE_HTTP;
       c->params = params;
-      c->od = od;
     }
     if (!lock.is_locked()) {
       SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);

@@ -276,11 +276,17 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool s
 {
   int idx = this->index_of(alt_key);
   Item& item = data[idx];
+  CacheVC* reader;
 
   Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
 
   item._active.remove(vc);
   if (success) item._alternate.mark_frag_write(vc->fragment);
+
+  // Kick all the waiters, success or fail.
+  while (NULL != (reader = item._waiting.pop()))
+    eventProcessor.schedule_imm(reader);
+
   return *this;
 }
 

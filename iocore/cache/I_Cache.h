@@ -51,6 +51,7 @@
 #define CACHE_COMPRESSION_LIBZ           2
 #define CACHE_COMPRESSION_LIBLZMA        3
 
+struct CacheVConnection;
 struct CacheVC;
 struct CacheDisk;
 #ifdef HTTP_CACHE
@@ -85,6 +86,13 @@ struct CacheProcessor:public Processor
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                                CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
+
+  /** Open a cache reader from an already open writer.
+
+      This is used for partial content on a cache miss to open a reader corresponding to the
+      partial content writer.
+  */
+  inkcoreapi Action* open_read(Continuation* cont, CacheVConnection* writer);
 
   Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key,
                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);

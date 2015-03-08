@@ -82,7 +82,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
         ink_assert(!total_len);
         if (alternate_index >= 0) {
           MUTEX_TRY_LOCK(stripe_lock, vol->mutex, mutex->thread_holding);
-          if (!stripe_lock) VC_SCHED_LOCK_RETRY();
+          if (!stripe_lock.is_locked()) VC_SCHED_LOCK_RETRY();
           write_vector->remove(alternate_index, true);
           alternate_index = CACHE_ALT_REMOVED;
           if (!write_vector->count())
