@@ -87,6 +87,13 @@ struct CacheHTTPInfoVector
     int _wait_idx_min;
     /// highest fragment inddex for which a reader is waiting.
     int _wait_idx_max;
+    /// Flag
+    union {
+      uint16_t _flags;
+      struct {
+	unsigned int dirty:1;
+      } f;
+    };
     ///@}
   };
 
@@ -120,6 +127,8 @@ struct CacheHTTPInfoVector
 
   /// Get the alternate index for the @a key.
   int index_of(CacheKey const& key);
+  /// Check if there are any writers for the alternate of @a alt_key.
+  bool has_writer(CacheKey const& alt_key);
   /// Mark a @c CacheVC as actively writing at @a offset on the alternate with @a alt_key.
   self& write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.

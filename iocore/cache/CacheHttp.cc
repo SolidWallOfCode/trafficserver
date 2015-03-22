@@ -29,6 +29,7 @@
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
+// Guaranteed to be all zero?
 static CacheHTTPInfoVector::Item default_vec_info;
 
 #ifdef HTTP_CACHE
@@ -292,6 +293,13 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool s
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
+
+bool
+CacheHTTPInfoVector::has_writer(CacheKey const& alt_key)
+{
+  int alt_idx = this->index_of(alt_key);
+  return alt_idx >= 0 && data[alt_idx]._active.head != NULL;
+}
 
 bool
 CacheHTTPInfoVector::is_write_active(CacheKey const& alt_key, int64_t offset)

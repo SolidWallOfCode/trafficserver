@@ -179,6 +179,12 @@ OpenDirEntry::index_of(CacheKey const& alt_key)
   return vector.index_of(alt_key);
 }
 
+bool
+OpenDirEntry::has_writer(CacheKey const& alt_key)
+{
+  return vector.has_writer(alt_key);
+}
+
 OpenDirEntry&
 OpenDirEntry::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
 {

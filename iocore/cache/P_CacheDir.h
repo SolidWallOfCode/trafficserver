@@ -267,6 +267,21 @@ struct OpenDirEntry
   volatile bool reading_vec;    // somebody is currently reading the vector
   volatile bool writing_vec;    // somebody is currently writing the vector
 
+  /** Set to a write @c CacheVC that has started but not yet updated the vector.
+
+      If this is set then there is a write @c CacheVC that is active but has not yet been able to
+      update the vector for its alternate. Any new reader should block on open if this is set and
+      enter itself on the @a _waiting list, making this effectively a write lock on the object.
+      This is necessary because we can't reliably do alternate selection in this state. The waiting
+      read @c CacheVC instances are released as soon as the vector is updated, they do not have to
+      wait until the write @c CacheVC has finished its transaction. In practice this means until the
+      server response has been received and processed.
+  */
+  volatile CacheVC* open_writer;
+  /** A list of @c CacheVC instances that are waiting for the @a open_writer.
+   */
+  DLL<CacheVC, Link_CacheVC_Active_Link> open_waiting;
+
   LINK(OpenDirEntry, link);
 
   //  int wait(CacheVC *c, int msec);
@@ -278,6 +293,8 @@ struct OpenDirEntry
 
   /// Get the alternate index for the @a key.
   int index_of(CacheKey const& key);
+  /// Check if there are any writers for the alternate of @a alt_key.
+  bool has_writer(CacheKey const& alt_key);
   /// Mark a @c CacheVC as actively writing at @a offset on the alternate with @a alt_key.
   self& write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.

@@ -1378,16 +1378,41 @@ CacheProcessor::get_fixed_fragment_size() const {
   return cache_config_target_fragment_size - sizeofDoc;
 }
 
+
+Action*
+CacheVC::do_init_write()
+{
+  Debug("amc", "[do_init_write] vc=%p", this);
+  SET_CONTINUATION_HANDLER(this, &CacheVC::openWriteInit);
+  return EVENT_DONE == this->openWriteInit(EVENT_IMMEDIATE, 0) ? ACTION_RESULT_DONE : &_action;
+}
+
 /* Do some initial setup and then switch over to openWriteMain
  */
 int
-CacheVC::openWriteInit(int eid, Event* event)
+CacheVC::openWriteInit(int eid, Event*)
 {
+  Debug("amc", "[openWriteInit] vc=%p", this);
+  {
+    CACHE_TRY_LOCK(lock, od->mutex, mutex->thread_holding);
+    if (!lock.is_locked()) {
+      trigger = mutex->thread_holding->schedule_in_local(this, HRTIME_MSECONDS(cache_config_mutex_retry_delay), eid);
+      return EVENT_CONT;
+    }
+
+    // If we're not already in the alt vector, insert.
+    if (-1 == (alternate_index = get_alternate_index(write_vector, first_key))) {
+      alternate_index = write_vector->insert(&alternate);
+    }
+  }
+
   if (resp_range.hasRanges()) resp_range.start();
 //  write_pos = resp_range.getOffset();
 //  key = alternate.get_frag_key_of(write_pos);
   SET_HANDLER(&CacheVC::openWriteMain);
-  return openWriteMain(eid, event);
+  this->callcont(CACHE_EVENT_OPEN_WRITE);
+//  return openWriteMain(eid, event);
+  return EVENT_DONE;
 }
 
 int
@@ -1644,7 +1669,7 @@ Lcollision:
       if (od->has_multiple_writers()) {
         MUTEX_RELEASE(lock);
         SET_HANDLER(&CacheVC::openWriteInit);
-        return callcont(CACHE_EVENT_OPEN_WRITE);
+        return this->openWriteInit(EVENT_IMMEDIATE, 0);
       }
     }
     // check for collision
@@ -1665,7 +1690,7 @@ Lsuccess:
   if (_action.cancelled)
     goto Lcancel;
   SET_HANDLER(&CacheVC::openWriteInit);
-  return callcont(CACHE_EVENT_OPEN_WRITE);
+  return this->openWriteInit(EVENT_IMMEDIATE, 0);
 
 Lfailure:
   CACHE_INCREMENT_DYN_STAT(base_stat + CACHE_STAT_FAILURE);
@@ -1903,9 +1928,10 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   }
 
 Lmiss:
-  SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
-  c->callcont(CACHE_EVENT_OPEN_WRITE);
-  return ACTION_RESULT_DONE;
+  return c->do_init_write();
+//  SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
+//  c->callcont(CACHE_EVENT_OPEN_WRITE);
+//  return ACTION_RESULT_DONE;
 
 Lfailure:
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);

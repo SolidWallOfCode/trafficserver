@@ -1585,12 +1585,19 @@ HttpSM::handle_api_return()
         if (t_state.hdr_info.request_range.hasRanges() &&
             HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action
           ) {
+          Debug("amc", "Set up for partial read");
+          CacheVConnection* save_write_vc = cache_sm.cache_write_vc;
           setup_server_transfer_to_cache_only();
+          t_state.next_action = HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ;
+          t_state.source = HttpTransact::SOURCE_CACHE;
+          HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
+          cache_sm.cache_write_vc = save_write_vc;
+          pending_action = cache_sm.open_partial_read();
+          cache_sm.cache_write_vc = NULL;
         } else {
           setup_server_transfer();
           perform_cache_write_action();
         }
-        tunnel.tunnel_run(); // may have a read tunnel do, start everything.
       }
       break;
     }
@@ -2578,11 +2585,12 @@ HttpSM::state_cache_open_read(int event, void *data)
 //  operation.
 //////////////////////////////////////////////////////////////////////////
 int
-HttpSM::state_cache_open_partial_read(int event, void* /* data */)
+HttpSM::state_cache_open_partial_read(int event, void* data)
 {
   STATE_ENTER(&HttpSM::state_cache_open_partial_read, event);
 
   ink_assert(NULL != cache_sm.cache_write_vc);
+  Debug("amc", "Handling partial read event");
 
   t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
   t_state.next_action = HttpTransact::SM_ACTION_SERVER_READ;
@@ -2610,11 +2618,14 @@ HttpSM::state_cache_open_partial_read(int event, void* /* data */)
     // Although we've got a serious problem if we don't open in this situation.
     break;
 
+
   default:
-    ink_release_assert("!Unknown event");
-    break;
+    // When the SM is in this state we've already started a tunnel running so we have to handle
+    // that case in here so unless it's an event of interest to this state, pass it on.
+    return this->tunnel_handler(event, data);
   }
 
+//  HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::tunnel_handler);
   set_next_state();
   return 0;
 }
@@ -7264,9 +7275,12 @@ HttpSM::set_next_state()
 
   case HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ:
     {
+# if 0
       HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
       t_state.source = HttpTransact::SOURCE_CACHE;
       pending_action = cache_sm.open_partial_read();
+# endif
+      ink_assert(!"[amc] Shouldn't get here");
       break;
     }
 

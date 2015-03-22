@@ -70,7 +70,6 @@ struct EvacuationBlock;
     CACHE_MUTEX_RELEASE(_l)
 #endif
 
-
 #define VC_LOCK_RETRY_EVENT() \
   do { \
     trigger = mutex->thread_holding->schedule_in_local(this, HRTIME_MSECONDS(cache_config_mutex_retry_delay), event); \
@@ -284,6 +283,8 @@ struct CacheVC: public CacheVConnection
     return -1;
   }
 
+  Action* do_init_write();
+
   //  bool writer_done();
   int calluser(int event);
   int callcont(int event);
@@ -410,6 +411,9 @@ struct CacheVC: public CacheVConnection
   // before being used by the CacheVC
   CacheKey key, first_key, earliest_key, update_key;
   Dir dir, earliest_dir, overwrite_dir, first_dir;
+  /// Thread to use to wake up this VC. Set when the VC puts itself on a wait list.
+  /// The waker should schedule @c EVENT_IMMEDIATE on this thread to wake up this VC.
+  EThread* wake_up_thread;
   // end Region A
 
   // Start Region B
@@ -1100,6 +1104,7 @@ struct Cache
   Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr *request,
                      CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t) 0,
                      CacheFragType type = CACHE_FRAG_TYPE_HTTP);
+
   static void generate_key(INK_MD5 *md5, URL *url);
 #endif
 

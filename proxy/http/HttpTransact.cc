@@ -4369,6 +4369,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
   }
 
 
+# if 0
   /* If we plan to do a write and the request was partial, then we need to open a
      cache read to service the request and not just pass through.
   */
@@ -4378,6 +4379,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State* s)
   ) {
     s->next_action = SM_ACTION_CACHE_OPEN_PARTIAL_READ;
   }
+# endif
 
   // update stat, set via string, etc
 
