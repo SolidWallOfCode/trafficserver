@@ -6637,7 +6637,6 @@ void
 HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* base)
 {
   int64_t cl = HTTP_UNDEFINED_CL;
-  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
 
   ink_assert(header->type_get() == HTTP_TYPE_RESPONSE);
   if (base->presence(MIME_PRESENCE_CONTENT_LENGTH)) {
@@ -6650,7 +6649,7 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
       case SOURCE_HTTP_ORIGIN_SERVER:
         // We made our decision about whether to trust the
         //   response content length in init_state_vars_from_response()
-        if (cache_read_vc && cache_read_vc->is_http_partial_content()) {
+        if (s->hdr_info.request_range.hasRanges()) {
           change_response_header_because_of_range_request(s,header);
           s->hdr_info.trust_response_cl = true;
         }
@@ -6659,7 +6658,7 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
       case SOURCE_CACHE:
         // if we are doing a single Range: request, calculate the new
         // C-L: header
-        if (cache_read_vc && cache_read_vc->is_http_partial_content()) {
+        if (s->hdr_info.request_range.hasRanges()) {
           change_response_header_because_of_range_request(s,header);
           s->hdr_info.trust_response_cl = true;
         }
@@ -8864,9 +8863,10 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
 {
   MIMEField *field = header->field_find(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
   char *reason_phrase;
-  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
+//  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
   HTTPHdr* cached_response = find_appropriate_cached_resp(s);
-  HTTPRangeSpec& rs = cache_read_vc->get_http_range_spec();
+//  HTTPRangeSpec& rs = cache_read_vc->get_http_range_spec();
+  HTTPRangeSpec& rs = s->state_machine->t_state.hdr_info.request_range;
 
   Debug("http_trans", "Partial content requested, re-calculating content-length");
 
@@ -8876,6 +8876,8 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
 
   // set the right Content-Type for multiple entry Range
   if (rs.isMulti()) { // means we need a boundary string.
+    ink_release_assert(!"[amc] Computation of boundary string not correct working");
+#   if 0
     int rbs_len;
     char const* rbs = cache_read_vc->get_http_range_boundary_string(&rbs_len);
     char buff[(sizeof(HTTP_RANGE_MULTIPART_CONTENT_TYPE)-1) + HTTP_RANGE_BOUNDARY_LEN];
@@ -8888,6 +8890,7 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
     field->value_append(header->m_heap, header->m_mime, buff, sizeof(buff));
 
     header->field_attach(field);
+#   endif
   } else if (rs.isSingle()) {
     int n;
     char buff[HTTP_LEN_BYTES + (18+1)*3];
@@ -8898,11 +8901,11 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
                 , rs[0]._min, rs[0]._max
                 , cached_response->get_content_length()
       );
-//    buff[0] = tolower(buff[0]);
     field->value_set(header->m_heap, header->m_mime, buff, n);
     header->field_attach(field);
+    header->set_content_length(rs.size());
   }
-  header->set_content_length(cache_read_vc->get_effective_content_size());
+//  header->set_content_length(cache_read_vc->get_effective_content_size());
 }
 
 #if TS_HAS_TESTS

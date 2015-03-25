@@ -5941,8 +5941,14 @@ HttpSM::setup_cache_read_transfer()
 
   HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::tunnel_handler);
 
-  if (doc_size != INT64_MAX)
+  if (doc_size != INT64_MAX) {
+    /* Brokenness - if the object was already in cache, @a doc_size is correct based on the range because the
+       CacheVC had a chance to do that on the way here, but if not then the read CacheVC isn't fully set up
+       and doesn't account for the range data, so we do it. That needs to be rationalized.
+    */
+    doc_size = t_state.hdr_info.request_range.calcContentLength(doc_size, 0);
     doc_size += hdr_size;
+  }
 
   HttpTunnelProducer *p = tunnel.add_producer(cache_sm.cache_read_vc,
                                               doc_size, buf_start, &HttpSM::tunnel_handler_cache_read, HT_CACHE_READ,
