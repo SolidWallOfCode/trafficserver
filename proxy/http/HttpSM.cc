@@ -1592,7 +1592,7 @@ HttpSM::handle_api_return()
           t_state.source = HttpTransact::SOURCE_CACHE;
           HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
           cache_sm.cache_write_vc = save_write_vc;
-          pending_action = cache_sm.open_partial_read();
+          pending_action = cache_sm.open_partial_read(&t_state.hdr_info.client_request);
           cache_sm.cache_write_vc = NULL;
         } else {
           setup_server_transfer();

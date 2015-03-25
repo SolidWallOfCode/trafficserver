@@ -277,7 +277,7 @@ HttpCacheSM::state_cache_open_partial_read(int evid, void* data)
 }
 
 Action*
-HttpCacheSM::open_partial_read()
+HttpCacheSM::open_partial_read(HTTPHdr* client_request_hdr)
 {
   // Simple because this requires an active write VC so we know the object is there (no retries).
   ink_assert(NULL != cache_write_vc);
@@ -285,7 +285,7 @@ HttpCacheSM::open_partial_read()
   SET_HANDLER(&HttpCacheSM::state_cache_open_partial_read);
   open_read_cb = false;
 
-  Action *action_handle = cacheProcessor.open_read(this, cache_write_vc);
+  Action *action_handle = cacheProcessor.open_read(this, cache_write_vc, client_request_hdr);
 
   if (action_handle != ACTION_RESULT_DONE) pending_action = action_handle;
 

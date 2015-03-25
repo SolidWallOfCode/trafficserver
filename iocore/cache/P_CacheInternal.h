@@ -1082,7 +1082,7 @@ struct Cache
 
   Action *lookup(Continuation *cont, CacheKey *key, CacheFragType type, char const* hostname, int host_len);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, CacheFragType type, char *hostname, int len);
-  inkcoreapi Action* open_read(Continuation* cont, CacheVConnection* writer);
+  inkcoreapi Action* open_read(Continuation* cont, CacheVConnection* writer, HTTPHdr* client_request_hdr);
   inkcoreapi Action *open_write(Continuation *cont, CacheKey *key,
                                 CacheFragType frag_type, int options = 0,
                                 time_t pin_in_cache = (time_t) 0, char *hostname = 0, int host_len = 0);
@@ -1211,9 +1211,9 @@ CacheProcessor::open_read(Continuation *cont, CacheKey *key, bool cluster_cache_
 }
 
 TS_INLINE inkcoreapi Action *
-CacheProcessor::open_read(Continuation *cont, CacheVConnection* writer)
+CacheProcessor::open_read(Continuation *cont, CacheVConnection* writer, HTTPHdr* client_request_hdr)
 {
-  return caches[CACHE_FRAG_TYPE_HTTP]->open_read(cont, writer);
+  return caches[CACHE_FRAG_TYPE_HTTP]->open_read(cont, writer, client_request_hdr);
 }
 
 TS_INLINE Action *

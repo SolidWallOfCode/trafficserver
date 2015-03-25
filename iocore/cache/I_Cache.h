@@ -92,7 +92,7 @@ struct CacheProcessor:public Processor
       This is used for partial content on a cache miss to open a reader corresponding to the
       partial content writer.
   */
-  inkcoreapi Action* open_read(Continuation* cont, CacheVConnection* writer);
+  inkcoreapi Action* open_read(Continuation* cont, CacheVConnection* writer, HTTPHdr* client_request_hdr);
 
   Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key,
                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);

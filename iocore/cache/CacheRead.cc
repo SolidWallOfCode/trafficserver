@@ -90,7 +90,7 @@ Lcallreturn:
 
 #ifdef HTTP_CACHE
 Action*
-Cache::open_read(Continuation* cont, CacheVConnection* vc)
+Cache::open_read(Continuation* cont, CacheVConnection* vc, HTTPHdr* client_request_hdr)
 {
   Action* zret = ACTION_RESULT_DONE;
 
@@ -108,7 +108,9 @@ Cache::open_read(Continuation* cont, CacheVConnection* vc)
     c->od = write_vc->od;
     c->frag_type = write_vc->frag_type;
     CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
-    write_vc->alternate.request_get(&c->request);
+//    write_vc->alternate.request_get(&c->request);
+//    client_request_hdr->copy_shallow(&c->request);
+    c->request.copy_shallow(client_request_hdr);
     c->params = write_vc->params; // seems to be a no-op, always NULL.
     c->dir = c->first_dir = write_vc->first_dir;
     c->write_vc = write_vc;

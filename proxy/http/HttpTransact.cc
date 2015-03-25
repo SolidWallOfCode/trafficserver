@@ -6637,6 +6637,8 @@ void
 HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* base)
 {
   int64_t cl = HTTP_UNDEFINED_CL;
+  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
+
   ink_assert(header->type_get() == HTTP_TYPE_RESPONSE);
   if (base->presence(MIME_PRESENCE_CONTENT_LENGTH)) {
     cl = base->get_content_length();
@@ -6648,12 +6650,16 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
       case SOURCE_HTTP_ORIGIN_SERVER:
         // We made our decision about whether to trust the
         //   response content length in init_state_vars_from_response()
+        if (cache_read_vc && cache_read_vc->is_http_partial_content()) {
+          change_response_header_because_of_range_request(s,header);
+          s->hdr_info.trust_response_cl = true;
+        }
         break;
 
       case SOURCE_CACHE:
         // if we are doing a single Range: request, calculate the new
         // C-L: header
-        if (s->state_machine->get_cache_sm().cache_read_vc->is_http_partial_content()) {
+        if (cache_read_vc && cache_read_vc->is_http_partial_content()) {
           change_response_header_because_of_range_request(s,header);
           s->hdr_info.trust_response_cl = true;
         }
