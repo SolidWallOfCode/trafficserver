@@ -66,7 +66,7 @@ struct CacheHTTPInfoVector
     /** These two lists tracks active / outstanding I/O operations on The @a _active list is for writers
 	and the CacheVC should be on this list iff it has initiated an I/O that has not yet
 	completed. The @a _waiting list is for CacheVCs that are waiting for a fragment that is being written
-	by a CacheVC on the @a _active list. That is, it is waiting on the same I/O operation as the @a _active
+	by a CacheVC on the @a _active list. That is, it is waiting on the same I/O operation as an @a _active
 	CacheVC.
 
 	@internal An alternative implementation would be to have an array with an element for each fragment. With
@@ -140,6 +140,8 @@ struct CacheHTTPInfoVector
   self& waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset);
   /// Get the fragment key for a specific @a offset.
   CacheKey const& key_for(CacheKey const& alt_key, int64_t offset);
+  /// Close out anything related to this writer
+  self& close_writer(CacheKey const& alt_key, CacheVC* vc);
   /** Compute the convex hull of the uncached parts of the @a request taking current writers in to account.
 
       @return @c true if there is uncached data that must be retrieved.

@@ -1120,6 +1120,7 @@ CacheVC::openWriteCloseDir(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */
       ink_assert(!is_io_in_progress());
       VC_SCHED_LOCK_RETRY();
     }
+    od->close_writer(earliest_key, this);
     vol->close_write(this);
     if (closed < 0 && fragment)
       dir_delete(&earliest_key, vol, &earliest_dir);
@@ -1390,7 +1391,7 @@ CacheVC::do_init_write()
 /* Do some initial setup and then switch over to openWriteMain
  */
 int
-CacheVC::openWriteInit(int eid, Event*)
+CacheVC::openWriteInit(int eid, Event* event)
 {
   Debug("amc", "[openWriteInit] vc=%p", this);
   {
@@ -1404,15 +1405,25 @@ CacheVC::openWriteInit(int eid, Event*)
     if (-1 == (alternate_index = get_alternate_index(write_vector, first_key))) {
       alternate_index = write_vector->insert(&alternate);
     }
+    // mark us as an writer.
+    write_vector->data[alternate_index]._writers.push(this);
+
+    if (this == od->open_writer) {
+      od->open_writer = NULL;
+      CacheVC* reader;
+      while (NULL != (reader = od->open_waiting.pop())) {
+        Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
+        reader->wake_up_thread->schedule_imm(reader);
+      }
+    }
   }
 
   if (resp_range.hasRanges()) resp_range.start();
 //  write_pos = resp_range.getOffset();
 //  key = alternate.get_frag_key_of(write_pos);
   SET_HANDLER(&CacheVC::openWriteMain);
-  this->callcont(CACHE_EVENT_OPEN_WRITE);
-//  return openWriteMain(eid, event);
-  return EVENT_DONE;
+  return openWriteMain(eid, event);
+//  return EVENT_DONE;
 }
 
 int
@@ -1421,6 +1432,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
   cancel_trigger();
   int called_user = 0;
   ink_assert(!is_io_in_progress());
+  Debug("amc", "[CacheVC::openWriteMain]");
 Lagain:
   if (!vio.buffer.writer()) {
     if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
@@ -1909,6 +1921,8 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
           goto Lfailure;
         }
         // document doesn't exist, begin write
+        ink_assert(NULL == c->od->open_writer);
+        c->od->open_writer = c;
         goto Lmiss;
       } else {
         c->od->reading_vec = 1;
@@ -1928,10 +1942,10 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   }
 
 Lmiss:
-  return c->do_init_write();
-//  SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
-//  c->callcont(CACHE_EVENT_OPEN_WRITE);
-//  return ACTION_RESULT_DONE;
+//  return c->do_init_write();
+  SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
+  c->callcont(CACHE_EVENT_OPEN_WRITE);
+  return ACTION_RESULT_DONE;
 
 Lfailure:
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);

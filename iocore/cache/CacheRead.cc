@@ -109,11 +109,11 @@ Cache::open_read(Continuation* cont, CacheVConnection* vc)
     c->frag_type = write_vc->frag_type;
     CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
     write_vc->alternate.request_get(&c->request);
-    c->params = write_vc->params;
+    c->params = write_vc->params; // seems to be a no-op, always NULL.
     c->dir = c->first_dir = write_vc->first_dir;
     c->write_vc = write_vc;
-    c->first_buf = write_vc->first_buf;
-    SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartEarliest);
+    c->first_buf = write_vc->first_buf; // I don't think this is effective either.
+    SET_CONTINUATION_HANDLER(c, &CacheVC::openReadFromWriter);
     zret = &c->_action; // default, override if needed.
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (lock.is_locked() && c->handleEvent(EVENT_IMMEDIATE, 0) == EVENT_DONE) {
@@ -326,7 +326,7 @@ CacheVC::openReadFromWriter(int event, Event * e)
   } else
     ink_assert(od == vol->open_read(&first_key));
 
-  CACHE_TRY_LOCK(lock_od, vol->mutex, mutex->thread_holding);
+  CACHE_TRY_LOCK(lock_od, od->mutex, mutex->thread_holding);
   if (!lock_od.is_locked())
     VC_SCHED_LOCK_RETRY();
 
@@ -336,12 +336,18 @@ CacheVC::openReadFromWriter(int event, Event * e)
       wake_up_thread = mutex->thread_holding;
       od->open_waiting.push(this);
     }
+    Debug("amc", "[CacheVC::openReadFromWriter] waiting for %p", od->open_writer);
     return EVENT_CONT; // wait for the writer to wake us up.
   }
 
   MUTEX_RELEASE(lock); // we have the OD lock now, don't need the vol lock.
 
-  if (!write_vc) {
+  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), earliest_key))) {
+    alternate.copy_shallow(od->vector.get(alternate_index));
+    MUTEX_RELEASE(lock_od);
+    SET_HANDLER(&CacheVC::openReadStartEarliest);
+    return openReadStartEarliest(event, e);
+  } else {
     int ret = openReadChooseWriter(event, e);
     if (ret < 0) {
       MUTEX_RELEASE(lock_od);
@@ -851,6 +857,40 @@ Lcallreturn:
   return handleEvent(AIO_EVENT_DONE, 0);
 }
 
+int
+CacheVC::openReadWaitEarliest(int evid, Event*)
+{
+  int zret = EVENT_CONT;
+  cancel_trigger();
+
+  CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
+  if (!lock.is_locked())
+    VC_SCHED_LOCK_RETRY();
+  Debug("amc", "[CacheVC::openReadWaitEarliest] [%d]", evid);
+  if (NULL == vol->open_read(&first_key)) {
+    // Writer is gone, so no more data for which to wait.
+    // Best option is to just start over from the first frag.
+    // Most likely scenario - object turned out to be a resident alternate so
+    // there's no explicit earliest frag.
+    lock.release();
+    SET_HANDLER(&self::openReadStartHead);
+    od = NULL;
+    key = first_key;
+    return handleEvent(EVENT_IMMEDIATE, 0);
+  } else if (dir_probe(&key, vol, &earliest_dir, &last_collision) ||
+      dir_lookaside_probe(&key, vol, &earliest_dir, NULL))
+  {
+    dir = earliest_dir;
+    SET_HANDLER(&self::openReadStartEarliest);
+    if ((zret = do_read_call(&key)) == EVENT_RETURN) {
+      lock.release();
+      return handleEvent(AIO_EVENT_DONE, 0);
+    }
+  }
+  return zret;
+}
+  
+
 /*
   This code follows CacheVC::openReadStartHead closely,
   if you change this you might have to change that.
@@ -865,7 +905,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
   if (_action.cancelled)
     return free_CacheVC(this);
   {
-    CACHE_TRY_LOCK(lock, od ? od->mutex : vol->mutex, mutex->thread_holding);
+    CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock.is_locked())
       VC_SCHED_LOCK_RETRY();
     if (!buf)
@@ -939,7 +979,18 @@ Lread:
     // rewrite the vector.
 #ifdef HTTP_CACHE
     // It's OK if there's a writer for this alternate, we can wait on it.
-    if (!(od && od->has_writer(earliest_key)) && frag_type == CACHE_FRAG_TYPE_HTTP) {
+    if (od && od->has_writer(earliest_key)) {
+      wake_up_thread = mutex->thread_holding;
+      od->waiting_for(earliest_key, this, 0);
+      lock.release();
+      // The SM must be signaled that the cache read is open even if we haven't got the earliest frag
+      // yet because otherwise it won't set up the read side of the tunnel before the write side finishes
+      // and terminates the SM (in the case of a resident alternate). But the VC can't be left with this
+      // handler or it will confuse itself when it wakes up from the earliest frag read. So we put it
+      // in a special wait state / handler and then signal the SM.
+      SET_HANDLER(&self::openReadWaitEarliest);
+      return callcont(CACHE_EVENT_OPEN_READ); // must signal read is open
+    } else if (frag_type == CACHE_FRAG_TYPE_HTTP) {
       // don't want any writers while we are evacuating the vector
       if (!vol->open_write(this, false, 1)) {
         Doc *doc1 = (Doc *) first_buf->data();
@@ -1173,13 +1224,16 @@ CacheVC::openReadStartHead(int event, Event * e)
         err = ECACHE_BAD_META_DATA;
         goto Ldone;
       }
-      if (cache_config_select_alternate) {
+      // If @a params is @c NULL then we're a retry from a range request pair so don't do alt select.
+      // Instead try the @a earliest_key - if that's a match then that's the correct alt, written
+      // by the paired write VC.
+      if (cache_config_select_alternate && params) {
         alternate_index = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
         if (alternate_index < 0) {
           err = ECACHE_ALT_MISS;
           goto Ldone;
         }
-      } else
+      } else if (CACHE_ALT_INDEX_DEFAULT == (alternate_index = get_alternate_index(&vector, earliest_key)))
         alternate_index = 0;
       alternate_tmp = vector.get(alternate_index);
       if (!alternate_tmp->valid()) {

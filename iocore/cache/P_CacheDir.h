@@ -307,6 +307,8 @@ struct OpenDirEntry
   /** Wait for a fragment to be written.
    */
   self& waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset);
+  /// Close out anything related to this writer
+  self& close_writer(CacheKey const& alt_key, CacheVC* vc);
 };
 
 struct OpenDir: public Continuation

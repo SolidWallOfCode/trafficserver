@@ -235,6 +235,7 @@ extern int good_interim_disks;
 // CacheVC
 struct CacheVC: public CacheVConnection
 {
+  typedef CacheVC self; ///< Self reference type.
   typedef HTTPCacheAlt::FragmentDescriptor FragmentDescriptor; ///< Import type.
   typedef HTTPCacheAlt::FragmentDescriptorTable FragmentDescriptorTable; ///< Import type.
 
@@ -305,6 +306,7 @@ struct CacheVC: public CacheVConnection
   int openReadReadDone(int event, Event *e);
   int openReadMain(int event, Event *e);
   int openReadStartEarliest(int event, Event *e);
+  int openReadWaitEarliest(int evid, Event* e);
 #ifdef HTTP_CACHE
   int openReadVecWrite(int event, Event *e);
 #endif

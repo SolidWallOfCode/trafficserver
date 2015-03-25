@@ -267,13 +267,22 @@ HttpCacheSM::open_read(URL * url, HTTPHdr * hdr, CacheLookupHttpConfig * params,
   }
 }
 
+int
+HttpCacheSM::state_cache_open_partial_read(int evid, void* data)
+{
+  if (!open_read_cb)
+    return this->state_cache_open_read(evid, data);
+  Debug("amc", "[HttpCacheSM::state_cache_open_partial_read] second round");
+  return VC_EVENT_DONE;
+}
+
 Action*
 HttpCacheSM::open_partial_read()
 {
   // Simple because this requires an active write VC so we know the object is there (no retries).
   ink_assert(NULL != cache_write_vc);
 
-  SET_HANDLER(&HttpCacheSM::state_cache_open_read);
+  SET_HANDLER(&HttpCacheSM::state_cache_open_partial_read);
   open_read_cb = false;
 
   Action *action_handle = cacheProcessor.open_read(this, cache_write_vc);

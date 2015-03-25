@@ -1587,7 +1587,7 @@ HttpSM::handle_api_return()
           ) {
           Debug("amc", "Set up for partial read");
           CacheVConnection* save_write_vc = cache_sm.cache_write_vc;
-          setup_server_transfer_to_cache_only();
+          tunnel.tunnel_run(setup_server_transfer_to_cache_only());
           t_state.next_action = HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ;
           t_state.source = HttpTransact::SOURCE_CACHE;
           HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
@@ -2589,11 +2589,8 @@ HttpSM::state_cache_open_partial_read(int event, void* data)
 {
   STATE_ENTER(&HttpSM::state_cache_open_partial_read, event);
 
-  ink_assert(NULL != cache_sm.cache_write_vc);
+//  ink_assert(NULL != cache_sm.cache_write_vc);
   Debug("amc", "Handling partial read event");
-
-  t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
-  t_state.next_action = HttpTransact::SM_ACTION_SERVER_READ;
 
   switch (event) {
   case CACHE_EVENT_OPEN_READ:
@@ -2606,8 +2603,10 @@ HttpSM::state_cache_open_partial_read(int event, void* data)
     cache_sm.cache_read_vc->get_http_info(&t_state.cache_info.object_read);
     ink_assert(t_state.cache_info.object_read != 0);
 
-    setup_cache_read_transfer();
+    t_state.next_action = HttpTransact::SM_ACTION_SERVE_FROM_CACHE;
+    t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
 
+    do_api_callout();
     break;
   case CACHE_EVENT_OPEN_READ_FAILED:
     pending_action = NULL;
@@ -2616,6 +2615,7 @@ HttpSM::state_cache_open_partial_read(int event, void* data)
 
     // Need to do more here - mainly fall back to bypass from origin.
     // Although we've got a serious problem if we don't open in this situation.
+    ink_assert("[amc] do something!");
     break;
 
 
@@ -2625,8 +2625,6 @@ HttpSM::state_cache_open_partial_read(int event, void* data)
     return this->tunnel_handler(event, data);
   }
 
-//  HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::tunnel_handler);
-  set_next_state();
   return 0;
 }
 
@@ -2894,6 +2892,8 @@ int
 HttpSM::tunnel_handler(int event, void *data)
 {
   STATE_ENTER(&HttpSM::tunnel_handler, event);
+
+  if (CACHE_EVENT_OPEN_READ == event) return 0;
 
   ink_assert(event == HTTP_TUNNEL_EVENT_DONE);
   ink_assert(data == &tunnel);

@@ -298,7 +298,7 @@ bool
 CacheHTTPInfoVector::has_writer(CacheKey const& alt_key)
 {
   int alt_idx = this->index_of(alt_key);
-  return alt_idx >= 0 && data[alt_idx]._active.head != NULL;
+  return alt_idx >= 0 && data[alt_idx]._writers.head != NULL;
 }
 
 bool
@@ -324,6 +324,23 @@ CacheHTTPInfoVector::waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t o
   int frag_idx = item._alternate.get_frag_index_of(offset);
   vc->fragment = frag_idx;
   item._waiting.push(vc);
+  return *this;
+}
+
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
+CacheHTTPInfoVector&
+CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
+{
+  CacheVC* reader;
+  int alt_idx = this->index_of(alt_key);
+  Item& item = data[alt_idx];
+  item._writers.remove(vc);
+  while (NULL != (reader = item._waiting.pop())) {
+    Debug("amc", "[close_writer] wake up %p", reader);
+    reader->wake_up_thread->schedule_imm(reader);
+  }
   return *this;
 }
 

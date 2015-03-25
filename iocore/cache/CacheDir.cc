@@ -221,6 +221,13 @@ OpenDirEntry::waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
   return *this;
 }
 
+OpenDirEntry&
+OpenDirEntry::close_writer(CacheKey const& alt_key, CacheVC* vc)
+{
+  vector.close_writer(alt_key, vc);
+  return *this;
+}
+
 //
 // Cache Directory
 //

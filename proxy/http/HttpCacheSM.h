@@ -155,6 +155,7 @@ private:
 
   int state_cache_open_read(int event, void *data);
   int state_cache_open_write(int event, void *data);
+  int state_cache_open_partial_read(int evid, void* data);
 
   HttpCacheAction captive_action;
   bool open_read_cb;
