@@ -313,10 +313,11 @@ HttpVCTable::cleanup_all()
     DebugSM("http", "[%" PRId64 "] [%s, %s]", sm_id, #state_name, HttpDebugNames::get_event_name(event)); \
   }
 
-#define HTTP_SM_SET_DEFAULT_HANDLER(_h) \
-  {                                     \
-    REMEMBER(-1, reentrancy_count);     \
-    default_handler = _h;               \
+#define HTTP_SM_SET_DEFAULT_HANDLER(_h)                                          \
+  {                                                                              \
+    REMEMBER(-1, reentrancy_count);                                              \
+    Debug("amc", "SM %" PRId64 " default handler = %s", sm_id, handlerName(_h)); \
+    default_handler = _h;                                                        \
   }
 
 
@@ -1673,9 +1674,20 @@ HttpSM::handle_api_return()
 
       setup_blind_tunnel(true);
     } else {
-      HttpTunnelProducer *p = setup_server_transfer();
-      perform_cache_write_action();
-      tunnel.tunnel_run(p);
+      if (t_state.hdr_info.request_range.hasRanges() && HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action) {
+        Debug("amc", "Set up for partial read");
+        CacheVConnection *save_write_vc = cache_sm.cache_write_vc;
+        tunnel.tunnel_run(setup_server_transfer_to_cache_only());
+        t_state.next_action = HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ;
+        t_state.source = HttpTransact::SOURCE_CACHE;
+        HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
+        cache_sm.cache_write_vc = save_write_vc;
+        pending_action = cache_sm.open_partial_read(&t_state.hdr_info.client_request);
+        cache_sm.cache_write_vc = NULL;
+      } else {
+        setup_server_transfer();
+        perform_cache_write_action();
+      }
     }
     break;
   }
@@ -2637,6 +2649,61 @@ HttpSM::state_cache_open_read(int event, void *data)
   return 0;
 }
 
+//////////////////////////////////////////////////////////////////////////
+//
+//  HttpSM::state_cache_open_read_from_writer()
+//
+//  Handle the case where a partial request had a cache miss and we sent
+//  a request to the origin which has now come back successfully. We
+//  need to create a reader cache VC to handle the read side of the
+//  operation.
+//////////////////////////////////////////////////////////////////////////
+int
+HttpSM::state_cache_open_partial_read(int event, void *data)
+{
+  STATE_ENTER(&HttpSM::state_cache_open_partial_read, event);
+
+  //  ink_assert(NULL != cache_sm.cache_write_vc);
+  Debug("amc", "Handling partial read event");
+
+  switch (event) {
+  case CACHE_EVENT_OPEN_READ:
+    pending_action = NULL;
+
+    DebugSM("http", "[%" PRId64 "] cache_open_partial_read - CACHE_EVENT_OPEN_READ", sm_id);
+
+    ink_assert(cache_sm.cache_read_vc != NULL);
+
+    cache_sm.cache_read_vc->get_http_info(&t_state.cache_info.object_read);
+    ink_assert(t_state.cache_info.object_read != 0);
+
+    t_state.next_action = HttpTransact::SM_ACTION_SERVE_FROM_CACHE;
+    t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
+
+    do_api_callout();
+    break;
+  case CACHE_EVENT_OPEN_READ_FAILED:
+    pending_action = NULL;
+
+    DebugSM("http", "[%" PRId64 "] cache_open_partial_read - "
+                    "CACHE_EVENT_OPEN_READ_FAILED",
+            sm_id);
+
+    // Need to do more here - mainly fall back to bypass from origin.
+    // Although we've got a serious problem if we don't open in this situation.
+    ink_assert("[amc] do something!");
+    break;
+
+
+  default:
+    // When the SM is in this state we've already started a tunnel running so we have to handle
+    // that case in here so unless it's an event of interest to this state, pass it on.
+    return this->tunnel_handler(event, data);
+  }
+
+  return 0;
+}
+
 int
 HttpSM::main_handler(int event, void *data)
 {
@@ -2902,6 +2969,9 @@ int
 HttpSM::tunnel_handler(int event, void *data)
 {
   STATE_ENTER(&HttpSM::tunnel_handler, event);
+
+  if (CACHE_EVENT_OPEN_READ == event)
+    return 0;
 
   ink_assert(event == HTTP_TUNNEL_EVENT_DONE);
   ink_assert(data == &tunnel);
@@ -4360,7 +4430,8 @@ HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
     ranges[nr]._end = end;
     ++nr;
 
-    if (!cache_sm.cache_read_vc->is_pread_capable() && cache_config_read_while_writer == 2) {
+#if 0
+    if (!cache_sm.cache_read_vc->is_pread_capable() && cache_config_read_while_writer==2) {
       // write in progress, check if request range not in cache yet
       HTTPInfo::FragOffset *frag_offset_tbl = t_state.cache_info.object_read->get_frag_table();
       int frag_offset_cnt = t_state.cache_info.object_read->get_frag_offset_count();
@@ -4370,6 +4441,7 @@ HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
         t_state.range_in_cache = false;
       }
     }
+#endif
   }
 
   if (nr > 0) {
@@ -4438,6 +4510,9 @@ HttpSM::do_range_parse(MIMEField *range_field)
 void
 HttpSM::do_range_setup_if_necessary()
 {
+#if 1
+  t_state.range_setup = HttpTransact::RANGE_NONE;
+#else
   MIMEField *field;
   INKVConnInternal *range_trans;
   int field_content_type_len = -1;
@@ -4475,6 +4550,7 @@ HttpSM::do_range_setup_if_necessary()
       }
     }
   }
+#endif
 }
 
 
@@ -5639,15 +5715,16 @@ HttpSM::perform_cache_write_action()
     break;
   }
 
-  case HttpTransact::CACHE_DO_WRITE:
-  case HttpTransact::CACHE_DO_REPLACE:
+  case HttpTransact::CACHE_DO_WRITE: {
     // Fix need to set up delete for after cache write has
     //   completed
+
     if (transform_info.entry == NULL || t_state.api_info.cache_untransformed == true) {
-      cache_sm.close_read();
       t_state.cache_info.write_status = HttpTransact::CACHE_WRITE_IN_PROGRESS;
       setup_cache_write_transfer(&cache_sm, server_entry->vc, &t_state.cache_info.object_store, client_response_hdr_bytes,
                                  "cache write");
+
+      cache_sm.close_read();
     } else {
       // We are not caching the untransformed.  We might want to
       //  use the cache writevc to cache the transformed copy
@@ -5656,7 +5733,7 @@ HttpSM::perform_cache_write_action()
       cache_sm.cache_write_vc = NULL;
     }
     break;
-
+  }
   default:
     ink_release_assert(0);
     break;
@@ -5912,7 +5989,8 @@ HttpSM::setup_cache_read_transfer()
 
   ink_assert(cache_sm.cache_read_vc != NULL);
 
-  doc_size = t_state.cache_info.object_read->object_size_get();
+  //  doc_size = t_state.cache_info.object_read->object_size_get();
+  doc_size = cache_sm.cache_read_vc->get_effective_content_size();
   alloc_index = buffer_size_to_index(doc_size + index_to_buffer_size(HTTP_HEADER_BUFFER_SIZE_INDEX));
 
 #ifndef USE_NEW_EMPTY_MIOBUFFER
@@ -5934,8 +6012,14 @@ HttpSM::setup_cache_read_transfer()
 
   HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::tunnel_handler);
 
-  if (doc_size != INT64_MAX)
+  if (doc_size != INT64_MAX) {
+    /* Brokenness - if the object was already in cache, @a doc_size is correct based on the range because the
+       CacheVC had a chance to do that on the way here, but if not then the read CacheVC isn't fully set up
+       and doesn't account for the range data, so we do it. That needs to be rationalized.
+    */
+    doc_size = t_state.hdr_info.request_range.calcContentLength(doc_size, 0);
     doc_size += hdr_size;
+  }
 
   HttpTunnelProducer *p = tunnel.add_producer(cache_sm.cache_read_vc, doc_size, buf_start, &HttpSM::tunnel_handler_cache_read,
                                               HT_CACHE_READ, "cache read");
@@ -5994,6 +6078,12 @@ HttpSM::setup_cache_write_transfer(HttpCacheSM *c_sm, VConnection *source_vc, HT
 
   store_info->request_sent_time_set(t_state.request_sent_time);
   store_info->response_received_time_set(t_state.response_received_time);
+
+  if (t_state.hdr_info.response_range.isValid()) {
+    if (t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL)
+      store_info->object_size_set(t_state.hdr_info.response_content_size);
+    c_sm->cache_write_vc->set_inbound_range(t_state.hdr_info.response_range._min, t_state.hdr_info.response_range._max);
+  }
 
   c_sm->cache_write_vc->set_http_info(store_info);
   store_info->clear();
@@ -6348,7 +6438,7 @@ HttpSM::setup_transfer_from_transform_to_cache_only()
   return p;
 }
 
-void
+HttpTunnelProducer *
 HttpSM::setup_server_transfer_to_cache_only()
 {
   TunnelChunkingAction_t action;
@@ -6376,6 +6466,7 @@ HttpSM::setup_server_transfer_to_cache_only()
   setup_cache_write_transfer(&cache_sm, server_entry->vc, &t_state.cache_info.object_store, 0, "cache write");
 
   server_entry->in_tunnel = true;
+  return p;
 }
 
 HttpTunnelProducer *
@@ -7831,4 +7922,15 @@ HttpSM::is_redirect_required()
     }
   }
   return redirect_required;
+}
+
+char const *
+HttpSM::handlerName(int (HttpSM::*ptm)(int, void *))
+{
+  char const *zret = "*method*";
+  if (ptm == &HttpSM::tunnel_handler)
+    zret = "tunnel_handler";
+  else if (ptm == &HttpSM::state_cache_open_partial_read)
+    zret = "state_cache_open_partial_read";
+  return zret;
 }

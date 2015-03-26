@@ -46,7 +46,7 @@
 #include "P_ClusterLoadMonitor.h"
 #include "P_TimeTrace.h"
 
-
+# if 0 // defined in InkErrno.h
 #define ECLUSTER_NO_VC (CLUSTER_ERRNO + 0)
 #define ECLUSTER_NO_MACHINE (CLUSTER_ERRNO + 1)
 #define ECLUSTER_OP_TIMEOUT (CLUSTER_ERRNO + 2)
@@ -54,6 +54,7 @@
 #define ECLUSTER_ORB_EIO (CLUSTER_ERRNO + 4)
 #define ECLUSTER_CHANNEL_INUSE (CLUSTER_ERRNO + 5)
 #define ECLUSTER_NOMORE_CHANNELS (CLUSTER_ERRNO + 6)
+#endif
 
 int init_clusterprocessor(void);
 enum {

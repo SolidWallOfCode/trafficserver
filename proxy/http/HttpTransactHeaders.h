@@ -85,6 +85,7 @@ public:
   static void remove_privacy_headers_from_request(HttpConfigParams *http_config_param, OverridableHttpConfigParams *http_txn_conf,
                                                   HTTPHdr *header);
 
+  static void insert_request_range_header(HTTPHdr* header, HTTPRangeSpec const* ranges);
   static int nstrcpy(char *d, const char *as);
 };
 

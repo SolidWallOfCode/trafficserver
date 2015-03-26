@@ -69,28 +69,33 @@ OpenDir::OpenDir()
    Returns 1 on success and 0 on failure.
    */
 int
-OpenDir::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
+OpenDir::open_write(CacheVC *cont, int /* allow_if_writers */, int /* max_writers */)
 {
   ink_assert(cont->vol->mutex->thread_holding == this_ethread());
   unsigned int h = cont->first_key.slice32(0);
   int b = h % OPEN_DIR_BUCKETS;
   for (OpenDirEntry *d = bucket[b].head; d; d = d->link.next) {
-    if (!(d->writers.head->first_key == cont->first_key))
+    if (!(d->first_key == cont->first_key))
       continue;
-    if (allow_if_writers && d->num_writers < d->max_writers) {
-      d->writers.push(cont);
+//    if (allow_if_writers && d->num_writers < d->max_writers) {
+//      d->writers.push(cont);
+    // [amc] Need to think if we want to track writers per object and not just per alt.
+    // useful to know when to close out the OpenDirEntry.
       d->num_writers++;
       cont->od = d;
       cont->write_vector = &d->vector;
       return 1;
-    }
+//    }
     return 0;
   }
-  OpenDirEntry *od = THREAD_ALLOC(openDirEntryAllocator, cont->mutex->thread_holding);
-  od->readers.head = NULL;
-  od->writers.push(cont);
+  OpenDirEntry *od = THREAD_ALLOC(openDirEntryAllocator,
+                                  cont->mutex->thread_holding);
+//  od->readers.head = NULL;
+//  od->writers.push(cont);
+  od->mutex = new_ProxyMutex();
+  od->first_key = cont->first_key;
   od->num_writers = 1;
-  od->max_writers = max_writers;
+//  od->max_writers = max_writers;
   od->vector.data.data = &od->vector.data.fast_data[0];
   od->dont_update_directory = 0;
   od->move_resident_alt = 0;
@@ -106,7 +111,7 @@ OpenDir::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
 int
 OpenDir::signal_readers(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
-  Queue<CacheVC, Link_CacheVC_opendir_link> newly_delayed_readers;
+  CacheVCQ newly_delayed_readers;
   EThread *t = mutex->thread_holding;
   CacheVC *c = NULL;
   while ((c = delayed_readers.dequeue())) {
@@ -132,15 +137,15 @@ int
 OpenDir::close_write(CacheVC *cont)
 {
   ink_assert(cont->vol->mutex->thread_holding == this_ethread());
-  cont->od->writers.remove(cont);
-  cont->od->num_writers--;
-  if (!cont->od->writers.head) {
+//  cont->od->writers.remove(cont);
+  if (--(cont->od->num_writers) < 1) {
     unsigned int h = cont->first_key.slice32(0);
     int b = h % OPEN_DIR_BUCKETS;
     bucket[b].remove(cont->od);
-    delayed_readers.append(cont->od->readers);
+//    delayed_readers.append(cont->od->readers);
     signal_readers(0, 0);
     cont->od->vector.clear();
+    cont->od->mutex = 0;
     THREAD_FREE(cont->od, openDirEntryAllocator, cont->mutex->thread_holding);
   }
   cont->od = NULL;
@@ -153,11 +158,12 @@ OpenDir::open_read(INK_MD5 *key)
   unsigned int h = key->slice32(0);
   int b = h % OPEN_DIR_BUCKETS;
   for (OpenDirEntry *d = bucket[b].head; d; d = d->link.next)
-    if (d->writers.head->first_key == *key)
+    if (d->first_key == *key)
       return d;
   return NULL;
 }
 
+# if 0
 int
 OpenDirEntry::wait(CacheVC *cont, int msec)
 {
@@ -167,6 +173,62 @@ OpenDirEntry::wait(CacheVC *cont, int msec)
   cont->trigger = cont->vol->mutex->thread_holding->schedule_in_local(cont, HRTIME_MSECONDS(msec));
   readers.push(cont);
   return EVENT_CONT;
+}
+# endif
+
+int
+OpenDirEntry::index_of(CacheKey const& alt_key)
+{
+  return vector.index_of(alt_key);
+}
+
+bool
+OpenDirEntry::has_writer(CacheKey const& alt_key)
+{
+  return vector.has_writer(alt_key);
+}
+
+OpenDirEntry&
+OpenDirEntry::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+{
+  Debug("amc", "VC %p write active @ %" PRId64, vc, offset);
+  vector.write_active(alt_key, vc, offset);
+  return *this;
+}
+
+OpenDirEntry&
+OpenDirEntry::write_complete(CacheKey const& alt_key, CacheVC* vc, bool success)
+{
+  Debug("amc", "[OpenDir::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
+  vector.write_complete(alt_key, vc, success);
+  return *this;
+}
+
+bool
+OpenDirEntry::is_write_active(CacheKey const& alt_key, int64_t offset)
+{
+  return vector.is_write_active(alt_key, offset);
+}
+
+CacheKey const&
+OpenDirEntry::key_for(CacheKey const& alt_key, int64_t offset)
+{
+  return vector.key_for(alt_key, offset);
+}
+
+OpenDirEntry&
+OpenDirEntry::waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+{
+  Debug("amc", "vc %p waiting for %" PRId64, vc, offset);
+  vector.waiting_for(alt_key, vc, offset);
+  return *this;
+}
+
+OpenDirEntry&
+OpenDirEntry::close_writer(CacheKey const& alt_key, CacheVC* vc)
+{
+  vector.close_writer(alt_key, vc);
+  return *this;
 }
 
 //
