@@ -2620,7 +2620,7 @@ CacheContinuation::getObjectSize(VConnection *vc, int opcode, CacheHTTPInfo *ret
     } else {
       new_ci.object_size_set(object_size);
     }
-    new_ci.m_alt->m_writeable = 1;
+    new_ci.m_alt->m_flag.writeable_p = true;
     ret_ci->copy_shallow(&new_ci);
   }
   ink_release_assert(object_size);

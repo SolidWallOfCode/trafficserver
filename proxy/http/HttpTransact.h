@@ -81,9 +81,7 @@
   s->transact_return_point = r;     \
   DebugSpecific((s->state_machine && s->state_machine->debug_on), "http_trans", "Next action %s; %s", #n, #r);
 
-#define TRANSACT_RETURN(n, r) \
-  TRANSACT_SETUP_RETURN(n, r) \
-  return;
+#define TRANSACT_RETURN(n, r) TRANSACT_SETUP_RETURN(n, r) return;
 
 #define TRANSACT_RETURN_VAL(n, r, v) \
   TRANSACT_SETUP_RETURN(n, r)        \
@@ -378,6 +376,7 @@ public:
     SCHEME_NOT_SUPPORTED,
     UNACCEPTABLE_TE_REQUIRED,
     INVALID_POST_CONTENT_LENGTH,
+    INVALID_RANGE_FIELD,
     TOTAL_REQUEST_ERROR_TYPES
   };
 
@@ -448,22 +447,18 @@ public:
     // SM_ACTION_AUTH_LOOKUP,
     SM_ACTION_DNS_LOOKUP,
     SM_ACTION_DNS_REVERSE_LOOKUP,
-
     SM_ACTION_CACHE_LOOKUP,
     SM_ACTION_CACHE_ISSUE_WRITE,
     SM_ACTION_CACHE_ISSUE_WRITE_TRANSFORM,
     SM_ACTION_CACHE_PREPARE_UPDATE,
     SM_ACTION_CACHE_ISSUE_UPDATE,
-
+    SM_ACTION_CACHE_OPEN_PARTIAL_READ,
     SM_ACTION_ICP_QUERY,
-
     SM_ACTION_ORIGIN_SERVER_OPEN,
     SM_ACTION_ORIGIN_SERVER_RAW_OPEN,
     SM_ACTION_ORIGIN_SERVER_RR_MARK_DOWN,
-
     SM_ACTION_READ_PUSH_HDR,
     SM_ACTION_STORE_PUSH_BODY,
-
     SM_ACTION_INTERNAL_CACHE_DELETE,
     SM_ACTION_INTERNAL_CACHE_NOOP,
     SM_ACTION_INTERNAL_CACHE_UPDATE_HEADERS,
@@ -475,14 +470,12 @@ public:
 #ifdef PROXY_DRAIN
     SM_ACTION_DRAIN_REQUEST_BODY,
 #endif /* PROXY_DRAIN */
-
     SM_ACTION_SERVE_FROM_CACHE,
     SM_ACTION_SERVER_READ,
     SM_ACTION_SERVER_PARSE_NEXT_HDR,
     SM_ACTION_TRANSFORM_READ,
     SM_ACTION_SSL_TUNNEL,
     SM_ACTION_CONTINUE,
-
     SM_ACTION_API_SM_START,
     SM_ACTION_API_READ_REQUEST_HDR,
     SM_ACTION_API_PRE_REMAP,
@@ -494,7 +487,6 @@ public:
     SM_ACTION_API_READ_RESPONSE_HDR,
     SM_ACTION_API_SEND_RESPONSE_HDR,
     SM_ACTION_API_SM_SHUTDOWN,
-
     SM_ACTION_REMAP_REQUEST,
     SM_ACTION_POST_REMAP_SKIP,
     SM_ACTION_REDIRECT_READ
@@ -546,10 +538,9 @@ public:
 
   enum RangeSetup_t {
     RANGE_NONE = 0,
-    RANGE_REQUESTED,
     RANGE_NOT_SATISFIABLE,
-    RANGE_NOT_HANDLED,
-    RANGE_NOT_TRANSFORM_REQUESTED,
+    RANGE_PARTIAL_WRITE,  ///< Cache a range request.
+    RANGE_PARTIAL_UPDATE, ///< Update an existing object with a range request.
   };
 
   enum CacheAuth_t {
@@ -787,9 +778,17 @@ public:
     HTTPHdr transform_response;
     HTTPHdr cache_response;
     int64_t request_content_length;
-    int64_t response_content_length;
+    int64_t response_content_length; // Length of the payload (Content-Length
+                                     // field)
+    int64_t response_content_size;   // Total size of the object on the origin
+                                     // server.
     int64_t transform_request_cl;
     int64_t transform_response_cl;
+    /// The range spec from the user agent request.
+    HTTPRangeSpec request_range;
+    /// The range sent in the proxy request if any.
+    HTTPRangeSpec::Range response_range;
+    ts::ConstBuffer response_range_boundary; // not used yet
     bool client_req_is_server_style;
     bool trust_response_cl;
     ResponseError_t response_error;
@@ -937,7 +936,8 @@ public:
     int api_txn_no_activity_timeout_value;
 
     // Used by INKHttpTxnCachedReqGet and INKHttpTxnCachedRespGet SDK functions
-    // to copy part of HdrHeap (only the writable portion) for cached response headers
+    // to copy part of HdrHeap (only the writable portion) for cached response
+    // headers
     // and request headers
     // These ptrs are deallocate when transaction is over.
     HdrHeapSDKHandle *cache_req_hdr_heap_handle;
@@ -985,7 +985,8 @@ public:
     RangeRecord *ranges;
 
     OverridableHttpConfigParams *txn_conf;
-    OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid malloc
+    OverridableHttpConfigParams my_txn_conf; // Storage for plugins, to avoid
+                                             // malloc
 
     bool transparent_passthrough;
     bool range_in_cache;
@@ -1297,7 +1298,8 @@ public:
   static bool will_this_request_self_loop(State *s);
   static bool is_request_likely_cacheable(State *s, HTTPHdr *request);
 
-  static void build_request(State *s, HTTPHdr *base_request, HTTPHdr *outgoing_request, HTTPVersion outgoing_version);
+  static void build_request(State *s, HTTPHdr *base_request, HTTPHdr *outgoing_request, HTTPVersion outgoing_version,
+                            HTTPRangeSpec const *ranges = 0);
   static void build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing_response, HTTPVersion outgoing_version,
                              HTTPStatus status_code, const char *reason_phrase = NULL);
   static void build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing_response, HTTPVersion outgoing_version);
@@ -1337,7 +1339,8 @@ public:
   static void origin_server_connection_speed(State *s, ink_hrtime transfer_time, int64_t nbytes);
   static void client_result_stat(State *s, ink_hrtime total_time, ink_hrtime request_process_time);
   static void delete_warning_value(HTTPHdr *to_warn, HTTPWarningCode warning_code);
-  static bool is_connection_collapse_checks_success(State *s); // YTS Team, yamsat
+  static bool is_connection_collapse_checks_success(State *s); // YTS Team,
+                                                               // yamsat
 };
 
 typedef void (*TransactEntryFunc_t)(HttpTransact::State *s);

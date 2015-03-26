@@ -307,10 +307,11 @@ CacheVC::CacheVC() : alternate_index(CACHE_ALT_INDEX_DEFAULT)
 {
   size_to_init = sizeof(CacheVC) - (size_t) & ((CacheVC *)nullptr)->vio;
   memset((void *)&vio, 0, size_to_init);
+  wait_position = -1;
 }
 
 #ifdef HTTP_CACHE
-HTTPInfo::FragOffset *
+HTTPInfo::FragmentDescriptorTable *
 CacheVC::get_frag_table()
 {
   ink_assert(alternate.valid());
@@ -480,9 +481,29 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
   } else
     f.allow_empty_doc = 0;
   alternate.copy_shallow(ainfo);
+  // This is not a good place to do this but I can't figure out a better one. We must do it
+  // no earlier than this, because there's no actual alternate to store the value in before this
+  // and I don't know of any later point that's guaranteed to be called before this is needed.
+  alternate.m_alt->m_fixed_fragment_size = cache_config_target_fragment_size - sizeofDoc;
   ainfo->clear();
 }
 #endif
+
+int64_t
+CacheVC::set_inbound_range(int64_t min, int64_t max)
+{
+  resp_range.clear();
+  resp_range.getRangeSpec().add(min, max);
+  Debug("amc", "%p inbound range set to %" PRId64 "-%" PRId64, this, min, max);
+  return 1 + (max - min);
+}
+
+void
+CacheVC::set_full_content_length(int64_t cl)
+{
+  alternate.object_size_set(cl);
+  resp_range.resolve(cl);
+}
 
 bool
 CacheVC::set_pin_in_cache(time_t time_pin)
@@ -497,6 +518,25 @@ CacheVC::set_pin_in_cache(time_t time_pin)
   }
   pin_in_cache = time_pin;
   return true;
+}
+
+void
+CacheVC::set_content_range(HTTPRangeSpec const &r)
+{
+  resp_range.getRangeSpec() = r;
+  resp_range.start();
+}
+
+bool
+CacheVC::get_uncached(HTTPRangeSpec const &req, HTTPRangeSpec &result, int64_t initial)
+{
+  HTTPRangeSpec::Range r =
+    od ? od->vector.get_uncached_hull(earliest_key, req, initial) : alternate.get_uncached_hull(req, initial);
+  if (r.isValid()) {
+    result.add(r);
+    return true;
+  }
+  return false;
 }
 
 bool
@@ -557,6 +597,7 @@ Vol::close_read(CacheVC *cont)
   EThread *t = cont->mutex->thread_holding;
   ink_assert(t == this_ethread());
   ink_assert(t == mutex->thread_holding);
+  open_dir.close_entry(cont);
   if (dir_is_empty(&cont->earliest_dir))
     return 1;
   int i = dir_evac_bucket(&cont->earliest_dir);
@@ -1123,6 +1164,12 @@ CacheProcessor::lookup(Continuation *cont, const CacheKey *key, bool cluster_cac
   }
 #endif
   return caches[frag_type]->lookup(cont, key, frag_type, hostname, host_len);
+}
+
+inkcoreapi Action *
+CacheProcessor::open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr)
+{
+  return caches[CACHE_FRAG_TYPE_HTTP]->open_read(cont, writer, client_request_hdr);
 }
 
 inkcoreapi Action *
@@ -2213,6 +2260,19 @@ CacheVC::is_pread_capable()
   return !f.read_from_writer_called;
 }
 
+#if 0
+void
+CacheVC::get_missing_ranges(HTTPRangeSpec& missing)
+{
+  missing.reset();
+  if (0 == alternate.);
+  // For now we'll just compute the convex hull of the missing data.
+  for ( RangeBox::const_iterator spot = req.begin(), limit = req.end() ; spot != limit ; ++spot ) {
+
+  }
+}
+#endif
+
 #define STORE_COLLISION 1
 
 #ifdef HTTP_CACHE
@@ -2238,7 +2298,7 @@ unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay)
     @internal I looked at doing this in place (rather than a copy & modify) but
     - The in place logic would be even worse than this mess
     - It wouldn't save you that much, since you end up doing inserts early in the buffer.
-      Without extreme care in the logic it could end up doing more copying thatn
+      Without extreme care in the logic it could end up doing more copying than
       the simpler copy & modify.
 
     @internal This logic presumes the existence of some slack at the end of the buffer, which
@@ -2257,16 +2317,16 @@ upgrade_doc_version(Ptr<IOBufferData> &buf)
     if (0 == doc->hlen) {
       Debug("cache_bc", "Doc %p without header, no upgrade needed.", doc);
     } else if (CACHE_FRAG_TYPE_HTTP_V23 == doc->doc_type) {
+      typedef cache_bc::HTTPCacheFragmentTable::FragOffset FragOffset;
       cache_bc::HTTPCacheAlt_v21 *alt = reinterpret_cast<cache_bc::HTTPCacheAlt_v21 *>(doc->hdr());
       if (alt && alt->is_unmarshalled_format()) {
         Ptr<IOBufferData> d_buf(ioDataAllocator.alloc());
         Doc *d_doc;
         char *src;
         char *dst;
-        char *hdr_limit = doc->data();
-        HTTPInfo::FragOffset *frags =
-          reinterpret_cast<HTTPInfo::FragOffset *>(static_cast<char *>(buf->data()) + cache_bc::sizeofDoc_v23);
-        int frag_count      = doc->_flen / sizeof(HTTPInfo::FragOffset);
+        char *hdr_limit     = doc->data();
+        FragOffset *frags   = reinterpret_cast<FragOffset *>(static_cast<char *>(buf->data()) + cache_bc::sizeofDoc_v23);
+        int frag_count      = doc->_flen / sizeof(FragOffset);
         size_t n            = 0;
         size_t content_size = doc->data_len();
 
@@ -2500,6 +2560,11 @@ CacheVC::handleRead(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   io.action             = this;
   io.thread             = mutex->thread_holding->tt == DEDICATED ? AIO_CALLBACK_THREAD_ANY : mutex->thread_holding;
   SET_HANDLER(&CacheVC::handleReadDone);
+  {
+    char xt[33];
+    Debug("amc", "cache read : key = %s %" PRId64 " bytes at stripe offset =% " PRId64, key.toHexStr(xt), io.aiocb.aio_nbytes,
+          io.aiocb.aio_offset);
+  }
   ink_assert(ink_aio_read(&io) >= 0);
   CACHE_DEBUG_INCREMENT_DYN_STAT(cache_pread_count_stat);
   return EVENT_CONT;
@@ -2564,7 +2629,7 @@ CacheVC::removeEvent(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       goto Lfree;
     }
     if (!f.remove_aborted_writers) {
-      if (vol->open_write(this, true, 1)) {
+      if (vol->open_write(this)) {
         // writer  exists
         ink_release_assert(od = vol->open_read(&key));
         od->dont_update_directory = 1;
@@ -3308,7 +3373,7 @@ CacheProcessor::open_read(Continuation *cont, const HttpCacheKey *key, bool clus
 
 //----------------------------------------------------------------------------
 Action *
-CacheProcessor::open_write(Continuation *cont, int expected_size, const HttpCacheKey *key, bool cluster_cache_local,
+CacheProcessor::open_write(Continuation *cont, int expected_size, HttpCacheKey const *key, bool cluster_cache_local,
                            CacheHTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache, CacheFragType type)
 {
 #ifdef CLUSTER_CACHE
@@ -3359,6 +3424,24 @@ CacheProcessor::find_by_path(const char *path, int len)
   return nullptr;
 }
 
+// ----------------------------
+Event *
+CacheVC::wake_up(int event, void *cookie)
+{
+  // This is not done under lock but due to other logic it should never be the case that there is
+  // already a trigger waiting or there is a race condition. If the CacheVC is waiting, it should be
+  // waiting and doing nothing else. Other logic should never wake up a CacheVC twice and the CacheVC
+  // should clear this and become quiescent again before going back to a waiting state.
+  // But let's do a check anyway.
+  if (NULL == trigger) {
+    Event *e = wake_up_thread->alloc_event(this, event, cookie);
+    if (ink_atomic_cas(&trigger, static_cast<Event volatile *>(NULL), static_cast<Event volatile *>(e)))
+      wake_up_thread->schedule(e, false);
+    else
+      wake_up_thread->free_event(e);
+  }
+  return const_cast<Event *>(trigger);
+}
 // ----------------------------
 
 namespace cache_bc

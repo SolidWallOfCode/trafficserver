@@ -32,9 +32,9 @@ namespace cache_bc
 */
 
 typedef HTTPHdr HTTPHdr_v21;
+typedef HTTPHdr HTTPHdr_v23;
 typedef HdrHeap HdrHeap_v23;
 typedef CryptoHash CryptoHash_v23;
-typedef HTTPCacheAlt HTTPCacheAlt_v23;
 
 /** Cache backwards compatibility structure - the fragment table.
     This is copied from @c HTTPCacheAlt in @c HTTP.h.
@@ -118,6 +118,34 @@ struct Doc_v23 {
   char *data();
   size_t data_len();
 };
+
+struct HTTPCacheAlt_v23 {
+  uint32_t m_magic;
+  int32_t m_writeable;
+  int32_t m_unmarshal_len;
+
+  int32_t m_id;
+  int32_t m_rid;
+
+  int32_t m_object_key[4];
+  int32_t m_object_size[2];
+
+  HTTPHdr_v23 m_request_hdr;
+  HTTPHdr_v23 m_response_hdr;
+
+  time_t m_request_sent_time;
+  time_t m_response_received_time;
+
+  int m_frag_offset_count;
+  typedef uint64_t FragOffset;
+  FragOffset *m_frag_offsets;
+  static int const N_INTEGRAL_FRAG_OFFSETS = 4;
+  FragOffset m_integral_frag_offsets[N_INTEGRAL_FRAG_OFFSETS];
+
+  RefCountObj *m_ext_buffer;
+};
+
+typedef HTTPCacheAlt_v23 HTTPCacheAlt_v24; // no changes between these versions.
 
 static size_t const sizeofDoc_v23 = sizeof(Doc_v23);
 char *

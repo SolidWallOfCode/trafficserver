@@ -1,30 +1,31 @@
 /** @file
 
-  A brief file description
+    A brief file description
 
-  @section license License
+    @section license License
 
-  Licensed to the Apache Software Foundation (ASF) under one
-  or more contributor license agreements.  See the NOTICE file
-  distributed with this work for additional information
-  regarding copyright ownership.  The ASF licenses this file
-  to you under the Apache License, Version 2.0 (the
-  "License"); you may not use this file except in compliance
-  with the License.  You may obtain a copy of the License at
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
 
-      http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
- */
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
 
 #ifndef __HTTP_H__
 #define __HTTP_H__
 
 #include <assert.h>
+#include <vector>
 #include "ts/Arena.h"
 #include "ts/INK_MD5.h"
 #include "MIME.h"
@@ -37,6 +38,11 @@
 #define HTTP_MAJOR(v) (((v) >> 16) & 0xFFFF)
 
 class Http2HeaderTable;
+class MIOBuffer;
+namespace ts
+{
+struct ConstBuffer;
+}
 
 enum HTTPStatus {
   HTTP_STATUS_NONE = 0,
@@ -405,6 +411,8 @@ extern int HTTP_LEN_S_MAXAGE;
 extern int HTTP_LEN_NEED_REVALIDATE_ONCE;
 extern int HTTP_LEN_100_CONTINUE;
 
+static size_t const HTTP_RANGE_BOUNDARY_LEN = 32 + 2 + 16;
+
 /* Private */
 void http_hdr_adjust(HTTPHdrImpl *hdrp, int32_t offset, int32_t length, int32_t delta);
 
@@ -450,13 +458,13 @@ HTTPStatus http_parse_status(const char *start, const char *end);
 int32_t http_parse_version(const char *start, const char *end);
 
 /*
-HTTPValAccept*         http_parse_accept (const char *buf, Arena *arena);
-HTTPValAcceptCharset*  http_parse_accept_charset (const char *buf, Arena *arena);
-HTTPValAcceptEncoding* http_parse_accept_encoding (const char *buf, Arena *arena);
-HTTPValAcceptLanguage* http_parse_accept_language (const char *buf, Arena *arena);
-HTTPValCacheControl*   http_parse_cache_control (const char *buf, Arena *arena);
-const char*            http_parse_cache_directive (const char **buf);
-HTTPValRange*          http_parse_range (const char *buf, Arena *arena);
+  HTTPValAccept*         http_parse_accept (const char *buf, Arena *arena);
+  HTTPValAcceptCharset*  http_parse_accept_charset (const char *buf, Arena *arena);
+  HTTPValAcceptEncoding* http_parse_accept_encoding (const char *buf, Arena *arena);
+  HTTPValAcceptLanguage* http_parse_accept_language (const char *buf, Arena *arena);
+  HTTPValCacheControl*   http_parse_cache_control (const char *buf, Arena *arena);
+  const char*            http_parse_cache_directive (const char **buf);
+  HTTPValRange*          http_parse_range (const char *buf, Arena *arena);
 */
 HTTPValTE *http_parse_te(const char *buf, int len, Arena *arena);
 
@@ -480,6 +488,251 @@ public:
 
 public:
   int32_t m_version;
+};
+
+/** A set of content ranges.
+
+    This represents the data for an HTTP range specification.
+    On a request this contains the request ranges. On a response it is the actual ranges in the
+    response, which are the requested ranges modified by the actual content length.
+*/
+struct HTTPRangeSpec {
+  typedef HTTPRangeSpec self;
+
+  /** A range of bytes in an object.
+
+      If @a _min > 0 and @a _max == 0 the range is backwards and counts from the
+      end of the object. That is (100,0) means the last 100 bytes of content.
+
+      A prefix range is represented by a @a _min >= 0 and @c _max == INT64_MAX.
+
+      A prefix or suffix range is an @a open range as it is not fully specified and depends on the
+      actual content length.
+  */
+  struct Range {
+    typedef Range self; ///< Self reference type.
+
+    int64_t _min; ///< Minimum offset of the range.
+    int64_t _max; ///< Maximum offset of the range.
+
+    /// Default constructor - invalid range.
+    Range() : _min(INT64_MAX), _max(1) {}
+    /// Construct as the range ( @a low .. @a high )
+    Range(int64_t low, int64_t high) : _min(low), _max(high) {}
+    /// Test if this range is a suffix range.
+    bool isSuffix() const;
+    /// Test if this range is a prefix range.
+    bool isPrefix() const;
+    /// Test if this range is a valid range.
+    bool isValid() const;
+    /// Get the size (in bytes) of the range.
+    int64_t size() const;
+    /** Convert range to absolute values for a content length of @a len.
+
+        @return @c true if the range was valid for @a len and all resulting range are absolute.
+    */
+    bool apply(int64_t len);
+
+    /// Make the range a suffix range.
+    self &setSuffix(int64_t len);
+
+    /// Force the range to an empty state.
+    Range &invalidate();
+  };
+
+  /// Range iteration type.
+  typedef Range *iterator;
+  typedef Range const *const_iterator;
+
+  /// Current state of the overall specification.
+  /// @internal We can distinguish between @c SINGLE and @c MULTI by looking at the
+  /// size of @a _ranges but we need this to mark @c EMPTY vs. not.
+  enum State {
+    EMPTY,         ///< No range.
+    INVALID,       ///< Range parsing failed.
+    UNSATISFIABLE, ///< Content length resolution failed.
+    SINGLE,        ///< Single range.
+    MULTI,         ///< Multiple ranges.
+  } _state;
+
+  /// The first range value.
+  /// By separating this out we can avoid allocation in the case of a single
+  /// range value, which is by far the most common ( > 99% in my experience).
+  Range _single;
+  /// Storage for range values.
+  typedef std::vector<Range> RangeBox;
+  /// The first range is copied here if there is more than one (to simplify).
+  RangeBox _ranges;
+
+  /// Default constructor - empty range
+  HTTPRangeSpec();
+
+  /// Reset to re-usable state.
+  void clear();
+
+  /** Parse a Range field @a value and update @a this with the results.
+      @return @c true if @a value was a valid range specifier, @c false otherwise.
+  */
+  bool parseRangeFieldValue(char const *value, int len);
+
+  /** Parse a Content-Range field @a value.
+
+      @a r is set to the content range. If the content range is unsatisfied or a parse error the @a range is
+      set to be invalid.
+
+      @note The content length return is ambiguous on its own, the state of @a r must be checked.
+
+      - Multipart: @a boundary is not empty
+      - Parse error: @a CL == -1 and @a r is invalid
+      - Unsatisfiable: @a CL >= 0 and @a r is invalid
+      - Indeterminate: @c CL == -1 and @a r is valid
+
+      @return The content length, or -1 if there is an error or the content length is indeterminate.
+  */
+  static int64_t parseContentRangeFieldValue(char const *value, int len, Range &r, ts::ConstBuffer &boundary);
+
+  /// Print the range specification.
+  /// @return The number of characters printed.
+  int print(char *buff ///< Output buffer.
+            ,
+            size_t len ///< Size of output buffer.
+            ) const;
+
+  /// Print the range specification quantized.
+  /// @return The number of characters printed.
+  int print_quantized(char *buff ///< Output buffer.
+                      ,
+                      size_t len ///< Size of output buffer.
+                      ,
+                      int64_t quantum ///< Align ranges to multiples of this value.
+                      ,
+                      int64_t interstitial ///< Require gaps to be at least this large.
+                      ,
+                      int64_t limit ///< All requested bytes will be less than this if > 0
+                      ) const;
+
+  /// Print the @a ranges.
+  /// @return The number of characters printed.
+  static int print_array(char *buff ///< Output buffer.
+                         ,
+                         size_t len ///< Size of output buffer.
+                         ,
+                         Range const *ranges ///< Array of ranges
+                         ,
+                         int count ///< # of ranges
+                         );
+
+#if 0
+  /** Copy ranges from @a while applying them to the content @a length.
+
+      Ranges are copied if valid for @a length and converted to absolute offsets. The number of ranges
+      after application may be less than the @a src number of ranges. In addition ranges will be clipped
+      to @a length.
+
+      @return @c true if the range spec is satisfiable, @c false otherwise.
+      Note a range spec with no ranges is always satisfiable and that suffix ranges are also
+      always satisfiable.
+  */
+  bool apply(self const& that, uint64_t length);
+#endif
+
+  /** Update ranges to be absolute based on content @a length.
+
+      Invalid ranges are removed, ranges will be clipped as needed, and suffix ranges will be
+      converted to absolute ranges.
+
+      @return @c true if the range spec is satisfiable (there remains at least one valid range), @c false otherwise.
+      Note a range spec with no ranges is always satisfiable and that suffix ranges are also
+      always satisfiable.
+  */
+  bool apply(int64_t length);
+
+  /** Number of distinct ranges.
+      @return Number of ranges.
+  */
+  size_t count() const;
+
+  /// Get the size (in bytes) of the ranges.
+  uint64_t size() const;
+
+  /// If this is a valid  single range specification.
+  bool isSingle() const;
+
+  /// If this is a valid multi range specification.
+  bool isMulti() const;
+
+  /// Test if this contains at least one valid range.
+  bool hasRanges() const;
+
+  /// Test if this is a well formed range (may be empty).
+  bool isValid() const;
+
+  /// Test if this is a valid but empty range spec.
+  bool isEmpty() const;
+
+  /// Test if this is an unsatisfied range.
+  bool isUnsatisfied() const;
+
+  /// Test if there is an open range (not absolute offsets)
+  bool hasOpenRange() const;
+
+  /// Access the range at index @a idx.
+  Range &operator[](int n);
+
+  /// Access the range at index @a idx.
+  Range const &operator[](int n) const;
+
+  /// Calculate the convex hull of the range spec.
+  /// The convex hull is the smallest single range that contains all of the ranges in the range spec.
+  /// @note This will return an invalid range if there are no ranges in the range spec.
+  /// @see HttpRangeSpec::Range::isValid
+  Range getConvexHull() const;
+
+  /** Calculate the content length for this range specification.
+
+      @note If a specific content length has not been @c apply 'd this will not produce
+      a usable result.
+
+      @return The content length for the ranges including the range separators.
+  */
+  uint64_t calcContentLength(uint64_t base_content_size, ///< Content size w/o ranges.
+                             uint64_t ct_val_len         ///< Length of Content-Type field value.
+                             ) const;
+
+  /// Calculate the length of the range part boundary header.
+  static uint64_t calcPartBoundarySize(uint64_t object_size ///< Base content size
+                                       ,
+                                       uint64_t ct_val_len ///< Length of the Content-Type value (0 if none).
+                                       );
+
+  /** Write the range part boundary to @a out.
+   */
+  static uint64_t writePartBoundary(MIOBuffer *out ///< Output IO Buffer
+                                    ,
+                                    char const *boundary_str ///< Boundary marker string.
+                                    ,
+                                    size_t boundary_len ///< Length of boundary marker string.
+                                    ,
+                                    uint64_t total_size ///< Base content size.
+                                    ,
+                                    uint64_t low ///< Low value for the range.
+                                    ,
+                                    uint64_t high ///< High value for the raNGE.
+                                    ,
+                                    MIMEField *ctf ///< Content-Type field (@c NULL if none)
+                                    ,
+                                    bool final ///< Is this the final part boundary?
+                                    );
+
+  /// Iterator for first range.
+  iterator begin();
+  const_iterator begin() const;
+  /// Iterator past last range.
+  iterator end();
+  const_iterator end() const;
+
+  self &add(uint64_t low, uint64_t high);
+  self &add(Range const &r);
 };
 
 class IOBufferReader;
@@ -617,6 +870,7 @@ public:
 
   const char *reason_get(int *length);
   void reason_set(const char *value, int length);
+  void reason_set(HTTPStatus status);
 
   ParseResult parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing = false);
   ParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, bool eof);
@@ -1230,7 +1484,16 @@ HTTPHdr::reason_set(const char *value, int length)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-inline ParseResult
+inline void
+HTTPHdr::reason_set(HTTPStatus status)
+{
+  char const *phrase = http_hdr_reason_lookup(status);
+  this->reason_set(phrase, strlen(phrase));
+}
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
+inline MIMEParseResult
 HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing)
 {
   ink_assert(valid());
@@ -1309,28 +1572,114 @@ enum {
   CACHE_ALT_MAGIC_DEAD      = 0xdeadeed,
 };
 
-// struct HTTPCacheAlt
+/// Header for an alternate of an object.
+/// This is close to a POD, all the real API is in the @c HTTPInfo class.
+/// @note THIS IS DIRECTLY SERIALIZED TO DISK
+/// (after some tweaks, but any member in this struct will be written to disk)
 struct HTTPCacheAlt {
+  /// Information about a fragment in this alternate.
+  /// @internal Currently @c Dir has only 40 bits for the disk offset of a fragment,
+  /// and since no object (or alternate) is split across stripes (and thence disks)
+  /// no fragment can have an internal offset more than 40 bits long, so 48 bits
+  /// should suffice here.
+  struct FragmentDescriptor {
+    CryptoHash m_key;       ///< Key for fragment.
+    uint64_t m_offset : 48; ///< Starting offset of fragment in object.
+    union {
+      uint16_t m_flags;
+      struct {
+        unsigned int cached_p : 1; ///< Presence bit (is fragment in cache?)
+        unsigned int zero : 15;    ///< Zero fill for future use.
+      } m_flag;
+    };
+  };
+
+  /** Holds the table of fragment descriptors.
+
+      @internal To avoid allocating 2 chunks of memory we hang the descriptors off the end of this structure and provide
+      a method to do the calculations. The @a m_size contains the number of descriptors, the actual byte size must be
+      computed from that. The count of valid entries is held in this structure, not in the table, because it makes
+      serialization easier.  We don't serialize the explicit contents of the table struct (e.g., the capacity / @a
+      m_size value) only the descriptors.
+  */
+  struct FragmentDescriptorTable {
+    /** The number of entries in the table.
+        Because this is a 1 based array, this is also the largest valid index.
+        @note It is 1 less than the total number of fragment descriptors because earliest is stored
+        directly and not in this table.
+        @note This is never zero because in that case the table isn't created at all.
+     */
+    uint32_t m_n;
+
+    /** Fragment index of last initial segment cached.
+
+        All fragments from the earliest to this are in cache.
+
+        @note A simple effort to minimize the cost of detecting a complete object.
+        In the normal case we'll get all the fragments in order so this will roll along nicely.
+        Otherwise we may have to do a lot of work on a single fragment, but that is better
+        than doing it every time for every fragment.
+    */
+    uint32_t m_cached_idx;
+
+    /** Array operator for fragments in the table (1-based).
+        This is a bit tricky. The earliest fragment is special and so is @b not stored in this table.
+        To make that easier to deal with this array is one based so the containing object can simply
+        pass the index on if it's not 0 (earliest). From an external point of view the array of fragments
+        is zero based.
+     */
+    FragmentDescriptor &operator[](int idx);
+    /// Calculate the allocation size needed for a maximum array index of @a n.
+    static size_t calc_size(uint32_t n);
+  };
+
   HTTPCacheAlt();
+
   void copy(HTTPCacheAlt *to_copy);
-  void copy_frag_offsets_from(HTTPCacheAlt *src);
   void destroy();
 
   uint32_t m_magic;
 
-  // Writeable is set to true is we reside
-  //  in a buffer owned by this structure.
-  // INVARIANT: if own the buffer this HttpCacheAlt
-  //   we also own the buffers for the request &
-  //   response headers
-  int32_t m_writeable;
+  union {
+    uint32_t m_flags;
+    struct {
+      /** Do we own our own buffer?
+          @c true if the buffer containing this data is owned by this object.
+          INVARIANT: if we own this buffer then we also own the buffers for
+          @a m_request_hdr and @a m_response_hdr.
+      */
+      uint32_t writeable_p : 1;
+      /// Was this alternate originally stored as a partial object?
+      uint32_t composite_p : 1;
+      /// Did the origin tell us the actual length of the object?
+      uint32_t content_length_p : 1;
+      /// Are all fragments in cache?
+      uint32_t complete_p : 1;
+      /// Is the fragment table independently allocated?
+      uint32_t table_allocated_p : 1;
+      // Note - !composite_p => complete_p
+      //      - complete_p => content_length_p
+    } m_flag;
+  };
+
   int32_t m_unmarshal_len;
 
   int32_t m_id;
   int32_t m_rid;
 
-  int32_t m_object_key[4];
-  int32_t m_object_size[2];
+  /// # of fragments in the cached version of the alternate, including the earliest fragment.
+  /// This can be zero for a resident alternate.
+  /// @internal In practice this is the high water mark for cached fragments, the maximum index of cached fragments.
+  /// This tracks in effect the minimum content size of the actual object - it must be at least this many fragments.
+  /// Contrast with the @a m_cached_idx in the fragment table - that marks the high
+  /// water of cached initial fragments.
+  uint32_t m_frag_count;
+
+  /** The target size for fragments in this alternate.
+      This is @b mandatory if the object is being partially cached.
+      During read it should be used as a guideline but not considered definitive.
+  */
+  uint32_t m_fixed_fragment_size;
 
   HTTPHdr m_request_hdr;
   HTTPHdr m_response_hdr;
@@ -1338,21 +1687,23 @@ struct HTTPCacheAlt {
   time_t m_request_sent_time;
   time_t m_response_received_time;
 
-  /// # of fragment offsets in this alternate.
-  /// @note This is one less than the number of fragments.
-  int m_frag_offset_count;
-  /// Type of offset for a fragment.
-  typedef uint64_t FragOffset;
-  /// Table of fragment offsets.
-  /// @note The offsets are forward looking so that frag[0] is the
-  /// first byte past the end of fragment 0 which is also the first
-  /// byte of fragment 1. For this reason there is no fragment offset
-  /// for the last fragment.
-  FragOffset *m_frag_offsets;
-  /// # of fragment offsets built in to object.
-  static int const N_INTEGRAL_FRAG_OFFSETS = 4;
-  /// Integral fragment offset table.
-  FragOffset m_integral_frag_offsets[N_INTEGRAL_FRAG_OFFSETS];
+  /** Special case the first (earliest, non-resident) fragment.
+      This holds the key for the earliest fragment and the object size
+      by overloading the offset in this specific instance.
+  */
+  FragmentDescriptor m_earliest;
+
+  /** Descriptors for the rest of the fragments.
+      Because of this, index 0 in this array is really the next fragment after the
+      earliest fragment. We should have the invariant
+      ( @a m_fragments != 0) == ( @a m_frag_count > 1 )
+
+      @internal I thought of using @c std::vector here, but then we end up with either
+      doing 2 allocations (one for the @c std::vector and another for its contents) or
+      writing the @c std::vector container to disk (because this struct is directly
+      serialized). Instead we do our own memory management, which doesn't make me happy either.
+  */
+  FragmentDescriptorTable *m_fragments;
 
   // With clustering, our alt may be in cluster
   //  incoming channel buffer, when we are
@@ -1367,7 +1718,8 @@ struct HTTPCacheAlt {
 class HTTPInfo
 {
 public:
-  typedef HTTPCacheAlt::FragOffset FragOffset; ///< Import type.
+  typedef HTTPCacheAlt::FragmentDescriptor FragmentDescriptor;           ///< Import type.
+  typedef HTTPCacheAlt::FragmentDescriptorTable FragmentDescriptorTable; ///< Import type.
 
   HTTPCacheAlt *m_alt;
 
@@ -1393,7 +1745,6 @@ public:
   {
     m_alt = info->m_alt;
   }
-  void copy_frag_offsets_from(HTTPInfo *src);
   HTTPInfo &operator=(const HTTPInfo &m);
 
   inkcoreapi int marshal_length();
@@ -1424,9 +1775,9 @@ public:
     m_alt->m_rid = id;
   }
 
-  INK_MD5 object_key_get();
-  void object_key_get(INK_MD5 *);
-  bool compare_object_key(const INK_MD5 *);
+  CryptoHash const &object_key_get();
+  void object_key_get(CryptoHash *);
+  bool compare_object_key(const CryptoHash *);
   int64_t object_size_get();
 
   void
@@ -1468,7 +1819,7 @@ public:
     return m_alt->m_response_received_time;
   }
 
-  void object_key_set(INK_MD5 &md5);
+  void object_key_set(CryptoHash const &md5);
   void object_size_set(int64_t size);
 
   void
@@ -1493,14 +1844,72 @@ public:
     m_alt->m_response_received_time = t;
   }
 
+  bool
+  is_composite() const
+  {
+    return m_alt->m_flag.composite_p;
+  }
+  bool
+  is_complete() const
+  {
+    return m_alt->m_flag.complete_p;
+  }
+  bool
+  is_writeable() const
+  {
+    return m_alt->m_flag.writeable_p;
+  }
+  int64_t
+  get_fixed_fragment_size() const
+  {
+    return m_alt->m_fixed_fragment_size;
+  }
+
+  /** Compute the convex hull of uncached ranges.
+
+      If the resulting range has a minimum that is less than @a initial @b and the earliest fragment
+      is not cached then the minimum will be changed to zero. Alternatively, the initial uncached
+      segment must be at least @a initial bytes long.
+
+      @return An invalid range if all of the request is available in cache.
+  */
+  HTTPRangeSpec::Range get_uncached_hull(HTTPRangeSpec const &req ///< [in] UA request with content length applied
+                                         ,
+                                         int64_t initial ///< Minimize size for uncached initial data
+                                         );
+
   /// Get the fragment table.
-  FragOffset *get_frag_table();
-  /// Get the # of fragment offsets
-  /// @note This is the size of the fragment offset table, and one less
-  /// than the actual # of fragments.
-  int get_frag_offset_count();
-  /// Add an @a offset to the end of the fragment offset table.
-  void push_frag_offset(FragOffset offset);
+  /// @note There is a fragment table only for multi-fragment alternates @b and
+  /// the indexing starts with the second (non-earliest) fragment.
+  /// @deprecated - use specialized methods.
+  FragmentDescriptorTable *get_frag_table();
+
+  /// Force a descriptor at index @a idx.
+  FragmentDescriptor *force_frag_at(unsigned int idx);
+
+  /// Get the fragment index for @a offset.
+  int get_frag_index_of(int64_t offset);
+  /// Get the fragment key for an @a offset.
+  /// @note Forces fragment.
+  CryptoHash const &get_frag_key_of(int64_t offset);
+  /// Get the fragment key of the @a idx fragment.
+  /// @note Forces fragment.
+  CryptoHash const &get_frag_key(unsigned int idx);
+  /// Get the starting offset of a fragment.
+  int64_t get_frag_offset(unsigned int idx);
+  /// Given a @a position and @a length return the maximum length that does not cross a fragment boundary.
+  int64_t clip_to_frag_boundary(int64_t position, int64_t length);
+  /// Get the number of fragments.
+  /// 0 means resident alternate, 1 means single fragment, > 1 means multi-fragment.
+  int get_frag_count() const;
+  /// Get the target fragment size.
+  uint32_t get_frag_fixed_size() const;
+  /// Mark a fragment at index @a idx as written to cache.
+  void mark_frag_write(unsigned int idx);
+  /// Check if a fragment is cached.
+  bool is_frag_cached(unsigned int idx) const;
+  /// Get the range of bytes for the fragments from @a low to @a high.
+  HTTPRangeSpec::Range get_range_for_frags(int low, int high);
 
   // Sanity check functions
   static bool check_marshalled(char *buf, int len);
@@ -1513,7 +1922,7 @@ inline void
 HTTPInfo::destroy()
 {
   if (m_alt) {
-    if (m_alt->m_writeable) {
+    if (m_alt->m_flag.writeable_p) {
       m_alt->destroy();
     } else if (m_alt->m_ext_buffer) {
       if (m_alt->m_ext_buffer->refcount_dec() == 0) {
@@ -1531,77 +1940,315 @@ HTTPInfo::operator=(const HTTPInfo &m)
   return *this;
 }
 
-inline INK_MD5
+inline CryptoHash const &
 HTTPInfo::object_key_get()
 {
-  INK_MD5 val;
-  int32_t *pi = reinterpret_cast<int32_t *>(&val);
-
-  pi[0] = m_alt->m_object_key[0];
-  pi[1] = m_alt->m_object_key[1];
-  pi[2] = m_alt->m_object_key[2];
-  pi[3] = m_alt->m_object_key[3];
-
-  return val;
+  return m_alt->m_earliest.m_key;
 }
 
 inline void
-HTTPInfo::object_key_get(INK_MD5 *md5)
+HTTPInfo::object_key_get(CryptoHash *key)
 {
-  int32_t *pi = reinterpret_cast<int32_t *>(md5);
-  pi[0]       = m_alt->m_object_key[0];
-  pi[1]       = m_alt->m_object_key[1];
-  pi[2]       = m_alt->m_object_key[2];
-  pi[3]       = m_alt->m_object_key[3];
+  memcpy(key, &(m_alt->m_earliest.m_key), sizeof(*key));
 }
 
 inline bool
-HTTPInfo::compare_object_key(const INK_MD5 *md5)
+HTTPInfo::compare_object_key(const CryptoHash *key)
 {
-  int32_t const *pi = reinterpret_cast<int32_t const *>(md5);
-  return ((m_alt->m_object_key[0] == pi[0]) && (m_alt->m_object_key[1] == pi[1]) && (m_alt->m_object_key[2] == pi[2]) &&
-          (m_alt->m_object_key[3] == pi[3]));
+  return *key == m_alt->m_earliest.m_key;
 }
 
 inline int64_t
 HTTPInfo::object_size_get()
 {
-  int64_t val;
-  int32_t *pi = reinterpret_cast<int32_t *>(&val);
-
-  pi[0] = m_alt->m_object_size[0];
-  pi[1] = m_alt->m_object_size[1];
-  return val;
+  return m_alt->m_earliest.m_offset;
 }
 
 inline void
-HTTPInfo::object_key_set(INK_MD5 &md5)
+HTTPInfo::object_key_set(CryptoHash const &md5)
 {
-  int32_t *pi            = reinterpret_cast<int32_t *>(&md5);
-  m_alt->m_object_key[0] = pi[0];
-  m_alt->m_object_key[1] = pi[1];
-  m_alt->m_object_key[2] = pi[2];
-  m_alt->m_object_key[3] = pi[3];
+  m_alt->m_earliest.m_key = md5;
 }
 
 inline void
 HTTPInfo::object_size_set(int64_t size)
 {
-  int32_t *pi             = reinterpret_cast<int32_t *>(&size);
-  m_alt->m_object_size[0] = pi[0];
-  m_alt->m_object_size[1] = pi[1];
+  m_alt->m_earliest.m_offset     = size;
+  m_alt->m_flag.content_length_p = true;
+  // Invariant - if a fragment is cached, all of that fragment is cached.
+  // Therefore if the last byte is in the initial cached fragments all of the data is cached.
+  if (!m_alt->m_flag.complete_p) {
+    int64_t mco = 0; // maximum cached offset + 1
+    if (m_alt->m_fragments) {
+      if (m_alt->m_fragments->m_cached_idx >= 0)
+        mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
+    } else if (m_alt->m_earliest.m_flag.cached_p) {
+      mco = this->get_frag_fixed_size();
+    }
+    if (mco > size)
+      m_alt->m_flag.complete_p = true;
+  }
 }
 
-inline HTTPInfo::FragOffset *
+inline HTTPInfo::FragmentDescriptorTable *
 HTTPInfo::get_frag_table()
 {
-  return m_alt ? m_alt->m_frag_offsets : 0;
+  return m_alt ? m_alt->m_fragments : 0;
 }
 
 inline int
-HTTPInfo::get_frag_offset_count()
+HTTPInfo::get_frag_count() const
 {
-  return m_alt ? m_alt->m_frag_offset_count : 0;
+  return m_alt ? m_alt->m_frag_count : 0;
 }
+
+inline uint32_t
+HTTPInfo::get_frag_fixed_size() const
+{
+  return m_alt ? m_alt->m_fixed_fragment_size : 0;
+}
+
+inline CryptoHash const &
+HTTPInfo::get_frag_key_of(int64_t offset)
+{
+  return this->get_frag_key(this->get_frag_index_of(offset));
+}
+
+inline CryptoHash const &
+HTTPInfo::get_frag_key(unsigned int idx)
+{
+  return 0 == idx ? m_alt->m_earliest.m_key : this->force_frag_at(idx)->m_key;
+}
+
+inline bool
+HTTPInfo::is_frag_cached(unsigned int idx) const
+{
+  return m_alt && ((0 == idx && m_alt->m_earliest.m_flag.cached_p) ||
+                   (m_alt->m_fragments && idx <= m_alt->m_fragments->m_n && (*m_alt->m_fragments)[idx].m_flag.cached_p));
+}
+
+inline HTTPRangeSpec::HTTPRangeSpec() : _state(EMPTY)
+{
+}
+
+inline void
+HTTPRangeSpec::clear()
+{
+  _state = EMPTY;
+  RangeBox().swap(_ranges); // force memory drop.
+}
+
+inline bool
+HTTPRangeSpec::isSingle() const
+{
+  return SINGLE == _state;
+}
+
+inline bool
+HTTPRangeSpec::isMulti() const
+{
+  return MULTI == _state;
+}
+
+inline bool
+HTTPRangeSpec::isEmpty() const
+{
+  return EMPTY == _state;
+}
+
+inline bool
+HTTPRangeSpec::isUnsatisfied() const
+{
+  return UNSATISFIABLE == _state;
+}
+
+inline size_t
+HTTPRangeSpec::count() const
+{
+  return SINGLE == _state ? 1 : _ranges.size();
+}
+
+inline bool
+HTTPRangeSpec::hasRanges() const
+{
+  return SINGLE == _state || MULTI == _state;
+}
+
+inline bool
+HTTPRangeSpec::isValid() const
+{
+  return SINGLE == _state || MULTI == _state || EMPTY == _state;
+}
+
+inline HTTPRangeSpec::Range &
+HTTPRangeSpec::Range::invalidate()
+{
+  _min = INT64_MAX;
+  _max = 1;
+  return *this;
+}
+
+inline bool
+HTTPRangeSpec::Range::isSuffix() const
+{
+  return 0 == _max && _min > 0;
+}
+
+inline HTTPRangeSpec::Range &
+HTTPRangeSpec::Range::setSuffix(int64_t size)
+{
+  _max = 0;
+  _min = size;
+  return *this;
+}
+
+inline bool
+HTTPRangeSpec::Range::isPrefix() const
+{
+  return _min >= 0 && _max == INT64_MAX;
+}
+
+inline bool
+HTTPRangeSpec::Range::isValid() const
+{
+  return _min <= _max || this->isSuffix();
+}
+
+inline int64_t
+HTTPRangeSpec::Range::size() const
+{
+  return 1 + (_max - _min);
+}
+
+inline uint64_t
+HTTPRangeSpec::size() const
+{
+  uint64_t size = 0;
+  if (this->isSingle())
+    size = _single.size();
+  else if (this->isMulti()) {
+    for (RangeBox::const_iterator spot = _ranges.begin(), limit = _ranges.end(); spot != limit; ++spot)
+      size += spot->size();
+  }
+  return size;
+}
+
+inline bool
+HTTPRangeSpec::Range::apply(int64_t len)
+{
+  ink_assert(len > 0);
+  bool zret = true; // is this range satisfiable for @a len?
+  if (this->isSuffix()) {
+    _max = len - 1;
+    _min = _min > len ? 0 : len - _min;
+  } else if (_min < len) {
+    _max = MIN(_max, len - 1);
+  } else {
+    this->invalidate();
+    zret = false;
+  }
+  return zret;
+}
+
+inline HTTPRangeSpec &
+HTTPRangeSpec::add(uint64_t low, uint64_t high)
+{
+  return this->add(Range(low, high));
+}
+
+inline HTTPRangeSpec::Range &HTTPRangeSpec::operator[](int n)
+{
+  return SINGLE == _state ? _single : _ranges[n];
+}
+
+inline HTTPRangeSpec::Range const &HTTPRangeSpec::operator[](int n) const
+{
+  return SINGLE == _state ? _single : _ranges[n];
+}
+
+inline HTTPRangeSpec::iterator
+HTTPRangeSpec::begin()
+{
+  switch (_state) {
+  case SINGLE:
+    return &_single;
+  case MULTI:
+    return &(*(_ranges.begin()));
+  default:
+    return NULL;
+  }
+}
+
+inline HTTPRangeSpec::iterator
+HTTPRangeSpec::end()
+{
+  switch (_state) {
+  case SINGLE:
+    return (&_single) + 1;
+  case MULTI:
+    return &(*(_ranges.end()));
+  default:
+    return NULL;
+  }
+}
+
+inline HTTPRangeSpec::const_iterator
+HTTPRangeSpec::begin() const
+{
+  return const_cast<self *>(this)->begin();
+}
+
+inline HTTPRangeSpec::const_iterator
+HTTPRangeSpec::end() const
+{
+  return const_cast<self *>(this)->end();
+}
+
+inline HTTPRangeSpec::Range
+HTTPRangeSpec::getConvexHull() const
+{
+  Range zret;
+  // Compute the convex hull of the original in fragment indices.
+  for (const_iterator spot = this->begin(), limit = this->end(); spot != limit; ++spot) {
+    if (spot->_min < zret._min)
+      zret._min = spot->_min;
+    if (spot->_max > zret._max)
+      zret._max = spot->_max;
+  }
+  return zret;
+}
+
+inline HTTPCacheAlt::FragmentDescriptor &HTTPCacheAlt::FragmentDescriptorTable::operator[](int idx)
+{
+  ink_assert(idx > 0);
+  return *(reinterpret_cast<FragmentDescriptor *>(reinterpret_cast<char *>(this + 1) + sizeof(FragmentDescriptor) * (idx - 1)));
+}
+
+inline size_t
+HTTPCacheAlt::FragmentDescriptorTable::calc_size(uint32_t n)
+{
+  return n < 1 ? 0 : sizeof(FragmentDescriptorTable) + n * sizeof(FragmentDescriptor);
+}
+
+#if 0
+inline
+HTTPCacheAlt::FragmentAccessor::FragmentAccessor(HTTPCacheAlt* alt)
+             : _alt(alt), _table(alt->m_fragments)
+{
+}
+
+inline HTTPCacheAlt::FragmentDescriptor&
+HTTPCacheAlt::FragmentAccessor::operator [] (int idx)
+{
+  ink_assert(idx >= 0);
+  return idx == 0 ? _alt->m_earliest : (*_table)[idx];
+}
+
+inline uint32_t
+HTTPCacheAlt::FragmentAccessor::get_initial_cached_index() const
+{
+  return _table ? _table->m_cached_idx : 0;
+}
+#endif
 
 #endif /* __HTTP_H__ */

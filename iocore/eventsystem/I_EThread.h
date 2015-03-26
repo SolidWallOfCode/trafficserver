@@ -301,6 +301,7 @@ public:
 
   void execute();
   void process_event(Event *e, int calling_code);
+  Event *alloc_event(Continuation *contp, int callback_event = EVENT_IMMEDIATE, void *cookie = NULL);
   void free_event(Event *e);
   void (*signal_hook)(EThread *);
 

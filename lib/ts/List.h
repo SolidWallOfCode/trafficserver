@@ -743,4 +743,14 @@ template <class C, class L> inline AtomicSLL<C, L>::AtomicSLL()
   ink_atomiclist_init(&al, "AtomicSLL", (uint32_t)(uintptr_t)&L::next_link((C *)0));
 }
 
+namespace std
+{
+template <class C, class L>
+void
+swap(DLL<C, L> &lhs, DLL<C, L> &rhs)
+{
+  std::swap(lhs.head, rhs.head);
+}
+}
+
 #endif /*_List_h_*/

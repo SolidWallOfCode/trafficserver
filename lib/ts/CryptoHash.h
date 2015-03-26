@@ -29,8 +29,15 @@
 
 namespace ats
 {
+/// Permutation table for computing next hash.
+extern uint8_t const CRYPTO_HASH_NEXT_TABLE[256];
+/// Permutation table for computing previous hash.
+extern uint8_t const CRYPTO_HASH_PREV_TABLE[256];
+
 /// Crypto hash output.
 union CryptoHash {
+  typedef CryptoHash self; ///< Self reference type.
+
   uint64_t b[2]; // Legacy placeholder
   uint64_t u64[2];
   uint32_t u32[4];
@@ -95,6 +102,44 @@ union CryptoHash {
   toHexStr(char buffer[33])
   {
     return ink_code_to_hex_str(buffer, u8);
+  }
+
+  /// Check for the zero key.
+  bool
+  is_zero() const
+  {
+    return 0 == (u64[0] | u64[1]);
+  }
+
+  /// Update the key to the computationally chained next key from @a that.
+  void
+  next(self const &that)
+  {
+    u8[0] = CRYPTO_HASH_NEXT_TABLE[that.u8[0]];
+    for (unsigned int i = 1; i < sizeof(u8); ++i)
+      u8[i]             = CRYPTO_HASH_NEXT_TABLE[(u8[i - 1] + that.u8[i]) & 0xFF];
+  }
+  /// Update the key to the computationally chained next key.
+  void
+  next()
+  {
+    this->next(*this);
+  }
+
+  /// Update the key to the computationally chained previous key from @a that.
+  void
+  prev(self const &that)
+  {
+    for (unsigned int i = sizeof(u8) - 1; i > 0; --i)
+      u8[i]             = 256 + CRYPTO_HASH_PREV_TABLE[that.u8[i]] - that.u8[i - 1];
+    u8[0]               = CRYPTO_HASH_PREV_TABLE[that.u8[0]];
+  }
+
+  /// Update the key to the computationally chained previous key.
+  void
+  prev()
+  {
+    this->prev(*this);
   }
 };
 

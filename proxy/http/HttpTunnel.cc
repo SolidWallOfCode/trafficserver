@@ -895,13 +895,7 @@ HttpTunnel::producer_run(HttpTunnelProducer *p)
     }
   }
 
-  int64_t read_start_pos = 0;
-  if (p->vc_type == HT_CACHE_READ && sm->t_state.range_setup == HttpTransact::RANGE_NOT_TRANSFORM_REQUESTED) {
-    ink_assert(sm->t_state.num_range_fields == 1); // we current just support only one range entry
-    read_start_pos = sm->t_state.ranges[0]._start;
-    producer_n     = (sm->t_state.ranges[0]._end - sm->t_state.ranges[0]._start) + 1;
-    consumer_n     = (producer_n + sm->client_response_hdr_bytes);
-  } else if (p->nbytes >= 0) {
+  if (p->nbytes >= 0) {
     consumer_n = p->nbytes;
     producer_n = p->ntodo;
   } else {
@@ -1053,11 +1047,7 @@ HttpTunnel::producer_run(HttpTunnelProducer *p)
       Debug("http_tunnel", "[%" PRId64 "] [tunnel_run] producer already done", sm->sm_id);
       producer_handler(HTTP_TUNNEL_EVENT_PRECOMPLETE, p);
     } else {
-      if (read_start_pos > 0) {
-        p->read_vio = ((CacheVC *)p->vc)->do_io_pread(this, producer_n, p->read_buffer, read_start_pos);
-      } else {
-        p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
-      }
+      p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
     }
   }
 

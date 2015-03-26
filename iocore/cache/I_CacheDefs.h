@@ -21,6 +21,8 @@
   limitations under the License.
  */
 
+#include <vector>
+
 #ifndef _I_CACHE_DEFS_H__
 #define _I_CACHE_DEFS_H__
 
@@ -33,7 +35,7 @@
 #define CACHE_ALT_INDEX_DEFAULT -1
 #define CACHE_ALT_REMOVED -2
 
-#define CACHE_DB_MAJOR_VERSION 24
+#define CACHE_DB_MAJOR_VERSION 25
 #define CACHE_DB_MINOR_VERSION 0
 
 #define CACHE_DIR_MAJOR_VERSION 18
@@ -86,6 +88,9 @@ enum CacheEventType {
   CACHE_EVENT_SCAN_OPERATION_BLOCKED = CACHE_EVENT_EVENTS_START + 23,
   CACHE_EVENT_SCAN_OPERATION_FAILED  = CACHE_EVENT_EVENTS_START + 24,
   CACHE_EVENT_SCAN_DONE              = CACHE_EVENT_EVENTS_START + 25,
+
+  CACHE_EVENT_WRITER_UPDATED_ALT_TABLE = CACHE_EVENT_EVENTS_START + 26,
+
   //////////////////////////
   // Internal error codes //
   //////////////////////////
@@ -145,4 +150,5 @@ struct HttpCacheKey {
    word(2) - tag (lower bits), hosttable hash (upper bits)
    word(3) - ram cache hash, lookaside cache
  */
+
 #endif // __CACHE_DEFS_H__

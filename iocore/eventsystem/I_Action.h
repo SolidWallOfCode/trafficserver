@@ -134,16 +134,9 @@ public:
 
   */
   virtual void
-  cancel(Continuation *c = nullptr)
+  cancel(Continuation *c = NULL) volatile
   {
-    ink_assert(!c || c == continuation);
-#ifdef DEBUG
-    ink_assert(!cancelled);
-    cancelled = true;
-#else
-    if (!cancelled)
-      cancelled = true;
-#endif
+    this->cancel_action();
   }
 
   /**
@@ -158,7 +151,7 @@ public:
 
   */
   void
-  cancel_action(Continuation *c = nullptr)
+  cancel_action(Continuation *c = NULL) volatile
   {
     ink_assert(!c || c == continuation);
 #ifdef DEBUG

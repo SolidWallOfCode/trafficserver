@@ -87,6 +87,12 @@ public:
   static void remove_privacy_headers_from_request(HttpConfigParams *http_config_param, OverridableHttpConfigParams *http_txn_conf,
                                                   HTTPHdr *header);
 
+  /** Add a RANGE field to the request @a header based on @a ranges.
+      If @a limit > 0 then the request range is limited to less than that value. This is intended
+      to be the content length, if known, to clip the request range rather than fullying quantizing it out to
+      the end of the final fragment.
+  */
+  static void insert_proxy_request_range_header(HTTPHdr *header, HTTPRangeSpec const *ranges, uint64_t limit);
   static int nstrcpy(char *d, const char *as);
 };
 

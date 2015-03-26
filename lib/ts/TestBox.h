@@ -32,7 +32,7 @@ namespace
 {
 /** Class to make handling regression tests easier.
     This holds the important regression test values so they don't have to
-    be passed repeated.
+    be passed repeatedly.
 */
 struct TestBox {
   typedef TestBox self;  ///< Self reference type.
@@ -55,7 +55,7 @@ struct TestBox {
   }
 };
 
-bool
+inline bool
 TestBox::check(bool result, char const *fmt, ...)
 {
   if (!result) {

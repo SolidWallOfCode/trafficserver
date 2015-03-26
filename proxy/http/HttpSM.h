@@ -252,6 +252,7 @@ public:
   // Debugging routines to dump the SM history, hdrs
   void dump_state_on_assert();
   void dump_state_hdr(HTTPHdr *h, const char *s);
+  char const *handlerName(int (HttpSM::*ptm)(int, void *));
 
   // Functions for manipulating api hooks
   void txn_hook_append(TSHttpHookID id, INKContInternal *cont);
@@ -380,6 +381,7 @@ protected:
   // Cache Handlers
   int state_cache_open_read(int event, void *data);
   int state_cache_open_write(int event, void *data);
+  int state_cache_open_partial_read(int event, void *data);
 
   // Http Server Handlers
   int state_http_server_open(int event, void *data);
@@ -450,7 +452,7 @@ protected:
   void setup_server_send_request();
   void setup_server_send_request_api();
   HttpTunnelProducer *setup_server_transfer();
-  void setup_server_transfer_to_cache_only();
+  HttpTunnelProducer *setup_server_transfer_to_cache_only();
   HttpTunnelProducer *setup_cache_read_transfer();
   void setup_internal_transfer(HttpSMHandler handler);
   void setup_error_transfer();

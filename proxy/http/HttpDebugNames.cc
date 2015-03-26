@@ -386,6 +386,8 @@ HttpDebugNames::get_action_name(HttpTransact::StateMachineAction_t e)
     return ("SM_ACTION_API_POST_REMAP");
   case HttpTransact::SM_ACTION_POST_REMAP_SKIP:
     return ("SM_ACTION_POST_REMAP_SKIP");
+  case HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ:
+    return "SM_ACTION_CACHE_OPEN_PARTIAL_READ";
   }
 
   return ("unknown state name");

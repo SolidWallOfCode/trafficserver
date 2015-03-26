@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "HTTP.h"
+#include "I_IOBuffer.h"
 #include "HdrToken.h"
 #include "ts/Diags.h"
 
@@ -1817,91 +1818,74 @@ ClassAllocator<HTTPCacheAlt> httpCacheAltAllocator("httpCacheAltAllocator");
   -------------------------------------------------------------------------*/
 HTTPCacheAlt::HTTPCacheAlt()
   : m_magic(CACHE_ALT_MAGIC_ALIVE),
-    m_writeable(1),
     m_unmarshal_len(-1),
     m_id(-1),
     m_rid(-1),
+    m_frag_count(0),
     m_request_hdr(),
     m_response_hdr(),
     m_request_sent_time(0),
     m_response_received_time(0),
-    m_frag_offset_count(0),
-    m_frag_offsets(nullptr),
-    m_ext_buffer(nullptr)
+    m_fragments(0),
+    m_ext_buffer(NULL)
 {
-  m_object_key[0]  = 0;
-  m_object_key[1]  = 0;
-  m_object_key[2]  = 0;
-  m_object_key[3]  = 0;
-  m_object_size[0] = 0;
-  m_object_size[1] = 0;
+  m_flags            = 0;    // set all flags to false.
+  m_flag.writeable_p = true; // except this one.
 }
 
 void
 HTTPCacheAlt::destroy()
 {
   ink_assert(m_magic == CACHE_ALT_MAGIC_ALIVE);
-  ink_assert(m_writeable);
-  m_magic     = CACHE_ALT_MAGIC_DEAD;
-  m_writeable = 0;
+  ink_assert(m_flag.writeable_p);
+  m_magic            = CACHE_ALT_MAGIC_DEAD;
+  m_flag.writeable_p = 0;
   m_request_hdr.destroy();
   m_response_hdr.destroy();
-  m_frag_offset_count = 0;
-  if (m_frag_offsets && m_frag_offsets != m_integral_frag_offsets) {
-    ats_free(m_frag_offsets);
-    m_frag_offsets = nullptr;
-  }
+  m_frag_count = 0;
+  if (m_flag.table_allocated_p)
+    ats_free(m_fragments);
+  m_fragments = 0;
   httpCacheAltAllocator.free(this);
 }
 
 void
-HTTPCacheAlt::copy(HTTPCacheAlt *to_copy)
+HTTPCacheAlt::copy(HTTPCacheAlt *that)
 {
-  m_magic = to_copy->m_magic;
-  // m_writeable =      to_copy->m_writeable;
-  m_unmarshal_len  = to_copy->m_unmarshal_len;
-  m_id             = to_copy->m_id;
-  m_rid            = to_copy->m_rid;
-  m_object_key[0]  = to_copy->m_object_key[0];
-  m_object_key[1]  = to_copy->m_object_key[1];
-  m_object_key[2]  = to_copy->m_object_key[2];
-  m_object_key[3]  = to_copy->m_object_key[3];
-  m_object_size[0] = to_copy->m_object_size[0];
-  m_object_size[1] = to_copy->m_object_size[1];
+  m_magic         = that->m_magic;
+  m_unmarshal_len = that->m_unmarshal_len;
+  m_id            = that->m_id;
+  m_rid           = that->m_rid;
+  m_earliest      = that->m_earliest;
 
-  if (to_copy->m_request_hdr.valid()) {
-    m_request_hdr.copy(&to_copy->m_request_hdr);
+  if (that->m_request_hdr.valid()) {
+    m_request_hdr.copy(&that->m_request_hdr);
   }
 
-  if (to_copy->m_response_hdr.valid()) {
-    m_response_hdr.copy(&to_copy->m_response_hdr);
+  if (that->m_response_hdr.valid()) {
+    m_response_hdr.copy(&that->m_response_hdr);
   }
 
-  m_request_sent_time      = to_copy->m_request_sent_time;
-  m_response_received_time = to_copy->m_response_received_time;
-  this->copy_frag_offsets_from(to_copy);
-}
+  m_request_sent_time      = that->m_request_sent_time;
+  m_response_received_time = that->m_response_received_time;
+  m_fixed_fragment_size    = that->m_fixed_fragment_size;
 
-void
-HTTPCacheAlt::copy_frag_offsets_from(HTTPCacheAlt *src)
-{
-  m_frag_offset_count = src->m_frag_offset_count;
-  if (m_frag_offset_count > 0) {
-    if (m_frag_offset_count > N_INTEGRAL_FRAG_OFFSETS) {
-      /* Mixed feelings about this - technically we don't need it to be a
-         power of two when copied because currently that means it is frozen.
-         But that could change later and it would be a nasty bug to find.
-         So we'll do it for now. The relative overhead is tiny.
-      */
-      int bcount = HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS * 2;
-      while (bcount < m_frag_offset_count) {
-        bcount *= 2;
-      }
-      m_frag_offsets = static_cast<FragOffset *>(ats_malloc(sizeof(FragOffset) * bcount));
-    } else {
-      m_frag_offsets = m_integral_frag_offsets;
-    }
-    memcpy(m_frag_offsets, src->m_frag_offsets, sizeof(FragOffset) * m_frag_offset_count);
+  m_frag_count = that->m_frag_count;
+
+  if (m_flag.table_allocated_p)
+    ats_free(m_fragments);
+
+  // Safe to copy now, and we need to do that before we copy the fragment table.
+  m_flags = that->m_flags;
+
+  if (that->m_fragments) {
+    size_t size = FragmentDescriptorTable::calc_size(that->m_fragments->m_n);
+    m_fragments = static_cast<FragmentDescriptorTable *>(ats_malloc(size));
+    memcpy(m_fragments, that->m_fragments, size);
+    m_flag.table_allocated_p = true;
+  } else {
+    m_fragments              = 0;
+    m_flag.table_allocated_p = false;
   }
 }
 
@@ -1916,20 +1900,12 @@ HTTPInfo::create()
 void
 HTTPInfo::copy(HTTPInfo *hi)
 {
-  if (m_alt && m_alt->m_writeable) {
+  if (m_alt && m_alt->m_flag.writeable_p) {
     destroy();
   }
 
   create();
   m_alt->copy(hi->m_alt);
-}
-
-void
-HTTPInfo::copy_frag_offsets_from(HTTPInfo *src)
-{
-  if (m_alt && src->m_alt) {
-    m_alt->copy_frag_offsets_from(src->m_alt);
-  }
 }
 
 int
@@ -1945,10 +1921,8 @@ HTTPInfo::marshal_length()
     len += m_alt->m_response_hdr.m_heap->marshal_length();
   }
 
-  if (m_alt->m_frag_offset_count > HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS) {
-    len -= sizeof(m_alt->m_integral_frag_offsets);
-    len += sizeof(FragOffset) * m_alt->m_frag_offset_count;
-  }
+  if (m_alt->m_fragments)
+    len += FragmentDescriptorTable::calc_size(m_alt->m_fragments->m_n);
 
   return len;
 }
@@ -1961,42 +1935,30 @@ HTTPInfo::marshal(char *buf, int len)
   HTTPCacheAlt *marshal_alt = (HTTPCacheAlt *)buf;
   // non-zero only if the offsets are external. Otherwise they get
   // marshalled along with the alt struct.
-  int frag_len = (0 == m_alt->m_frag_offset_count || m_alt->m_frag_offsets == m_alt->m_integral_frag_offsets) ?
-                   0 :
-                   sizeof(HTTPCacheAlt::FragOffset) * m_alt->m_frag_offset_count;
+  size_t frag_len = m_alt->m_fragments ? FragmentDescriptorTable::calc_size(m_alt->m_fragments->m_n) : 0;
 
   ink_assert(m_alt->m_magic == CACHE_ALT_MAGIC_ALIVE);
 
   // Make sure the buffer is aligned
   //    ink_assert(((intptr_t)buf) & 0x3 == 0);
 
-  // If we have external fragment offsets, copy the initial ones
-  // into the integral data.
-  if (frag_len) {
-    memcpy(m_alt->m_integral_frag_offsets, m_alt->m_frag_offsets, sizeof(m_alt->m_integral_frag_offsets));
-    frag_len -= sizeof(m_alt->m_integral_frag_offsets);
-    // frag_len should never be non-zero at this point, as the offsets
-    // should be external only if too big for the internal table.
-  }
   // Memcpy the whole object so that we can use it
   //   live later.  This involves copying a few
   //   extra bytes now but will save copying any
   //   bytes on the way out of the cache
   memcpy(buf, m_alt, sizeof(HTTPCacheAlt));
-  marshal_alt->m_magic         = CACHE_ALT_MAGIC_MARSHALED;
-  marshal_alt->m_writeable     = 0;
-  marshal_alt->m_unmarshal_len = -1;
-  marshal_alt->m_ext_buffer    = nullptr;
+  marshal_alt->m_magic            = CACHE_ALT_MAGIC_MARSHALED;
+  marshal_alt->m_flag.writeable_p = 0;
+  marshal_alt->m_unmarshal_len    = -1;
+  marshal_alt->m_ext_buffer       = NULL;
   buf += HTTP_ALT_MARSHAL_SIZE;
   used += HTTP_ALT_MARSHAL_SIZE;
 
   if (frag_len > 0) {
-    marshal_alt->m_frag_offsets = static_cast<FragOffset *>(reinterpret_cast<void *>(used));
-    memcpy(buf, m_alt->m_frag_offsets + HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS, frag_len);
+    marshal_alt->m_fragments = static_cast<FragmentDescriptorTable *>(reinterpret_cast<void *>(used));
+    memcpy(buf, m_alt->m_fragments, frag_len);
     buf += frag_len;
     used += frag_len;
-  } else {
-    marshal_alt->m_frag_offsets = nullptr;
   }
 
   // The m_{request,response}_hdr->m_heap pointers are converted
@@ -2038,7 +2000,6 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
 
   if (alt->m_magic == CACHE_ALT_MAGIC_ALIVE) {
     // Already unmarshaled, must be a ram cache
-    //  it
     ink_assert(alt->m_unmarshal_len > 0);
     ink_assert(alt->m_unmarshal_len <= len);
     return alt->m_unmarshal_len;
@@ -2049,32 +2010,14 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
 
   ink_assert(alt->m_unmarshal_len < 0);
   alt->m_magic = CACHE_ALT_MAGIC_ALIVE;
-  ink_assert(alt->m_writeable == 0);
+  ink_assert(alt->m_flag.writeable_p == 0);
   len -= HTTP_ALT_MARSHAL_SIZE;
 
-  if (alt->m_frag_offset_count > HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS) {
-    // stuff that didn't fit in the integral slots.
-    int extra       = sizeof(FragOffset) * alt->m_frag_offset_count - sizeof(alt->m_integral_frag_offsets);
-    char *extra_src = buf + reinterpret_cast<intptr_t>(alt->m_frag_offsets);
-    // Actual buffer size, which must be a power of two.
-    // Well, technically not, because we never modify an unmarshalled fragment
-    // offset table, but it would be a nasty bug should that be done in the
-    // future.
-    int bcount = HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS * 2;
-
-    while (bcount < alt->m_frag_offset_count) {
-      bcount *= 2;
-    }
-    alt->m_frag_offsets =
-      static_cast<FragOffset *>(ats_malloc(bcount * sizeof(FragOffset))); // WRONG - must round up to next power of 2.
-    memcpy(alt->m_frag_offsets, alt->m_integral_frag_offsets, sizeof(alt->m_integral_frag_offsets));
-    memcpy(alt->m_frag_offsets + HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS, extra_src, extra);
-    len -= extra;
-  } else if (alt->m_frag_offset_count > 0) {
-    alt->m_frag_offsets = alt->m_integral_frag_offsets;
-  } else {
-    alt->m_frag_offsets = nullptr; // should really already be zero.
+  if (alt->m_fragments) {
+    alt->m_fragments = reinterpret_cast<FragmentDescriptorTable *>(buf + reinterpret_cast<intptr_t>(alt->m_fragments));
+    len -= FragmentDescriptorTable::calc_size(alt->m_fragments->m_n);
   }
+  alt->m_flag.table_allocated_p = false;
 
   HdrHeap *heap   = (HdrHeap *)(alt->m_request_hdr.m_heap ? (buf + (intptr_t)alt->m_request_hdr.m_heap) : nullptr);
   HTTPHdrImpl *hh = nullptr;
@@ -2090,6 +2033,7 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
     alt->m_request_hdr.m_http              = hh;
     alt->m_request_hdr.m_mime              = hh->m_fields_impl;
     alt->m_request_hdr.m_url_cached.m_heap = heap;
+    alt->m_request_hdr.mark_target_dirty();
   }
 
   heap = (HdrHeap *)(alt->m_response_hdr.m_heap ? (buf + (intptr_t)alt->m_response_hdr.m_heap) : nullptr);
@@ -2104,6 +2048,7 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
     alt->m_response_hdr.m_heap = heap;
     alt->m_response_hdr.m_http = hh;
     alt->m_response_hdr.m_mime = hh->m_fields_impl;
+    alt->m_response_hdr.mark_target_dirty();
   }
 
   alt->m_unmarshal_len = orig_len - len;
@@ -2124,7 +2069,7 @@ HTTPInfo::check_marshalled(char *buf, int len)
     return false;
   }
 
-  if (alt->m_writeable != false) {
+  if (alt->m_flag.writeable_p != false) {
     return false;
   }
 
@@ -2212,23 +2157,711 @@ HTTPInfo::get_handle(char *buf, int len)
   return -1;
 }
 
+int64_t
+HTTPInfo::get_frag_offset(unsigned int idx)
+{
+  int64_t zret = 0;
+  // fragment 0 must always have an offset of 0.
+  if (idx > 0) {
+    if (m_alt->m_fragments) {
+      unsigned int last_idx = m_alt->m_fragments->m_n;
+      // @a last_idx is the limit of data in the fragment table - past that the offset must be computed
+      // based on the last stored offset plus the appropriate number of fixed fragment sizes. This handles
+      // the empty earliest case.
+      if (idx > last_idx) {
+        zret = (*m_alt->m_fragments)[last_idx].m_offset + m_alt->m_fixed_fragment_size * (idx - last_idx);
+      } else {
+        zret = (*m_alt->m_fragments)[idx].m_offset;
+      }
+    } else {
+      zret = m_alt->m_fixed_fragment_size * idx;
+    }
+  }
+  return zret;
+}
+
+int64_t
+HTTPInfo::clip_to_frag_boundary(int64_t position, int64_t length)
+{
+  int64_t ff_size = m_alt->m_fixed_fragment_size;
+  int64_t idx     = position / ff_size;
+  return std::min(length, (idx + 1) * ff_size - position);
+}
+
+HTTPInfo::FragmentDescriptor *
+HTTPInfo::force_frag_at(unsigned int idx)
+{
+  FragmentDescriptor *frag;
+  FragmentDescriptorTable *old_table = 0;
+
+  ink_assert(m_alt);
+  ink_assert(idx >= 0);
+
+  if (0 == idx)
+    return &m_alt->m_earliest;
+
+  // Due to the earliest potentially holding data, @a idx must be larger than @a m_n to require additional space.
+  if (0 == m_alt->m_fragments || idx > m_alt->m_fragments->m_n) { // no inn or no room at the inn
+    int64_t obj_size       = this->object_size_get();
+    uint32_t ff_size       = this->get_frag_fixed_size();
+    unsigned int n         = 0; // set if we need to allocate, this is max array index needed.
+    size_t size            = 0;
+    size_t old_size        = 0;
+    unsigned int old_count = 0;
+    int64_t offset         = 0;
+    CryptoHash key;
+
+    ink_assert(ff_size);
+
+    if (0 == m_alt->m_fragments && obj_size > 0) {
+      n = (obj_size + ff_size - 1) / ff_size;
+      if (idx > n)
+        n = idx;
+      if (m_alt->m_earliest.m_flag.cached_p) {
+        // Computed as if all the data is in the fragment table. If the earliest is not empty then
+        // one fragment worth of data will be there. This is the common case so worth optimizing.
+        --n;
+        offset += ff_size;
+      }
+    } else {
+      n         = idx + MAX(4, idx >> 1); // grow by 50% and at least 4
+      old_table = m_alt->m_fragments;
+    }
+
+    size = FragmentDescriptorTable::calc_size(n);
+
+    m_alt->m_fragments = static_cast<FragmentDescriptorTable *>(ats_malloc(size));
+    ink_zero(*(m_alt->m_fragments)); // just need to zero the base struct.
+    if (old_table) {
+      old_count = old_table->m_n;
+      frag      = &((*old_table)[old_count]);
+      offset    = frag->m_offset + ff_size;
+      key       = frag->m_key;
+      old_size  = FragmentDescriptorTable::calc_size(old_count);
+      memcpy(m_alt->m_fragments, old_table, old_size);
+      if (m_alt->m_flag.table_allocated_p)
+        ats_free(old_table);
+    } else {
+      key                              = m_alt->m_earliest.m_key;
+      m_alt->m_fragments->m_cached_idx = 0;
+    }
+    m_alt->m_fragments->m_n         = n;
+    m_alt->m_flag.table_allocated_p = true;
+    // fill out the new parts with offsets & keys.
+    ++old_count; // left as the index of the last frag in the previous set.
+    for (frag = &((*m_alt->m_fragments)[old_count]); old_count <= n; ++old_count, ++frag) {
+      key.next();
+      frag->m_key    = key;
+      frag->m_offset = offset;
+      frag->m_flags  = 0;
+      offset += ff_size;
+    }
+  }
+  return &(*m_alt->m_fragments)[idx];
+}
+
 void
-HTTPInfo::push_frag_offset(FragOffset offset)
+HTTPInfo::mark_frag_write(unsigned int idx)
 {
   ink_assert(m_alt);
-  if (nullptr == m_alt->m_frag_offsets) {
-    m_alt->m_frag_offsets = m_alt->m_integral_frag_offsets;
-  } else if (m_alt->m_frag_offset_count >= HTTPCacheAlt::N_INTEGRAL_FRAG_OFFSETS &&
-             0 == (m_alt->m_frag_offset_count & (m_alt->m_frag_offset_count - 1))) {
-    // need more space than in integral storage and we're at an upgrade
-    // size (power of 2).
-    FragOffset *nf = static_cast<FragOffset *>(ats_malloc(sizeof(FragOffset) * (m_alt->m_frag_offset_count * 2)));
-    memcpy(nf, m_alt->m_frag_offsets, sizeof(FragOffset) * m_alt->m_frag_offset_count);
-    if (m_alt->m_frag_offsets != m_alt->m_integral_frag_offsets) {
-      ats_free(m_alt->m_frag_offsets);
-    }
-    m_alt->m_frag_offsets = nf;
+  ink_assert(idx >= 0);
+
+  if (idx >= m_alt->m_frag_count)
+    m_alt->m_frag_count = idx + 1;
+
+  if (0 == idx) {
+    m_alt->m_earliest.m_flag.cached_p = true;
+  } else {
+    FragmentDescriptor *fptr = this->force_frag_at(idx);
+    fptr->m_flag.cached_p    = true;
+    Debug("amc", "mark frag %d[%p] cached", idx, fptr);
   }
 
-  m_alt->m_frag_offsets[m_alt->m_frag_offset_count++] = offset;
+  // bump the last cached value if possible and mark complete if appropriate.
+  if (m_alt->m_fragments && idx == m_alt->m_fragments->m_cached_idx + 1) {
+    unsigned int j = idx + 1;
+    while (j < m_alt->m_frag_count && (*m_alt->m_fragments)[j].m_flag.cached_p)
+      ++j;
+    Debug("amc", "Marking fragment write %d, cached_idx set to %d", idx, j - 1);
+    m_alt->m_fragments->m_cached_idx = j - 1;
+    if (!m_alt->m_flag.content_length_p &&
+        (this->get_frag_fixed_size() + this->get_frag_offset(j - 1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
+      m_alt->m_flag.complete_p = true;
+  }
 }
+
+int
+HTTPInfo::get_frag_index_of(int64_t offset)
+{
+  int zret                       = 0;
+  uint32_t ff_size               = this->get_frag_fixed_size();
+  FragmentDescriptorTable *table = this->get_frag_table();
+  if (!table) {
+    // if there's no table yet then either there's an earliest fragment or it is yet to be determined if
+    // there will be. Best we can do is compute as if earliest is present and depend on better context
+    // up the call chain to detect and fix if it turns out later there is not because it's impossible to
+    // do so at this point.
+    zret = offset / ff_size;
+  } else {
+    FragmentDescriptorTable &frags = *table;    // easier to work with.
+    int n                          = frags.m_n; // also the max valid frag table index and always >= 1.
+    // I should probably make @a m_offset int64_t to avoid casting issues like this...
+    uint64_t uoffset = static_cast<uint64_t>(offset);
+
+    if (uoffset >= frags[n].m_offset) {
+      // in or past the last fragment, compute the index by computing the # of @a ff_size chunks past the end.
+      zret = n + (static_cast<uint64_t>(offset) - frags[n].m_offset) / ff_size;
+    } else if (uoffset < frags[1].m_offset) {
+      zret = 0; // in the earliest fragment.
+    } else {
+      // Need to handle old data where the offsets are not guaranteed to be regular.
+      // So we start with our guess (which should be close) and if we're right, boom, else linear
+      // search which should only be 1 or 2 steps.
+      zret = offset / ff_size;
+      if (frags[1].m_offset == 0 || 0 == zret) // zret can be zero if the earliest frag is less than @a ff_size
+        ++zret;
+      while (0 < zret && zret < n) {
+        if (uoffset < frags[zret].m_offset) {
+          --zret;
+        } else if (uoffset >= frags[zret + 1].m_offset) {
+          ++zret;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  return zret;
+}
+/***********************************************************************
+ *                                                                     *
+ *                      R A N G E   S U P P O R T                      *
+ *                                                                     *
+ ***********************************************************************/
+
+namespace
+{
+// Need to promote this out of here at some point.
+// This handles parsing an integer from a string with various limits and in 64 bits.
+struct integer {
+  static size_t const MAX_DIGITS = 15;
+  static bool
+  parse(ts::ConstBuffer const &b, uint64_t &result)
+  {
+    bool zret = false;
+    if (0 < b.size() && b.size() <= MAX_DIGITS) {
+      size_t n;
+      result = ats_strto64(b.data(), b.size(), &n);
+      zret   = n == b.size();
+    }
+    return zret;
+  }
+};
+}
+
+// Parse the content of a range field, filling in @a this range spec.
+bool
+HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
+{
+  // Maximum # of digits permitted for an offset. Avoid issues with overflow.
+  static size_t const MAX_DIGITS = 15;
+  ts::ConstBuffer src(v, len);
+  size_t n;
+
+  _state = INVALID;
+  src.skip(&ParseRules::is_ws);
+
+  if (src.size() > sizeof(HTTP_LEN_BYTES) + 1 && 0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
+      '=' == src[HTTP_LEN_BYTES]) {
+    src += HTTP_LEN_BYTES + 1;
+    while (src) {
+      ts::ConstBuffer max = src.splitOn(','); // grab the next field (comma separated).
+
+      if (!max) { // no comma so everything in @a src should be processed as a single range.
+        max = src;
+        src.reset();
+      }
+
+      ts::ConstBuffer min = max.splitOn('-'); // split min, max
+
+      src.skip(&ParseRules::is_ws);
+
+      // Spec forbids whitespace anywhere in the range element, so parse error is correct if some is found.
+      if (min) { // something before the '-'
+        if (ParseRules::is_digit(*min) && min.size() <= MAX_DIGITS) {
+          uint64_t low = ats_strto64(min.data(), min.size(), &n);
+          if (n < min.size())
+            break; // extra cruft in range, not even ws allowed
+          if (max) {
+            if (ParseRules::is_digit(*max) && max.size() <= MAX_DIGITS) {
+              uint64_t high = ats_strto64(max.data(), max.size(), &n);
+              if (n < max.size() && (max += n).skip(&ParseRules::is_ws))
+                break; // non-ws cruft after maximum
+              else if (low <= high)
+                this->add(low, high);
+            } else {
+              break; // invalid characters for maximum, or invalid range values (min > max).
+            }
+          } else {                      // no maximum
+            this->add(low, UINT64_MAX); // "X-" : "offset X to end of content"
+          }
+        } else {
+          break; // invalid characters for minimum
+        }
+      } else {
+        if (max) {
+          if (ParseRules::is_digit(*max) && max.size() <= MAX_DIGITS) {
+            uint64_t high = ats_strto64(max.data(), max.size(), &n);
+            if (n < max.size() && (max += n).skip(&ParseRules::is_ws)) {
+              break; // cruft after end of maximum
+            } else {
+              this->add(high, 0);
+            }
+          } else {
+            break; // invalid maximum
+          }
+        }
+      }
+    }
+    if (src)
+      _state = INVALID; // didn't parse everything, must have been an error.
+  }
+  return _state != INVALID;
+}
+
+HTTPRangeSpec &
+HTTPRangeSpec::add(Range const &r)
+{
+  if (MULTI == _state) {
+    _ranges.push_back(r);
+  } else if (SINGLE == _state) {
+    _ranges.push_back(_single);
+    _ranges.push_back(r);
+    _state = MULTI;
+  } else {
+    _single = r;
+    _state  = SINGLE;
+  }
+  return *this;
+}
+
+bool
+HTTPRangeSpec::hasOpenRange() const
+{
+  if (!this->hasRanges())
+    return false;
+  else if (_single.isSuffix() || _single.isPrefix())
+    return false;
+  for (RangeBox::const_iterator spot = _ranges.begin(), limit = _ranges.end(); spot != limit && EMPTY == _state; ++spot) {
+    if (spot->isSuffix() || spot->isPrefix())
+      return false;
+  }
+  return true;
+}
+
+bool
+HTTPRangeSpec::apply(int64_t len)
+{
+  if (len > 0) {
+    if (!this->hasRanges()) {
+      // nothing - makes other cases simpler.
+    } else if (0 == len) {
+      /* Must special case zero length content
+         - suffix ranges are OK but other ranges are not.
+         - Best option is to return a 200 (not 206 or 416) for all suffix range spec on zero length content.
+         (this is what Apache HTTPD does)
+         - So, mark result as either @c UNSATISFIABLE or @c EMPTY, clear all ranges.
+      */
+      _state = EMPTY;
+      if (!_single.isSuffix())
+        _state = UNSATISFIABLE;
+      for (RangeBox::iterator spot = _ranges.begin(), limit = _ranges.end(); spot != limit && EMPTY == _state; ++spot) {
+        if (!spot->isSuffix())
+          _state = UNSATISFIABLE;
+      }
+      _ranges.clear();
+    } else if (this->isSingle()) {
+      if (!_single.apply(len))
+        _state = UNSATISFIABLE;
+    } else { // gotta be MULTI
+      int src = 0, dst = 0;
+      int n = _ranges.size();
+      while (src < n) {
+        Range &r = _ranges[src];
+        if (r.apply(len)) {
+          if (src != dst)
+            _ranges[dst] = r;
+          ++dst;
+        }
+        ++src;
+      }
+      // at this point, @a dst is the # of valid ranges.
+      if (dst > 0) {
+        _single = _ranges[0];
+        if (dst == 1)
+          _state = SINGLE;
+        _ranges.resize(dst);
+      } else {
+        _state = UNSATISFIABLE;
+        _ranges.clear();
+      }
+    }
+  }
+  return this->isValid();
+}
+
+static ts::ConstBuffer const MULTIPART_BYTERANGE("multipart/byteranges", 20);
+static ts::ConstBuffer const MULTIPART_BOUNDARY("boundary", 9);
+
+int64_t
+HTTPRangeSpec::parseContentRangeFieldValue(char const *v, int len, Range &r, ts::ConstBuffer &boundary)
+{
+  // [amc] TBD - handle the multipart/byteranges syntax.
+  ts::ConstBuffer src(v, len);
+  int64_t zret = -1;
+
+  r.invalidate();
+  src.skip(&ParseRules::is_ws);
+
+  if (src.skipNoCase(MULTIPART_BYTERANGE)) {
+    while (src && (';' == *src || ParseRules::is_ws(*src)))
+      ++src;
+    if (src.skipNoCase(MULTIPART_BOUNDARY)) {
+      src.trim(&ParseRules::is_ws);
+      boundary = src;
+    }
+  } else if (src.size() > sizeof(HTTP_LEN_BYTES) + 1 && 0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
+             ParseRules::is_ws(src[HTTP_LEN_BYTES]) // must have white space
+             ) {
+    uint64_t cl, low, high;
+    bool unsatisfied_p = false, indeterminate_p = false;
+    ts::ConstBuffer min, max;
+
+    src += HTTP_LEN_BYTES;
+    src.skip(&ParseRules::is_ws); // but can have any number
+
+    max = src.splitOn('/'); // src has total length value
+
+    if (max.size() == 1 && *max == '*')
+      unsatisfied_p = true;
+    else
+      min = max.splitOn('-');
+
+    src.trim(&ParseRules::is_ws);
+    if (src && src.size() == 1 && *src == '*')
+      indeterminate_p = true;
+
+    // note - spec forbids internal spaces so it's "X-Y/Z" w/o whitespace.
+    // spec also says we can have "*/Z" or "X-Y/*" but never "*/*".
+
+    if (!(indeterminate_p && unsatisfied_p) && (indeterminate_p || integer::parse(src, cl)) &&
+        (unsatisfied_p || (integer::parse(min, low) && integer::parse(max, high)))) {
+      if (!unsatisfied_p)
+        r._min = low, r._max = high;
+      if (!indeterminate_p)
+        zret = static_cast<int64_t>(cl);
+    }
+  }
+  return zret;
+}
+
+namespace
+{
+int
+Calc_Digital_Length(uint64_t x)
+{
+  char buff[32]; // big enough for 64 bit #
+  return snprintf(buff, sizeof(buff), "%" PRIu64, x);
+}
+}
+
+uint64_t
+HTTPRangeSpec::calcPartBoundarySize(uint64_t object_size, uint64_t ct_val_len)
+{
+  size_t l_size = Calc_Digital_Length(object_size);
+  // CR LF "--" boundary-string CR LF "Content-Range" ": " "bytes " X "-" Y "/" Z CR LF Content-Type CR LF
+  uint64_t zret =
+    4 + HTTP_RANGE_BOUNDARY_LEN + 2 + MIME_LEN_CONTENT_RANGE + 2 + HTTP_LEN_BYTES + 1 + l_size + 1 + l_size + 1 + l_size + 2;
+  if (ct_val_len)
+    zret += MIME_LEN_CONTENT_TYPE + 2 + ct_val_len + 2;
+  return zret;
+}
+
+uint64_t
+HTTPRangeSpec::calcContentLength(uint64_t object_size, uint64_t ct_val_len) const
+{
+  uint64_t size = object_size;
+  size_t nr     = this->count();
+
+  if (nr >= 1) {
+    size = this->size();                                                    // the real content size.
+    if (nr > 1)                                                             // part boundaries
+      size += nr * self::calcPartBoundarySize(object_size, ct_val_len) + 2; // need trailing '--'
+  }
+  return size;
+}
+
+uint64_t
+HTTPRangeSpec::writePartBoundary(MIOBuffer *out, char const *boundary_str, size_t boundary_len, uint64_t total_size, uint64_t low,
+                                 uint64_t high, MIMEField *ctf, bool final)
+{
+  size_t x;                                                  // tmp for printf results.
+  size_t loc_size = Calc_Digital_Length(total_size) * 3 + 3; // precomputed size of all the location / size text.
+  size_t n        = self::calcPartBoundarySize(total_size, ctf ? ctf->m_len_value : 0) + (final ? 2 : 0);
+  Ptr<IOBufferData> d(new_IOBufferData(iobuffer_size_to_index(n, MAX_BUFFER_SIZE_INDEX), MEMALIGNED));
+  char *spot = d->data();
+
+  x = snprintf(spot, n, "\r\n--%.*s", static_cast<int>(boundary_len), boundary_str);
+  spot += x;
+  n -= x;
+  if (final) {
+    memcpy(spot, "--", 2);
+    spot += 2;
+    n -= 2;
+  }
+
+  x = snprintf(spot, n, "\r\n%.*s: %.*s", MIME_LEN_CONTENT_RANGE, MIME_FIELD_CONTENT_RANGE, HTTP_LEN_BYTES, HTTP_VALUE_BYTES);
+  spot += x;
+  n -= x;
+  spot[-HTTP_LEN_BYTES] = tolower(spot[-HTTP_LEN_BYTES]); // ugly cleanup just to be careful of stupid user agents.
+
+  x = snprintf(spot, n, " %" PRIu64 "-%" PRIu64 "/%" PRIu64, low, high, total_size);
+  // Need to space fill to match pre-computed size
+  if (x < loc_size)
+    memset(spot + x, ' ', loc_size - x);
+  spot += loc_size;
+  n -= loc_size;
+
+  if (ctf) {
+    int ctf_len;
+    char const *ctf_val = ctf->value_get(&ctf_len);
+    if (ctf_val) {
+      x = snprintf(spot, n, "\r\n%.*s: %.*s", MIME_LEN_CONTENT_TYPE, MIME_FIELD_CONTENT_TYPE, ctf_len, ctf_val);
+      spot += x;
+      n -= x;
+    }
+  }
+
+  // This also takes care of the snprintf null termination problem.
+  *spot++ = '\r';
+  *spot++ = '\n';
+  n -= 2;
+
+  ink_assert(n == 0);
+
+  IOBufferBlock *b = new_IOBufferBlock(d, spot - d->data());
+  b->_buf_end      = b->_end;
+  out->append_block(b);
+
+  return spot - d->data();
+}
+
+int
+HTTPRangeSpec::print_array(char *buff, size_t len, Range const *rv, int count)
+{
+  size_t zret = 0;
+  bool first  = true;
+
+  // Can't possibly write a range in less than this size buffer.
+  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4)
+    return 0;
+
+  for (int i = 0; i < count; ++i) {
+    int n      = 0;
+    int remain = len - zret;
+    char *spot = buff + zret;
+
+    if (first) {
+      memcpy(buff, HTTP_VALUE_BYTES, HTTP_LEN_BYTES);
+      buff[HTTP_LEN_BYTES] = '=';
+      n += HTTP_LEN_BYTES + 1;
+      first = false;
+    } else if (remain < 4) {
+      break;
+    } else {
+      *spot = ',';
+      ++n;
+    }
+    remain -= n;
+    spot += n;
+
+    if (rv[i].isSuffix())
+      n += snprintf(spot, remain, "-%" PRId64, rv[i]._min);
+    else if (rv[i].isPrefix())
+      n += snprintf(spot, remain, "%" PRId64 "-", rv[i]._min);
+    else
+      n += snprintf(spot, remain, "%" PRId64 "-%" PRIu64, rv[i]._min, rv[i]._max);
+
+    if (n + zret >= len) {
+      buff[zret] = 0; // clip partial output.
+      break;
+    }
+
+    zret += n;
+  }
+  return zret;
+}
+
+int
+HTTPRangeSpec::print(char *buff, size_t len) const
+{
+  return this->hasRanges() ? this->print_array(buff, len, &(*(this->begin())), this->count()) : 0;
+}
+
+int
+HTTPRangeSpec::print_quantized(char *buff, size_t len, int64_t quantum, int64_t interstitial, int64_t rlimit) const
+{
+  static const int MAX_R = 20; // this needs to be promoted
+  // We will want to have a max # of ranges limit, probably a build time constant, in the not so distant
+  // future anyway, so might as well start here.
+  int qrn         = 0;  // count of quantized ranges
+  int64_t trailer = -1; // Union of trailing ranges.
+  Range qr[MAX_R + 1];  // quantized ranges - leave one for the trailing range, if any.
+
+  // Can't possibly write a range in less than this size buffer.
+  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4)
+    return 0;
+
+  // Avoid annoying "+1" in the adjacency checks.
+  if (interstitial < 1)
+    interstitial = 1;
+  else
+    ++interstitial;
+
+  for (const_iterator spot = this->begin(), limit = this->end(); spot != limit; ++spot) {
+    Range r(*spot);
+    if (r.isSuffix()) {
+      trailer = std::max(trailer, r._min);
+    } else {
+      if (quantum > 1) {
+        r._min = (r._min / quantum) * quantum;
+        r._max = ((r._max + quantum - 1) / quantum) * quantum - 1;
+      }
+      int i; // need to persist past @c for loop.
+      // Clip max request value if needed.
+      if (rlimit > 0)
+        r._max = std::min(r._max, rlimit - 1);
+      // blend in to the current ranges.
+      for (i = 0; i < qrn; ++i) {
+        Range &cr = qr[i];
+        if ((r._max + interstitial) < cr._min) {
+          memmove(qr, qr + 1, sizeof(*qr) * qrn);
+          ++qrn;
+          qr[0] = r;
+          i     = -1;
+          break;
+        } else if (cr._max + interstitial >= r._min) {
+          int j   = i + 1;
+          cr._min = std::min(cr._min, r._min);
+          cr._max = std::max(cr._max, r._max);
+          while (j < qrn) {
+            if (qr[j]._min < cr._max + interstitial)
+              cr._max = std::max(cr._max, qr[j]._max);
+            ++j;
+          }
+          if (j < qrn)
+            memmove(qr + i + 1, qr + j, sizeof(*qr) * qrn - j);
+          qrn -= j - i;
+          i = -1;
+          break;
+        }
+      }
+      if (i >= qrn)
+        qr[qrn++] = r;
+      ink_assert(qrn <= MAX_R);
+    }
+  }
+
+  if (trailer >= 0)
+    qr[qrn++].setSuffix(trailer);
+
+  return this->print_array(buff, len, qr, qrn);
+}
+
+HTTPRangeSpec::Range
+HTTPInfo::get_range_for_frags(int low, int high)
+{
+  return HTTPRangeSpec::Range(this->get_frag_offset(low), this->get_frag_offset(high + 1) - 1);
+}
+
+/* Note - we're not handling unspecified content length and trailing segments at all here.
+   Must deal with that at some point.
+*/
+
+HTTPRangeSpec::Range
+HTTPInfo::get_uncached_hull(HTTPRangeSpec const &req, int64_t initial)
+{
+  HTTPRangeSpec::Range r;
+
+  if (m_alt && !m_alt->m_flag.complete_p) {
+    HTTPRangeSpec::Range s = req.getConvexHull();
+    if (m_alt->m_fragments) {
+      FragmentDescriptorTable &fdt = *(m_alt->m_fragments);
+      int32_t lidx;
+      int32_t ridx;
+      if (s.isValid()) {
+        lidx = this->get_frag_index_of(s._min);
+        ridx = this->get_frag_index_of(s._max);
+      } else { // not a range request, get hull of all uncached fragments
+        lidx = fdt.m_cached_idx + 1;
+        // This really isn't valid if !content_length_p, need to deal with that at some point.
+        ridx = this->get_frag_index_of(this->object_size_get());
+      }
+
+      if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p)
+        lidx = 0;
+      else {
+        if (0 == lidx)
+          ++lidx; // because if we get here with lidx == 0, earliest is cached and we should skip ahead.
+        while (lidx <= ridx && fdt[lidx].m_flag.cached_p)
+          ++lidx;
+      }
+
+      while (lidx <= ridx && fdt[ridx].m_flag.cached_p)
+        --ridx;
+
+      if (lidx <= ridx)
+        r = this->get_range_for_frags(lidx, ridx);
+    } else { // no fragments past earliest cached yet
+      r._min = m_alt->m_earliest.m_flag.cached_p ? this->get_frag_fixed_size() : 0;
+      if (s.isValid()) {
+        r._min = std::max(r._min, s._min);
+        r._max = s._max;
+      } else {
+        r._max = INT64_MAX;
+      }
+    }
+    if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) >= this->object_size_get())
+      r._max = this->object_size_get() - 1;
+    if (static_cast<int64_t>(r._min) < initial && !m_alt->m_earliest.m_flag.cached_p)
+      r._min = 0;
+  }
+  return r;
+}
+
+#if 0
+bool
+HTTPInfo::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
+{
+  bool zret = false;
+  if (m_alt && !m_alt->m_flag.complete_p) {
+    FragmentAccessor frags(m_alt);
+
+    for ( HTTPRangeSpec::const_iterator spot = req.begin(), limit = req.end() ; spot != limit ; ++spot ) {
+      int32_t lidx = this->get_frag_index_of(spot->_min);
+      int32_t ridx = this->get_frag_index_of(spot->_max);
+      while (lidx <= ridx && frags[lidx].m_flag.cached_p)
+        ++lidx;
+      if (lidx > ridx) continue; // All of this range is present.
+      while (lidx <= ridx && frags[ridx].m_flag.cached_p) // must hit missing frag at lhs at the latest
+        --ridx;
+
+      if (lidx <= ridx) {
+        result.add(this->get_range_for_frags(lidx, ridx));
+        zret = true;
+      }
+    }
+  }
+  return zret;
+}
+#endif

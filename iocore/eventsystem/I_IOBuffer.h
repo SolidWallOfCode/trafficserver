@@ -345,9 +345,9 @@ public:
 
   */
   int64_t
-  size()
+  size() const
   {
-    return (int64_t)(_end - _start);
+    return static_cast<int64_t>(_end - _start);
   }
 
   /**
@@ -358,9 +358,9 @@ public:
 
   */
   int64_t
-  read_avail()
+  read_avail() const
   {
-    return (int64_t)(_end - _start);
+    return static_cast<int64_t>(_end - _start);
   }
 
   /**
@@ -434,7 +434,7 @@ public:
     @return copy of this IOBufferBlock.
 
   */
-  IOBufferBlock *clone();
+  IOBufferBlock *clone() const;
 
   /**
     Clear the IOBufferData this IOBufferBlock handles. Clears this
@@ -526,6 +526,73 @@ private:
 };
 
 extern inkcoreapi ClassAllocator<IOBufferBlock> ioBlockAllocator;
+
+/** A class for holding a chain of IO buffer blocks.
+    This class is intended to be used as a member variable for other classes that
+    need to anchor an IO Buffer chain but don't need the full @c MIOBuffer machinery.
+    That is, the owner is the only reader/writer of the data.
+
+    This does not handle incremental reads or writes well. The intent is that data is
+    placed in the instance, held for a while, then used and discarded.
+
+    @note Contrast also with @c IOBufferReader which is similar but requires an
+    @c MIOBuffer as its owner.
+*/
+class IOBufferChain
+{
+  typedef IOBufferChain self;
+
+public:
+  /// Default constructor - construct empty chain.
+  IOBufferChain() : _blocks(NULL), _tail(NULL), _len(0) {}
+  /// Shallow copy.
+  self &operator=(self const &that);
+
+  /// Shallow append.
+  self &operator+=(self const &that);
+
+  int64_t
+  length() const
+  {
+    return _len;
+  }
+
+  /// Copy a chain of @a blocks in to this object up to @a length bytes.
+  /// If @a offset is greater than 0 that many bytes are skipped. Those bytes do not count
+  /// as part of @a length.
+  /// This creates a new chain using existing data blocks. This
+  /// breaks the original chain so that changes there (such as appending blocks)
+  /// is not reflected in this chain.
+  /// @return The number of bytes written to the chain.
+  int64_t write(IOBufferBlock *blocks, int64_t length, int64_t offset = 0);
+
+  /// Add the content of a buffer block.
+  /// The buffer block is unchanged.
+  int64_t write(IOBufferData *data, int64_t length = 0, int64_t offset = 0);
+
+  /// Remove @a size bytes of content from the front of the chain.
+  /// @return The actual number of bytes removed.
+  int64_t consume(int64_t size);
+
+  /// Clear current chain.
+  void clear();
+
+  /// Get the first block.
+  IOBufferBlock *head();
+  IOBufferBlock const *head() const;
+
+protected:
+  /// Append @a block.
+  void append(IOBufferBlock *block);
+
+  /// Head of buffer block chain.
+  Ptr<IOBufferBlock> _blocks;
+  /// Tail of the block chain.
+  IOBufferBlock *_tail;
+  /// The amount of data of interest.
+  /// Not necessarily the amount of data in the chain of blocks.
+  int64_t _len;
+};
 
 /**
   An independent reader from an MIOBuffer. A reader for a set of
@@ -911,6 +978,17 @@ public:
   */
   inkcoreapi int64_t write(IOBufferReader *r, int64_t len = INT64_MAX, int64_t offset = 0);
 
+  /** Copy data from the @a chain to this buffer.
+      New IOBufferBlocks are allocated so this gets a copy of the data that is independent of the source.
+      @a offset bytes are skipped at the start of the @a chain. The length is bounded by @a len and the
+      size in the @a chain.
+
+      @return the number of bytes copied.
+
+      @internal I do not like counting @a offset against @a bytes but that's how @c write works...
+  */
+  int64_t write(IOBufferChain const *chain, int64_t len = INT64_MAX, int64_t offset = 0);
+
   int64_t remove_append(IOBufferReader *);
 
   /**
@@ -1079,6 +1157,7 @@ public:
   void alloc(int64_t i = default_large_iobuffer_size);
   void alloc_xmalloc(int64_t buf_size);
   void append_block_internal(IOBufferBlock *b);
+  int64_t write(IOBufferBlock const *b, int64_t len, int64_t offset);
   int64_t puts(char *buf, int64_t len);
 
   // internal interface
@@ -1401,4 +1480,47 @@ extern IOBufferBlock *iobufferblock_clone(IOBufferBlock *b, int64_t offset, int6
 
 */
 extern IOBufferBlock *iobufferblock_skip(IOBufferBlock *b, int64_t *poffset, int64_t *plen, int64_t write);
+
+inline IOBufferChain &
+IOBufferChain::operator=(self const &that)
+{
+  _blocks = that._blocks;
+  _tail   = that._tail;
+  _len    = that._len;
+  return *this;
+}
+
+inline IOBufferChain &
+IOBufferChain::operator+=(self const &that)
+{
+  if (NULL == _blocks)
+    *this = that;
+  else {
+    _tail->next = that._blocks;
+    _tail       = that._tail;
+    _len += that._len;
+  }
+  return *this;
+}
+
+inline IOBufferBlock const *
+IOBufferChain::head() const
+{
+  return _blocks;
+}
+
+inline IOBufferBlock *
+IOBufferChain::head()
+{
+  return _blocks;
+}
+
+inline void
+IOBufferChain::clear()
+{
+  _blocks = NULL;
+  _tail   = NULL;
+  _len    = 0;
+}
+
 #endif
