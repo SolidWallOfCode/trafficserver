@@ -36,7 +36,8 @@
  *  configuration file and builds the lookup table
  *
  *     Four types of matched are supported: hostname, domain name, ip address
- *  and URL regex.  For these four types, three lookup tables are used.  Regex and
+ *  and URL regex.  For these four types, three lookup tables are used.  Regex
+ *and
  *  ip lookups have there own tables and host and domain lookups share a single
  *  table
  *
@@ -163,7 +164,6 @@ public:
   bool internal_txn;
 };
 
-
 template <class Data, class Result> class UrlMatcher
 {
 public:
@@ -195,7 +195,6 @@ protected:
   const char *matcher_name; // Used for Debug/Warning/Error messages
   const char *file_name;    // Used for Debug/Warning/Error messages
 };
-
 
 template <class Data, class Result> class RegexMatcher
 {
@@ -300,7 +299,6 @@ public:
   const char *matcher_name; // Used for Debug/Warning/Error messages
   const char *file_name;    // Used for Debug/Warning/Error messages
 };
-
 
 #define ALLOW_HOST_TABLE 1 << 0
 #define ALLOW_IP_TABLE 1 << 1

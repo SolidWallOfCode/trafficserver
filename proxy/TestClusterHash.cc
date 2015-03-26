@@ -28,7 +28,6 @@
 #include "Cluster.h"
 #include "libts.h"
 
-
 //
 // This test function produces the table included
 // in Memo.ClusterHash

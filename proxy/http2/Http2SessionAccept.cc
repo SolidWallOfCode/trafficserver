@@ -38,7 +38,8 @@ Http2SessionAccept::~Http2SessionAccept()
 void
 Http2SessionAccept::accept(NetVConnection *netvc, MIOBuffer *iobuf, IOBufferReader *reader)
 {
-  // XXX we need to refactor the ACL checks from HttpSessionAccept so that we can invoke them here, and also in
+  // XXX we need to refactor the ACL checks from HttpSessionAccept so that we
+  // can invoke them here, and also in
   // the SPDY protocol layer ...
   // Warning("skipping access control checks for HTTP/2 connection");
 
@@ -48,8 +49,9 @@ Http2SessionAccept::accept(NetVConnection *netvc, MIOBuffer *iobuf, IOBufferRead
     const sockaddr *client_ip = netvc->get_remote_addr();
     ip_port_text_buffer ipb;
 
-    Debug("http2_seq", "[HttpSessionAccept2:mainEvent %p] accepted connection from %s transport type = %d", netvc,
-          ats_ip_nptop(client_ip, ipb, sizeof(ipb)), netvc->attributes);
+    Debug("http2_seq", "[HttpSessionAccept2:mainEvent %p] accepted connection "
+                       "from %s transport type = %d",
+          netvc, ats_ip_nptop(client_ip, ipb, sizeof(ipb)), netvc->attributes);
   }
 
   // XXX Allocate a Http2ClientSession
@@ -69,7 +71,8 @@ Http2SessionAccept::mainEvent(int event, void *data)
     return EVENT_CONT;
   }
 
-  // XXX We should hoist the error handling so that all the protocols generate the statistics
+  // XXX We should hoist the error handling so that all the protocols generate
+  // the statistics
   // without code duplication.
   if (((long)data) == -ECONNABORTED) {
     HTTP_SUM_DYN_STAT(http_ua_msecs_counts_errors_pre_accept_hangups_stat, 0);

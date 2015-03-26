@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #if !defined(_RECORDS_CONFIG_H_)
 #define _RECORDS_CONFIG_H_
 
@@ -50,7 +49,8 @@ typedef void (*RecordElementCallback)(const RecordElement *, void *);
 void RecordsConfigIterate(RecordElementCallback, void *);
 
 void LibRecordsConfigInit();                 // initializes RecordsConfigIndex
-void RecordsConfigOverrideFromEnvironment(); // Override records from the environment
+void RecordsConfigOverrideFromEnvironment(); // Override records from the
+                                             // environment
 void test_librecords();
 
 #endif

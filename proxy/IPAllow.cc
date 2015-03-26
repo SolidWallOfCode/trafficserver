@@ -94,7 +94,6 @@ IpAllow::release(IpAllow *lookup)
 //   End API functions
 //
 
-
 IpAllow::IpAllow(const char *config_var, const char *name, const char *action_val) : module_name(name), action(action_val)
 {
   ats_scoped_str config_path(RecConfigReadConfigPath(config_var));
@@ -207,7 +206,8 @@ IpAllow::BuildTable()
           SignalError(errBuf, alarmAlready);
         } else {
           // INKqa05845
-          // Search for "action=ip_allow method=PURGE method=GET ..." or "action=ip_deny method=PURGE method=GET ...".
+          // Search for "action=ip_allow method=PURGE method=GET ..." or
+          // "action=ip_deny method=PURGE method=GET ...".
           char *label, *val;
           uint32_t acl_method_mask = 0;
           AclRecord::MethodSet nonstandard_methods;
@@ -278,7 +278,8 @@ IpAllow::BuildTable()
             _map.fill(&addr1, &addr2, reinterpret_cast<void *>(_acls.length() - 1));
           } else {
             snprintf(errBuf, sizeof(errBuf), "%s discarding %s entry at line %d : %s", module_name, config_file_path, line_num,
-                     "Invalid action/method specified"); // changed by YTS Team, yamsat bug id -59022
+                     "Invalid action/method specified"); // changed by YTS Team,
+                                                         // yamsat bug id -59022
             SignalError(errBuf, alarmAlready);
           }
         }

@@ -110,7 +110,8 @@ LogAccessHttp::init()
       //
       // here is the assert
       //
-      // assert (m_proxy_resp_content_type_str[0] >= 'A' && m_proxy_resp_content_type_str[0] <= 'z');
+      // assert (m_proxy_resp_content_type_str[0] >= 'A' &&
+      // m_proxy_resp_content_type_str[0] <= 'z');
       LogUtils::remove_content_type_attributes(m_proxy_resp_content_type_str, &m_proxy_resp_content_type_len);
     } else {
       // If Content-Type field is missing, check for @Content-Type
@@ -135,7 +136,8 @@ LogAccessHttp::init()
 /*-------------------------------------------------------------------------
   The set routines ...
 
-  These routines are used by the WIPE_FIELD_VALUE filter to replace the original req url
+  These routines are used by the WIPE_FIELD_VALUE filter to replace the original
+  req url
   strings with the WIPED req strings.
   -------------------------------------------------------------------------*/
 
@@ -187,13 +189,13 @@ LogAccessHttp::set_client_req_unmapped_url_host(char *buf, int len)
 void
 LogAccessHttp::set_client_req_url_path(char *buf, int len)
 {
-  //?? use m_client_req_unmapped_url_path_str for now..may need to enhance later..
+  //?? use m_client_req_unmapped_url_path_str for now..may need to enhance
+  // later..
   if (buf) {
     m_client_req_url_path_len = len;
     ink_strlcpy(m_client_req_unmapped_url_path_str, buf, m_client_req_url_path_len + 1);
   }
 }
-
 
 /*-------------------------------------------------------------------------
   The marshalling routines ...
@@ -272,7 +274,6 @@ LogAccessHttp::marshal_client_auth_user_name(char *buf)
   return len;
 }
 
-
 /*-------------------------------------------------------------------------
   Private utility function to validate m_client_req_unmapped_url_canon_str &
   m_client_req_unmapped_url_canon_len fields.
@@ -331,7 +332,6 @@ LogAccessHttp::validate_unmapped_url_path(void)
     }
   }
 }
-
 
 /*-------------------------------------------------------------------------
   This is the method, url, and version all rolled into one.  Use the
@@ -408,7 +408,6 @@ LogAccessHttp::marshal_client_req_url_canon(char *buf)
   }
   return len;
 }
-
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
@@ -823,7 +822,6 @@ LogAccessHttp::marshal_server_host_ip(char *buf)
   return marshal_ip(buf, ip);
 }
 
-
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
@@ -845,7 +843,6 @@ LogAccessHttp::marshal_server_host_name(char *buf)
   }
   return padded_len;
 }
-
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
@@ -1003,7 +1000,6 @@ LogAccessHttp::marshal_cache_resp_http_version(char *buf)
   return (2 * INK_MIN_ALIGN);
 }
 
-
 int
 LogAccessHttp::marshal_client_retry_after_time(char *buf)
 {
@@ -1047,7 +1043,6 @@ convert_cache_write_code(HttpTransact::CacheWriteStatus_t t)
   return code;
 }
 
-
 int
 LogAccessHttp::marshal_cache_write_code(char *buf)
 {
@@ -1069,7 +1064,6 @@ LogAccessHttp::marshal_cache_write_transform_code(char *buf)
 
   return INK_MIN_ALIGN;
 }
-
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/

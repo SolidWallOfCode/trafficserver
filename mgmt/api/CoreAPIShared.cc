@@ -92,7 +92,8 @@ readHTTPResponse(int sock, char *buffer, int bufsize, uint64_t timeout)
     //      printf("before poll_read\n");
     err = poll_read(sock, timeout);
     if (err < 0) {
-      //      printf("(test) poll read failed [%d '%s']\n", errno, strerror (errno));
+      //      printf("(test) poll read failed [%d '%s']\n", errno, strerror
+      // (errno));
       goto error;
     } else if (err == 0) {
       //      printf("(test) read timeout\n");
@@ -144,7 +145,8 @@ sendHTTPRequest(int sock, char *req, uint64_t timeout)
 
   int err = poll_write(sock, timeout);
   if (err < 0) {
-    //      printf("(test) poll write failed [%d '%s']\n", errno, strerror (errno));
+    //      printf("(test) poll write failed [%d '%s']\n", errno, strerror
+    // (errno));
     goto error;
   } else if (err == 0) {
     //      printf("(test) write timeout\n");
@@ -158,7 +160,8 @@ sendHTTPRequest(int sock, char *req, uint64_t timeout)
     } while ((err < 0) && ((errno == EINTR) || (errno == EAGAIN)));
 
     if (err < 0) {
-      //      printf("(test) write failed [%d '%s']\n", errno, strerror (errno));
+      //      printf("(test) write failed [%d '%s']\n", errno, strerror
+      // (errno));
       goto error;
     }
     requestPtr += err;
@@ -175,7 +178,6 @@ error: /* "Houston, we have a problem!" (Apollo 13) */
   return TS_ERR_NET_WRITE;
 }
 
-
 /* Modified from TrafficCop.cc (open_socket) */
 int
 connectDirect(const char *host, int port, uint64_t /* timeout ATS_UNUSED */)
@@ -188,7 +190,8 @@ connectDirect(const char *host, int port, uint64_t /* timeout ATS_UNUSED */)
   } while ((sock < 0) && ((errno == EINTR) || (errno == EAGAIN)));
 
   if (sock < 0) {
-    //        printf("(test) unable to create socket [%d '%s']\n", errno, strerror(errno));
+    //        printf("(test) unable to create socket [%d '%s']\n", errno,
+    // strerror(errno));
     goto error;
   }
 
@@ -204,7 +207,8 @@ connectDirect(const char *host, int port, uint64_t /* timeout ATS_UNUSED */)
   } while ((err < 0) && ((errno == EINTR) || (errno == EAGAIN)));
 
   if (err < 0) {
-    //        printf("(test) unable to put socket in non-blocking mode [%d '%s']\n", errno, strerror (errno));
+    //        printf("(test) unable to put socket in non-blocking mode [%d
+    // '%s']\n", errno, strerror (errno));
     goto error;
   }
   // Connect to the specified port on the machine we're running on.
@@ -223,7 +227,8 @@ connectDirect(const char *host, int port, uint64_t /* timeout ATS_UNUSED */)
   } while ((err < 0) && ((errno == EINTR) || (errno == EAGAIN)));
 
   if ((err < 0) && (errno != EINPROGRESS)) {
-    //        printf("(test) unable to connect to server [%d '%s'] at port %d\n", errno, strerror (errno), port);
+    //        printf("(test) unable to connect to server [%d '%s'] at port
+    // %d\n", errno, strerror (errno), port);
     goto error;
   }
   return sock;
@@ -270,7 +275,6 @@ poll_write(int fd, int timeout)
   do {
     err = poll(&info, 1, timeout);
   } while ((err < 0) && ((errno == EINTR) || (errno == EAGAIN)));
-
 
   if ((err > 0) && (info.revents & POLLOUT)) {
     return 1;

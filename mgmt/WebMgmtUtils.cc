@@ -36,7 +36,6 @@
  *
  ****************************************************************************/
 
-
 // bool varSetFromStr(const char*, const char* )
 //
 // Sets the named local manager variable from the value string
@@ -286,7 +285,6 @@ varDataFromName(RecDataT varType, const char *varName, RecData *value)
   return (err == REC_ERR_OKAY);
 }
 
-
 // bool varCounterFromName (const char*, RecFloat* )
 //
 //   Sets the *value to value of the varName.
@@ -434,7 +432,6 @@ varIntFromName(const char *varName, RecInt *value)
 
   return found;
 }
-
 
 // void percentStrFromFloat(MgmtFloat, char* bufVal)
 //
@@ -785,7 +782,6 @@ varType(const char *varName)
   return data_type;
 }
 
-
 // InkHashTable* processFormSubmission(char* submission)
 //
 //  A generic way to handle a HTML form submission.
@@ -1011,7 +1007,6 @@ substituteForHTMLChars(const char *buffer)
   return safeBuf;
 }
 
-
 // bool ProxyShutdown()
 //
 //  Attempts to turn the proxy off.  Returns
@@ -1212,8 +1207,9 @@ recordIPCheck(const char *pattern, const char *value)
   //  regex_t regex;
   //  int result;
   bool check;
-  const char *range_pattern =
-    "\\[[0-9]+\\-[0-9]+\\]\\\\\\.\\[[0-9]+\\-[0-9]+\\]\\\\\\.\\[[0-9]+\\-[0-9]+\\]\\\\\\.\\[[0-9]+\\-[0-9]+\\]";
+  const char *range_pattern = "\\[[0-9]+\\-[0-9]+\\]\\\\\\.\\[[0-9]+\\-[0-9]+"
+                              "\\]\\\\\\.\\[[0-9]+\\-[0-9]+\\]\\\\\\.\\[[0-9]+"
+                              "\\-[0-9]+\\]";
   const char *ip_pattern = "[0-9]*[0-9]*[0-9].[0-9]*[0-9]*[0-9].[0-9]*[0-9]*[0-9].[0-9]*[0-9]*[0-9]";
 
   Tokenizer dotTok1(".");

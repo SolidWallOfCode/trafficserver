@@ -33,7 +33,8 @@ class HTTPHdr;
 
 typedef unsigned Http2StreamId;
 
-// 6.9.2 Initial Flow Control Window Size - the flow control window can be come negative
+// 6.9.2 Initial Flow Control Window Size - the flow control window can be come
+// negative
 // so we need to track it with a signed type.
 typedef int32_t Http2WindowSize;
 
@@ -77,7 +78,6 @@ enum Http2ErrorCode {
   HTTP2_ERROR_ENHANCE_YOUR_CALM = 11,
   HTTP2_ERROR_INADEQUATE_SECURITY = 12,
   HTTP2_ERROR_HTTP_1_1_REQUIRED = 13,
-
   HTTP2_ERROR_MAX,
 };
 
@@ -103,7 +103,6 @@ enum Http2FrameType {
   HTTP2_FRAME_TYPE_GOAWAY = 7,
   HTTP2_FRAME_TYPE_WINDOW_UPDATE = 8,
   HTTP2_FRAME_TYPE_CONTINUATION = 9,
-
   HTTP2_FRAME_TYPE_MAX,
 };
 
@@ -111,7 +110,6 @@ enum Http2FrameType {
 enum Http2FrameFlagsData {
   HTTP2_FLAGS_DATA_END_STREAM = 0x01,
   HTTP2_FLAGS_DATA_PADDED = 0x08,
-
   HTTP2_FLAGS_DATA_MASK = 0x2B,
 };
 
@@ -121,7 +119,6 @@ enum Http2FrameFlagsHeaders {
   HTTP2_FLAGS_HEADERS_END_HEADERS = 0x04,
   HTTP2_FLAGS_HEADERS_PADDED = 0x08,
   HTTP2_FLAGS_HEADERS_PRIORITY = 0x20,
-
   HTTP2_FLAGS_HEADERS_MASK = 0x2B,
 };
 
@@ -136,27 +133,18 @@ enum Http2FrameFlagsRstStream {
 };
 
 // 6.4 Settings
-enum Http2FrameFlagsSettings {
-  HTTP2_FLAGS_SETTINGS_ACK = 0x01,
-
-  HTTP2_FLAGS_SETTINGS_MASK = 0x01
-};
+enum Http2FrameFlagsSettings { HTTP2_FLAGS_SETTINGS_ACK = 0x01, HTTP2_FLAGS_SETTINGS_MASK = 0x01 };
 
 // 6.6 Push Promise
 enum Http2FrameFlagsPushPromise {
   HTTP2_FLAGS_PUSH_PROMISE_END_HEADERS = 0x04,
   HTTP2_FLAGS_PUSH_PROMISE_PAD_LOW = 0x08,
   HTTP2_FLAGS_PUSH_PROMISE_PAD_HIGH = 0x10,
-
   HTTP2_FLAGS_PUSH_PROMISE_MASK = 0x1C,
 };
 
 // 6.7 Ping
-enum Http2FrameFlagsPing {
-  HTTP2_FLAGS_PING_ACK = 0x01,
-
-  HTTP2_FLAGS_PING_MASK = 0x01
-};
+enum Http2FrameFlagsPing { HTTP2_FLAGS_PING_ACK = 0x01, HTTP2_FLAGS_PING_MASK = 0x01 };
 
 // 6.8 Goaway
 enum Http2FrameFlagsGoaway {
@@ -173,7 +161,6 @@ enum Http2FrameFlagsContinuation {
   HTTP2_FLAGS_CONTINUATION_END_HEADERS = 0x04,
   HTTP2_FLAGS_CONTINUATION_PAD_LOW = 0x08,
   HTTP2_FLAGS_CONTINUATION_PAD_HIGH = 0x10,
-
   HTTP2_FLAGS_CONTINUATION_MASK = 0x1C,
 };
 
@@ -185,7 +172,6 @@ enum Http2SettingsIdentifier {
   HTTP2_SETTINGS_INITIAL_WINDOW_SIZE = 4,
   HTTP2_SETTINGS_MAX_FRAME_SIZE = 5,
   HTTP2_SETTINGS_MAX_HEADER_LIST_SIZE = 6,
-
   HTTP2_SETTINGS_MAX
 };
 
@@ -222,8 +208,10 @@ struct Http2Goaway {
   Http2StreamId last_streamid;
   uint32_t error_code;
 
-  // NOTE: we don't (de)serialize the variable length debug data at this layer because there's
-  // really nothing we can do with it without some out of band agreement. Trying to deal with it
+  // NOTE: we don't (de)serialize the variable length debug data at this layer
+  // because there's
+  // really nothing we can do with it without some out of band agreement. Trying
+  // to deal with it
   // just complicates memory management.
 };
 
@@ -286,9 +274,10 @@ int64_t http2_write_psuedo_headers(HTTPHdr *, uint8_t *, uint64_t, Http2DynamicT
 
 int64_t http2_write_header_fragment(HTTPHdr *, MIMEFieldIter &, uint8_t *, uint64_t, Http2DynamicTable &, bool &);
 
-
-// Not sure where else to put this, but figure this is as good of a start as anything else.
-// Right now, only the static init() is available, which sets up some basic librecords
+// Not sure where else to put this, but figure this is as good of a start as
+// anything else.
+// Right now, only the static init() is available, which sets up some basic
+// librecords
 // dependencies.
 class Http2
 {

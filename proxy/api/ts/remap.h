@@ -38,29 +38,32 @@ extern "C" {
 
 typedef struct _tsremap_api_info {
   unsigned long size;            /* in: sizeof(struct _tsremap_api_info) */
-  unsigned long tsremap_version; /* in: TS supported version ((major << 16) | minor) */
+  unsigned long tsremap_version; /* in: TS supported version ((major << 16) |
+                                    minor) */
 } TSRemapInterface;
 
-
 typedef struct _tm_remap_request_info {
-  /* Important: You should *not* release these buf pointers or TSMLocs from your plugin! */
+  /* Important: You should *not* release these buf pointers or TSMLocs from your
+   * plugin! */
 
   /* these URL mloc's are read only, use normal ts/ts.h APIs for accesing  */
   TSMLoc mapFromUrl;
   TSMLoc mapToUrl;
 
-  /* the request URL mloc and buffer pointers are read-write. You can read and modify the
-   requestUrl using normal ts/ts.h APIs, which is how you change the destination URL. */
+  /* the request URL mloc and buffer pointers are read-write. You can read and
+   modify the
+   requestUrl using normal ts/ts.h APIs, which is how you change the destination
+   URL. */
   TSMLoc requestUrl;
 
-  /* requestBufp and requestHdrp are the equivalent of calling TSHttpTxnClientReqGet(). */
+  /* requestBufp and requestHdrp are the equivalent of calling
+   * TSHttpTxnClientReqGet(). */
   TSMBuffer requestBufp;
   TSMLoc requestHdrp;
 
   /* 0 - don't redirect, 1 - use the (new)request URL as a redirect */
   int redirect;
 } TSRemapRequestInfo;
-
 
 /* This is the type returned by the TSRemapDoRemap() callback */
 typedef enum {
@@ -74,13 +77,14 @@ typedef enum {
      -500 to -599
      ....
      This would allow a plugin to generate an error page. Right now,
-     setting the return code to any negative number is equivalent to TSREMAP_NO_REMAP */
+     setting the return code to any negative number is equivalent to
+     TSREMAP_NO_REMAP */
   TSREMAP_ERROR = -1 /* Some error, that should generate an error page */
 } TSRemapStatus;
 
-
 /* ----------------------------------------------------------------------------------
-   These are the entry points a plugin can implement. Note that TSRemapInit() and
+   These are the entry points a plugin can implement. Note that TSRemapInit()
+   and
    TSRemapDoRemap() are both required.
    ----------------------------------------------------------------------------------
 */
@@ -92,32 +96,32 @@ typedef enum {
 */
 tsapi TSReturnCode TSRemapInit(TSRemapInterface *api_info, char *errbuf, int errbuf_size);
 
-
 /* Remap new request
    Mandatory interface function.
    Remap API plugin can/should use SDK API function calls inside this function!
    return: TSREMAP_NO_REMAP - No remaping was done, continue with next in chain
            TSREMAP_DID_REMAP - Remapping was done, continue with next in chain
-           TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain evaluation
-           TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain evaluation
+           TSREMAP_NO_REMAP_STOP - No remapping was done, and stop plugin chain
+   evaluation
+           TSREMAP_DID_REMAP_STOP -  Remapping was done, but stop plugin chain
+   evaluation
 */
 tsapi TSRemapStatus TSRemapDoRemap(void *ih, TSHttpTxn rh, TSRemapRequestInfo *rri);
-
 
 /* Plugin shutdown, called when plugin is unloaded.
    Optional function. */
 tsapi void TSRemapDone(void);
 
-
-/* Plugin new instance. Create new plugin processing entry for unique remap record.
+/* Plugin new instance. Create new plugin processing entry for unique remap
+   record.
    First two arguments in argv vector are - fromURL and toURL from remap record.
-   Please keep in mind that fromURL and toURL will be converted to canonical view.
+   Please keep in mind that fromURL and toURL will be converted to canonical
+   view.
    Return: TS_SUCESS
            TS_ERROR - instance creation error
 */
 tsapi TSReturnCode TSRemapNewInstance(int argc, char *argv[], void **ih, char *errbuf, int errbuf_size);
 tsapi void TSRemapDeleteInstance(void *);
-
 
 /* Check response code from Origin Server
    os_response_type -> TSServerState

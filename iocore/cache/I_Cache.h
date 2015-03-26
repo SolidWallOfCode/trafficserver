@@ -49,6 +49,7 @@
 #define CACHE_COMPRESSION_LIBZ 2
 #define CACHE_COMPRESSION_LIBLZMA 3
 
+struct CacheVConnection;
 struct CacheVC;
 struct CacheDisk;
 #ifdef HTTP_CACHE
@@ -56,6 +57,7 @@ class CacheLookupHttpConfig;
 class URL;
 class HTTPHdr;
 class HTTPInfo;
+class HTTPRangeSpec;
 
 typedef HTTPHdr CacheHTTPHdr;
 typedef URL CacheURL;
@@ -80,9 +82,22 @@ struct CacheProcessor : public Processor {
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                                CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
+
+  /** Open a cache reader from an already open writer.
+
+      This is used for partial content on a cache miss to open a reader corresponding to the
+      partial content writer.
+  */
+  inkcoreapi Action *open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr);
+
+  Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key, CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
+                           char *hostname = 0, int host_len = 0);
+
   inkcoreapi Action *open_write(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                                 CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, int expected_size = CACHE_EXPECTED_SIZE,
                                 int options = 0, time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
+  Action *open_write_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key, CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
+                            int options = 0, time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
   inkcoreapi Action *remove(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, const char *hostname = 0, int host_len = 0);
   Action *scan(Continuation *cont, char *hostname = 0, int host_len = 0, int KB_per_second = SCAN_KB_PER_SECOND);
@@ -121,6 +136,9 @@ struct CacheProcessor : public Processor {
       If this returns @c false then the cache should be disabled as there is no storage available.
   */
   bool has_online_storage() const;
+
+  /** Get the target fragment size. */
+  int64_t get_fixed_fragment_size() const;
 
   static int IsCacheEnabled();
 
@@ -187,6 +205,62 @@ struct CacheVConnection : public VConnection {
 #ifdef HTTP_CACHE
   virtual void set_http_info(CacheHTTPInfo *info) = 0;
   virtual void get_http_info(CacheHTTPInfo **info) = 0;
+
+  /** Get the boundary string for a multi-part range response.
+      The length of the string is returned in @a len.
+
+      @return A point to the string.
+   */
+  virtual char const *get_http_range_boundary_string(int *len) const = 0;
+
+  /** Get the effective content size.
+
+      This is the amount of actual data based on any range or framing.  Effectively this is the
+      value to be passed to the @c VIO while the content length is used in the HTTP header.
+  */
+  virtual int64_t get_effective_content_size() = 0;
+
+  /** Set the origin reported content size.
+
+      This is the content length reported by the origin server and should be considered a hint, not
+      definitive. The object size, as stored in the cache, is the actual amount of data received and
+      cached.
+
+      @note This is the total content length as reported in the HTTP header, not the partial (range based) response size.
+      Also this is the length of the HTTP content, which may differ from the size of the data stream.
+  */
+  virtual void set_full_content_length(int64_t) = 0;
+
+  /** Set the output ranges for the content.
+   */
+  virtual void set_content_range(HTTPRangeSpec const &range) = 0;
+
+  /// Get the unchanged ranges for the request range @a req.
+  /// If @a req is empty it is treated as a full request (non-partial).
+  /// @return @c true if the @a result is not empty.
+  /// @internal Currently this just returns the single range that is convex hull of the uncached request.
+  /// Someday we may want to do the exact range spec but we use the type for now because it's easier.
+  virtual bool
+  get_uncached(HTTPRangeSpec const &req, HTTPRangeSpec &result, int64_t initial)
+  {
+    (void)req;
+    (void)result;
+    (void)initial;
+    return false;
+  }
+
+  /** Set the range for the input (response content).
+      The incoming bytes will be written to this section of the object.
+      @note This range @b must be absolute.
+      @note The range is inclusive.
+      @return The # of bytes in the range.
+  */
+  virtual int64_t
+  set_inbound_range(int64_t min, int64_t max)
+  {
+    return 1 + (max - min);
+  }
+
 #endif
 
   virtual bool is_ram_cache_hit() const = 0;

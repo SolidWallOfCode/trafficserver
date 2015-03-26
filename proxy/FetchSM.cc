@@ -67,9 +67,12 @@ FetchSM::httpConnect()
   http_vc = reinterpret_cast<PluginVC *>(TSHttpConnectWithPluginId(&_addr.sa, tag, id));
 
   /*
-   * TS-2906: We need a way to unset internal request when using FetchSM, the use case for this
-   * is SPDY when it creates outgoing requests it uses FetchSM and the outgoing requests
-   * are spawned via SPDY SYN packets which are definitely not internal requests.
+   * TS-2906: We need a way to unset internal request when using FetchSM, the
+   * use case for this
+   * is SPDY when it creates outgoing requests it uses FetchSM and the outgoing
+   * requests
+   * are spawned via SPDY SYN packets which are definitely not internal
+   * requests.
    */
   if (!is_internal_request) {
     PluginVC *other_side = reinterpret_cast<PluginVC *>(http_vc)->get_other_side();
@@ -363,7 +366,8 @@ FetchSM::get_info_from_buffer(IOBufferReader *the_reader)
   info = (char *)ats_malloc(sizeof(char) * (read_avail + 1));
   client_response = info;
 
-  // To maintain backwards compatability we don't allow chunking when it's not streaming.
+  // To maintain backwards compatability we don't allow chunking when it's not
+  // streaming.
   if (!(fetch_flags & TS_FETCH_FLAGS_STREAM) || !check_chunked()) {
     /* Read the data out of the reader */
     while (read_avail > 0) {

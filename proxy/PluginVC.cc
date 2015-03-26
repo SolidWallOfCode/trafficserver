@@ -53,7 +53,8 @@
    PluginVC, there a two locks. The one we got from our PluginVCCore and
    the lock from the state machine using the PluginVC.  The read side
    lock & the write side lock must be the same.  The regular net processor has
-   this constraint as well.  In order to handle scheduling of retry events cleanly,
+   this constraint as well.  In order to handle scheduling of retry events
+ cleanly,
    we have two event pointers, one for each lock.  sm_lock_retry_event can only
    be changed while holding the using state machine's lock and
    core_lock_retry_event can only be manipulated while holding the PluginVC's
@@ -492,7 +493,6 @@ PluginVC::process_write_side(bool other_side_call)
   Debug("pvc", "[%u] %s: process_write_side", core_obj->id, PVC_TYPE);
   need_write_process = false;
 
-
   // Check the state of our write buffer as well as ntodo
   int64_t ntodo = write_state.vio.ntodo();
   if (ntodo == 0) {
@@ -558,7 +558,6 @@ PluginVC::process_write_side(bool other_side_call)
     }
   }
 }
-
 
 // void PluginVC::process_read_side()
 //
@@ -727,7 +726,8 @@ PluginVC::process_close()
   core_obj->attempt_delete();
 }
 
-// void PluginVC::process_timeout(Event** e, int event_to_send, Event** our_eptr)
+// void PluginVC::process_timeout(Event** e, int event_to_send, Event**
+// our_eptr)
 //
 //   Handles sending timeout event to the VConnection.  e is the event we got
 //     which indicates the timeout.  event_to_send is the event to the
@@ -1116,7 +1116,6 @@ PluginVCCore::state_send_accept(int /* event ATS_UNUSED */, void * /* data ATS_U
 
   return 0;
 }
-
 
 // void PluginVCCore::attempt_delete()
 //

@@ -192,7 +192,8 @@ Init(const char *socket_path, TSInitOptionT options)
 
   ts_init_options = options;
 
-  // XXX This should use RecConfigReadRuntimeDir(), but that's not linked into the management
+  // XXX This should use RecConfigReadRuntimeDir(), but that's not linked into
+  // the management
   // libraries. The caller has to pass down the right socket path :(
   if (!socket_path) {
     Layout::create();

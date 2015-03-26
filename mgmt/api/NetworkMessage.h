@@ -70,7 +70,8 @@ struct mgmt_message_sender {
   virtual ~mgmt_message_sender(){};
 };
 
-// Marshall and send a request, prefixing the message length as a MGMT_MARSHALL_INT.
+// Marshall and send a request, prefixing the message length as a
+// MGMT_MARSHALL_INT.
 TSMgmtError send_mgmt_request(const mgmt_message_sender &snd, OpType optype, ...);
 TSMgmtError send_mgmt_request(int fd, OpType optype, ...);
 
@@ -80,7 +81,8 @@ TSMgmtError send_mgmt_error(int fd, OpType op, TSMgmtError error);
 // Parse a request message from a buffer.
 TSMgmtError recv_mgmt_request(void *buf, size_t buflen, OpType optype, ...);
 
-// Marshall and send a response, prefixing the message length as a MGMT_MARSHALL_INT.
+// Marshall and send a response, prefixing the message length as a
+// MGMT_MARSHALL_INT.
 TSMgmtError send_mgmt_response(int fd, OpType optype, ...);
 
 // Parse a response message from a buffer.
@@ -89,7 +91,8 @@ TSMgmtError recv_mgmt_response(void *buf, size_t buflen, OpType optype, ...);
 // Pull a management message (either request or response) off the wire.
 TSMgmtError recv_mgmt_message(int fd, MgmtMarshallData &msg);
 
-// Extract the first MGMT_MARSHALL_INT from the buffered message. This is the OpType.
+// Extract the first MGMT_MARSHALL_INT from the buffered message. This is the
+// OpType.
 OpType extract_mgmt_request_optype(void *msg, size_t msglen);
 
 #endif /* _NETWORK_MESSAGE_H_ */

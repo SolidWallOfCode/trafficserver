@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #include "libts.h"
 #include "LocalManager.h"
 #include "ClusterCom.h"
@@ -67,7 +66,6 @@ Alarms::Alarms()
   alarmOEMcount = minOEMkey;
 } /* End Alarms::Alarms */
 
-
 Alarms::~Alarms()
 {
   ink_hash_table_destroy(cblist);
@@ -75,7 +73,6 @@ Alarms::~Alarms()
   ink_hash_table_destroy_and_xfree_values(remote_alarms);
   ink_mutex_destroy(&mutex);
 } /* End Alarms::Alarms */
-
 
 void
 Alarms::registerCallback(AlarmCallbackFunc func)
@@ -88,7 +85,6 @@ Alarms::registerCallback(AlarmCallbackFunc func)
   ink_hash_table_insert(cblist, cb_buf, (void *)func);
   ink_mutex_release(&mutex);
 } /* End Alarms::registerCallback */
-
 
 bool
 Alarms::isCurrentAlarm(alarm_t a, char *ip)
@@ -112,7 +108,6 @@ Alarms::isCurrentAlarm(alarm_t a, char *ip)
   ink_mutex_release(&mutex);
   return ret;
 } /* End Alarms::isCurrentAlarm */
-
 
 void
 Alarms::resolveAlarm(alarm_t a, char *ip)
@@ -146,7 +141,6 @@ Alarms::resolveAlarm(alarm_t a, char *ip)
 
   return;
 } /* End Alarms::resolveAlarm */
-
 
 void
 Alarms::signalAlarm(alarm_t a, const char *desc, const char *ip)
@@ -294,13 +288,13 @@ Alarms::signalAlarm(alarm_t a, const char *desc, const char *ip)
     (*(func))(a, ip, desc);
   }
 
-  /* Priority 2 alarms get signalled if they are the first unsolved occurence. */
+  /* Priority 2 alarms get signalled if they are the first unsolved occurence.
+   */
   if (priority == 2 && !ip) {
     execAlarmBin(desc);
   }
 
 } /* End Alarms::signalAlarm */
-
 
 /*
  * resetSeenFlag(...)
@@ -326,7 +320,6 @@ Alarms::resetSeenFlag(char *ip)
   ink_mutex_release(&mutex);
   return;
 } /* End Alarms::resetSeenFlag */
-
 
 /*
  * clearUnSeen(...)
@@ -356,7 +349,6 @@ Alarms::clearUnSeen(char *ip)
   ink_mutex_release(&mutex);
   return;
 } /* End Alarms::clearUnSeen */
-
 
 /*
  * constructAlarmMessage(...)
@@ -417,7 +409,6 @@ Alarms::constructAlarmMessage(const AppVersionInfo &version, char *ip, char *mes
   ink_mutex_release(&mutex);
   return;
 } /* End Alarms::constructAlarmMessage */
-
 
 /*
  * checkSystemNAlert(...)

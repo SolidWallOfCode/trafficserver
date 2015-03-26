@@ -308,7 +308,8 @@ event_callback_main(void *arg)
         EventClientT *new_client_con = new_event_client();
 
         if (!new_client_con) {
-          // Debug ("TS_Control_Main", "can't create new EventClientT for new connection\n");
+          // Debug ("TS_Control_Main", "can't create new EventClientT for new
+          // connection\n");
         } else {
           // accept connection
           new_con_fd = mgmt_accept(con_socket_fd, new_client_con->adr, &addr_len);
@@ -320,7 +321,8 @@ event_callback_main(void *arg)
 
       // some other file descriptor; for each one, service request
       if (fds_ready > 0) { // RECEIVED A REQUEST from remote API client
-        // see if there are more fd to set - iterate through all entries in hash table
+        // see if there are more fd to set - iterate through all entries in hash
+        // table
         con_entry = ink_hash_table_iterator_first(accepted_clients, &con_state);
         while (con_entry) {
           client_entry = (EventClientT *)ink_hash_table_entry_value(accepted_clients, con_entry);
@@ -349,7 +351,8 @@ event_callback_main(void *arg)
               continue;
             }
 
-          } // end if(client_entry->fd && FD_ISSET(client_entry->fd, &selectFDs))
+          } // end if(client_entry->fd && FD_ISSET(client_entry->fd,
+          // &selectFDs))
 
           con_entry = ink_hash_table_iterator_next(accepted_clients, &con_state);
         } // end while (con_entry)
@@ -408,7 +411,8 @@ event_callback_main(void *arg)
   // delete tables
   delete_mgmt_events();
 
-  // iterate through hash table; close client socket connections and remove entry
+  // iterate through hash table; close client socket connections and remove
+  // entry
   con_entry = ink_hash_table_iterator_first(accepted_clients, &con_state);
   while (con_entry) {
     client_entry = (EventClientT *)ink_hash_table_entry_value(accepted_clients, con_entry);
@@ -433,7 +437,8 @@ event_callback_main(void *arg)
 /**************************************************************************
  * handle_event_reg_callback
  *
- * purpose: handles request to register a callback for a specific event (or all events)
+ * purpose: handles request to register a callback for a specific event (or all
+ *events)
  * input: client - the client currently reading the msg from
  *        req    - the event_name
  * output: TS_ERR_xx
@@ -451,7 +456,8 @@ handle_event_reg_callback(EventClientT *client, void *req, size_t reqlen)
     goto done;
   }
 
-  // mark the specified alarm as "wanting to be notified" in the client's alarm_registered list
+  // mark the specified alarm as "wanting to be notified" in the client's
+  // alarm_registered list
   if (strlen(name) == 0) { // mark all alarms
     for (int i = 0; i < NUM_EVENTS; i++) {
       client->events_registered[i] = true;
@@ -476,7 +482,8 @@ done:
 /**************************************************************************
  * handle_event_unreg_callback
  *
- * purpose: handles request to unregister a callback for a specific event (or all events)
+ * purpose: handles request to unregister a callback for a specific event (or
+ *all events)
  * input: client - the client currently reading the msg from
  *        req    - the event_name
  * output: TS_ERR_xx
@@ -494,7 +501,8 @@ handle_event_unreg_callback(EventClientT *client, void *req, size_t reqlen)
     goto done;
   }
 
-  // mark the specified alarm as "wanting to be notified" in the client's alarm_registered list
+  // mark the specified alarm as "wanting to be notified" in the client's
+  // alarm_registered list
   if (strlen(name) == 0) { // mark all alarms
     for (int i = 0; i < NUM_EVENTS; i++) {
       client->events_registered[i] = false;
@@ -562,7 +570,8 @@ handle_event_message(EventClientT *client, void *req, size_t reqlen)
     uid_t euid = -1;
     gid_t egid = -1;
 
-    // For now, all event messages require privilege. This is compatible with earlier
+    // For now, all event messages require privilege. This is compatible with
+    // earlier
     // versions of Traffic Server that always required privilege.
     if (mgmt_get_peereid(client->fd, &euid, &egid) == -1 || (euid != 0 && euid != geteuid())) {
       return TS_ERR_PERMISSION_DENIED;

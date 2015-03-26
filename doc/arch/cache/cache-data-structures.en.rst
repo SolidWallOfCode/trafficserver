@@ -24,7 +24,8 @@ Cache Data Structures
 
 .. cpp:class:: OpenDir
 
-   An open directory entry. It contains all the information of a
+   This represents an open directory entry. An entry is open when there is an active write on the object. Read operations do not of themselves require an `OpenDir` but if there is already one for the object it will be used by the read operation to coordinate with the write operations.
+
    :cpp:class:`Dir` plus additional information from the first :cpp:class:`Doc`.
 
 .. cpp:class:: CacheVC

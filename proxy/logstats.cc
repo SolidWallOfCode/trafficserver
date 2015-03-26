@@ -69,7 +69,6 @@ const int DEFAULT_LINE_LEN = 78;
 const double LOG10_1024 = 3.0102999566398116;
 const int MAX_ORIG_STRING = 4096;
 
-
 // Optimizations for "strcmp()", treat some fixed length (3 or 4 bytes) strings
 // as integers.
 const int GET_AS_INT = 5522759;
@@ -102,7 +101,6 @@ struct LastState {
   ino_t st_ino;
 };
 static LastState last_state;
-
 
 // Store the collected counters and stats, per Origin Server, URL or total
 struct StatsCounter {
@@ -446,7 +444,8 @@ public:
         }
         ats_free(const_cast<char *>(l->url)); // We no longer own this string.
       } else {
-        l = _stack.insert(l, UrlStats()); // This seems faster than having a static "template" ...
+        l = _stack.insert(l, UrlStats()); // This seems faster than having a
+                                          // static "template" ...
       }
 
       // Setup this URL stat
@@ -553,7 +552,6 @@ private:
   int _size, _show_urls;
   LruStack::iterator _cur;
 };
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Globals, holding the accumulated stats (ok, I'm lazy ...)
@@ -671,7 +669,6 @@ CommandLineArgs::parse_arguments(const char **argv)
   }
 }
 
-
 // Enum for return code levels.
 enum ExitLevel {
   EXIT_OK = 0,
@@ -707,7 +704,6 @@ struct ExitStatus {
     ink_strlcat(notice, s.c_str(), sizeof(notice));
   }
 };
-
 
 // Enum for parsing a log line
 enum ParseStates {
@@ -747,7 +743,6 @@ enum URLScheme {
   SCHEME_NONE,
   SCHEME_OTHER,
 };
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Initialize the elapsed field
@@ -903,7 +898,6 @@ update_results_elapsed(OriginStats *stat, int result, int elapsed, int size)
   }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Update the "codes" stats for a particular record
 inline void
@@ -1051,7 +1045,6 @@ update_codes(OriginStats *stat, int code, int size)
     update_counter(stat->codes.c_2xx, size);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Update the "methods" stats for a particular record
 inline void
@@ -1105,7 +1098,6 @@ update_methods(OriginStats *stat, int method, int size)
   }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Update the "schemes" stats for a particular record
 inline void
@@ -1120,7 +1112,6 @@ update_schemes(OriginStats *stat, int scheme, int size)
   else
     update_counter(stat->schemes.other, size);
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Parse a log buffer
@@ -1296,7 +1287,8 @@ parse_log_buff(LogBufferHeader *buf_header, bool summary = false)
           if (ptr && !summary) { // Find the origin
             *ptr = '\0';
 
-            // TODO: If we save state (struct) for a run, we probably need to always
+            // TODO: If we save state (struct) for a run, we probably need to
+            // always
             // update the origin data, no matter what the origin_set is.
             if (origin_set->empty() || (origin_set->find(tok) != origin_set->end())) {
               o_iter = origins.find(tok);
@@ -1591,7 +1583,6 @@ parse_log_buff(LogBufferHeader *buf_header, bool summary = false)
   return 0;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Process a file (FD)
 int
@@ -1655,8 +1646,9 @@ process_file(int in_fd, off_t offset, unsigned max_age)
     unsigned second_read_size = sizeof(LogBufferHeader) - first_read_size;
     nread = read(in_fd, &buffer[first_read_size], second_read_size);
     if (!nread || EOF == nread) {
-      Debug("logstats", "Second read of header failed (attemped %d bytes at offset %d, got nothing), errno=%d.", second_read_size,
-            first_read_size, errno);
+      Debug("logstats", "Second read of header failed (attemped %d bytes at "
+                        "offset %d, got nothing), errno=%d.",
+            second_read_size, first_read_size, errno);
       return 1;
     }
 
@@ -1674,12 +1666,15 @@ process_file(int in_fd, off_t offset, unsigned max_age)
 
     const int MAX_READ_TRIES = 5;
     int total_read = 0;
-    int read_tries_remaining = MAX_READ_TRIES; // since the data will be old anyway, let's only try a few times.
+    int read_tries_remaining = MAX_READ_TRIES; // since the data will be old
+                                               // anyway, let's only try a few
+                                               // times.
     do {
       nread = read(in_fd, &buffer[sizeof(LogBufferHeader) + total_read], buffer_bytes - total_read);
       if (EOF == nread || !nread) { // just bail on error
-        Debug("logstats", "Read failed while reading log buffer, wanted %d bytes, nread=%d, errno=%d", buffer_bytes - total_read,
-              nread, errno);
+        Debug("logstats", "Read failed while reading log buffer, wanted %d "
+                          "bytes, nread=%d, errno=%d",
+              buffer_bytes - total_read, nread, errno);
         return 1;
       } else {
         total_read += nread;
@@ -1692,8 +1687,9 @@ process_file(int in_fd, off_t offset, unsigned max_age)
           return 1;
         }
         // let's wait until we get more data on this file descriptor
-        Debug("logstats_partial_read",
-              "Failed to read buffer payload [%d bytes], total_read=%d, buffer_bytes=%d, tries_remaining=%d",
+        Debug("logstats_partial_read", "Failed to read buffer payload [%d "
+                                       "bytes], total_read=%d, "
+                                       "buffer_bytes=%d, tries_remaining=%d",
               buffer_bytes - total_read, total_read, buffer_bytes, read_tries_remaining);
         usleep(50 * 1000); // wait 50ms
       }
@@ -1713,7 +1709,6 @@ process_file(int in_fd, off_t offset, unsigned max_age)
   return 0;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Determine if this "stat" (Origin Server) is worthwhile to produce a
 // report for.
@@ -1722,7 +1717,6 @@ use_origin(const OriginStats *stat)
 {
   return ((stat->total.count > cl.min_hits) && (NULL != strchr(stat->server, '.')) && (NULL == strchr(stat->server, '%')));
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Produce a nicely formatted output for a stats collection on a stream
@@ -1786,7 +1780,6 @@ format_elapsed_line(const char *desc, const ElapsedStats &stat, bool json = fals
   }
 }
 
-
 void
 format_detail_header(const char *desc)
 {
@@ -1828,7 +1821,6 @@ format_line(const char *desc, const StatsCounter &stat, const StatsCounter &tota
     std::cout << std::right << buf << std::endl;
   }
 }
-
 
 // Little "helpers" for the vector we use to sort the Origins.
 typedef pair<const char *, OriginStats *> OriginPair;
@@ -2068,7 +2060,6 @@ print_detail_stats(const OriginStats *stat, bool json = false)
   }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Little wrapper around exit, to allow us to exit gracefully
 void
@@ -2140,7 +2131,8 @@ my_exit(const ExitStatus &status)
     }
   }
 
-  // Next the totals for all Origins, unless we specified a list of origins to filter.
+  // Next the totals for all Origins, unless we specified a list of origins to
+  // filter.
   if (origin_set->empty()) {
     first = false;
     if (cl.json) {
@@ -2212,7 +2204,6 @@ open_main_log(ExitStatus &status)
 #endif
   return main_fd;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // main

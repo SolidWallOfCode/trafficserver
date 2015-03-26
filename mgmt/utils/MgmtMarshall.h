@@ -31,19 +31,23 @@
 // Simple message marshalling.
 //
 // MGMT_MARSHALL_INT
-// Wire size is 4 bytes signed. This type is used for enum and boolean values, as well as embedded lengths and general
+// Wire size is 4 bytes signed. This type is used for enum and boolean values,
+// as well as embedded lengths and general
 // integer values.
 //
 // MGMT_MARSHALL_LONG
 // Wire size is 8 bytes signed.
 //
 // MGMT_MARSHALL_STRING
-// Wire size is a 4 byte length followed by N bytes. The trailing NUL is always sent and NULL strings are sent as empty
-// strings. This means that the minimum wire size for a string is 5 bytes (4 byte length + NUL byte). The unmarshalled
+// Wire size is a 4 byte length followed by N bytes. The trailing NUL is always
+// sent and NULL strings are sent as empty
+// strings. This means that the minimum wire size for a string is 5 bytes (4
+// byte length + NUL byte). The unmarshalled
 // string point is guaranteed to be non-NULL.
 //
 // MGMT_MARSHALL_DATA
-// Wire size is 4 byte length followed by N data bytes. If the length is 0, no subsequent bytes are sent. In this case
+// Wire size is 4 byte length followed by N data bytes. If the length is 0, no
+// subsequent bytes are sent. In this case
 // the unmarshalled data pointer is guaranteed to be NULL.
 //
 enum MgmtMarshallType {

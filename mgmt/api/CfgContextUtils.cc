@@ -86,7 +86,8 @@ string_to_ip_addr_ele(const char *str)
     ip_a = ats_strdup(const_ip_a);
     ip_b = ats_strdup(const_ip_b);
 
-    // determine if ip's are cidr type; only test if ip_a is cidr, assume both are same
+    // determine if ip's are cidr type; only test if ip_a is cidr, assume both
+    // are same
     cidr_tokens.Initialize(ip_a, COPY_TOKS);
     numTokens = cidr_tokens.count();
     if (numTokens == 1) { // Range, NON-CIDR TYPE
@@ -116,7 +117,6 @@ Lerror:
 
   return NULL;
 }
-
 
 /* ----------------------------------------------------------------------------
  * ip_addr_ele_to_string
@@ -208,7 +208,8 @@ ip_addr_to_string(TSIpAddr ip)
  * string_to_ip_addr
  * ---------------------------------------------------------------------------
  * Converts an ip address in dotted-decimal string format into a string;
- * allocates memory for string. If IP is invalid, then returns TS_INVALID_IP_ADDR.
+ * allocates memory for string. If IP is invalid, then returns
+ * TS_INVALID_IP_ADDR.
  */
 TSIpAddr
 string_to_ip_addr(const char *str)
@@ -559,7 +560,6 @@ int_list_to_string(TSIntList list, const char *delimiter)
   if (list == TS_INVALID_LIST || !delimiter)
     return NULL;
 
-
   numElems = queue_len((LLQ *)list);
 
   memset(buf, 0, MAX_BUF_SIZE);
@@ -616,7 +616,6 @@ Lerror:
   return TS_INVALID_LIST;
 }
 
-
 /* ---------------------------------------------------------------
  * string_to_domain_list
  * ---------------------------------------------------------------
@@ -653,7 +652,6 @@ string_to_domain_list(const char *str_list, const char *delimiter)
 
   return list;
 }
-
 
 /*----------------------------------------------------------------------------
  * domain_list_to_string
@@ -958,7 +956,6 @@ pdest_sspec_to_string(TSPrimeDestT pd, char *pd_val, TSSspec *sspec)
   return str;
 }
 
-
 /*----------------------------------------------------------------------------
  * string_to_pdss_format
  *----------------------------------------------------------------------------
@@ -1036,7 +1033,6 @@ string_to_pdss_format(const char *str, TSPdSsFormat *pdss)
 Lerror:
   return TS_ERR_FAIL;
 }
-
 
 /*----------------------------------------------------------------------------
  * hms_time_to_string
@@ -1185,7 +1181,6 @@ Lerror:
   return TS_ERR_FAIL;
 }
 
-
 /*----------------------------------------------------------------------------
  * string_to_header_type
  *----------------------------------------------------------------------------
@@ -1246,7 +1241,6 @@ string_to_scheme_type(const char *scheme)
   }
   return TS_SCHEME_UNDEFINED;
 }
-
 
 char *
 scheme_type_to_string(TSSchemeT scheme)
@@ -1486,7 +1480,6 @@ admin_acc_type_to_string(TSAccessT access)
   return NULL;
 }
 
-
 /***************************************************************************
  * Tokens-to-Struct Converstion Functions
  ***************************************************************************/
@@ -1530,7 +1523,6 @@ tokens_to_pdss_format(TokenList *tokens, Token *first_tok, TSPdSsFormat *pdss)
     return NULL; // INVALID primary destination specifier
   }
   pdss->pd_val = ats_strdup(first_tok->value);
-
 
   // iterate through tokens checking for sec specifiers
   // state determines which sec specifier being checked
@@ -2104,7 +2096,6 @@ get_rule_type(TokenList *token_list, TSFileNameT file)
   case TS_FNAME_IP_ALLOW: /* ip_allow.config */
     return TS_IP_ALLOW;
 
-
   case TS_FNAME_LOGS_XML: /* logs_xml.config */
     printf(" *** CfgContextUtils.cc: NOT DONE YET! **\n");
     //  TS_LOG_FILTER,             /* logs_xml.config */
@@ -2186,7 +2177,6 @@ copy_cfg_ele(TSCfgEle *src_ele, TSCfgEle *dst_ele)
   dst_ele->type = src_ele->type;
   dst_ele->error = src_ele->error;
 }
-
 
 void
 copy_sspec(TSSspec *src, TSSspec *dst)
@@ -2451,7 +2441,6 @@ copy_congestion_ele(TSCongestionEle *ele)
 
   return nele;
 }
-
 
 TSHostingEle *
 copy_hosting_ele(TSHostingEle *ele)

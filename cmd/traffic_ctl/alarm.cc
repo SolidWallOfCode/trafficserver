@@ -128,7 +128,8 @@ subcommand_alarm(unsigned argc, const char **argv)
     {alarm_clear, "clear", "Clear all current alarms"},
     {alarm_list, "list", "List all current alarms"},
 
-    // Note that we separate resolve one from resolve all for the same reasons that
+    // Note that we separate resolve one from resolve all for the same reasons
+    // that
     // we have "metric zero" and "metric clear".
     {alarm_resolve, "resolve", "Resolve the listed alarms"},
     /* XXX describe a specific alarm? */

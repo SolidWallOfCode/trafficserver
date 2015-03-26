@@ -476,7 +476,8 @@ mgmt_getAddrForIntr(char *intrName, sockaddr *addr, int *mtu)
     ifc.ifc_buf = ifbuf;
     if (ioctl(fakeSocket, SIOCGIFCONF, &ifc) < 0) {
       if (errno != EINVAL || lastlen != 0) {
-        mgmt_fatal(stderr, errno, "[getAddrForIntr] Unable to read network interface configuration\n");
+        mgmt_fatal(stderr, errno, "[getAddrForIntr] Unable to read network "
+                                  "interface configuration\n");
       }
     } else {
       if (ifc.ifc_len == lastlen) {

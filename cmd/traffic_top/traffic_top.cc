@@ -154,7 +154,8 @@ response_code_page(Stats &stats)
 {
   attron(COLOR_PAIR(colorPair::border));
   attron(A_BOLD);
-  mvprintw(0, 0, "                              RESPONSE CODES                                   ");
+  mvprintw(0, 0, "                              RESPONSE CODES                 "
+                 "                  ");
   attroff(COLOR_PAIR(colorPair::border));
   attroff(A_BOLD);
 
@@ -229,22 +230,24 @@ help(const string &host, const string &version)
     attron(A_BOLD);
     mvprintw(0, 0, "Overview:");
     attroff(A_BOLD);
-    mvprintw(
-      1, 0,
-      "traffic_top is a top like program for Apache Traffic Server (ATS). "
-      "There is a lot of statistical information gathered by ATS. "
-      "This program tries to show some of the more important stats and gives a good overview of what the proxy server is doing. "
-      "Hopefully this can be used as a tool for diagnosing the proxy server if there are problems.");
+    mvprintw(1, 0, "traffic_top is a top like program for Apache Traffic Server (ATS). "
+                   "There is a lot of statistical information gathered by ATS. "
+                   "This program tries to show some of the more important stats and gives "
+                   "a good overview of what the proxy server is doing. "
+                   "Hopefully this can be used as a tool for diagnosing the proxy server "
+                   "if there are problems.");
 
     attron(A_BOLD);
     mvprintw(7, 0, "Definitions:");
     attroff(A_BOLD);
     mvprintw(8, 0, "Fresh      => Requests that were servered by fresh entries in cache");
-    mvprintw(9, 0, "Revalidate => Requests that contacted the origin to verify if still valid");
+    mvprintw(9, 0, "Revalidate => Requests that contacted the origin to verify "
+                   "if still valid");
     mvprintw(10, 0, "Cold       => Requests that were not in cache at all");
     mvprintw(11, 0, "Changed    => Requests that required entries in cache to be updated");
     mvprintw(12, 0, "Changed    => Requests that can't be cached for some reason");
-    mvprintw(12, 0, "No Cache   => Requests that the client sent Cache-Control: no-cache header");
+    mvprintw(12, 0, "No Cache   => Requests that the client sent "
+                    "Cache-Control: no-cache header");
 
     attron(COLOR_PAIR(colorPair::border));
     attron(A_BOLD);
@@ -400,7 +403,8 @@ main(int argc, char **argv)
   string url = "";
   if (optind >= argc) {
     if (TS_ERR_OKAY != TSInit(NULL, static_cast<TSInitOptionT>(TS_MGMT_OPT_NO_EVENTS | TS_MGMT_OPT_NO_SOCK_TESTS))) {
-      fprintf(stderr, "Error: missing URL on command line or error connecting to the local manager\n");
+      fprintf(stderr, "Error: missing URL on command line or error connecting "
+                      "to the local manager\n");
       usage();
     }
   } else {
@@ -424,7 +428,6 @@ main(int argc, char **argv)
   init_pair(colorPair::border, COLOR_WHITE, COLOR_BLUE);
   //  mvchgat(0, 0, -1, A_BLINK, 1, NULL);
 
-
   enum Page {
     MAIN_PAGE,
     RESPONSE_PAGE,
@@ -446,7 +449,6 @@ main(int argc, char **argv)
     mvprintw(23, 0, "%-20.20s   %30s (q)uit (h)elp (%c)bsolute  ", host.c_str(), page_alt.c_str(), absolute ? 'A' : 'a');
     attroff(COLOR_PAIR(colorPair::border));
     attroff(A_BOLD);
-
 
     if (page == MAIN_PAGE) {
       main_stats_page(stats);

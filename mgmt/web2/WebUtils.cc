@@ -61,7 +61,6 @@ socket_read(SocketInfo socketD, char *buf, size_t nbyte)
   return -1;
 }
 
-
 // int sigfdreadln(int fd, char *s, int len)
 //
 //  An inefficient way to read a line from a socket

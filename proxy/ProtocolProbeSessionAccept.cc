@@ -30,7 +30,8 @@
 static bool
 proto_is_spdy(IOBufferReader *reader)
 {
-  // SPDY clients have to start by sending a control frame (the high bit is set). Let's assume
+  // SPDY clients have to start by sending a control frame (the high bit is
+  // set). Let's assume
   // that no other protocol could possibly ever set this bit!
   return ((uint8_t)(*reader)[0]) == 0x80u;
 }
@@ -63,7 +64,8 @@ struct ProtocolProbeTrampoline : public Continuation, public ProtocolProbeSessio
     : Continuation(mutex), probeParent(probe)
   {
     this->iobuf = new_MIOBuffer(buffer_size_index);
-    reader = iobuf->alloc_reader(); // reader must be allocated only on a new MIOBuffer.
+    reader = iobuf->alloc_reader(); // reader must be allocated only on a new
+                                    // MIOBuffer.
     SET_HANDLER(&ProtocolProbeTrampoline::ioCompletionEvent);
   }
 
@@ -100,7 +102,8 @@ struct ProtocolProbeTrampoline : public Continuation, public ProtocolProbeSessio
       goto done;
     }
 
-    // SPDY clients have to start by sending a control frame (the high bit is set). Let's assume
+    // SPDY clients have to start by sending a control frame (the high bit is
+    // set). Let's assume
     // that no other protocol could possibly ever set this bit!
     if (proto_is_spdy(reader)) {
       key = PROTO_SPDY;
@@ -118,7 +121,8 @@ struct ProtocolProbeTrampoline : public Continuation, public ProtocolProbeSessio
       goto done;
     }
 
-    // Directly invoke the session acceptor, letting it take ownership of the input buffer.
+    // Directly invoke the session acceptor, letting it take ownership of the
+    // input buffer.
     probeParent->endpoint[key]->accept(netvc, this->iobuf, reader);
     delete this;
     return EVENT_CONT;

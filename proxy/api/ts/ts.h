@@ -731,7 +731,6 @@ TSUrlPercentEncode(TSMBuffer bufp, TSMLoc offset, char *dst, size_t dst_size, si
 */
 tsapi TSReturnCode TSStringPercentDecode(const char *str, size_t str_len, char *dst, size_t dst_size, size_t *length);
 
-
 /* --------------------------------------------------------------------------
    MIME headers */
 
@@ -1008,7 +1007,8 @@ tsapi TSReturnCode TSMimeHdrFieldValueUintSet(TSMBuffer bufp, TSMLoc hdr, TSMLoc
 tsapi TSReturnCode TSMimeHdrFieldValueDateSet(TSMBuffer bufp, TSMLoc hdr, TSMLoc field, time_t value);
 
 tsapi TSReturnCode TSMimeHdrFieldValueAppend(TSMBuffer bufp, TSMLoc hdr, TSMLoc field, int idx, const char *value, int length);
-/* These Insert() APIs should be considered. Use the corresponding Set() API instead */
+/* These Insert() APIs should be considered. Use the corresponding Set() API
+ * instead */
 tsapi TSReturnCode
 TSMimeHdrFieldValueStringInsert(TSMBuffer bufp, TSMLoc hdr, TSMLoc field, int idx, const char *value, int length);
 tsapi TSReturnCode TSMimeHdrFieldValueIntInsert(TSMBuffer bufp, TSMLoc hdr, TSMLoc field, int idx, int value);
@@ -1340,7 +1340,8 @@ tsapi struct sockaddr const *TSHttpTxnServerAddrGet(TSHttpTxn txnp);
     This must be invoked before the origin server address is looked up.
     If called no lookup is done, the address @a addr is used instead.
 
-    @return @c TS_SUCCESS if the origin server address is set, @c TS_ERROR otherwise.
+    @return @c TS_SUCCESS if the origin server address is set, @c TS_ERROR
+   otherwise.
 */
 tsapi TSReturnCode TSHttpTxnServerAddrSet(TSHttpTxn txnp, struct sockaddr const *addr /**< Address for origin server. */
                                           );
@@ -1498,8 +1499,10 @@ tsapi void *TSHttpTxnArgGet(TSHttpTxn txnp, int arg_idx);
 tsapi void TSHttpSsnArgSet(TSHttpSsn ssnp, int arg_idx, void *arg);
 tsapi void *TSHttpSsnArgGet(TSHttpSsn ssnp, int arg_idx);
 
-/* The reserve API should only be use in TSAPI plugins, during plugin initialization! */
-/* The lookup methods can be used anytime, but are best used during initialization as well,
+/* The reserve API should only be use in TSAPI plugins, during plugin
+ * initialization! */
+/* The lookup methods can be used anytime, but are best used during
+   initialization as well,
    or at least "cache" the results for best performance. */
 tsapi TSReturnCode TSHttpArgIndexReserve(const char *name, const char *description, int *arg_idx);
 tsapi TSReturnCode TSHttpArgIndexNameLookup(const char *name, int *arg_idx, const char **description);
@@ -1536,7 +1539,8 @@ tsapi void TSHttpTxnDebugSet(TSHttpTxn txnp, int on);
 tsapi int TSHttpTxnDebugGet(TSHttpTxn txnp);
 /**
        Set the session specific debugging flag for this client session.
-       When turned on, internal debug messages related to this session and all transactions
+       When turned on, internal debug messages related to this session and all
+   transactions
        in the session will be written even if the debug tag isn't on.
 
     @param ssnp Client session to change.
@@ -1626,7 +1630,8 @@ tsapi void TSHttpTxnServerIntercept(TSCont contp, TSHttpTxn txnp);
     This returns a VConn that connected to the transaction.
 
     @param addr Target address of the origin server.
-    @param tag A logging tag that can be accessed via the pitag field. May be @c NULL.
+    @param tag A logging tag that can be accessed via the pitag field. May be @c
+   NULL.
     @param id A logging id that can be access via the piid field.
  */
 tsapi TSVConn TSHttpConnectWithPluginId(struct sockaddr const *addr, char const *tag, int64_t id);
@@ -1724,10 +1729,10 @@ tsapi struct sockaddr const *TSNetVConnRemoteAddrGet(TSVConn vc);
       or cancel the attempt to connect.
 
  */
-tsapi TSAction
-TSNetConnect(TSCont contp, /**< continuation that is called back when the attempted net connection either succeeds or fails. */
-             struct sockaddr const *to /**< Address to which to connect. */
-             );
+tsapi TSAction TSNetConnect(TSCont contp,             /**< continuation that is called back when the attempted net
+                                                         connection either succeeds or fails. */
+                            struct sockaddr const *to /**< Address to which to connect. */
+                            );
 
 tsapi TSAction TSNetAccept(TSCont contp, int port, int domain, int accept_threads);
 
@@ -1949,8 +1954,10 @@ tsapi int64_t TSIOBufferReaderAvail(TSIOBufferReader readerp);
 tsapi struct sockaddr const *TSNetVConnLocalAddrGet(TSVConn vc);
 
 /* --------------------------------------------------------------------------
-   Stats and configs based on librecords raw stats (this is preferred API until we
-   rewrite stats). This system has a limitation of up to 1,500 stats max, controlled
+   Stats and configs based on librecords raw stats (this is preferred API until
+   we
+   rewrite stats). This system has a limitation of up to 1,500 stats max,
+   controlled
    via proxy.config.stat_api.max_stats_allowed (default is 512).
 
    This is available as of Apache TS v2.2.*/
@@ -1999,7 +2006,8 @@ tsapi void TSDebug(const char *tag, const char *format_str, ...) TS_PRINTFLIKE(2
     Output a debug line even if the debug tag is turned off, as long as
     debugging is enabled. Could be used as follows:
     @code
-    TSDebugSpecifc(TSHttpTxnDebugGet(txn), "plugin_tag" , "Hello World from transaction %p", txn);
+    TSDebugSpecifc(TSHttpTxnDebugGet(txn), "plugin_tag" , "Hello World from
+   transaction %p", txn);
     @endcode
     will be printed if the plugin_tag is enabled or the transaction specific
     debugging is turned on for txn.
@@ -2159,14 +2167,16 @@ tsapi TSReturnCode TSTextLogObjectRollingEnabledSet(TSTextLogObject the_object, 
 tsapi void TSTextLogObjectRollingIntervalSecSet(TSTextLogObject the_object, int rolling_interval_sec);
 
 /**
-    Set the rolling offset. rolling_offset_hr specifies the hour (between 0 and 23) when log rolling
+    Set the rolling offset. rolling_offset_hr specifies the hour (between 0 and
+   23) when log rolling
     should take place.
 
  */
 tsapi void TSTextLogObjectRollingOffsetHrSet(TSTextLogObject the_object, int rolling_offset_hr);
 
 /**
-    Set the rolling size. rolling_size_mb specifies the size in MB when log rolling
+    Set the rolling size. rolling_size_mb specifies the size in MB when log
+   rolling
     should take place.
 
  */
@@ -2242,7 +2252,6 @@ tsapi void TSVConnActiveTimeoutCancel(TSVConn connp);
 */
 tsapi void TSSkipRemappingSet(TSHttpTxn txnp, int flag);
 
-
 /*
   Set or get various overridable configurations, for a transaction. This should
   probably be done as early as possible, e.g. TS_HTTP_READ_REQUEST_HDR_HOOK.
@@ -2286,7 +2295,8 @@ tsapi void TSHttpTxnRedirectUrlSet(TSHttpTxn txnp, const char *url, const int ur
 tsapi TS_DEPRECATED void TSRedirectUrlSet(TSHttpTxn txnp, const char *url, const int url_len);
 
 /**
-   Return the current (if set) redirection URL string. This is still owned by the
+   Return the current (if set) redirection URL string. This is still owned by
+   the
    core, and must not be free'd.
 
    @param txnp the transaction pointer
@@ -2328,10 +2338,13 @@ tsapi int TSHttpTxnBackgroundFillStarted(TSHttpTxn txnp);
 tsapi TSReturnCode TSBase64Decode(const char *str, size_t str_len, unsigned char *dst, size_t dst_size, size_t *length);
 tsapi TSReturnCode TSBase64Encode(const char *str, size_t str_len, char *dst, size_t dst_size, size_t *length);
 
-/* Get milestone timers, useful for measuring where we are spending time in the transaction processing */
+/* Get milestone timers, useful for measuring where we are spending time in the
+ * transaction processing */
 /**
-   Return the particular milestone timer for the transaction. If 0 is returned, it means
-   the transaction has not yet reached that milestone. Asking for an "unknown" milestone is
+   Return the particular milestone timer for the transaction. If 0 is returned,
+   it means
+   the transaction has not yet reached that milestone. Asking for an "unknown"
+   milestone is
    an error.
 
    @param txnp the transaction pointer
@@ -2345,20 +2358,25 @@ tsapi TSReturnCode TSBase64Encode(const char *str, size_t str_len, char *dst, si
 tsapi TSReturnCode TSHttpTxnMilestoneGet(TSHttpTxn txnp, TSMilestonesType milestone, TSHRTime *time);
 
 /**
-  Test whether a request / response header pair would be cacheable under the current
-  configuration. This would typically be used in TS_HTTP_READ_RESPONSE_HDR_HOOK, when
+  Test whether a request / response header pair would be cacheable under the
+  current
+  configuration. This would typically be used in TS_HTTP_READ_RESPONSE_HDR_HOOK,
+  when
   you have both the client request and server response ready.
 
   @param txnp the transaction pointer
-  @param request the client request header. If NULL, use the transactions client request.
-  @param response the server response header. If NULL, use the transactions origin response.
+  @param request the client request header. If NULL, use the transactions client
+  request.
+  @param response the server response header. If NULL, use the transactions
+  origin response.
 
   @return 1 if the request / response is cacheable, 0 otherwise
 */
 tsapi int TSHttpTxnIsCacheable(TSHttpTxn txnp, TSMBuffer request, TSMBuffer response);
 
 /**
-   Return a string respresentation for a TSServerState value. This is useful for plugin debugging.
+   Return a string respresentation for a TSServerState value. This is useful for
+   plugin debugging.
 
    @param state the value of this TSServerState
 
@@ -2367,7 +2385,8 @@ tsapi int TSHttpTxnIsCacheable(TSHttpTxn txnp, TSMBuffer request, TSMBuffer resp
 tsapi const char *TSHttpServerStateNameLookup(TSServerState state);
 
 /**
-   Return a string respresentation for a TSHttpHookID value. This is useful for plugin debugging.
+   Return a string respresentation for a TSHttpHookID value. This is useful for
+   plugin debugging.
 
    @param hook the value of this TSHttpHookID
 
@@ -2376,7 +2395,8 @@ tsapi const char *TSHttpServerStateNameLookup(TSServerState state);
 tsapi const char *TSHttpHookNameLookup(TSHttpHookID hook);
 
 /**
-   Return a string respresentation for a TSEvent value. This is useful for plugin debugging.
+   Return a string respresentation for a TSEvent value. This is useful for
+   plugin debugging.
 
    @param event the value of this TSHttpHookID
 

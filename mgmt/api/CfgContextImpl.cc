@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #include "libts.h"
 #include "ink_platform.h"
 
@@ -66,7 +65,6 @@ CommentObj::getCfgEleCopy()
 {
   return (TSCfgEle *)copy_comment_ele(m_ele);
 }
-
 
 //--------------------------------------------------------------------------
 // CacheObj
@@ -246,7 +244,6 @@ CacheObj::getCfgEleCopy()
 {
   return (TSCfgEle *)copy_cache_ele(m_ele);
 }
-
 
 //--------------------------------------------------------------------------
 // CongestionObj
@@ -464,7 +461,6 @@ CongestionObj::getCfgEleCopy()
 {
   return (TSCfgEle *)copy_congestion_ele(m_ele);
 }
-
 
 //--------------------------------------------------------------------------
 // HostingObj
@@ -976,7 +972,6 @@ IpAllowObj::getCfgEleCopy()
   return (TSCfgEle *)copy_ip_allow_ele(m_ele);
 }
 
-
 //--------------------------------------------------------------------------
 // ParentProxyObj
 //--------------------------------------------------------------------------
@@ -1418,7 +1413,6 @@ PluginObj::getCfgEleCopy()
   return (TSCfgEle *)copy_plugin_ele(m_ele);
 }
 
-
 //--------------------------------------------------------------------------
 // RemapObj
 //--------------------------------------------------------------------------
@@ -1449,7 +1443,8 @@ RemapObj::RemapObj(TokenList *tokens)
   if (m_ele->cfg_ele.type == TS_TYPE_UNDEFINED) {
     goto FORMAT_ERR;
   }
-  // The first token must either be "map, "reverse_map", "redirect", and redirect_temporary
+  // The first token must either be "map, "reverse_map", "redirect", and
+  // redirect_temporary
   token = tokens->first();
 
   // target
@@ -1460,7 +1455,8 @@ RemapObj::RemapObj(TokenList *tokens)
   }
 
   // TODO: Should we check the return value (count) here?
-  fromTok.Initialize(token->name, ALLOW_EMPTY_TOKS); // allow empty token for parse sanity check
+  fromTok.Initialize(token->name, ALLOW_EMPTY_TOKS); // allow empty token for
+                                                     // parse sanity check
 
   if (strcmp(fromTok[0], "http") == 0) {
     m_ele->from_scheme = TS_SCHEME_HTTP;
@@ -1514,7 +1510,8 @@ RemapObj::RemapObj(TokenList *tokens)
   }
 
   // TODO: Should we check the return value (count) here?
-  toTok.Initialize(token->value, ALLOW_EMPTY_TOKS); // allow empty token for parse sanity check
+  toTok.Initialize(token->value, ALLOW_EMPTY_TOKS); // allow empty token for
+                                                    // parse sanity check
 
   if (strcmp(toTok[0], "http") == 0) {
     m_ele->to_scheme = TS_SCHEME_HTTP;
@@ -2196,7 +2193,8 @@ StorageObj::StorageObj(TSStorageEle *ele)
   m_valid = isValid(); // now validate
 }
 
-// must have at least 1 token (token-name = pathname, token-value = size (if any) )
+// must have at least 1 token (token-name = pathname, token-value = size (if
+// any) )
 StorageObj::StorageObj(TokenList *tokens)
 {
   Token *tok;
@@ -2388,7 +2386,6 @@ VirtIpAddrObj::getCfgEleCopy()
 {
   return (TSCfgEle *)copy_virt_ip_addr_ele(m_ele);
 }
-
 
 /*****************************************************************
  * CfgContext

@@ -28,7 +28,6 @@
  ***************************************************************************/
 #include "libts.h"
 
-
 #include "Error.h"
 #include "P_EventSystem.h"
 #include "LogUtils.h"
@@ -248,7 +247,6 @@ LogObject::generate_filenames(const char *log_dir, const char *basename, LogFile
   m_basename[basename_len - 1] = 0;
 }
 
-
 void
 LogObject::rename(char *new_name)
 {
@@ -261,7 +259,6 @@ LogObject::rename(char *new_name)
   m_logFile->change_name(new_name);
 }
 
-
 void
 LogObject::add_filter(LogFilter *filter, bool copy)
 {
@@ -270,7 +267,6 @@ LogObject::add_filter(LogFilter *filter, bool copy)
   }
   m_filter_list.add(filter, copy);
 }
-
 
 void
 LogObject::set_filter_list(const LogFilterList &list, bool copy)
@@ -283,7 +279,6 @@ LogObject::set_filter_list(const LogFilterList &list, bool copy)
   }
   m_filter_list.set_conjunction(list.does_conjunction());
 }
-
 
 void
 LogObject::add_loghost(LogHost *host, bool copy)
@@ -299,7 +294,6 @@ LogObject::add_loghost(LogHost *host, bool copy)
   //
   m_logFile.clear();
 }
-
 
 // we conpute the object signature from the fieldlist_str and the printf_str
 // of the LogFormat rather than from the format_str because the format_str
@@ -328,7 +322,6 @@ LogObject::compute_signature(LogFormat *format, char *filename, unsigned int fla
   return signature;
 }
 
-
 void
 LogObject::display(FILE *fd)
 {
@@ -345,7 +338,6 @@ LogObject::display(FILE *fd)
   m_filter_list.display(fd);
   fprintf(fd, "++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
 }
-
 
 void
 LogObject::displayAsXML(FILE *fd, bool extended)
@@ -374,7 +366,6 @@ LogObject::displayAsXML(FILE *fd, bool extended)
 
   fprintf(fd, "</LogObject>\n");
 }
-
 
 LogBuffer *
 LogObject::_checkout_write(size_t *write_offset, size_t bytes_needed)
@@ -495,7 +486,6 @@ LogObject::_checkout_write(size_t *write_offset, size_t bytes_needed)
   }
   return buffer;
 }
-
 
 int
 LogObject::va_log(LogAccess *lad, const char *fmt, va_list ap)
@@ -636,7 +626,6 @@ LogObject::log(LogAccess *lad, const char *text_entry)
   return Log::LOG_OK;
 }
 
-
 void
 LogObject::_setup_rolling(Log::RollingEnabledValues rolling_enabled, int rolling_interval_sec, int rolling_offset_hr,
                           int rolling_size_mb)
@@ -702,7 +691,6 @@ LogObject::_setup_rolling(Log::RollingEnabledValues rolling_enabled, int rolling
   }
 }
 
-
 unsigned
 LogObject::roll_files(long time_now)
 {
@@ -762,7 +750,6 @@ LogObject::roll_files(long time_now)
   return num_rolled;
 }
 
-
 unsigned
 LogObject::_roll_files(long last_roll_time, long time_now)
 {
@@ -786,7 +773,6 @@ LogObject::_roll_files(long last_roll_time, long time_now)
   return num_rolled;
 }
 
-
 void
 LogObject::check_buffer_expiration(long time_now)
 {
@@ -795,7 +781,6 @@ LogObject::check_buffer_expiration(long time_now)
     force_new_buffer();
   }
 }
-
 
 // make sure that we will be able to write the logs to the disk
 //
@@ -808,7 +793,6 @@ LogObject::do_filesystem_checks()
     return m_host_list.do_filesystem_checks();
   }
 }
-
 
 /*-------------------------------------------------------------------------
   TextLogObject::TextLogObject
@@ -825,7 +809,6 @@ TextLogObject::TextLogObject(const char *name, const char *log_dir, bool timesta
     this->set_fmt_timestamps();
   }
 }
-
 
 /*-------------------------------------------------------------------------
   TextLogObject::write
@@ -850,7 +833,6 @@ TextLogObject::write(const char *format, ...)
   return ret_val;
 }
 
-
 /*-------------------------------------------------------------------------
   TextLogObject::va_write
 
@@ -865,7 +847,6 @@ TextLogObject::va_write(const char *format, va_list ap)
 {
   return this->va_log(NULL, format, ap);
 }
-
 
 /*-------------------------------------------------------------------------
   LogObjectManager
@@ -953,7 +934,6 @@ LogObjectManager::_manage_object(LogObject *log_object, bool is_api_object, int 
 
   return retVal;
 }
-
 
 int
 LogObjectManager::_solve_filename_conflicts(LogObject *log_object, int maxConflicts)
@@ -1060,7 +1040,6 @@ LogObjectManager::_solve_filename_conflicts(LogObject *log_object, int maxConfli
   return retVal;
 }
 
-
 bool
 LogObjectManager::_has_internal_filename_conflict(const char *filename, LogObjectList &objects)
 {
@@ -1077,7 +1056,6 @@ LogObjectManager::_has_internal_filename_conflict(const char *filename, LogObjec
   }
   return false;
 }
-
 
 int
 LogObjectManager::_solve_internal_filename_conflicts(LogObject *log_object, int maxConflicts, int fileNum)
@@ -1103,7 +1081,6 @@ LogObjectManager::_solve_internal_filename_conflicts(LogObject *log_object, int 
   return retVal;
 }
 
-
 LogObject *
 LogObjectManager::get_object_with_signature(uint64_t signature)
 {
@@ -1116,7 +1093,6 @@ LogObjectManager::get_object_with_signature(uint64_t signature)
   }
   return NULL;
 }
-
 
 void
 LogObjectManager::check_buffer_expiration(long time_now)
@@ -1154,7 +1130,6 @@ LogObjectManager::preproc_buffers(int idx)
   return buffers_preproced;
 }
 
-
 bool
 LogObjectManager::unmanage_api_object(LogObject *logObject)
 {
@@ -1163,7 +1138,8 @@ LogObjectManager::unmanage_api_object(LogObject *logObject)
   if (this->_APIobjects.in(logObject)) {
     this->_APIobjects.remove(logObject);
 
-    // Force a buffer flush, then schedule this LogObject to be deleted on the eventProcessor.
+    // Force a buffer flush, then schedule this LogObject to be deleted on the
+    // eventProcessor.
     logObject->force_new_buffer();
     new_Derefer(logObject, HRTIME_SECONDS(60));
 
@@ -1175,7 +1151,6 @@ LogObjectManager::unmanage_api_object(LogObject *logObject)
   return false;
 }
 
-
 void
 LogObjectManager::add_filter_to_all(LogFilter *filter)
 {
@@ -1183,7 +1158,6 @@ LogObjectManager::add_filter_to_all(LogFilter *filter)
     _objects[i]->add_filter(filter);
   }
 }
-
 
 void
 LogObjectManager::open_local_pipes()
@@ -1198,7 +1172,6 @@ LogObjectManager::open_local_pipes()
     }
   }
 }
-
 
 void
 LogObjectManager::transfer_objects(LogObjectManager &old_mgr)
@@ -1219,7 +1192,8 @@ LogObjectManager::transfer_objects(LogObjectManager &old_mgr)
     }
   }
 
-  // Transfer the API objects from the old manager. The old manager will retain its refcount.
+  // Transfer the API objects from the old manager. The old manager will retain
+  // its refcount.
   for (unsigned i = 0; i < old_mgr._APIobjects.length(); ++i) {
     manage_api_object(old_mgr._APIobjects[i]);
   }
@@ -1230,8 +1204,10 @@ LogObjectManager::transfer_objects(LogObjectManager &old_mgr)
 
     Debug("log-config-transfer", "examining existing object %s", old_obj->get_base_filename());
 
-    // See if any of the new objects is just a copy of an old one. If so, transfer the
-    // old one to the new manager and delete the new one. We don't use Vec::in here because
+    // See if any of the new objects is just a copy of an old one. If so,
+    // transfer the
+    // old one to the new manager and delete the new one. We don't use Vec::in
+    // here because
     // we need to compare the object hash, not the pointers.
     for (unsigned j = 0; j < _objects.length(); j++) {
       new_obj = _objects[j];
@@ -1394,8 +1370,10 @@ REGRESSION_TEST(LogObjectManager_Transfer)(RegressionTest *t, int /* atype ATS_U
 {
   TestBox box(t, pstatus);
 
-  // There used to be a lot of confusion around whether LogObjects were owned by ome or more LogObjectManager
-  // objects, or handed off to static storage in the Log class. This test just verifies that this is no longer
+  // There used to be a lot of confusion around whether LogObjects were owned by
+  // ome or more LogObjectManager
+  // objects, or handed off to static storage in the Log class. This test just
+  // verifies that this is no longer
   // the case.
   {
     LogObjectManager mgr1;

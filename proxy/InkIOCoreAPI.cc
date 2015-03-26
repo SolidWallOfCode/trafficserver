@@ -46,7 +46,6 @@
 #define sdk_assert(EX) ((void)((EX) ? (void)0 : _TSReleaseAssert(#EX, __FILE__, __LINE__)))
 #endif
 
-
 TSReturnCode
 sdk_sanity_check_mutex(TSMutex mutex)
 {
@@ -62,7 +61,6 @@ sdk_sanity_check_mutex(TSMutex mutex)
 
   return TS_SUCCESS;
 }
-
 
 TSReturnCode
 sdk_sanity_check_hostlookup_structure(TSHostLookupResult data)
@@ -85,7 +83,6 @@ sdk_sanity_check_iocore_structure(void *data)
 // From InkAPI.cc
 TSReturnCode sdk_sanity_check_continuation(TSCont cont);
 TSReturnCode sdk_sanity_check_null_ptr(void *ptr);
-
 
 ////////////////////////////////////////////////////////////////////
 //
@@ -168,7 +165,6 @@ TSThreadSelf(void)
   return ithread;
 }
 
-
 ////////////////////////////////////////////////////////////////////
 //
 // Mutexes
@@ -228,7 +224,6 @@ TSMutexLock(TSMutex mutexp)
   sdk_assert(sdk_sanity_check_mutex(mutexp) == TS_SUCCESS);
   MUTEX_TAKE_LOCK((ProxyMutex *)mutexp, this_ethread());
 }
-
 
 TSReturnCode
 TSMutexLockTry(TSMutex mutexp)
@@ -401,7 +396,6 @@ INKUDPSendTo(TSCont contp, INKUDPConn udp, unsigned int ip, int port, char *data
   return reinterpret_cast<TSAction>(conn->send((Continuation *)contp, packet));
 }
 
-
 TSAction
 INKUDPRecvFrom(TSCont contp, INKUDPConn udp)
 {
@@ -487,7 +481,6 @@ INKUDPPacketGet(INKUDPacketQueue queuep)
 
   return NULL;
 }
-
 
 /* Buffers */
 

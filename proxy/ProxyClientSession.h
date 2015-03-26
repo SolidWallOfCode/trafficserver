@@ -29,7 +29,8 @@
 #include "InkAPIInternal.h"
 
 // Emit a debug message conditional on whether this particular client session
-// has debugging enabled. This should only be called from within a client session
+// has debugging enabled. This should only be called from within a client
+// session
 // member function.
 #define DebugSsn(ssn, tag, ...) DebugSpecific((ssn)->debug(), tag, __VA_ARGS__)
 
@@ -103,7 +104,8 @@ public:
   static int64_t next_connection_id();
 
 protected:
-  // XXX Consider using a bitwise flags variable for the following flags, so that we can make the best
+  // XXX Consider using a bitwise flags variable for the following flags, so
+  // that we can make the best
   // use of internal alignment padding.
 
   // Session specific debug flag.

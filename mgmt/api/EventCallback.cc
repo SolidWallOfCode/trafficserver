@@ -35,7 +35,6 @@
 #include "EventCallback.h"
 #include "CoreAPIShared.h"
 
-
 /**********************************************************************
  * create_event_callback
  *
@@ -92,7 +91,6 @@ create_callback_table(const char *lock_name)
   return cb_table;
 }
 
-
 /**********************************************************************
  * delete_callback_table
  *
@@ -148,7 +146,8 @@ LLQ *
 get_events_with_callbacks(CallbackTable *cb_table)
 {
   LLQ *cb_ev_list;
-  bool all_events = true; // set to false if at least one event doesn't have registered callback
+  bool all_events = true; // set to false if at least one event doesn't have
+                          // registered callback
 
   cb_ev_list = create_queue();
   for (int i = 0; i < NUM_EVENTS; i++) {
@@ -174,7 +173,8 @@ get_events_with_callbacks(CallbackTable *cb_table)
  * purpose: Registers the specified function for the specified event in
  *          the specified callback list
  * input: cb_list - the table of callbacks to store the callback fn
- *        event_name - the event to store the callback for (if NULL, register for all events)
+ *        event_name - the event to store the callback for (if NULL, register
+ *for all events)
  *        func - the callback function
  *        first_cb - true only if this is the event's first callback
  * output: TS_ERR_xx
@@ -236,14 +236,14 @@ cb_table_register(CallbackTable *cb_table, const char *event_name, TSEventSignal
   return TS_ERR_OKAY;
 }
 
-
 /**********************************************************************
  * cb_table_unregister
  *
  * purpose: Unregisters the specified function for the specified event in
  *          the specified callback list
  * input: cb_table - the table of callbacks to store the callback fn
- *        event_name - the event to store the callback for (if NULL, register for all events)
+ *        event_name - the event to store the callback for (if NULL, register
+ *for all events)
  *        func - the callback function
  *        first_cb - true only if this is the event's first callback
  * output: TS_ERR_xx

@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #ifndef _CORE_API_H
 #define _CORE_API_H
 
@@ -49,7 +48,8 @@ TSMgmtError ServerBacktrace(unsigned options, char **trace);
 TSMgmtError Reconfigure();                            // TS reread config files
 TSMgmtError Restart(unsigned options);                // restart TM
 TSMgmtError Bounce(unsigned options);                 // restart traffic_server
-TSMgmtError StorageDeviceCmdOffline(const char *dev); // Storage device operation.
+TSMgmtError StorageDeviceCmdOffline(const char *dev); // Storage device
+                                                      // operation.
 
 /***************************************************************************
  * Record Operations

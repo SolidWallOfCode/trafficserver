@@ -44,11 +44,13 @@
  * preprocess_msg
  *
  * purpose: reads in all the message; parses the message into header info
- *          (OpType + msg_len) and the request portion (used by the handle_xx fns)
+ *          (OpType + msg_len) and the request portion (used by the handle_xx
+ *fns)
  * input: sock_info - socket msg is read from
  *        msg       - the data from the network message (no OpType or msg_len)
  * output: TS_ERR_xx ( if TS_ERR_OKAY, then parameters set successfully)
- * notes: Since preprocess_msg already removes the OpType and msg_len, this part o
+ * notes: Since preprocess_msg already removes the OpType and msg_len, this part
+ *o
  *        the message is not dealt with by the other parsing functions
  **********************************************************************/
 TSMgmtError

@@ -150,7 +150,8 @@ ts_ctrl_main(void *arg)
 
     if (con_socket_fd >= 0) {
       FD_SET(con_socket_fd, &selectFDs);
-      // Debug("ts_main", "[ts_ctrl_main] add fd %d to select set\n", con_socket_fd);
+      // Debug("ts_main", "[ts_ctrl_main] add fd %d to select set\n",
+      // con_socket_fd);
     }
     // see if there are more fd to set
     con_entry = ink_hash_table_iterator_first(accepted_con, &con_state);
@@ -189,7 +190,8 @@ ts_ctrl_main(void *arg)
 
       // some other file descriptor; for each one, service request
       if (fds_ready > 0) { // RECEIVED A REQUEST from remote API client
-        // see if there are more fd to set - iterate through all entries in hash table
+        // see if there are more fd to set - iterate through all entries in hash
+        // table
         con_entry = ink_hash_table_iterator_first(accepted_con, &con_state);
         while (con_entry) {
           Debug("ts_main", "[ts_ctrl_main] We have a remote client request!\n");
@@ -222,7 +224,8 @@ ts_ctrl_main(void *arg)
               continue;
             }
 
-          } // end if(client_entry->fd && FD_ISSET(client_entry->fd, &selectFDs))
+          } // end if(client_entry->fd && FD_ISSET(client_entry->fd,
+          // &selectFDs))
 
           con_entry = ink_hash_table_iterator_next(accepted_con, &con_state);
         } // end while (con_entry)
@@ -236,7 +239,8 @@ ts_ctrl_main(void *arg)
   Debug("ts_main", "[ts_ctrl_main] CLOSING AND SHUTTING DOWN OPERATIONS\n");
   close_socket(con_socket_fd);
 
-  // iterate through hash table; close client socket connections and remove entry
+  // iterate through hash table; close client socket connections and remove
+  // entry
   con_entry = ink_hash_table_iterator_first(accepted_con, &con_state);
   while (con_entry) {
     client_entry = (ClientT *)ink_hash_table_entry_value(accepted_con, con_entry);
@@ -395,7 +399,8 @@ send_record_match(RecT /* rec_type */, void *edata, int /* registered */, const 
       match->err = send_record_get_response(match->fd, TS_REC_COUNTER, name, &(rec_val->rec_counter), sizeof(TSCounter));
       break;
     case RECD_STRING:
-      // For NULL string parameters, end the literal "NULL" to match the behavior of MgmtRecordGet(). Make sure to send
+      // For NULL string parameters, end the literal "NULL" to match the
+      // behavior of MgmtRecordGet(). Make sure to send
       // the trailing NULL.
       if (rec_val->rec_string) {
         match->err = send_record_get_response(match->fd, TS_REC_STRING, name, rec_val->rec_string, strlen(rec_val->rec_string) + 1);
@@ -1163,7 +1168,8 @@ handle_control_message(int fd, void *req, size_t reqlen)
     uid_t euid = -1;
     gid_t egid = -1;
 
-    // For privileged calls, ensure we have caller credentials and that the caller is privileged.
+    // For privileged calls, ensure we have caller credentials and that the
+    // caller is privileged.
     if (handlers[optype].flags & MGMT_API_PRIVILEGED) {
       if (mgmt_get_peereid(fd, &euid, &egid) == -1 || (euid != 0 && euid != geteuid())) {
         Debug("ts_main", "denied privileged API access on fd=%d for uid=%d gid=%d", fd, euid, egid);
@@ -1176,8 +1182,10 @@ handle_control_message(int fd, void *req, size_t reqlen)
 
   error = handlers[optype].handler(fd, req, reqlen);
   if (error != TS_ERR_OKAY) {
-    // NOTE: if the error was produced by the handler sending a response, this could attempt to
-    // send a response again. However, this would only happen if sending the response failed, so
+    // NOTE: if the error was produced by the handler sending a response, this
+    // could attempt to
+    // send a response again. However, this would only happen if sending the
+    // response failed, so
     // it is safe to fail to send it again here ...
     return send_mgmt_error(fd, optype, error);
   }

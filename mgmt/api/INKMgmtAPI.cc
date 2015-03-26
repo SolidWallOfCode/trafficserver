@@ -160,7 +160,8 @@ TSListIsValid(TSList l)
   return true;
 }
 
-/*--- TSIpAddrList operations -------------------------------------------------*/
+/*--- TSIpAddrList operations
+ * -------------------------------------------------*/
 tsapi TSIpAddrList
 TSIpAddrListCreate(void)
 {
@@ -1621,7 +1622,8 @@ TSRecordSetMlt(TSList rec_list, TSActionNeedT *action_need)
     enqueue((LLQ *)rec_list, ele);
   }
 
-  // set the action_need to be the most sever action needed of all the "set" calls
+  // set the action_need to be the most sever action needed of all the "set"
+  // calls
   *action_need = top_action_req;
 
   return status;
@@ -1894,7 +1896,8 @@ TSConfigFileWrite(TSFileNameT file, char *text, int size, int version)
  *         body       - a buffer is allocated on the body char* pointer
  *         bodySize   - the size of the body buffer is returned
  * Output: TSMgmtError   - TS_ERR_OKAY if succeed, TS_ERR_FAIL otherwise
- * Obsolete:  tsapi TSMgmtError TSReadFromUrl (char *url, char **text, int *size);
+ * Obsolete:  tsapi TSMgmtError TSReadFromUrl (char *url, char **text, int
+ * *size);
  * NOTE: The URL can be expressed in the following forms:
  *       - http://www.example.com:80/products/network/index.html
  *       - http://www.example.com/products/network/index.html

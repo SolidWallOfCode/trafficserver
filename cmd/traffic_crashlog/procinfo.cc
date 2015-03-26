@@ -146,9 +146,12 @@ crashlog_write_backtrace(FILE *fp, const crashlog_target &)
   TSString trace = NULL;
   TSMgmtError mgmterr;
 
-  // NOTE: sometimes we can't get a backtrace because the ptrace attach will fail with
-  // EPERM. I've seen this happen when a debugger is attached, which makes sense, but it
-  // can also happen without a debugger. Possibly in that case, there is a race with the
+  // NOTE: sometimes we can't get a backtrace because the ptrace attach will
+  // fail with
+  // EPERM. I've seen this happen when a debugger is attached, which makes
+  // sense, but it
+  // can also happen without a debugger. Possibly in that case, there is a race
+  // with the
   // kernel locking the process information?
 
   if ((mgmterr = TSProxyBacktraceGet(0, &trace)) != TS_ERR_OKAY) {
@@ -177,7 +180,8 @@ crashlog_write_records(FILE *fp, const crashlog_target &)
     goto done;
   }
 
-  // If the RPC call failed, the list will be empty, so we won't print anything. Otherwise,
+  // If the RPC call failed, the list will be empty, so we won't print anything.
+  // Otherwise,
   // print all the results, freeing them as we go.
   for (TSRecordEle *rec_ele = (TSRecordEle *)TSListDequeue(list); rec_ele; rec_ele = (TSRecordEle *)TSListDequeue(list)) {
     if (!success) {

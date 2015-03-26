@@ -405,7 +405,6 @@ LogField::set_aggregate_op(LogField::Aggregate agg_op)
   }
 }
 
-
 void
 LogField::update_aggregate(int64_t val)
 {
@@ -439,7 +438,6 @@ LogField::update_aggregate(int64_t val)
         m_symbol, val, m_agg_val, m_agg_cnt);
 }
 
-
 LogField::Container
 LogField::valid_container_name(char *name)
 {
@@ -450,7 +448,6 @@ LogField::valid_container_name(char *name)
   }
   return LogField::NO_CONTAINER;
 }
-
 
 LogField::Aggregate
 LogField::valid_aggregate_name(char *name)
@@ -463,7 +460,6 @@ LogField::valid_aggregate_name(char *name)
   return LogField::NO_AGGREGATE;
 }
 
-
 bool
 LogField::fieldlist_contains_aggregates(char *fieldlist)
 {
@@ -475,7 +471,6 @@ LogField::fieldlist_contains_aggregates(char *fieldlist)
   }
   return contains_aggregates;
 }
-
 
 /*-------------------------------------------------------------------------
   LogFieldList

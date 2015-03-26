@@ -115,7 +115,6 @@ public:
 // in a locking manner (too bad for the net threads).
 //
 
-
 #define UNSAFE_FORCE_MUTEX
 
 #ifdef UNSAFE_FORCE_MUTEX
@@ -160,7 +159,6 @@ TSReturnCode sdk_sanity_check_iocore_structure(void *);
 
 tsapi TSMutex TSMutexCreateInternal(void);
 tsapi int TSMutexCheck(TSMutex mutex);
-
 
 /* IOBuffer */
 tsapi void TSIOBufferReaderCopy(TSIOBufferReader readerp, const void *buf, int64_t length);

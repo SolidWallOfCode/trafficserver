@@ -87,7 +87,8 @@ public:
     return this->hdr.cooked;
   }
 
-  // Allocate an IOBufferBlock for this frame. This switches us from using the in-line header
+  // Allocate an IOBufferBlock for this frame. This switches us from using the
+  // in-line header
   // buffer, to an external buffer block.
   void
   alloc(int index)
@@ -197,7 +198,6 @@ public:
   {
     return upgrade_context;
   }
-
 
 private:
   Http2ClientSession(Http2ClientSession &);                  // noncopyable

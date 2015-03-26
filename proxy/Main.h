@@ -28,7 +28,6 @@
 #include "Regression.h"
 #include "I_Version.h"
 
-
 //
 // Constants
 //

@@ -132,8 +132,10 @@ subcommand_metric(unsigned argc, const char **argv)
     {metric_match, "match", "Get metrics matching a regular expression"},
     {CtrlUnimplementedCommand, "monitor", "Display the value of a metric over time"},
 
-    // We could allow clearing all the metrics in the "clear" subcommand, but that seems error-prone. It
-    // would be too easy to just expect a help message and accidentally nuke all the metrics.
+    // We could allow clearing all the metrics in the "clear" subcommand, but
+    // that seems error-prone. It
+    // would be too easy to just expect a help message and accidentally nuke all
+    // the metrics.
     {metric_zero, "zero", "Clear one or more metric values"},
   };
 

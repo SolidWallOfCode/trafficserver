@@ -68,7 +68,6 @@ LogFilter::~LogFilter()
   delete m_field;
 }
 
-
 /*-------------------------------------------------------------------------
   LogFilterString::LogFilterString
   -------------------------------------------------------------------------*/
@@ -94,7 +93,6 @@ LogFilterString::_setValues(size_t n, char **value)
     }
   }
 }
-
 
 LogFilterString::LogFilterString(const char *name, LogField *field, LogFilter::Action action, LogFilter::Operator oper,
                                  char *values)
@@ -245,7 +243,6 @@ LogFilterString::wipe_this_entry(LogAccess *lad)
   ats_free(big_buf);
   return cond_satisfied;
 }
-
 
 /*-------------------------------------------------------------------------
   LogFilterString::toss_this_entry
@@ -655,7 +652,9 @@ LogFilterIP::LogFilterIP(const char *name, LogField *field, LogFilter::Action ac
       if (0 == min.load(t)) {
         if (x) {
           if (0 != max.load(x)) {
-            Warning("LogFilterIP Configuration: '%s-%s' looks like a range but the second address was ill formed", t, x);
+            Warning("LogFilterIP Configuration: '%s-%s' looks like a range but "
+                    "the second address was ill formed",
+                    t, x);
             continue;
           }
         } else {
@@ -744,8 +743,10 @@ LogFilterIP::is_match(LogAccess *lad)
   if (m_field && lad) {
     LogFieldIpStorage value;
     m_field->marshal(lad, reinterpret_cast<char *>(&value));
-    // This is bad, we abuse the fact that the initial layout of LogFieldIpStorage and IpAddr
-    // are identical. We should look at converting the log stuff to use IpAddr directly.
+    // This is bad, we abuse the fact that the initial layout of
+    // LogFieldIpStorage and IpAddr
+    // are identical. We should look at converting the log stuff to use IpAddr
+    // directly.
     zret = m_map.contains(reinterpret_cast<IpAddr &>(value));
   }
 
@@ -816,7 +817,6 @@ LogFilterIP::display(FILE *fd)
     fprintf(fd, "\n");
   }
 }
-
 
 void
 LogFilterIP::display_as_XML(FILE *fd)
@@ -957,7 +957,6 @@ LogFilterList::wipe_this_entry(LogAccess *lad)
   return wipeFlag;
 }
 
-
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
@@ -998,7 +997,6 @@ LogFilterList::find_by_name(char *name)
   }
   return NULL;
 }
-
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/

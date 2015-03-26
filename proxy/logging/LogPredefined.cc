@@ -27,17 +27,17 @@
 #include "LogPredefined.h"
 
 // predefined formats
-const char *const PreDefinedFormatInfo::squid =
-  "%<cqtq> %<ttms> %<chi> %<crc>/%<pssc> %<psql> %<cqhm> %<cquc> %<caun> %<phr>/%<pqsn> %<psct>";
+const char *const PreDefinedFormatInfo::squid = "%<cqtq> %<ttms> %<chi> %<crc>/%<pssc> %<psql> %<cqhm> %<cquc> %<caun> "
+                                                "%<phr>/%<pqsn> %<psct>";
 
 const char *const PreDefinedFormatInfo::common = "%<chi> - %<caun> [%<cqtn>] \"%<cqtx>\" %<pssc> %<pscl>";
 
 const char *const PreDefinedFormatInfo::extended = "%<chi> - %<caun> [%<cqtn>] \"%<cqtx>\" %<pssc> %<pscl> "
                                                    "%<sssc> %<sscl> %<cqbl> %<pqbl> %<cqhl> %<pshl> %<pqhl> %<sshl> %<tts>";
 
-const char *const PreDefinedFormatInfo::extended2 =
-  "%<chi> - %<caun> [%<cqtn>] \"%<cqtx>\" %<pssc> %<pscl> "
-  "%<sssc> %<sscl> %<cqbl> %<pqbl> %<cqhl> %<pshl> %<pqhl> %<sshl> %<tts> %<phr> %<cfsc> %<pfsc> %<crc>";
+const char *const PreDefinedFormatInfo::extended2 = "%<chi> - %<caun> [%<cqtn>] \"%<cqtx>\" %<pssc> %<pscl> "
+                                                    "%<sssc> %<sscl> %<cqbl> %<pqbl> %<cqhl> %<pshl> %<pqhl> %<sshl> %<tts> "
+                                                    "%<phr> %<cfsc> %<pfsc> %<crc>";
 
 PreDefinedFormatInfo *
 MakePredefinedErrorLog(LogConfig *config)
@@ -47,7 +47,8 @@ MakePredefinedErrorLog(LogConfig *config)
   fmt = MakeTextLogFormat("error");
   config->global_format_list.add(fmt, false);
 
-  // The error log is always ASCII, and currently does not work correctly with log collation.
+  // The error log is always ASCII, and currently does not work correctly with
+  // log collation.
   return new PreDefinedFormatInfo(fmt, "error.log", NULL /* no log header */, LOG_FILE_ASCII, false);
 }
 
@@ -69,7 +70,8 @@ PreDefinedFormatList::init(LogConfig *config)
 {
   LogFormat *fmt;
 
-// All these predefined formats work with log collation. They are optionally binary or ASCII, each
+// All these predefined formats work with log collation. They are optionally
+// binary or ASCII, each
 // with a different config option.
 #define make_format(is_ascii) ((is_ascii) ? LOG_FILE_ASCII : LOG_FILE_BINARY)
 

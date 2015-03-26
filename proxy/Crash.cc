@@ -27,7 +27,8 @@
 #include "signals.h"
 #include "ink_cap.h"
 
-// ucontext.h is deprecated on Darwin, and we really only need it on Linux, so only
+// ucontext.h is deprecated on Darwin, and we really only need it on Linux, so
+// only
 // include it if we are planning to use it.
 #if defined(__linux__)
 #include <ucontext.h>
@@ -93,7 +94,8 @@ crash_logger_init()
     return;
   }
 
-  // By this point, we have an absolute path, so we'd better be able to find the basename.
+  // By this point, we have an absolute path, so we'd better be able to find the
+  // basename.
   basename = strrchr(logger, '/') + 1;
 
   socketpair(AF_UNIX, SOCK_STREAM, 0, pipe);
@@ -150,8 +152,10 @@ crash_logger_invoke(int signo, siginfo_t *info, void *ctx)
     kill(crash_logger_pid, SIGCONT);
 
 #if defined(__linux__)
-    // Write the crashing thread information to the crash logger. While the siginfo_t is blesses by POSIX, the
-    // ucontext_t can contain pointers, so it's highly platform dependent. On Linux with glibc, however, it is
+    // Write the crashing thread information to the crash logger. While the
+    // siginfo_t is blesses by POSIX, the
+    // ucontext_t can contain pointers, so it's highly platform dependent. On
+    // Linux with glibc, however, it is
     // a single memory block that we can just puke out.
     ATS_UNUSED_RETURN(write(crash_logger_fd, info, sizeof(siginfo_t)));
     ATS_UNUSED_RETURN(write(crash_logger_fd, (ucontext_t *)ctx, sizeof(ucontext_t)));

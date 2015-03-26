@@ -305,7 +305,6 @@ ParentConfigParams::findParent(HttpRequestData *rdata, ParentResult *result)
   }
 }
 
-
 void
 ParentConfigParams::recordRetrySuccess(ParentResult *result)
 {
@@ -1016,7 +1015,6 @@ setup_socks_servers(ParentRecord *rec_arr, int len)
   return 0;
 }
 
-
 void
 SocksServerConfig::reconfigure()
 {
@@ -1107,7 +1105,6 @@ request_to_data(HttpRequestData *req, sockaddr const *srcip, sockaddr const *dst
   http_parser_clear(&parser);
 }
 
-
 static int passes;
 static int fails;
 
@@ -1154,7 +1151,8 @@ EXCLUSIVE_REGRESSION_TEST(PARENTSELECTION)(RegressionTest * /* t ATS_UNUSED */, 
   // Test 1
   tbl[0] = '\0';
   ST(1)
-  T("dest_domain=. parent=red:37412,orange:37412,yellow:37412 round_robin=strict\n")
+  T("dest_domain=. parent=red:37412,orange:37412,yellow:37412 "
+    "round_robin=strict\n")
   REBUILD int c, red = 0, orange = 0, yellow = 0;
   for (c = 0; c < 21; c++) {
     REINIT br(request, "fruit_basket.net");
@@ -1166,7 +1164,8 @@ EXCLUSIVE_REGRESSION_TEST(PARENTSELECTION)(RegressionTest * /* t ATS_UNUSED */, 
   // Test 2
   ST(2)
   tbl[0] = '\0';
-  T("dest_domain=. parent=green:4325,blue:4325,indigo:4325,violet:4325 round_robin=false\n")
+  T("dest_domain=. parent=green:4325,blue:4325,indigo:4325,violet:4325 "
+    "round_robin=false\n")
   REBUILD int g = 0, b = 0, i = 0, v = 0;
   for (c = 0; c < 17; c++) {
     REINIT br(request, "fruit_basket.net");
@@ -1182,23 +1181,26 @@ EXCLUSIVE_REGRESSION_TEST(PARENTSELECTION)(RegressionTest * /* t ATS_UNUSED */, 
   tbl[0] = '\0';
 #define TEST_IP4_ADDR "209.131.62.14"
 #define TEST_IP6_ADDR "BEEF:DEAD:ABBA:CAFE:1337:1E1F:5EED:C0FF"
-  T("dest_ip=" TEST_IP4_ADDR " parent=cat:37,dog:24 round_robin=strict\n")             /* L1 */
-  T("dest_ip=" TEST_IP6_ADDR " parent=zwoop:37,jMCg:24 round_robin=strict\n")          /* L1 */
-  T("dest_host=www.pilot.net parent=pilot_net:80\n")                                   /* L2 */
-  T("url_regex=snoopy parent=odie:80,garfield:80 round_robin=true\n")                  /* L3 */
-  T("dest_domain=i.am parent=amy:80,katie:80,carissa:771 round_robin=false\n")         /* L4 */
-  T("dest_domain=microsoft.net time=03:00-22:10 parent=zoo.net:341\n")                 /* L5 */
-  T("dest_domain=microsoft.net time=0:00-02:59 parent=zoo.net:347\n")                  /* L6 */
-  T("dest_domain=microsoft.net time=22:11-23:59 parent=zoo.edu:111\n")                 /* L7 */
-  T("dest_domain=imac.net port=819 parent=genie:80 round_robin=strict\n")              /* L8 */
-  T("dest_ip=172.34.61.211 port=3142 parent=orangina:80 go_direct=false\n")            /* L9 */
-  T("url_regex=miffy prefix=furry/rabbit parent=nintje:80 go_direct=false\n")          /* L10 */
-  T("url_regex=kitty suffix=tif parent=hello:80 round_robin=strict go_direct=false\n") /* L11 */
-  T("url_regex=cyclops method=get parent=turkey:80\n")                                 /* L12 */
-  T("url_regex=cyclops method=post parent=club:80\n")                                  /* L13 */
-  T("url_regex=cyclops method=put parent=sandwich:80\n")                               /* L14 */
-  T("url_regex=cyclops method=trace parent=mayo:80\n")                                 /* L15 */
-  T("dest_host=pluto scheme=HTTP parent=strategy:80\n")                                /* L16 */
+  T("dest_ip=" TEST_IP4_ADDR " parent=cat:37,dog:24 round_robin=strict\n")     /* L1 */
+  T("dest_ip=" TEST_IP6_ADDR " parent=zwoop:37,jMCg:24 round_robin=strict\n")  /* L1 */
+  T("dest_host=www.pilot.net parent=pilot_net:80\n")                           /* L2 */
+  T("url_regex=snoopy parent=odie:80,garfield:80 round_robin=true\n")          /* L3 */
+  T("dest_domain=i.am parent=amy:80,katie:80,carissa:771 round_robin=false\n") /* L4 */
+  T("dest_domain=microsoft.net time=03:00-22:10 parent=zoo.net:341\n")         /* L5 */
+  T("dest_domain=microsoft.net time=0:00-02:59 parent=zoo.net:347\n")          /* L6 */
+  T("dest_domain=microsoft.net time=22:11-23:59 parent=zoo.edu:111\n")         /* L7 */
+  T("dest_domain=imac.net port=819 parent=genie:80 round_robin=strict\n")      /* L8
+                                                                                  */
+  T("dest_ip=172.34.61.211 port=3142 parent=orangina:80 go_direct=false\n")    /* L9
+                                                                                  */
+  T("url_regex=miffy prefix=furry/rabbit parent=nintje:80 go_direct=false\n")  /* L10 */
+  T("url_regex=kitty suffix=tif parent=hello:80 round_robin=strict "
+    "go_direct=false\n")                                 /* L11 */
+  T("url_regex=cyclops method=get parent=turkey:80\n")   /* L12 */
+  T("url_regex=cyclops method=post parent=club:80\n")    /* L13 */
+  T("url_regex=cyclops method=put parent=sandwich:80\n") /* L14 */
+  T("url_regex=cyclops method=trace parent=mayo:80\n")   /* L15 */
+  T("dest_host=pluto scheme=HTTP parent=strategy:80\n")  /* L16 */
   REBUILD
   // Test 3
   IpEndpoint ip;
@@ -1245,7 +1247,8 @@ EXCLUSIVE_REGRESSION_TEST(PARENTSELECTION)(RegressionTest * /* t ATS_UNUSED */, 
     //   FP RE(verify(result,PARENT_SPECIFIED,"genie",80),8)
     // Test 7 - N Parent Table
     tbl[0] = '\0';
-  T("dest_domain=rabbit.net parent=fuzzy:80,fluffy:80,furry:80,frisky:80 round_robin=strict go_direct=true\n")
+  T("dest_domain=rabbit.net parent=fuzzy:80,fluffy:80,furry:80,frisky:80 "
+    "round_robin=strict go_direct=true\n")
   REBUILD
   // Test 8
   ST(8) REINIT br(request, "i.am.rabbit.net");

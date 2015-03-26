@@ -59,7 +59,8 @@ private:
 
   /** Child acceptors, index by @c ProtoGroupKey
 
-      We pass on the actual accept to one of these after doing protocol sniffing.
+      We pass on the actual accept to one of these after doing protocol
+     sniffing.
       We make it one larger and leave the last entry NULL so we don't have to
       do range checks on the enum value.
    */

@@ -142,7 +142,6 @@ ProtoVCTable<VCTentry, max_entries>::cleanup_all()
   }
 }
 
-
 template <class VCTentry, int max_entries>
 inline bool
 ProtoVCTable<VCTentry, max_entries>::is_table_clear()

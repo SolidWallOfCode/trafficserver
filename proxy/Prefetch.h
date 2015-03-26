@@ -409,7 +409,6 @@ public:
   IOBufferReader *reader;
 };
 
-
 #define PREFETCH_CONFIG_UPDATE_TIMEOUT (HRTIME_SECOND * 60)
 
 #endif // PREFETCH

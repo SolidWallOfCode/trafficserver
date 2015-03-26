@@ -56,7 +56,8 @@ struct PreDefinedFormatList {
   PreDefinedFormatList();
   ~PreDefinedFormatList();
 
-  // Initialize the predefined format list from the given LogConfig. This has the side-effect of
+  // Initialize the predefined format list from the given LogConfig. This has
+  // the side-effect of
   // adding the predefined LogFormats to the LogConfig global_format_list.
   void init(LogConfig *config);
 

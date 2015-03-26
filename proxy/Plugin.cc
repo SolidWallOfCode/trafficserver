@@ -57,7 +57,8 @@ PluginRegInfo::PluginRegInfo()
 
 PluginRegInfo::~PluginRegInfo()
 {
-  // We don't support unloading plugins once they are successfully loaded, so assert
+  // We don't support unloading plugins once they are successfully loaded, so
+  // assert
   // that we don't accidentally attempt this.
   ink_release_assert(this->plugin_registered == false);
   ink_release_assert(this->link.prev == NULL);
@@ -91,7 +92,8 @@ plugin_load(int argc, char *argv[], bool validateOnly)
     }
   }
 
-  // elevate the access to read files as root if compiled with capabilities, if not
+  // elevate the access to read files as root if compiled with capabilities, if
+  // not
   // change the effective user to root
   {
 #if TS_USE_POSIX_CAP
@@ -198,7 +200,6 @@ plugin_expand(char *arg)
     goto not_found;
     break;
   }
-
 
 not_found:
   Warning("plugin.config: unable to find parameter %s", arg);

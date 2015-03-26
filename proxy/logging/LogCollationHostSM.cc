@@ -284,7 +284,8 @@ LogCollationHostSM::host_recv(int event, void * /* data ATS_UNUSED */)
       log_buffer_header = (LogBufferHeader *)m_read_buffer;
 
       // convert the buffer we just received to host order
-      // TODO: We currently don't try to make the log buffers handle little vs big endian. TS-1156.
+      // TODO: We currently don't try to make the log buffers handle little vs
+      // big endian. TS-1156.
       // LogBuffer::convert_to_host_order(log_buffer_header);
 
       version = log_buffer_header->version;

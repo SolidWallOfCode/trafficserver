@@ -1,6 +1,7 @@
 /** @file
 
-  File contains the member function defs and thread loop for the process manager.
+  File contains the member function defs and thread loop for the process
+  manager.
 
   @section license License
 
@@ -20,7 +21,6 @@
   See the License for the specific language governing permissions and
   limitations under the License.
  */
-
 
 #include "libts.h"
 #undef HTTP_CACHE
@@ -76,7 +76,6 @@ ProcessManager::ProcessManager(bool rlm) : BaseManager(), require_lm(rlm), mgmt_
   pid = getpid();
 } /* End ProcessManager::ProcessManager */
 
-
 void
 ProcessManager::reconfigure()
 {
@@ -87,14 +86,12 @@ ProcessManager::reconfigure()
   return;
 } /* End ProcessManager::reconfigure */
 
-
 void
 ProcessManager::signalManager(int msg_id, const char *data_str)
 {
   signalManager(msg_id, data_str, strlen(data_str) + 1);
   return;
 } /* End ProcessManager::signalManager */
-
 
 void
 ProcessManager::signalManager(int msg_id, const char *data_raw, int data_len)
@@ -109,7 +106,6 @@ ProcessManager::signalManager(int msg_id, const char *data_raw, int data_len)
   return;
 
 } /* End ProcessManager::signalManager */
-
 
 bool
 ProcessManager::processEventQueue()
@@ -126,7 +122,8 @@ ProcessManager::processEventQueue()
       executeMgmtCallback(mh->msg_id, NULL, 0);
     }
     if (mh->msg_id == MGMT_EVENT_SHUTDOWN) {
-      mgmt_log(stderr, "[ProcessManager::processEventQueue] Shutdown msg received, exiting\n");
+      mgmt_log(stderr, "[ProcessManager::processEventQueue] Shutdown msg "
+                       "received, exiting\n");
       _exit(0);
     } /* Exit on shutdown */
     ats_free(mh);
@@ -134,7 +131,6 @@ ProcessManager::processEventQueue()
   }
   return ret;
 } /* End ProcessManager::processEventQueue */
-
 
 bool
 ProcessManager::processSignalQueue()
@@ -157,7 +153,6 @@ ProcessManager::processSignalQueue()
 
   return ret;
 } /* End ProcessManager::processSignalQueue */
-
 
 void
 ProcessManager::initLMConnection()
@@ -192,7 +187,8 @@ ProcessManager::initLMConnection()
   }
 
   if ((connect(local_manager_sockfd, (struct sockaddr *)&serv_addr, servlen)) < 0) {
-    mgmt_fatal(stderr, errno, "[ProcessManager::initLMConnection] failed to connect management socket '%s'\n",
+    mgmt_fatal(stderr, errno, "[ProcessManager::initLMConnection] failed to "
+                              "connect management socket '%s'\n",
                (const char *)sockpath);
   }
 
@@ -218,13 +214,11 @@ ProcessManager::initLMConnection()
     }
   }
 
-
   if (sync_key_raw)
     memcpy(&mgmt_sync_key, sync_key_raw, sizeof(mgmt_sync_key));
   Debug("pmgmt", "[ProcessManager::initLMConnection] Received key: %d\n", mgmt_sync_key);
 
 } /* End ProcessManager::initLMConnection */
-
 
 void
 ProcessManager::pollLMConnection()
@@ -263,7 +257,9 @@ ProcessManager::pollLMConnection()
       }
 
     } else if (num < 0) { /* Error */
-      mgmt_elog(stderr, 0, "[ProcessManager::pollLMConnection] select failed or was interrupted (%d)\n", errno);
+      mgmt_elog(stderr, 0, "[ProcessManager::pollLMConnection] select failed "
+                           "or was interrupted (%d)\n",
+                errno);
     }
   }
 

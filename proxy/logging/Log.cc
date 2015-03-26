@@ -130,9 +130,12 @@ Log::change_configuration()
   ink_mutex_release(prev->log_object_manager._APImutex);
   Debug("log-api-mutex", "Log::change_configuration released api mutex");
 
-  // Register the new config in the config processor; the old one will now be scheduled for a
-  // future deletion. We don't need to do anything magical with refcounts, since the
-  // configProcessor will keep a reference count, and drop it when the deletion is scheduled.
+  // Register the new config in the config processor; the old one will now be
+  // scheduled for a
+  // future deletion. We don't need to do anything magical with refcounts, since
+  // the
+  // configProcessor will keep a reference count, and drop it when the deletion
+  // is scheduled.
   configProcessor.set(log_configid, new_config);
 
   // If we replaced the logging configuration, flush any log
@@ -511,11 +514,12 @@ Log::init_fields()
     SQUID_LOG_ERR_FUTURE_1, "ERR_FUTURE_1", SQUID_LOG_ERR_UNKNOWN, "ERR_UNKNOWN");
 
   Ptr<LogFieldAliasTable> cache_hit_miss_map = make_ptr(new LogFieldAliasTable);
-  cache_hit_miss_map->init(23, SQUID_HIT_RESERVED, "HIT", SQUID_HIT_LEVEL_1, "HIT_RAM", // Also SQUID_HIT_RAM
-                           SQUID_HIT_LEVEL_2, "HIT_SSD",                                // Also SQUID_HIT_SSD
-                           SQUID_HIT_LEVEL_3, "HIT_DISK",                               // Also SQUID_HIT_DISK
-                           SQUID_HIT_LEVEL_4, "HIT_CLUSTER",                            // Also SQUID_HIT_CLUSTER
-                           SQUID_HIT_LEVEL_5, "HIT_NET",                                // Also SQUID_HIT_NET
+  cache_hit_miss_map->init(23, SQUID_HIT_RESERVED, "HIT", SQUID_HIT_LEVEL_1,
+                           "HIT_RAM",                        // Also SQUID_HIT_RAM
+                           SQUID_HIT_LEVEL_2, "HIT_SSD",     // Also SQUID_HIT_SSD
+                           SQUID_HIT_LEVEL_3, "HIT_DISK",    // Also SQUID_HIT_DISK
+                           SQUID_HIT_LEVEL_4, "HIT_CLUSTER", // Also SQUID_HIT_CLUSTER
+                           SQUID_HIT_LEVEL_5, "HIT_NET",     // Also SQUID_HIT_NET
                            SQUID_HIT_LEVEL_6, "HIT_LEVEL_6", SQUID_HIT_LEVEL_7, "HIT_LEVEL_7", SQUID_HIT_LEVEL_8, "HIT_LEVEL_8",
                            SQUID_HIT_LEVEl_9, "HIT_LEVEL_9", SQUID_MISS_NONE, "MISS", SQUID_MISS_ICP_AUTH, "MISS_ICP_AUTH",
                            SQUID_MISS_HTTP_NON_CACHE, "MISS_HTTP_NON_CACHE", SQUID_MISS_ICP_STOPLIST, "MISS_ICP_STOPLIST",
@@ -1099,8 +1103,9 @@ Log::flush_thread_main(void * /* args ATS_UNUSED */)
       //
       while (total_bytes - bytes_written) {
         if (Log::config->logging_space_exhausted) {
-          Debug("log", "logging space exhausted, failed to write file:%s, have dropped (%d) bytes.", logfile->get_name(),
-                (total_bytes - bytes_written));
+          Debug("log", "logging space exhausted, failed to write file:%s, have "
+                       "dropped (%d) bytes.",
+                logfile->get_name(), (total_bytes - bytes_written));
 
           RecIncrRawStat(log_rsb, mutex->thread_holding, log_stat_bytes_lost_before_written_to_disk_stat,
                          total_bytes - bytes_written);
@@ -1233,7 +1238,9 @@ Log::collate_thread_main(void * /* args ATS_UNUSED */)
       }
 
       if (header->version != LOG_SEGMENT_VERSION) {
-        Note("Invalid LogBuffer received; invalid version - buffer = %u, current = %u", header->version, LOG_SEGMENT_VERSION);
+        Note("Invalid LogBuffer received; invalid version - buffer = %u, "
+             "current = %u",
+             header->version, LOG_SEGMENT_VERSION);
         delete[] header;
         continue;
       }

@@ -58,7 +58,6 @@ static RecInt autoconf_localhost_only = 1;
 
 #define SOCKET_TIMEOUT 10 * 60
 
-
 WebInterFaceGlobals wGlobals;
 
 // There are two web ports maintained
@@ -245,7 +244,8 @@ api_socket_is_restricted()
 {
   RecInt intval;
 
-  // If the socket is not administratively restricted, check whether we have platform
+  // If the socket is not administratively restricted, check whether we have
+  // platform
   // support. Otherwise, default to making it restricted.
   if (RecGetRecordInt("proxy.config.admin.api.restricted", &intval) == REC_ERR_OKAY) {
     if (intval == 0) {
@@ -354,7 +354,8 @@ webIntr_main(void *)
   autoconfContext.defaultFile = "/proxy.pac";
 
   // INKqa09866
-  // fire up interface for ts configuration through API; use absolute path from root to
+  // fire up interface for ts configuration through API; use absolute path from
+  // root to
   // set up socket paths;
   ats_scoped_str rundir(RecConfigReadRuntimeDir());
   ats_scoped_str apisock(Layout::relative_to(rundir, MGMTAPI_MGMT_SOCKET_NAME));
@@ -365,14 +366,16 @@ webIntr_main(void *)
 
   mgmtapiFD = bind_unix_domain_socket(apisock, newmode);
   if (mgmtapiFD == -1) {
-    mgmt_log(stderr, "[WebIntrMain] Unable to set up socket for handling management API calls. API socket path = %s\n",
+    mgmt_log(stderr, "[WebIntrMain] Unable to set up socket for handling "
+                     "management API calls. API socket path = %s\n",
              (const char *)apisock);
     lmgmt->alarm_keeper->signalAlarm(MGMT_ALARM_WEB_ERROR, mgmtapiFailMsg);
   }
 
   eventapiFD = bind_unix_domain_socket(eventsock, newmode);
   if (eventapiFD == -1) {
-    mgmt_log(stderr, "[WebIntrMain] Unable to set up so for handling management API event calls. Event Socket path: %s\n",
+    mgmt_log(stderr, "[WebIntrMain] Unable to set up so for handling "
+                     "management API event calls. Event Socket path: %s\n",
              (const char *)eventsock);
   }
 

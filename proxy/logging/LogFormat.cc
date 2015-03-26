@@ -95,7 +95,8 @@ LogFormat::setup(const char *name, const char *format_str, unsigned interval_sec
     return true;
   }
 
-  // We don't have a format string (ie. this will be a raw text log, so we are always valid.
+  // We don't have a format string (ie. this will be a raw text log, so we are
+  // always valid.
   m_valid = true;
   return true;
 }
@@ -188,8 +189,10 @@ LogFormat::LogFormat(const char *name, const char *format_str, unsigned interval
 {
   setup(name, format_str, interval_sec);
 
-  // A LOG_FORMAT_TEXT is a log without a format string, everything else is a LOG_FORMAT_CUSTOM. It's possible that we could get
-  // rid of log types altogether, but LogFile currently tests whether a format is a LOG_FORMAT_TEXT format ...
+  // A LOG_FORMAT_TEXT is a log without a format string, everything else is a
+  // LOG_FORMAT_CUSTOM. It's possible that we could get
+  // rid of log types altogether, but LogFile currently tests whether a format
+  // is a LOG_FORMAT_TEXT format ...
   m_format_type = format_str ? LOG_FORMAT_CUSTOM : LOG_FORMAT_TEXT;
 }
 
@@ -574,7 +577,9 @@ LogFormat::parse_escape_string(const char *str, int len)
     sum = (a - '0') * 64 + (b - '0') * 8 + (c - '0');
 
     if (sum == 0 || sum >= 255) {
-      Warning("Octal escape sequence out of range: \\%c%c%c, treat it as normal string\n", a, b, c);
+      Warning("Octal escape sequence out of range: \\%c%c%c, treat it as "
+              "normal string\n",
+              a, b, c);
       return -1;
     } else
       return sum;
@@ -594,7 +599,9 @@ LogFormat::parse_escape_string(const char *str, int len)
     sum = i * 16 + j;
 
     if (sum == 0 || sum >= 255) {
-      Warning("Hex escape sequence out of range: \\%c%c%c, treat it as normal string\n", a, b, c);
+      Warning("Hex escape sequence out of range: \\%c%c%c, treat it as normal "
+              "string\n",
+              a, b, c);
       return -1;
     } else
       return sum;

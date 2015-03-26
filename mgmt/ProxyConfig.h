@@ -65,7 +65,8 @@ public:
   ConfigProcessor();
 
   enum {
-    // The number of seconds to wait before garbage collecting stale ConfigInfo objects. There's
+    // The number of seconds to wait before garbage collecting stale ConfigInfo
+    // objects. There's
     // no good reason to tune this, outside of regression tests, so don't.
     CONFIG_PROCESSOR_RELEASE_SECS = 60
   };
@@ -91,7 +92,8 @@ public:
   int ninfos;
 };
 
-// A Continuation wrapper that calls the static reconfigure() method of the given class.
+// A Continuation wrapper that calls the static reconfigure() method of the
+// given class.
 template <typename UpdateClass> struct ConfigUpdateContinuation : public Continuation {
   int
   update(int /* etype */, void * /* data */)

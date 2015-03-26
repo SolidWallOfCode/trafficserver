@@ -34,16 +34,20 @@ _D(cluster_connections_open_stat)
 _D(cluster_connections_openned_stat)
 _D(cluster_con_total_time_stat)
 _D(cluster_ctrl_msgs_sent_stat)
-_D(cluster_slow_ctrl_msgs_sent_stat) // fast ctrl messages do not require a mallo
+_D(cluster_slow_ctrl_msgs_sent_stat) // fast ctrl messages do not require a
+                                     // mallo
 _D(cluster_ctrl_msgs_recvd_stat)
 _D(cluster_slow_ctrl_msgs_recvd_stat)
 _D(cluster_ctrl_msgs_send_time_stat)
 _D(cluster_ctrl_msgs_recv_time_stat)
 _D(cluster_read_bytes_stat)
 _D(cluster_write_bytes_stat)
-_D(cluster_op_delayed_for_lock_stat) // a message to a machine was blocked by a locked connection
-_D(cluster_connections_locked_stat)  // a connection could not use its slot (locked)
-_D(cluster_connections_bumped_stat)  // a connection could not get a slot (scheduled too late)
+_D(cluster_op_delayed_for_lock_stat) // a message to a machine was blocked by a
+                                     // locked connection
+_D(cluster_connections_locked_stat)  // a connection could not use its slot
+                                     // (locked)
+_D(cluster_connections_bumped_stat)  // a connection could not get a slot
+                                     // (scheduled too late)
 _D(cluster_nodes_stat)
 _D(cluster_net_backup_stat)
 _D(cluster_machines_allocated_stat)
@@ -91,7 +95,6 @@ _D(cluster_vc_cache_scans_stat)
 _D(cluster_vc_cache_scan_lock_misses_stat)
 _D(cluster_vc_cache_purges_stat)
 _D(cluster_write_lock_misses_stat)
-
 
 //
 // Dynamic Load Shedding Stats

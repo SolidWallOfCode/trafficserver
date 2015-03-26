@@ -156,7 +156,8 @@ ts_connect()
 #endif
   // connect call
   if (connect(event_socket_fd, (struct sockaddr *)&client_event_sock, sockaddr_len) < 0) {
-    // fprintf(stderr, "[connect] ERROR (event_socket_fd %d): %s\n", event_socket_fd, strerror(int(errno)));
+    // fprintf(stderr, "[connect] ERROR (event_socket_fd %d): %s\n",
+    // event_socket_fd, strerror(int(errno)));
     close(event_socket_fd);
     close(main_socket_fd);
     event_socket_fd = -1;
@@ -173,7 +174,8 @@ ERROR:
 /***************************************************************************
  * disconnect
  *
- * purpose: disconnect from traffic server; closes sockets and resets their values
+ * purpose: disconnect from traffic server; closes sockets and resets their
+ *values
  * input: None
  * output: TS_ERR_FAIL, TS_ERR_OKAY
  * notes: doesn't do clean up - all cleanup should be done before here
@@ -264,13 +266,15 @@ reconnect_loop(int num_attempts)
     numTries++;
     err = reconnect();
     if (err == TS_ERR_OKAY) {
-      // fprintf(stderr, "[reconnect_loop] Successful reconnction; Leave loop\n");
+      // fprintf(stderr, "[reconnect_loop] Successful reconnction; Leave
+      // loop\n");
       return TS_ERR_OKAY; // successful connection
     }
     sleep(1); // to make it slower
   }
 
-  // fprintf(stderr, "[reconnect_loop] FAIL TO CONNECT after %d tries\n", num_attempts);
+  // fprintf(stderr, "[reconnect_loop] FAIL TO CONNECT after %d tries\n",
+  // num_attempts);
   return err; // unsuccessful connection after num_attempts
 }
 
@@ -641,7 +645,8 @@ event_poll_thread_main(void *arg)
     event->id = get_event_id(name);
     event->description = desc;
 
-    // got event notice; spawn new thread to handle the event's callback functions
+    // got event notice; spawn new thread to handle the event's callback
+    // functions
     ink_thread_create(event_callback_thread, (void *)event);
   }
 

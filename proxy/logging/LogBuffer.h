@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #ifndef LOG_BUFFER_H
 #define LOG_BUFFER_H
 
@@ -94,7 +93,6 @@ struct LogBufferHeader {
   char *src_hostname();
   char *log_filename();
 };
-
 
 union LB_State {
   LB_State() : ival(0) {}
@@ -197,7 +195,8 @@ public:
   static void
   destroy(LogBuffer *lb)
   {
-    // ink_atomic_increment() returns the previous value, so when it was 1, we are
+    // ink_atomic_increment() returns the previous value, so when it was 1, we
+    // are
     // the thread that decremented to zero and should delete ...
     int refcnt = ink_atomic_increment(&lb->m_references, -1);
 
@@ -214,7 +213,8 @@ private:
   size_t m_size;                    // the buffer size
   size_t m_buf_align;               // the buffer alignment
   size_t m_write_align;             // the write alignment mask
-  int m_buffer_fast_allocator_size; // indicates whether the logbuffer is allocated from ioBuf
+  int m_buffer_fast_allocator_size; // indicates whether the logbuffer is
+                                    // allocated from ioBuf
 
   long m_expiration_time; // buffer expiration time
 
@@ -293,7 +293,6 @@ private:
   LogBufferIterator &operator=(const LogBufferIterator &);
 };
 
-
 /*-------------------------------------------------------------------------
   LogBufferIterator
 
@@ -319,7 +318,6 @@ inline LogBufferIterator::LogBufferIterator(LogBufferHeader *header, bool in_net
     break;
   }
 }
-
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/

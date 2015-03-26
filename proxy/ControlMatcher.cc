@@ -430,7 +430,8 @@ RegexMatcher<Data, Result>::AllocateSpace(int num_entries)
 }
 
 //
-// config_parse_error RegexMatcher<Data,Result>::NewEntry(matcher_line* line_info)
+// config_parse_error RegexMatcher<Data,Result>::NewEntry(matcher_line*
+// line_info)
 //
 template <class Data, class Result>
 config_parse_error
@@ -663,7 +664,8 @@ IpMatcher<Data, Result>::NewEntry(matcher_line *line_info)
 }
 
 //
-// void IpMatcherData,Result>::Match(in_addr_t addr, RequestData* rdata, Result* result)
+// void IpMatcherData,Result>::Match(in_addr_t addr, RequestData* rdata, Result*
+// result)
 //
 template <class Data, class Result>
 void
@@ -676,7 +678,6 @@ IpMatcher<Data, Result>::Match(sockaddr const *addr, RequestData *rdata, Result 
     cur->UpdateMatch(result, rdata);
   }
 }
-
 
 template <class Data, class Result>
 void
@@ -756,7 +757,6 @@ ControlMatcher<Data, Result>::Print()
     hrMatch->Print();
   }
 }
-
 
 // void ControlMatcher<Data, Result>::Match(RequestData* rdata
 //                                          Result* result)
@@ -969,7 +969,6 @@ ControlMatcher<Data, Result>::BuildTable()
   ats_free(file_buf);
   return ret;
 }
-
 
 /****************************************************************
  *    TEMPLATE INSTANTIATIONS GO HERE

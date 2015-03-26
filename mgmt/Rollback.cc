@@ -108,11 +108,14 @@ Rollback::Rollback(const char *baseFileName, bool root_access_needed_) : configF
         activeVerStr = createPathStr(ACTIVE_VERSION);
 
         if (rename(highestSeenStr, activeVerStr) < 0) {
-          mgmt_log(stderr, "[RollBack::Rollback] Automatic Rollback to prior version failed for %s : %s\n", fileName,
-                   strerror(errno));
+          mgmt_log(stderr, "[RollBack::Rollback] Automatic Rollback to prior "
+                           "version failed for %s : %s\n",
+                   fileName, strerror(errno));
           needZeroLength = true;
         } else {
-          mgmt_log(stderr, "[RollBack::Rollback] Automatic Rollback to version succeded for %s\n", fileName, strerror(errno));
+          mgmt_log(stderr, "[RollBack::Rollback] Automatic Rollback to version "
+                           "succeded for %s\n",
+                   fileName, strerror(errno));
           needZeroLength = false;
           highestSeen--;
           // Since we've made the highestVersion active
@@ -135,8 +138,9 @@ Rollback::Rollback(const char *baseFileName, bool root_access_needed_) : configF
           ats_free(alarmMsg);
           closeFile(fd, true);
         } else {
-          mgmt_fatal(stderr, 0,
-                     "[RollBack::Rollback] Unable to find configuration file %s.\n\tCreation of a placeholder failed : %s\n",
+          mgmt_fatal(stderr, 0, "[RollBack::Rollback] Unable to find "
+                                "configuration file %s.\n\tCreation of a "
+                                "placeholder failed : %s\n",
                      fileName, strerror(errno));
         }
       }
@@ -146,8 +150,9 @@ Rollback::Rollback(const char *baseFileName, bool root_access_needed_) : configF
     } else {
       // If is there but we can not stat it, it is unusable to manager
       //   probably due to permissions problems.  Bail!
-      mgmt_fatal(stderr, 0, "[RollBack::Rollback] Unable to find configuration file %s.\n\tStat failed : %s\n", fileName,
-                 strerror(errno));
+      mgmt_fatal(stderr, 0, "[RollBack::Rollback] Unable to find configuration "
+                            "file %s.\n\tStat failed : %s\n",
+                 fileName, strerror(errno));
     }
   } else {
     fileLastModified = TS_ARCHIVE_STAT_MTIME(fileInfo);
@@ -204,7 +209,6 @@ Rollback::~Rollback()
 {
   ats_free(fileName);
 }
-
 
 // Rollback::createPathStr(version_t version)
 //
@@ -297,7 +301,6 @@ Rollback::closeFile(int fd, bool callSync)
   return result;
 }
 
-
 RollBackCodes
 Rollback::updateVersion(textBuffer *buf, version_t basedOn, version_t newVersion, bool notifyChange, bool incVersion)
 {
@@ -323,7 +326,6 @@ Rollback::updateVersion_ml(textBuffer *buf, version_t basedOn, version_t newVers
 
   return returnCode;
 }
-
 
 RollBackCodes
 Rollback::forceUpdate(textBuffer *buf, version_t newVersion)
@@ -361,7 +363,6 @@ Rollback::internalUpdate(textBuffer *buf, version_t newVersion, bool notifyChang
   versionInfo *newBak;
   bool failedLink = false;
   char *alarmMsg = NULL;
-
 
   // Check to see if the callee has specified a newVersion number
   //   If the newVersion argument is less than zero, the callee
@@ -414,7 +415,8 @@ Rollback::internalUpdate(textBuffer *buf, version_t newVersion, bool notifyChang
     //    install a new file so that we do not go around in
     //    an endless loop
     if (errno == ENOENT) {
-      mgmt_log(stderr, "[Rollback::internalUpdate] The active version of %s was lost.\n\tThe updated copy was installed.\n",
+      mgmt_log(stderr, "[Rollback::internalUpdate] The active version of %s "
+                       "was lost.\n\tThe updated copy was installed.\n",
                fileName);
       failedLink = true;
     } else {
@@ -425,7 +427,9 @@ Rollback::internalUpdate(textBuffer *buf, version_t newVersion, bool notifyChang
 
   if (rename(nextVersion, activeVersion) < 0) {
     mgmt_log(stderr, "[Rollback::internalUpdate] Rename failed : %s\n", strerror(errno));
-    mgmt_log(stderr, "[Rollback::internalUpdate] Unable to create new version of %s.  Using prior version\n", fileName);
+    mgmt_log(stderr, "[Rollback::internalUpdate] Unable to create new version "
+                     "of %s.  Using prior version\n",
+             fileName);
 
     returnCode = SYS_CALL_ERROR_ROLLBACK;
     goto UPDATE_CLEANUP;
@@ -459,7 +463,6 @@ Rollback::internalUpdate(textBuffer *buf, version_t newVersion, bool notifyChang
   this->numVersions++;
   this->currentVersion = newVersion;
 
-
   returnCode = OK_ROLLBACK;
 
   // Post the change to the config file manager
@@ -491,7 +494,6 @@ UPDATE_CLEANUP:
 
   return returnCode;
 }
-
 
 RollBackCodes
 Rollback::getVersion(version_t version, textBuffer **buffer)
@@ -547,7 +549,8 @@ Rollback::getVersion_ml(version_t version, textBuffer **buffer)
   } while (readResult > 0);
 
   if ((off_t)newBuffer->spaceUsed() != fileInfo.st_size) {
-    mgmt_log(stderr, "[Rollback::getVersion] Incorrect amount of data retrieved from %s version %d.  Expected: %d   Got: %d\n",
+    mgmt_log(stderr, "[Rollback::getVersion] Incorrect amount of data "
+                     "retrieved from %s version %d.  Expected: %d   Got: %d\n",
              fileName, version, fileInfo.st_size, newBuffer->spaceUsed());
     returnCode = SYS_CALL_ERROR_ROLLBACK;
     delete newBuffer;
@@ -640,8 +643,9 @@ Rollback::findVersions_ml(ExpandingArray *listNames)
   dir = opendir(sysconfdir);
 
   if (dir == NULL) {
-    mgmt_log(stderr, "[Rollback::findVersions] Unable to open configuration directory: %s: %s\n", (const char *)sysconfdir,
-             strerror(errno));
+    mgmt_log(stderr, "[Rollback::findVersions] Unable to open configuration "
+                     "directory: %s: %s\n",
+             (const char *)sysconfdir, strerror(errno));
     return INVALID_VERSION;
   }
   // The fun of Solaris - readdir_r requires a buffer passed into it
@@ -757,7 +761,6 @@ Rollback::findVersions_ml(Queue<versionInfo> &q)
 
   return highest;
 }
-
 
 RollBackCodes
 Rollback::removeVersion(version_t version)
@@ -909,7 +912,9 @@ Rollback::checkForUserUpdate(RollBackCheckType how)
         delete buf;
       }
       if (r != OK_ROLLBACK) {
-        mgmt_log(stderr, "[Rollback::checkForUserUpdate] Failed to roll changed user file %s: %s", fileName, RollbackStrings[r]);
+        mgmt_log(stderr, "[Rollback::checkForUserUpdate] Failed to roll "
+                         "changed user file %s: %s",
+                 fileName, RollbackStrings[r]);
       }
 
       mgmt_log(stderr, "User has changed config file %s\n", fileName);

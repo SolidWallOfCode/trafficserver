@@ -29,18 +29,15 @@
 #define MAX_INTERFACE 16
 #define MAX_SUB_ID 8
 
-
 typedef struct _vip_info {
   char interface[MAX_INTERFACE];
   char sub_interface_id[MAX_SUB_ID];
 } VIPInfo;
 
-
 typedef struct _realip_info {
   struct in_addr real_ip;
   bool mappings_for_interface;
 } RealIPInfo;
-
 
 /*
  * class VMap
@@ -108,7 +105,8 @@ public:
   ink_mutex *mutex;
   // Map of virtual ip addresses assigned to the local node
   InkHashTable *our_map;
-  // Map of virtual ip addresses assigned to other nodes; as indicated through multicast messages; used
+  // Map of virtual ip addresses assigned to other nodes; as indicated through
+  // multicast messages; used
   // to detect conflicts
   InkHashTable *ext_map;
   InkHashTable *id_map;

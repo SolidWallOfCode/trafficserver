@@ -230,8 +230,14 @@ extern int cache_config_read_while_writer_max_retries;
 #if TS_USE_INTERIM_CACHE == 1
 extern int good_interim_disks;
 #endif
+
+
 // CacheVC
 struct CacheVC : public CacheVConnection {
+  typedef CacheVC self;                                                  ///< Self reference type.
+  typedef HTTPCacheAlt::FragmentDescriptor FragmentDescriptor;           ///< Import type.
+  typedef HTTPCacheAlt::FragmentDescriptorTable FragmentDescriptorTable; ///< Import type.
+
   CacheVC();
 
   VIO *do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *buf);
@@ -281,7 +287,9 @@ struct CacheVC : public CacheVConnection {
     return -1;
   }
 
-  bool writer_done();
+  Action *do_write_init();
+
+  //  bool writer_done();
   int calluser(int event);
   int callcont(int event);
   int die();
@@ -301,6 +309,7 @@ struct CacheVC : public CacheVConnection {
   int openReadReadDone(int event, Event *e);
   int openReadMain(int event, Event *e);
   int openReadStartEarliest(int event, Event *e);
+  int openReadWaitEarliest(int evid, Event *e);
 #ifdef HTTP_CACHE
   int openReadVecWrite(int event, Event *e);
 #endif
@@ -308,7 +317,7 @@ struct CacheVC : public CacheVConnection {
   int openReadFromWriter(int event, Event *e);
   int openReadFromWriterMain(int event, Event *e);
   int openReadFromWriterFailure(int event, Event *);
-  int openReadChooseWriter(int event, Event *e);
+  //  int openReadChooseWriter(int event, Event *e);
 
   int openWriteCloseDir(int event, Event *e);
   int openWriteCloseHeadDone(int event, Event *e);
@@ -318,13 +327,18 @@ struct CacheVC : public CacheVConnection {
   int openWriteRemoveVector(int event, Event *e);
   int openWriteWriteDone(int event, Event *e);
   int openWriteOverwrite(int event, Event *e);
+  int openWriteInit(int event, Event *e);
   int openWriteMain(int event, Event *e);
   int openWriteStartDone(int event, Event *e);
   int openWriteStartBegin(int event, Event *e);
+  int openWriteEmptyEarliestDone(int event, Event *e);
 
   int updateVector(int event, Event *e);
   int updateReadDone(int event, Event *e);
   int updateVecWrite(int event, Event *e);
+  int updateWriteStateFromRange();
+
+  int closeReadAndFree(int event, Event *e);
 
   int removeEvent(int event, Event *e);
 
@@ -364,12 +378,35 @@ struct CacheVC : public CacheVConnection {
       @return The address of the start of the fragment table,
       or @c NULL if there is no fragment table.
   */
-  virtual HTTPInfo::FragOffset *get_frag_table();
+  virtual HTTPInfo::FragmentDescriptorTable *get_frag_table();
   /** Load alt pointers and do fixups if needed.
       @return Length of header data used for alternates.
    */
   virtual uint32_t load_http_info(CacheHTTPInfoVector *info, struct Doc *doc, RefCountObj *block_ptr = NULL);
+
+  /// Change member @a key to be the key for the @a idx 'th fragment.
+  void update_key_to_frag_idx(int idx);
+  /// Compute the index of the fragment that contains the byte at content location @a offset.
+  int frag_idx_for_offset(uint64_t offset);
+
+  virtual char const *get_http_range_boundary_string(int *len) const;
+  virtual int64_t get_effective_content_size();
+  virtual void set_full_content_length(int64_t size);
+  virtual bool get_uncached(HTTPRangeSpec const &req, HTTPRangeSpec &result, int64_t initial);
+  /** This sets a range for data flowing in to the cache VC.
+      The CacheVC will write the incoming data to this part of the overall object.
+      @internal It's done this way to isolate the CacheVC from parsing range separators
+      in multi-range responses.
+  */
+  virtual int64_t set_inbound_range(int64_t min, int64_t max);
+  /** Select the ranges to apply to the content.
+      @internal In this case the CacheVC has to know the entire set of ranges so it can correctly
+      compute the actual output size (vs. the content size).
+  */
+  virtual void set_content_range(HTTPRangeSpec const &range);
+
 #endif
+
   virtual bool is_pread_capable();
   virtual bool set_pin_in_cache(time_t time_pin);
   virtual time_t get_pin_in_cache();
@@ -393,6 +430,9 @@ struct CacheVC : public CacheVConnection {
   // before being used by the CacheVC
   CacheKey key, first_key, earliest_key, update_key;
   Dir dir, earliest_dir, overwrite_dir, first_dir;
+  /// Thread to use to wake up this VC. Set when the VC puts itself on a wait list.
+  /// The waker should schedule @c EVENT_IMMEDIATE on this thread to wake up this VC.
+  EThread *wake_up_thread;
   // end Region A
 
   // Start Region B
@@ -412,11 +452,14 @@ struct CacheVC : public CacheVConnection {
 
   OpenDirEntry *od;
   AIOCallbackInternal io;
-  int alternate_index; // preferred position in vector
-  LINK(CacheVC, opendir_link);
+  int alternate_index;         // preferred position in vector
+  LINK(CacheVC, OpenDir_Link); ///< Reader/writer link per alternate in @c OpenDir.
+  LINK(CacheVC, Active_Link);  ///< Active I/O pending list in @c OpenDir.
 #ifdef CACHE_STAT_PAGES
   LINK(CacheVC, stat_link);
 #endif
+  CacheRange resp_range; ///< Tracking information for range data for response.
+  //  CacheRange uncached_range;      ///< The ranges in the request that are not in cache.
   // end Region B
 
   // Start Region C
@@ -458,6 +501,12 @@ struct CacheVC : public CacheVConnection {
   uint64_t total_len;    // total length written and available to write
   uint64_t doc_len;      // total_length (of the selected alternate for HTTP)
   uint64_t update_len;
+  HTTPRangeSpec::Range write_range; ///< Object based range for incoming partial content.
+  /// The offset in the content of the first byte beyond the end of the current fragment.
+  /// @internal This seems very weird but I couldn't figure out how to keep the more sensible
+  /// lower bound correctly updated.
+  /// The lower bound can can computed by subtracting doc->len from this value.
+  uint64_t frag_upper_bound;
   int fragment;
   int scan_msec_delay;
   CacheVC *write_vc;
@@ -466,6 +515,7 @@ struct CacheVC : public CacheVConnection {
   int header_to_write_len;
   void *header_to_write;
   short writer_lock_retry;
+
 #if TS_USE_INTERIM_CACHE == 1
   InterimCacheVol *interim_vol;
   MigrateToInterimCache *mts;
@@ -543,7 +593,10 @@ extern CacheSync *cacheDirSync;
 // Function Prototypes
 #ifdef HTTP_CACHE
 int cache_write(CacheVC *, CacheHTTPInfoVector *);
-int get_alternate_index(CacheHTTPInfoVector *cache_vector, CacheKey key);
+/// Get the index for the alternate indentified by @a key in @a cache_vector.
+/// @a idx is a hint - that index is checked first and if not there the vector is scanned.
+/// This makes repeated access faster if the vector is not being updated.
+int get_alternate_index(CacheHTTPInfoVector *cache_vector, CacheKey key, int idx = -1);
 #endif
 CacheVC *new_DocEvacuator(int nbytes, Vol *d);
 
@@ -630,6 +683,7 @@ free_CacheVC(CacheVC *cont)
   cont->alternate_index = CACHE_ALT_INDEX_DEFAULT;
   if (cont->scan_vol_map)
     ats_free(cont->scan_vol_map);
+  cont->resp_range.clear();
   memset((char *)&cont->vio, 0, cont->size_to_init);
 #ifdef CACHE_STAT_PAGES
   ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
@@ -784,6 +838,7 @@ CacheVC::do_write_lock_call()
   return handleWriteLock(EVENT_CALL, 0);
 }
 
+#if 0
 TS_INLINE bool
 CacheVC::writer_done()
 {
@@ -801,8 +856,9 @@ CacheVC::writer_done()
     return true;
   return false;
 }
+#endif
 
-TS_INLINE int
+TS_INLINE void
 Vol::close_write(CacheVC *cont)
 {
 #ifdef CACHE_STAT_PAGES
@@ -810,12 +866,12 @@ Vol::close_write(CacheVC *cont)
   stat_cache_vcs.remove(cont, cont->stat_link);
   ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
 #endif
-  return open_dir.close_write(cont);
+  open_dir.close_entry(cont);
 }
 
 // Returns 0 on success or a positive error code on failure
 TS_INLINE int
-Vol::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
+Vol::open_write(CacheVC *cont)
 {
   Vol *vol = this;
   bool agg_error = false;
@@ -835,7 +891,9 @@ Vol::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
     m_result->notMigrate = true;
   }
 #endif
-  if (open_dir.open_write(cont, allow_if_writers, max_writers)) {
+  ink_assert(NULL == cont->od);
+  if (NULL != (cont->od = open_dir.open_entry(this, cont->first_key, true))) {
+    cont->write_vector = &cont->od->vector;
 #ifdef CACHE_STAT_PAGES
     ink_assert(cont->mutex->thread_holding == this_ethread());
     ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
@@ -853,26 +911,23 @@ Vol::close_write_lock(CacheVC *cont)
   CACHE_TRY_LOCK(lock, mutex, t);
   if (!lock.is_locked())
     return -1;
-  return close_write(cont);
+  this->close_write(cont);
+  return 0;
 }
 
 TS_INLINE int
-Vol::open_write_lock(CacheVC *cont, int allow_if_writers, int max_writers)
+Vol::open_write_lock(CacheVC *cont)
 {
   EThread *t = cont->mutex->thread_holding;
   CACHE_TRY_LOCK(lock, mutex, t);
-  if (!lock.is_locked())
-    return -1;
-  return open_write(cont, allow_if_writers, max_writers);
+  return lock.is_locked() ? this->open_write(cont) : -1;
 }
 
 TS_INLINE OpenDirEntry *
 Vol::open_read_lock(INK_MD5 *key, EThread *t)
 {
   CACHE_TRY_LOCK(lock, mutex, t);
-  if (!lock.is_locked())
-    return NULL;
-  return open_dir.open_read(key);
+  return lock.is_locked() ? open_dir.open_entry(this, *key, false) : NULL;
 }
 
 TS_INLINE int
@@ -938,6 +993,18 @@ rand_CacheKey(CacheKey *next_key, ProxyMutex *mutex)
   next_key->b[1] = mutex->thread_holding->generator.random();
 }
 
+#if 1
+void TS_INLINE
+next_CacheKey(CacheKey *next_key, CacheKey *key)
+{
+  next_key->next(*key);
+}
+void TS_INLINE
+prev_CacheKey(CacheKey *prev_key, CacheKey *key)
+{
+  prev_key->prev(*key);
+}
+#else
 extern uint8_t CacheKey_next_table[];
 void TS_INLINE
 next_CacheKey(CacheKey *next_key, CacheKey *key)
@@ -958,6 +1025,7 @@ prev_CacheKey(CacheKey *prev_key, CacheKey *key)
     b[i] = 256 + CacheKey_prev_table[k[i]] - k[i - 1];
   b[0] = CacheKey_prev_table[k[0]];
 }
+#endif
 
 TS_INLINE unsigned int
 next_rand(unsigned int *p)
@@ -1026,6 +1094,7 @@ struct Cache {
 
   Action *lookup(Continuation *cont, const CacheKey *key, CacheFragType type, const char *hostname, int host_len);
   inkcoreapi Action *open_read(Continuation *cont, const CacheKey *key, CacheFragType type, const char *hostname, int len);
+  inkcoreapi Action *open_read(Continuation *cont, CacheVConnection* writer, HTTPHdr* client_request);
   inkcoreapi Action *open_write(Continuation *cont, const CacheKey *key, CacheFragType frag_type, int options = 0,
                                 time_t pin_in_cache = (time_t)0, const char *hostname = 0, int host_len = 0);
   inkcoreapi Action *remove(Continuation *cont, const CacheKey *key, CacheFragType type = CACHE_FRAG_TYPE_HTTP,
@@ -1117,6 +1186,7 @@ cache_hash(INK_MD5 &md5)
 #include "P_ClusterInline.h"
 #endif
 
-LINK_DEFINITION(CacheVC, opendir_link)
+LINK_DEFINITION(CacheVC, OpenDir_Link)
+LINK_DEFINITION(CacheVC, Active_Link)
 
 #endif /* _P_CACHE_INTERNAL_H__ */

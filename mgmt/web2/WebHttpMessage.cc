@@ -57,7 +57,6 @@ const char *const contentTypeStr[] = {"text/plain", "text/html", "text/css", "te
                                       "application/java-vm", "application/x-javascript", "application/x-x509-ca-cert",
                                       "application/x-ns-proxy-autoconfig", "application/zip"};
 
-
 // httpMessage::httpMessage()
 //
 httpMessage::httpMessage()
@@ -214,7 +213,6 @@ httpMessage::addHeader(char *hdr)
     getModDate();
   }
 }
-
 
 // httpMessage::getModDate()
 //
@@ -397,7 +395,8 @@ httpResponse::writeHdr(SocketInfo socketD)
   // Record Server Name
   hdr.copyFrom(serverStr, strlen(serverStr));
   hdr.copyFrom(managerStr, strlen(managerStr));
-  // XXX hdr.copyFrom(appVersionInfo.VersionStr, strlen(appVersionInfo.VersionStr));
+  // XXX hdr.copyFrom(appVersionInfo.VersionStr,
+  // strlen(appVersionInfo.VersionStr));
   hdr.copyFrom("\r\n", 2);
 
   // Record refresh
@@ -470,7 +469,6 @@ httpResponse::writeHdr(SocketInfo socketD)
   return bytesWritten;
 }
 
-
 void
 httpResponse::setContentType(const char *str)
 {
@@ -502,7 +500,6 @@ httpResponse::setLocationURL(const char *url)
     locationURL = ats_strdup(url);
   }
 }
-
 
 void
 httpResponse::getLogInfo(const char **date, HttpStatus_t *statusIn, int *length)

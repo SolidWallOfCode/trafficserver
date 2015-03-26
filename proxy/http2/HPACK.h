@@ -47,9 +47,12 @@ const static int HPACK_ERROR_HTTP2_PROTOCOL_ERROR = -2;
 
 enum HpackFieldType {
   HPACK_FIELD_INDEX,              // HPACK 7.1 Indexed Header Field Representation
-  HPACK_FIELD_INDEXED_LITERAL,    // HPACK 7.2.1 Literal Header Field with Incremental Indexing
-  HPACK_FIELD_NOINDEX_LITERAL,    // HPACK 7.2.2 Literal Header Field without Indexing
-  HPACK_FIELD_NEVERINDEX_LITERAL, // HPACK 7.2.3 Literal Header Field never Indexed
+  HPACK_FIELD_INDEXED_LITERAL,    // HPACK 7.2.1 Literal Header Field with
+                                  // Incremental Indexing
+  HPACK_FIELD_NOINDEX_LITERAL,    // HPACK 7.2.2 Literal Header Field without
+                                  // Indexing
+  HPACK_FIELD_NEVERINDEX_LITERAL, // HPACK 7.2.3 Literal Header Field never
+                                  // Indexed
   HPACK_FIELD_TABLESIZE_UPDATE,   // HPACK 7.3 Header Table Size Update
 };
 

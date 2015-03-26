@@ -140,7 +140,6 @@ print_err(const char *module, TSMgmtError err)
     TSfree(err_msg);
 }
 
-
 /*--------------------------------------------------------------
  * print_ports
  *--------------------------------------------------------------*/
@@ -222,7 +221,6 @@ print_domain_list(TSDomainList list)
   }
 }
 
-
 void
 print_ip_addr_ele(TSIpAddrEle *ele)
 {
@@ -278,7 +276,6 @@ print_list_of_ip_list(TSList list)
     TSListEnqueue(list, ele);
   }
 }
-
 
 /*-------------------------------------------------------
  * print_pd_sspec
@@ -349,7 +346,6 @@ print_pd_sspec(TSPdSsFormat info)
   }
   printf("\n");
 
-
   printf("\tscheme: ");
   switch (info.sec_spec.scheme) {
   case TS_SCHEME_NONE:
@@ -368,7 +364,6 @@ print_pd_sspec(TSPdSsFormat info)
 
   return;
 }
-
 
 void
 print_cache_ele(TSCacheEle *ele)
@@ -434,12 +429,12 @@ print_cache_ele(TSCacheEle *ele)
 
   /*
      print_pd_sspec(ele->cache_info);
-     printf("Time: %d day, %d hr, %d min, %d sec\n", ele->time_period.d, ele->time_period.h,
+     printf("Time: %d day, %d hr, %d min, %d sec\n", ele->time_period.d,
+     ele->time_period.h,
      ele->time_period.m, ele->time_period.s);
    */
   return;
 }
-
 
 void
 print_hosting_ele(TSHostingEle *ele)
@@ -838,7 +833,6 @@ print_ele_list(TSFileNameT file, TSCfgContext ctx)
   return;
 }
 
-
 /***************************************************************************
  * Control Testing
  ***************************************************************************/
@@ -935,13 +929,15 @@ test_action_need(void)
 
   // RU_NULL record
   TSRecordSetString("proxy.config.proxy_name", "proxy_dorky", &action);
-  printf("[TSRecordSetString] proxy.config.proxy_name \n\tAction Should: [%d]\n\tAction is    : [%d]\n", TS_ACTION_UNDEFINED,
-         action);
+  printf("[TSRecordSetString] proxy.config.proxy_name \n\tAction Should: "
+         "[%d]\n\tAction is    : [%d]\n",
+         TS_ACTION_UNDEFINED, action);
 
   // RU_RESTART_TS record
   TSRecordSetInt("proxy.config.cluster.cluster_port", 6666, &action);
-  printf("[TSRecordSetInt] proxy.config.cluster.cluster_port\n\tAction Should: [%d]\n\tAction is    : [%d]\n", TS_ACTION_RESTART,
-         action);
+  printf("[TSRecordSetInt] proxy.config.cluster.cluster_port\n\tAction Should: "
+         "[%d]\n\tAction is    : [%d]\n",
+         TS_ACTION_RESTART, action);
 }
 
 /* Bouncer the traffic_server process(es) */
@@ -990,12 +986,13 @@ test_error_records()
   ret = TSRecordSetInt("proy.config.cop.core_signal", new_port, &action);
   print_err("TSRecordSetInt", ret);
 
-
   printf("\n");
   if (TSRecordGetCounter("proxy.press.socks.connections_successful", &ctr1) != TS_ERR_OKAY)
     printf("TSRecordGetCounter FAILED!\n");
   else
-    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful=%" PRId64 " \n", ctr1);
+    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful="
+           "%" PRId64 " \n",
+           ctr1);
 
   printf("\n");
   if (TSRecordGetFloat("proxy.conig.http.cache.fuzz.probability", &flt1) != TS_ERR_OKAY)
@@ -1033,7 +1030,6 @@ test_records()
     printf("[TSRecordSetInt] proxy.config.cop.core_signal=%" PRId64 " \n", new_port);
 #endif
 
-
 #if TEST_REC_GET
   TSRecordEle *rec_ele;
   // retrieve a string value record using generic RecordGet
@@ -1046,7 +1042,6 @@ test_records()
   TSRecordEleDestroy(rec_ele);
   printf("\n\n");
 #endif
-
 
 #if TEST_REC_GET_2
   // retrieve a string value record using generic RecordGet
@@ -1076,7 +1071,6 @@ test_records()
     print_err("TSRecordSetString", err);
   else
     printf("[TSRecordSetString] proxy.config.proxy_name=%s\n", new_str);
-
 
   // get
   err = TSRecordGetString("proxy.config.proxy_name", &rec_value);
@@ -1115,17 +1109,23 @@ test_records()
   if (TSRecordGetCounter("proxy.process.socks.connections_successful", &ctr1) != TS_ERR_OKAY)
     printf("TSRecordGetCounter FAILED!\n");
   else
-    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful=%" PRId64 " \n", ctr1);
+    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful="
+           "%" PRId64 " \n",
+           ctr1);
 
   if (TSRecordSetCounter("proxy.process.socks.connections_successful", new_ctr, &action) != TS_ERR_OKAY)
     printf("TSRecordSetCounter FAILED!\n");
   else
-    printf("[TSRecordSetCounter] proxy.process.socks.connections_successful=%" PRId64 " \n", new_ctr);
+    printf("[TSRecordSetCounter] "
+           "proxy.process.socks.connections_successful=%" PRId64 " \n",
+           new_ctr);
 
   if (TSRecordGetCounter("proxy.process.socks.connections_successful", &ctr2) != TS_ERR_OKAY)
     printf("TSRecordGetCounter FAILED!\n");
   else
-    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful=%" PRId64 " \n", ctr2);
+    printf("[TSRecordGetCounter]proxy.process.socks.connections_successful="
+           "%" PRId64 " \n",
+           ctr2);
   printf("\n");
 #endif
 
@@ -1250,7 +1250,6 @@ test_record_get_mlt(void)
   TSStringListEnqueue(name_list, v7);
   TSStringListEnqueue(name_list, v8);
 
-
   num = TSStringListLen(name_list);
   printf("Num Records to Get: %d\n", num);
   ret = TSRecordGetMlt(name_list, rec_list);
@@ -1334,7 +1333,6 @@ test_record_set_mlt(void)
   ele5->rec_type = TS_REC_INT;
   ele5->valueT.int_val = 555;
 
-
   TSListEnqueue(list, ele4);
   TSListEnqueue(list, ele1);
   TSListEnqueue(list, ele2);
@@ -1353,7 +1351,6 @@ test_record_set_mlt(void)
   }
   TSListDestroy(list);
 }
-
 
 /***************************************************************************
  * File I/O Testing
@@ -1624,7 +1621,8 @@ test_cfg_context_move(char *args)
 
   // shift all the ele's down so that the next to bottom ele is now top ele
   // move all ele's above the last ele down; bottom ele becomes top ele
-  printf("\nShift all Ele's above second to last ele down; bottom ele becomes top ele\n");
+  printf("\nShift all Ele's above second to last ele down; bottom ele becomes "
+         "top ele\n");
   for (i = count - 3; i >= 0; i--) {
     err = TSCfgContextMoveEleDown(ctx, i);
     if (err != TS_ERR_OKAY) {
@@ -1729,7 +1727,6 @@ test_cfg_context_ops()
   }
   // print_VirtIpAddr_ele_list(ctx);
 
-
   printf("\nMove ele at index %d to botoom of list\n", insert_at);
   for (i = insert_at; i < TSCfgContextGetCount(ctx); i++) {
     err = TSCfgContextMoveEleDown(ctx, i);
@@ -1750,7 +1747,6 @@ test_cfg_context_ops()
     }
   }
   // print_VirtIpAddr_ele_list(ctx);
-
 
   // commit change
   TSCfgContextCommit(ctx, NULL, NULL);
@@ -1883,7 +1879,6 @@ test_cfg_socks()
 
   TSCfgContextDestroy(ctx);
 }
-
 
 /***************************************************************************
  * Events Testing
@@ -2136,7 +2131,6 @@ set_stats()
 
   fprintf(stderr, "[set_stats] Set Dummy Stat Values\n");
 
-
   TSRecordSetInt("proxy.process.http.user_agent_response_document_total_size", 100, &action);
   TSRecordSetInt("proxy.process.http.user_agent_response_header_total_size", 100, &action);
   TSRecordSetInt("proxy.process.http.current_client_connections", 100, &action);
@@ -2145,7 +2139,6 @@ set_stats()
   TSRecordSetInt("proxy.process.http.origin_server_response_header_total_size", 100, &action);
   TSRecordSetInt("proxy.process.http.current_server_connections", 100, &action);
   TSRecordSetInt("proxy.process.http.current_server_transactions", 100, &action);
-
 
   TSRecordSetFloat("proxy.node.bandwidth_hit_ratio", 110, &action);
   TSRecordSetFloat("proxy.node.hostdb.hit_ratio", 110, &action);
@@ -2192,7 +2185,6 @@ print_stats()
   TSInt i1, i2, i3, i4, i5, i6, i7, i8, i9;
 
   fprintf(stderr, "[print_stats]\n");
-
 
   TSRecordGetInt("proxy.process.http.user_agent_response_document_total_size", &i1);
   TSRecordGetInt("proxy.process.http.user_agent_response_header_total_size", &i2);
@@ -2273,12 +2265,14 @@ sync_test()
   TSActionNeedT action;
 
   TSRecordSetString("proxy.config.proxy_name", "dorkface", &action);
-  printf("[TSRecordSetString] proxy.config.proxy_name \n\tAction Should: [%d]\n\tAction is    : [%d]\n", TS_ACTION_UNDEFINED,
-         action);
+  printf("[TSRecordSetString] proxy.config.proxy_name \n\tAction Should: "
+         "[%d]\n\tAction is    : [%d]\n",
+         TS_ACTION_UNDEFINED, action);
 
   TSRecordSetInt("proxy.config.cluster.cluster_port", 3333, &action);
-  printf("[TSRecordSetInt] proxy.config.cluster.cluster_port\n\tAction Should: [%d]\n\tAction is    : [%d]\n", TS_ACTION_RESTART,
-         action);
+  printf("[TSRecordSetInt] proxy.config.cluster.cluster_port\n\tAction Should: "
+         "[%d]\n\tAction is    : [%d]\n",
+         TS_ACTION_RESTART, action);
 
   if (TSRecordSet("proxy.config.http.cache.fuzz.probability", "-0.3333", &action) != TS_ERR_OKAY)
     printf("TSRecordSet FAILED!\n");
@@ -2395,11 +2389,9 @@ runInteractive()
       sync_test();
     }
 
-
   } // end while(1)
 
 } // end runInteractive
-
 
 /* ------------------------------------------------------------------------
  * main

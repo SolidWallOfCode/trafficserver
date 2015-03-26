@@ -202,7 +202,6 @@ cop_log(int priority, const char *format, ...)
   va_end(args);
 }
 
-
 void
 chown_file_to_admin_user(const char *file)
 {
@@ -411,7 +410,6 @@ safe_kill(const char *lockfile_name, const char *pname, bool group)
   set_alarm_death();
   cop_log_trace("Leaving safe_kill(%s, %s, %d)\n", lockfile_name, pname, group);
 }
-
 
 // ink_hrtime milliseconds()
 //
@@ -816,7 +814,6 @@ spawn_manager()
   cop_log_trace("Leaving spawn_manager()\n");
 }
 
-
 static int
 poll_read_or_write(int fd, int timeout, int inorout)
 {
@@ -916,7 +913,8 @@ open_socket(int port, const char *ip = NULL, char const *ip_to_bind = NULL)
         ((sockaddr_in6 *)result_to_bind->ai_addr)->sin6_port = htons(source_port);
       }
 
-      // also set REUSEADDR so that previous cop connections in the TIME_WAIT state
+      // also set REUSEADDR so that previous cop connections in the TIME_WAIT
+      // state
       // do not interfere
       if (safe_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, SOCKOPT_ON, sizeof(int)) < 0) {
         cop_log(COP_WARNING, "(test) unable to set REUSEADDR socket option [%d '%s']\n", errno, strerror(errno));
@@ -1175,7 +1173,6 @@ read_mgmt_cli_int(const char *variable, int *value)
   return 0;
 }
 
-
 static int
 test_rs_port()
 {
@@ -1194,7 +1191,6 @@ test_rs_port()
 
   return 0;
 }
-
 
 static int
 test_mgmt_cli_port()
@@ -1216,7 +1212,6 @@ test_mgmt_cli_port()
     TSfree(val);
   return ret;
 }
-
 
 static int
 test_http_port(int port, char *request, int timeout, char const *ip = NULL, char const *ip_to_bind = NULL)
@@ -1300,7 +1295,8 @@ heartbeat_manager()
     err = test_rs_port();
 
   if (err < 0) {
-    // See heartbeat_server()'s comments for how we determine a server/manager failure.
+    // See heartbeat_server()'s comments for how we determine a server/manager
+    // failure.
     manager_failures += 1;
     cop_log(COP_WARNING, "manager heartbeat [variable] failed [%d]\n", manager_failures);
 
@@ -1400,7 +1396,6 @@ server_up()
   }
 }
 
-
 //         |  state  |  status  |  action
 // --------|---------|----------|---------------
 // manager |   up    |    ok    |  nothing
@@ -1414,7 +1409,6 @@ server_up()
 // --------|---------|----------|---------------
 // manager |   up    |    ok    |  kill server
 // server  |   up    |    bad   |
-
 
 static void
 check_programs()
@@ -1652,7 +1646,8 @@ check(void *arg)
     // the SIGALRM signal which we use to heartbeat the cop.
     millisleep(sleep_time * 1000);
 
-    // We do this after the first round of checks, since the first "check" will spawn traffic_manager
+    // We do this after the first round of checks, since the first "check" will
+    // spawn traffic_manager
     if (!mgmt_init) {
       ats_scoped_str runtimedir(config_read_runtime_dir());
       TSInit(runtimedir, static_cast<TSInitOptionT>(TS_MGMT_OPT_NO_EVENTS));
@@ -1671,7 +1666,6 @@ check(void *arg)
   cop_log_trace("Leaving check()\n");
   return arg;
 }
-
 
 static void
 check_lockfile()
@@ -1794,8 +1788,9 @@ init_config_file()
   if (stat(config_file, &info) < 0) {
     Layout::relative_to(config_file, sizeof(config_file), config_dir, "records.config");
     if (stat(config_file, &info) < 0) {
-      cop_log(COP_FATAL, "unable to locate \"%s/records.config\" or \"%s/records.config.shadow\"\n", (const char *)config_dir,
-              (const char *)config_dir);
+      cop_log(COP_FATAL, "unable to locate \"%s/records.config\" or "
+                         "\"%s/records.config.shadow\"\n",
+              (const char *)config_dir, (const char *)config_dir);
       exit(1);
     }
   }
@@ -1809,7 +1804,8 @@ init()
 
   cop_log_trace("Entering init()\n");
 
-  // Start up the records store and load the defaults so that we can locate our configuration.
+  // Start up the records store and load the defaults so that we can locate our
+  // configuration.
   RecConfigFileInit();
   RecordsConfigIterate(config_register_default, NULL);
 
@@ -1822,7 +1818,8 @@ init()
   runtime_dir = config_read_runtime_dir();
   if (stat(runtime_dir, &info) < 0) {
     cop_log(COP_FATAL, "unable to locate local state directory '%s'\n", runtime_dir);
-    cop_log(COP_FATAL, " please try setting correct root path in either env variable TS_ROOT \n");
+    cop_log(COP_FATAL, " please try setting correct root path in either env "
+                       "variable TS_ROOT \n");
     exit(1);
   }
 

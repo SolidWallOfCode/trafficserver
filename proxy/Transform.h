@@ -108,5 +108,4 @@ num_chars_for_int(int64_t i)
 
 extern TransformProcessor transformProcessor;
 
-
 #endif /* __TRANSFORM_H__ */

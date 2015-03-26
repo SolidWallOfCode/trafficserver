@@ -90,13 +90,16 @@ handleArgInvocation()
     TSRecordEleDestroy(rec_ele);
     return TSStatsReset(*ZeroCluster ? true : false, name);
   } else if (QueryDeadhosts == 1) {
-    fprintf(stderr, "Query Deadhosts is not implemented, it requires support for congestion control.\n");
-    fprintf(stderr, "For more details, examine the old code in cli/CLI.cc: QueryDeadhosts()\n");
+    fprintf(stderr, "Query Deadhosts is not implemented, it requires support "
+                    "for congestion control.\n");
+    fprintf(stderr, "For more details, examine the old code in cli/CLI.cc: "
+                    "QueryDeadhosts()\n");
     return TS_ERR_FAIL;
   } else if (*StorageCmdOffline) {
     return TSStorageDeviceCmdOffline(StorageCmdOffline);
   } else if (ShowAlarms == 1) {
-    // Show all active alarms, this was moved from the old traffic_shell implementation (show:alarms).
+    // Show all active alarms, this was moved from the old traffic_shell
+    // implementation (show:alarms).
     TSList events = TSListCreate();
 
     if (TS_ERR_OKAY != TSActiveEventGetMlt(events)) {
@@ -119,7 +122,8 @@ handleArgInvocation()
     TSListDestroy(events);
     return TS_ERR_OKAY;
   } else if (*ClearAlarms != '\0') {
-    // Clear (some) active alarms, this was moved from the old traffic_shell implementation (config:alarm)
+    // Clear (some) active alarms, this was moved from the old traffic_shell
+    // implementation (config:alarm)
     TSList events = TSListCreate();
     size_t len = strlen(ClearAlarms);
 
@@ -189,7 +193,9 @@ handleArgInvocation()
     return err;
   } else if (*ReadVar != '\0') { // Handle a value read
     if (*SetVar != '\0' || *VarValue != '\0') {
-      fprintf(stderr, "%s: Invalid Argument Combination: Can not read and set values at the same time\n", program_name);
+      fprintf(stderr, "%s: Invalid Argument Combination: Can not read and set "
+                      "values at the same time\n",
+              program_name);
       return TS_ERR_FAIL;
     } else {
       TSMgmtError err;
@@ -222,7 +228,9 @@ handleArgInvocation()
     }
   } else if (*MatchVar != '\0') { // Handle a value read
     if (*SetVar != '\0' || *VarValue != '\0') {
-      fprintf(stderr, "%s: Invalid Argument Combination: Can not read and set values at the same time\n", program_name);
+      fprintf(stderr, "%s: Invalid Argument Combination: Can not read and set "
+                      "values at the same time\n",
+              program_name);
       return TS_ERR_FAIL;
     } else {
       TSMgmtError err;
@@ -234,7 +242,8 @@ handleArgInvocation()
         ats_free(msg);
       }
 
-      // If the RPC call failed, the list will be empty, so we won't print anything. Otherwise,
+      // If the RPC call failed, the list will be empty, so we won't print
+      // anything. Otherwise,
       // print all the results, freeing them as we go.
       for (TSRecordEle *rec_ele = (TSRecordEle *)TSListDequeue(list); rec_ele; rec_ele = (TSRecordEle *)TSListDequeue(list)) {
         switch (rec_ele->rec_type) {
@@ -334,7 +343,8 @@ main(int /* argc ATS_UNUSED */, const char **argv)
   ShowStatus = 0;
   ClearAlarms[0] = '\0';
 
-  /* Argument description table used to describe how to parse command line args, */
+  /* Argument description table used to describe how to parse command line args,
+   */
   /* see 'ink_args.h' for meanings of the various fields */
   ArgumentDescription argument_descriptions[] = {
     {"query_deadhosts", 'q', "Query congested sites", "F", &QueryDeadhosts, NULL, NULL},
@@ -367,7 +377,8 @@ main(int /* argc ATS_UNUSED */, const char **argv)
 
   // Connect to Local Manager and do it.
   if (TS_ERR_OKAY != TSInit(NULL, static_cast<TSInitOptionT>(TS_MGMT_OPT_NO_EVENTS | TS_MGMT_OPT_NO_SOCK_TESTS))) {
-    fprintf(stderr, "error: could not connect to management port, make sure traffic_manager is running\n");
+    fprintf(stderr, "error: could not connect to management port, make sure "
+                    "traffic_manager is running\n");
     exit(1);
   }
 

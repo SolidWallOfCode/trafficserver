@@ -193,7 +193,8 @@ struct CtrlCommandLine {
       this->args.push_back(argv[i]);
     }
 
-    // Always NULL-terminate to keep ink_args happy. Note that we adjust arg() accordingly.
+    // Always NULL-terminate to keep ink_args happy. Note that we adjust arg()
+    // accordingly.
     this->args.push_back(NULL);
   }
 

@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #ifndef LOG_OBJECT_H
 #define LOG_OBJECT_H
 
@@ -83,7 +82,8 @@ public:
   size_t preproc_buffers(LogBufferSink *sink);
 };
 
-// LogObject is atomically reference counted, and the reference count is always owned by
+// LogObject is atomically reference counted, and the reference count is always
+// owned by
 // one or more LogObjectManagers.
 class LogObject : public RefCountObj
 {

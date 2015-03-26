@@ -101,8 +101,10 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     kill(getpid(), SIGSTOP);
   }
 
-  // XXX This is a hack. traffic_manager starts traffic_server with the euid of the admin user. We are still
-  // privileged, but won't be able to open files in /proc or ptrace the target. This really should be fixed
+  // XXX This is a hack. traffic_manager starts traffic_server with the euid of
+  // the admin user. We are still
+  // privileged, but won't be able to open files in /proc or ptrace the target.
+  // This really should be fixed
   // in traffic_manager.
   if (getuid() == 0) {
     ATS_UNUSED_RETURN(seteuid(0));

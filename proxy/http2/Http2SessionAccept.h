@@ -27,17 +27,21 @@
 #include "libts.h"
 #include "I_Net.h"
 
-// XXX HttpSessionAccept::Options needs to be refactored and separated from HttpSessionAccept so that
+// XXX HttpSessionAccept::Options needs to be refactored and separated from
+// HttpSessionAccept so that
 // it can generically apply to all protocol implementations.
 #include "http/HttpSessionAccept.h"
 
 // HTTP/2 Session Accept.
 //
-// HTTP/2 needs to be explicitly enabled on a server port. The syntax is different for SSL and raw
-// ports. There's currently no support for the HTTP/1.1 upgrade path. The example below configures
+// HTTP/2 needs to be explicitly enabled on a server port. The syntax is
+// different for SSL and raw
+// ports. There's currently no support for the HTTP/1.1 upgrade path. The
+// example below configures
 // HTTP/2 on port 80 and port 443 (with TLS).
 //
-// CONFIG proxy.config.http.server_ports STRING 80:proto=http2 443:ssl:proto=h2-12
+// CONFIG proxy.config.http.server_ports STRING 80:proto=http2
+// 443:ssl:proto=h2-12
 
 struct Http2SessionAccept : public SessionAccept {
   explicit Http2SessionAccept(const HttpSessionAccept::Options &);

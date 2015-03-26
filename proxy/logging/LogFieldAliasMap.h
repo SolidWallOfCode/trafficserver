@@ -22,10 +22,10 @@
 
   @section description
   This file implements an abstract class to map between numbers of type IntType
-  and strings. The purpose is to obtain one representation from the other so that
+  and strings. The purpose is to obtain one representation from the other so
+  that
   easily remembered names can be used to refer to log fields of integer type.
  */
-
 
 #ifndef LOG_FIELD_ALIAS_MAP_H
 #define LOG_FIELD_ALIAS_MAP_H
@@ -70,7 +70,6 @@ to a LogField object) without the object having to worry about freeing
 any memory the map may have allocated.
 
  *****************************************************************************/
-
 
 class LogFieldAliasMap : public RefCountObj
 {
@@ -211,7 +210,6 @@ public:
     return (LogUtils::timestamp_to_hex_str(time, buf, bufLen, numCharsPtr) ? BUFFER_TOO_SMALL : ALL_OK);
   }
 };
-
 
 // LOG_FIELD_ALIAS_MAP_H
 #endif

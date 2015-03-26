@@ -40,7 +40,6 @@
 
 #define SNAP_USAGE_PERIOD HRTIME_SECONDS(2)
 
-
 // variables
 
 #ifdef DEBUG
@@ -64,7 +63,6 @@ int snap_stats_every = 60;
 
 ink_hrtime http_handler_times[MAX_HTTP_HANDLER_EVENTS];
 int http_handler_counts[MAX_HTTP_HANDLER_EVENTS];
-
 
 char snap_filename[PATH_NAME_MAX] = DEFAULT_SNAP_FILENAME;
 
@@ -116,7 +114,6 @@ static int non_persistent_stats[] = {
 #undef _HEADER
 #undef _FOOTER
 #undef _D
-
 
 // functions
 
@@ -372,7 +369,6 @@ stat_callback(Continuation *cont, HTTPHdr *header)
     snprintf(result, result_size - 7, "<pre>\n%s", buffer);
   }
 
-
   if (!empty) {
     StatPageData data;
 
@@ -425,7 +421,8 @@ initialize_all_global_stats()
 
   if (access(rundir, R_OK | W_OK) == -1) {
     Warning("Unable to access() local state directory '%s': %d, %s", (const char *)rundir, errno, strerror(errno));
-    Warning(" Please set 'proxy.config.local_state_dir' to allow statistics collection");
+    Warning(" Please set 'proxy.config.local_state_dir' to allow statistics "
+            "collection");
   }
   REC_ReadConfigString(snap_file, "proxy.config.stats.snap_file", PATH_NAME_MAX);
   Layout::relative_to(snap_filename, sizeof(snap_filename), (const char *)rundir, snap_file);

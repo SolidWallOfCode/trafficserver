@@ -102,7 +102,8 @@ http2_are_frame_flags_valid(uint8_t ftype, uint8_t fflags)
     HTTP2_FLAGS_WINDOW_UPDATE_MASK, HTTP2_FLAGS_CONTINUATION_MASK,
   };
 
-  // The frame flags are valid for this frame if nothing outside the defined bits is set.
+  // The frame flags are valid for this frame if nothing outside the defined
+  // bits is set.
   return (fflags & ~mask[ftype]) == 0;
 }
 
@@ -129,8 +130,7 @@ http2_settings_parameter_is_valid(const Http2SettingsParameter &param)
 {
   // Static maximum values for Settings parameters.
   static const uint32_t settings_max[HTTP2_SETTINGS_MAX] = {
-    0,
-    UINT_MAX,              // HTTP2_SETTINGS_HEADER_TABLE_SIZE
+    0, UINT_MAX,           // HTTP2_SETTINGS_HEADER_TABLE_SIZE
     1,                     // HTTP2_SETTINGS_ENABLE_PUSH
     UINT_MAX,              // HTTP2_SETTINGS_MAX_CONCURRENT_STREAMS
     HTTP2_MAX_WINDOW_SIZE, // HTTP2_SETTINGS_INITIAL_WINDOW_SIZE
@@ -316,7 +316,6 @@ http2_parse_headers_parameter(IOVec iov, Http2HeadersParameter &params)
   return true;
 }
 
-
 // 6.3.  PRIORITY
 //
 // 0                   1                   2                   3
@@ -392,7 +391,6 @@ http2_parse_settings_parameter(IOVec iov, Http2SettingsParameter &param)
   return true;
 }
 
-
 // 6.8.  GOAWAY
 //
 // 0                   1                   2                   3
@@ -419,7 +417,6 @@ http2_parse_goaway(IOVec iov, Http2Goaway &goaway)
   goaway.error_code = ntohl(ec.value);
   return true;
 }
-
 
 // 6.9.  WINDOW_UPDATE
 //
@@ -581,8 +578,10 @@ http2_write_header_fragment(HTTPHdr *in, MIMEFieldIter &field_iter, uint8_t *out
   ink_assert(http_hdr_type_get(in->m_http) != HTTP_TYPE_UNKNOWN);
   ink_assert(in);
 
-  // TODO Get a index value from the tables for the header field, and then choose a representation type.
-  // TODO Each indexing types per field should be passed by a caller, HTTP/2 implementation.
+  // TODO Get a index value from the tables for the header field, and then
+  // choose a representation type.
+  // TODO Each indexing types per field should be passed by a caller, HTTP/2
+  // implementation.
 
   // Get first header field which is required encoding
   MIMEField *field;
@@ -760,7 +759,6 @@ Http2::init()
   REC_EstablishStaticConfigInt32U(max_header_list_size, "proxy.config.http2.max_header_list_size");
 }
 
-
 #if TS_HAS_TESTS
 
 #include "TestBox.h"
@@ -771,10 +769,11 @@ const static int MAX_TEST_FIELD_NUM = 8;
 
 /***********************************************************************************
  *                                                                                 *
- *                   Test cases for regression test                                *
+ *                   Test cases for regression test *
  *                                                                                 *
- * Some test cases are based on examples of specification.                         *
- * http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-09#appendix-D  *
+ * Some test cases are based on examples of specification. *
+ * http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-09#appendix-D
+ **
  *                                                                                 *
  ***********************************************************************************/
 
@@ -881,7 +880,7 @@ const static struct {
 
 /***********************************************************************************
  *                                                                                 *
- *                                Regression test codes                            *
+ *                                Regression test codes *
  *                                                                                 *
  ***********************************************************************************/
 

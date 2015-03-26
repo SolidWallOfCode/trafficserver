@@ -238,7 +238,6 @@ handle_default(WebHttpContext *whc, const char *file)
   return WEB_HTTP_ERR_OKAY;
 }
 
-
 //-------------------------------------------------------------------------
 // read_request
 //-------------------------------------------------------------------------
@@ -259,7 +258,6 @@ read_request(WebHttpContext *whc)
     response_hdr->setStatus(STATUS_BAD_REQUEST);
     return WEB_HTTP_ERR_REQUEST_FATAL;
   }
-
 
   if (request->addRequestLine(buffer) != 0) {
     response_hdr->setStatus(STATUS_BAD_REQUEST);

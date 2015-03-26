@@ -38,9 +38,12 @@ override_record(const RecordElement *record, void *)
 
     if ((value = RecConfigOverrideFromEnvironment(record->name, NULL))) {
       if (RecDataSetFromString(record->value_type, &data, value)) {
-        // WARNING: If we are not the record owner, RecSetRecord() doesn't set our copy
-        // of the record. It sends a set message to the local manager. This can cause
-        // "interesting" results if you are trying to override configuration values
+        // WARNING: If we are not the record owner, RecSetRecord() doesn't set
+        // our copy
+        // of the record. It sends a set message to the local manager. This can
+        // cause
+        // "interesting" results if you are trying to override configuration
+        // values
         // early in startup (before we have synced with the local manager).
         RecSetRecord(record->type, record->name, record->value_type, &data, NULL, false);
         RecDataClear(record->value_type, &data);
@@ -49,8 +52,10 @@ override_record(const RecordElement *record, void *)
   }
 }
 
-// We process environment variable overrides when we parse the records.config configuration file, but the
-// operator might choose to override a variable that is not present in records.config so we have to post-
+// We process environment variable overrides when we parse the records.config
+// configuration file, but the
+// operator might choose to override a variable that is not present in
+// records.config so we have to post-
 // process the full set of configuration valriables as well.
 void
 RecordsConfigOverrideFromEnvironment()
@@ -84,7 +89,8 @@ initialize_record(const RecordElement *record, void *)
     const char *value = RecConfigOverrideFromEnvironment(record->name, record->value);
     RecData data = {0};
 
-    // If you specify a consistency check, you have to specify a regex expression. We abort here
+    // If you specify a consistency check, you have to specify a regex
+    // expression. We abort here
     // so that this breaks QA completely.
     if (record->check != RECC_NULL && record->regex == NULL) {
       ink_fatal("%s has a consistency check but no regular expression", record->name);
@@ -115,7 +121,8 @@ initialize_record(const RecordElement *record, void *)
     } // switch
 
     RecDataClear(record->value_type, &data);
-  } else { // Everything else, except PROCESS, are stats. TODO: Should modularize this too like PROCESS was done.
+  } else { // Everything else, except PROCESS, are stats. TODO: Should
+           // modularize this too like PROCESS was done.
     ink_assert(REC_TYPE_IS_STAT(type));
 
     switch (record->value_type) {

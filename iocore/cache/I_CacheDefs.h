@@ -21,6 +21,7 @@
   limitations under the License.
  */
 
+#include <vector>
 
 #ifndef _I_CACHE_DEFS_H__
 #define _I_CACHE_DEFS_H__
@@ -32,7 +33,7 @@
 #define CACHE_ALT_INDEX_DEFAULT -1
 #define CACHE_ALT_REMOVED -2
 
-#define CACHE_DB_MAJOR_VERSION 24
+#define CACHE_DB_MAJOR_VERSION 25
 #define CACHE_DB_MINOR_VERSION 0
 
 #define CACHE_DIR_MAJOR_VERSION 18
@@ -126,4 +127,5 @@ typedef CryptoHash CacheKey;
    word(2) - tag (lower bits), hosttable hash (upper bits)
    word(3) - ram cache hash, lookaside cache
  */
+
 #endif // __CACHE_DEFS_H__

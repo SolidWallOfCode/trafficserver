@@ -35,7 +35,8 @@ class Http2ConnectionSettings
 public:
   Http2ConnectionSettings()
   {
-    // 6.5.2.  Defined SETTINGS Parameters. These should generally not be modified,
+    // 6.5.2.  Defined SETTINGS Parameters. These should generally not be
+    // modified,
     // only if the protocol changes should these change.
     settings[indexof(HTTP2_SETTINGS_ENABLE_PUSH)] = 0; // Disabled for now
 
@@ -180,10 +181,10 @@ private:
   uint64_t data_length;
 };
 
-
 // Http2ConnectionState
 //
-// Capture the semantics of a HTTP/2 connection. The client session captures the frame layer, and the
+// Capture the semantics of a HTTP/2 connection. The client session captures the
+// frame layer, and the
 // connection state captures the connection-wide state.
 
 class Http2ConnectionState : public Continuation
@@ -213,7 +214,8 @@ public:
     continued_buffer.iov_base = NULL;
     continued_buffer.iov_len = 0;
 
-    // Load the server settings from the records.config / RecordsConfig.cc settings.
+    // Load the server settings from the records.config / RecordsConfig.cc
+    // settings.
     server_settings.settings_from_configs();
   }
 
@@ -282,7 +284,8 @@ private:
   // Counter for current acive streams which is started by client
   uint32_t client_streams_count;
 
-  // The buffer used for storing incomplete fragments of a header field which consists of multiple frames.
+  // The buffer used for storing incomplete fragments of a header field which
+  // consists of multiple frames.
   Http2StreamId continued_id;
   IOVec continued_buffer;
 };

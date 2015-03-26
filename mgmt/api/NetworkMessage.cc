@@ -69,7 +69,8 @@ static const struct NetCmdOperation requests[] = {
   /* RECORD_DESCRIBE_CONFIG     */ {3, {MGMT_MARSHALL_INT, MGMT_MARSHALL_STRING, MGMT_MARSHALL_INT}},
 };
 
-// Responses always begin with a TSMgmtError code, followed by additional fields.
+// Responses always begin with a TSMgmtError code, followed by additional
+// fields.
 static const struct NetCmdOperation responses[] = {
   /* FILE_READ                  */ {3, {MGMT_MARSHALL_INT, MGMT_MARSHALL_INT, MGMT_MARSHALL_DATA}},
   /* FILE_WRITE                 */ {1, {MGMT_MARSHALL_INT}},
@@ -263,8 +264,10 @@ send_mgmt_error(int fd, OpType optype, TSMgmtError error)
   return TS_ERR_FAIL;
 }
 
-// Send a management message response. We don't need to worry about retransmitting the message if we get
-// disconnected, so this is much simpler. We can directly marshall the response as a data object.
+// Send a management message response. We don't need to worry about
+// retransmitting the message if we get
+// disconnected, so this is much simpler. We can directly marshall the response
+// as a data object.
 TSMgmtError
 send_mgmt_response(int fd, OpType optype, ...)
 {

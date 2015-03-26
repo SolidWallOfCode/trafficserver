@@ -63,7 +63,8 @@
   o Initial State
 
       - A LogBufferPool is allocated, with storage equal to
-        sizeof (LogBufferPoolHeader) + buffer_segment_count * buffer_segment_size
+        sizeof (LogBufferPoolHeader) + buffer_segment_count *
+  buffer_segment_size
 
       - The buffer pool space is divided into buffer_segment_count
         segments, each with a fixed size of buffer_segment_size.
@@ -466,7 +467,6 @@ private:
   Log(const Log &rhs);
   Log &operator=(const Log &rhs);
 };
-
 
 static inline bool
 LogRollingEnabledIsValid(int enabled)

@@ -76,7 +76,6 @@ overviewRecord::overviewRecord(unsigned long inet_addr, bool local, ClusterPeerI
     RecGetRecordOrderAndId(node_rec_data.recs[0].name, &node_rec_first_ix, NULL);
   }
 
-
   // Query for the name of the node.  If it is not there, some
   //   their cluster ip address
   name_l = this->readString("proxy.node.hostname_FQ", &name_found);
@@ -278,7 +277,7 @@ overviewPage::overviewPage() : sortRecords(10, false)
   nodeRecords = ink_hash_table_create(InkHashTableKeyType_Word);
   numHosts = 0;
   ourAddr = 0; // We will update this when we add the record for
-  //  this machine
+               //  this machine
 }
 
 overviewPage::~overviewPage()
@@ -330,7 +329,6 @@ overviewPage::checkForUpdates()
 
   ink_mutex_release(&accessLock);
 }
-
 
 // overrviewPage::sortHosts()
 //
@@ -453,7 +451,8 @@ overviewPage::findNodeByName(const char *nodeName)
   }
 }
 
-// MgmtString overviewPage::readString(const char* nodeName, char* *name, bool *found = NULL)
+// MgmtString overviewPage::readString(const char* nodeName, char* *name, bool
+// *found = NULL)
 //
 //   Looks up a node record for a specific by nodeName
 //    CALLEE deallocates the string with free()
@@ -482,7 +481,8 @@ overviewPage::readString(const char *nodeName, const char *name, bool *found)
   return r;
 }
 
-// MgmtInt overviewPage::readInteger(const char* nodeName, char* *name, bool *found = NULL)
+// MgmtInt overviewPage::readInteger(const char* nodeName, char* *name, bool
+// *found = NULL)
 //
 //   Looks up a node record for a specific by nodeName
 //
@@ -510,7 +510,8 @@ overviewPage::readInteger(const char *nodeName, const char *name, bool *found)
   return r;
 }
 
-// MgmtFloat overviewPage::readFloat(const char* nodeName, char* *name, bool *found = NULL)
+// MgmtFloat overviewPage::readFloat(const char* nodeName, char* *name, bool
+// *found = NULL)
 //
 //   Looks up a node record for a specific by nodeName
 //

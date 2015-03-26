@@ -21,7 +21,6 @@
   limitations under the License.
  */
 
-
 #ifndef LOG_CONFIG_H
 #define LOG_CONFIG_H
 
@@ -39,7 +38,6 @@ enum {
   log_stat_event_log_error_aggr_stat,
   log_stat_event_log_error_full_stat,
   log_stat_event_log_error_fail_stat,
-
   log_stat_event_log_access_ok_stat,
   log_stat_event_log_access_skip_stat,
   log_stat_event_log_access_aggr_stat,
@@ -52,12 +50,10 @@ enum {
   log_stat_num_received_from_network_stat,
   log_stat_num_flush_to_disk_stat,
   log_stat_num_lost_before_flush_to_disk_stat,
-
   log_stat_bytes_lost_before_preproc_stat,
   log_stat_bytes_sent_to_network_stat,
   log_stat_bytes_lost_before_sent_to_network_stat,
   log_stat_bytes_received_from_network_stat,
-
   log_stat_bytes_flush_to_disk_stat,
   log_stat_bytes_lost_before_flush_to_disk_stat,
   log_stat_bytes_written_to_disk_stat,
@@ -66,7 +62,6 @@ enum {
   // Logging I/O
   log_stat_log_files_open_stat,
   log_stat_log_files_space_used_stat,
-
   log_stat_count
 };
 

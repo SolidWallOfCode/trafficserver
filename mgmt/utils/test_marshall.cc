@@ -164,7 +164,8 @@ REGRESSION_TEST(MessageReadWriteA)(RegressionTest *t, int /* atype ATS_UNUSED */
   mlong = (MgmtMarshallLong)(&listenfd);
 
   // Check invalid Fd write. ToDo: Commented out, see TS-3052.
-  // CHECK_EQ(mgmt_message_write(FD_SETSIZE - 1, ifields, countof(ifields), &mint, &mlong), -1);
+  // CHECK_EQ(mgmt_message_write(FD_SETSIZE - 1, ifields, countof(ifields),
+  // &mint, &mlong), -1);
 
   CHECK_EQ(mgmt_message_write(clientfd, ifields, countof(ifields), &mint, &mlong), 12);
 
@@ -305,7 +306,8 @@ REGRESSION_TEST(MessageLength)(RegressionTest *t, int /* atype ATS_UNUSED */, in
   mstring = (char *)"";
   CHECK_EQ(mgmt_message_length(sfields, countof(sfields), &mstring), 4 + 1);
 
-  // data fields include a 4-byte length. We don't go looking at the data in this case.
+  // data fields include a 4-byte length. We don't go looking at the data in
+  // this case.
   mdata.len = 99;
   mdata.ptr = NULL;
   CHECK_EQ(mgmt_message_length(dfields, countof(dfields), &mdata), 99 + 4);

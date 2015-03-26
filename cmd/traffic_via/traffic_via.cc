@@ -84,12 +84,16 @@ detailViaLookup(char flag)
     // Cache Lookup Result
     viaTable->next = new VIA("Cache Lookup Result");
     viaTable->next->viaData[(unsigned char)'C'] = "cache hit but config forces revalidate";
-    viaTable->next->viaData[(unsigned char)'I'] = "conditional miss (client sent conditional, fresh in cache, returned 412)";
+    viaTable->next->viaData[(unsigned char)'I'] = "conditional miss (client "
+                                                  "sent conditional, fresh in "
+                                                  "cache, returned 412)";
     viaTable->next->viaData[(unsigned char)' '] = "cache miss or no cache lookup";
     viaTable->next->viaData[(unsigned char)'U'] = "cache hit, but client forces revalidate (e.g. Pragma: no-cache)";
     viaTable->next->viaData[(unsigned char)'D'] = "cache hit, but method forces revalidated (e.g. ftp, not anonymous)";
     viaTable->next->viaData[(unsigned char)'M'] = "cache miss (url not in cache)";
-    viaTable->next->viaData[(unsigned char)'N'] = "conditional hit (client sent conditional, doc fresh in cache, returned 304)";
+    viaTable->next->viaData[(unsigned char)'N'] = "conditional hit (client "
+                                                  "sent conditional, doc fresh "
+                                                  "in cache, returned 304)";
     viaTable->next->viaData[(unsigned char)'H'] = "cache hit";
     viaTable->next->viaData[(unsigned char)'S'] = "cache hit, but expired";
     viaTable->next->viaData[(unsigned char)'K'] = "cookie miss";
@@ -254,8 +258,11 @@ decodeViaHeader(const char *str)
   // Invalid header size, come out.
   printf("\nInvalid VIA header. VIA header length should be 6 or 24 characters\n");
   printf("Valid via header format is "
-         "[u<client-stuff>c<cache-lookup-stuff>s<server-stuff>f<cache-fill-stuff>p<proxy-stuff>]e<error-codes>:t<tunneling-info>c<"
-         "cache type><cache-lookup-result>i<icp-conn-info>p<parent-proxy-conn-info>s<server-conn-info>]");
+         "[u<client-stuff>c<cache-lookup-stuff>s<server-stuff>f<cache-fill-"
+         "stuff>p<proxy-stuff>]e<error-codes>:t<tunneling-info>c<"
+         "cache "
+         "type><cache-lookup-result>i<icp-conn-info>p<parent-proxy-conn-info>s<"
+         "server-conn-info>]");
   return TS_ERR_FAIL;
 }
 
@@ -270,8 +277,8 @@ filterViaHeader()
   int errOffset;
   int pcreExecCode;
   int i;
-  const char *viaPattern =
-    "\\[([ucsfpe]+[^\\]]+)\\]"; // Regex to match via header with in [] which can start with character class ucsfpe
+  const char *viaPattern = "\\[([ucsfpe]+[^\\]]+)\\]"; // Regex to match via header with in [] which
+                                                       // can start with character class ucsfpe
   char *viaHeaderString;
   char viaHeader[1024];
 
@@ -301,7 +308,9 @@ filterViaHeader()
     // Match successful, but too many substrings
     if (pcreExecCode == 0) {
       pcreExecCode = SUBSTRING_VECTOR_COUNT / 3;
-      printf("Too many substrings were found. %d substrings couldn't fit into subStringVector\n", pcreExecCode - 1);
+      printf("Too many substrings were found. %d substrings couldn't fit into "
+             "subStringVector\n",
+             pcreExecCode - 1);
     }
 
     // Loop based on number of matches found

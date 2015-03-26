@@ -27,7 +27,8 @@
 #include "libts.h"
 #include "mgmtapi.h"
 
-// ucontext.h is deprecated on Darwin, and we really only need it on Linux, so only
+// ucontext.h is deprecated on Darwin, and we really only need it on Linux, so
+// only
 // include it if we are planning to use it.
 #if defined(__linux__)
 #include <ucontext.h>

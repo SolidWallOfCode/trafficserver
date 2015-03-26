@@ -75,7 +75,6 @@ public:
   overviewPage *m_overviewGenerator;
 };
 
-
 /**
  * External expression evaluation API.
  *
