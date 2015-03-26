@@ -137,11 +137,21 @@ MIOBuffer::write_and_transfer_left_over_space(IOBufferReader *r, int64_t alen, i
 #endif
 
 int64_t
-MIOBuffer::write(IOBufferReader *r, int64_t alen, int64_t offset)
+MIOBuffer::write(IOBufferReader *r, int64_t len, int64_t offset)
+{
+  return this->write(r->block, len, offset + r->start_offset);
+}
+
+int64_t
+MIOBuffer::write(IOBufferChain const* chain, int64_t len, int64_t offset)
+{
+  return this->write(chain->head(), std::min(len, chain->length()), offset);
+}
+
+int64_t
+MIOBuffer::write(IOBufferBlock const* b, int64_t alen, int64_t offset)
 {
   int64_t len = alen;
-  IOBufferBlock *b = r->block;
-  offset += r->start_offset;
 
   while (b && len > 0) {
     int64_t max_bytes = b->read_avail();
@@ -270,4 +280,84 @@ IOBufferReader::memcpy(const void *ap, int64_t len, int64_t offset)
   }
 
   return p;
+}
+
+int64_t
+IOBufferChain::write(IOBufferBlock* blocks, int64_t length, int64_t offset)
+{
+  int64_t n = length;
+  
+  while (blocks && n > 0) {
+    int64_t bytes = std::min(n, blocks->read_avail());
+    if (bytes > 0) {
+      if (bytes > offset) {
+        IOBufferBlock* bb = blocks->clone();
+        bytes -= offset;
+        bb->_start += offset;
+        // A NOP except for (possibly) the last block.
+        bb->_buf_end = bb->_end = bb->_start + bytes;
+        // Attach the cloned block since its data will be kept.
+        this->append(bb);
+        n -= bytes;
+      } else if (offset > 0) {
+        // Drop the block but count the bytes against the offset.
+        offset -= bytes;
+      }
+    }
+    blocks = blocks->next;
+  }
+
+  length -= n; // actual bytes written to chain.
+  _len += length;
+  return length;
+}
+
+int64_t
+IOBufferChain::write(IOBufferData* data, int64_t length, int64_t offset)
+{
+  int64_t zret = 0;
+  IOBufferBlock* b = new_IOBufferBlock();
+  
+  if (length < 0) length = 0;
+ 
+  b->set(data, length, offset);
+  this->append(b);
+
+  zret = b->read_avail();
+  _len += zret;
+  return zret;
+}
+
+void
+IOBufferChain::append(IOBufferBlock* block)
+{
+  if (NULL == _tail) {
+    _tail = _blocks = block;
+  } else {
+    _tail->next = block;
+    _tail = block;
+  }
+}
+
+int64_t
+IOBufferChain::consume(int64_t size)
+{
+  int64_t zret = 0;
+  int64_t bytes;
+  size = std::min(size, _len);
+  
+  while (NULL != _blocks && size > 0 && (bytes = _blocks->read_avail()) > 0) {
+    if (size >= bytes) {
+      _blocks = _blocks->next;
+      zret += bytes;
+      size -= bytes;
+    } else {
+      _blocks->consume(size);
+      zret += size;
+      size = 0;
+    }
+  }
+  _len -= zret;
+  if (NULL == _blocks || _len == 0) _blocks = NULL, _tail = NULL, _len = 0;
+  return zret;
 }

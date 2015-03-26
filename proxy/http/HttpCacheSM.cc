@@ -305,6 +305,36 @@ HttpCacheSM::open_read(const HttpCacheKey *key, URL *url, HTTPHdr *hdr, CacheLoo
   }
 }
 
+int
+HttpCacheSM::state_cache_open_partial_read(int evid, void* data)
+{
+  if (!open_read_cb)
+    return this->state_cache_open_read(evid, data);
+  Debug("amc", "[HttpCacheSM::state_cache_open_partial_read] second round");
+  return VC_EVENT_DONE;
+}
+
+Action*
+HttpCacheSM::open_partial_read(HTTPHdr* client_request_hdr)
+{
+  // Simple because this requires an active write VC so we know the object is there (no retries).
+  ink_assert(NULL != cache_write_vc);
+
+  // If this is a partial fill there will be a cache read VC. Resetting it to be used is challenging
+  // because it requires digging in to the internals of the VC or expanding its interface. At present
+  // it's better to just close it and re-open one that we know is valid with regard to the write VC.
+  this->close_read();
+
+  SET_HANDLER(&HttpCacheSM::state_cache_open_partial_read);
+  open_read_cb = false;
+
+  Action *action_handle = cacheProcessor.open_read(this, cache_write_vc, client_request_hdr);
+
+  if (action_handle != ACTION_RESULT_DONE) pending_action = action_handle;
+
+  return open_read_cb ? ACTION_RESULT_DONE : &captive_action;
+}
+
 Action *
 HttpCacheSM::open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache,
                         bool retry, bool allow_multiple)
