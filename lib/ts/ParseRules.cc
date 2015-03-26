@@ -307,3 +307,20 @@ ink_atoi64(const char *str, int len)
   }
   return num;
 }
+
+uint64_t ats_strto64(char const* s, size_t len, size_t* used)
+{
+  uint64_t zret = 0;
+  char const* spot = s;
+
+  if (s && len) {
+    for (char const* limit = spot + len ; spot < limit && ParseRules::is_digit(*spot) ; ++spot) {
+      zret *= 10;
+      zret += *spot - '0';
+    }
+  }
+  
+  if (used) *used = spot - s;
+  return zret;
+    
+}

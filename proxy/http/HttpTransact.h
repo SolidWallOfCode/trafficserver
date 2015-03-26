@@ -387,6 +387,7 @@ public:
     SCHEME_NOT_SUPPORTED,
     UNACCEPTABLE_TE_REQUIRED,
     INVALID_POST_CONTENT_LENGTH,
+    INVALID_RANGE_FIELD,
     TOTAL_REQUEST_ERROR_TYPES
   };
 
@@ -468,6 +469,7 @@ public:
     SM_ACTION_CACHE_ISSUE_WRITE_TRANSFORM,
     SM_ACTION_CACHE_PREPARE_UPDATE,
     SM_ACTION_CACHE_ISSUE_UPDATE,
+    SM_ACTION_CACHE_OPEN_PARTIAL_READ,
 
     SM_ACTION_ICP_QUERY,
 
@@ -808,10 +810,14 @@ public:
     HTTPHdr server_response;
     HTTPHdr transform_response;
     HTTPHdr cache_response;
-   int64_t request_content_length;
-    int64_t response_content_length;
+    int64_t request_content_length;
+    int64_t response_content_length; // Length of the payload (Content-Length field)
+    int64_t response_content_size; // Total size of the object on the origin server.
     int64_t transform_request_cl;
     int64_t transform_response_cl;
+    HTTPRangeSpec request_range;
+    HTTPRangeSpec::Range response_range;
+    ts::ConstBuffer response_range_boundary; // not used yet
     bool client_req_is_server_style;
     bool trust_response_cl;
     ResponseError_t response_error;
@@ -1336,7 +1342,7 @@ public:
   static bool will_this_request_self_loop(State* s);
   static bool is_request_likely_cacheable(State* s, HTTPHdr* request);
 
-  static void build_request(State* s, HTTPHdr* base_request, HTTPHdr* outgoing_request, HTTPVersion outgoing_version);
+  static void build_request(State* s, HTTPHdr* base_request, HTTPHdr* outgoing_request, HTTPVersion outgoing_version, HTTPRangeSpec const* ranges = 0);
   static void build_response(State* s, HTTPHdr* base_response, HTTPHdr* outgoing_response, HTTPVersion outgoing_version,
                              HTTPStatus status_code, const char *reason_phrase = NULL);
   static void build_response(State* s, HTTPHdr* base_response, HTTPHdr* outgoing_response, HTTPVersion outgoing_version);

@@ -301,7 +301,7 @@ CacheVC::CacheVC():alternate_index(CACHE_ALT_INDEX_DEFAULT)
 }
 
 #ifdef HTTP_CACHE
-HTTPInfo::FragOffset*
+HTTPInfo::FragmentDescriptorTable*
 CacheVC::get_frag_table()
 {
   ink_assert(alternate.valid());
@@ -470,9 +470,20 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
   } else
     f.allow_empty_doc = 0;
   alternate.copy_shallow(ainfo);
+  // This is not a good place to do this but I can't figure out a better one. We must do it
+  // no earlier than this, because there's no actual alternate to store the value in before this
+  // and I don't know of any later point that's guaranteed to be called before this is needed.
+  alternate.m_alt->m_fixed_fragment_size = cache_config_target_fragment_size - sizeofDoc;
   ainfo->clear();
 }
 #endif
+
+void
+CacheVC::set_full_content_length(int64_t cl)
+{
+  alternate.object_size_set(cl);
+  resp_range.apply(cl);
+}
 
 bool CacheVC::set_pin_in_cache(time_t time_pin)
 {
@@ -486,6 +497,19 @@ bool CacheVC::set_pin_in_cache(time_t time_pin)
   }
   pin_in_cache = time_pin;
   return true;
+}
+
+bool
+CacheVC::get_uncached(HTTPRangeSpec& result)
+{
+  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, resp_range.getRangeSpec())
+    : alternate.get_uncached_hull(resp_range.getRangeSpec())
+    ;
+  if (r.isValid()) {
+    result.add(r);
+    return true;
+  }
+  return false;
 }
 
 bool CacheVC::set_disk_io_priority(int priority)
@@ -2360,6 +2384,19 @@ CacheVC::is_pread_capable()
   return !f.read_from_writer_called;
 }
 
+# if 0
+void
+CacheVC::get_missing_ranges(HTTPRangeSpec& missing)
+{
+  missing.reset();
+  if (0 == alternate.);
+  // For now we'll just compute the convex hull of the missing data.
+  for ( RangeBox::const_iterator spot = req.begin(), limit = req.end() ; spot != limit ; ++spot ) {
+    
+  }
+}
+#endif
+
 #define STORE_COLLISION 1
 
 #ifdef HTTP_CACHE
@@ -2383,7 +2420,7 @@ static void unmarshal_helper(Doc *doc, Ptr<IOBufferData> &buf, int &okay) {
     @internal I looked at doing this in place (rather than a copy & modify) but
     - The in place logic would be even worse than this mess
     - It wouldn't save you that much, since you end up doing inserts early in the buffer.
-      Without extreme care in the logic it could end up doing more copying thatn
+      Without extreme care in the logic it could end up doing more copying than
       the simpler copy & modify.
 
     @internal This logic presumes the existence of some slack at the end of the buffer, which
@@ -2400,6 +2437,7 @@ static bool upgrade_doc_version(Ptr<IOBufferData>& buf) {
     if (0 == doc->hlen) {
       Debug("cache_bc", "Doc %p without header, no upgrade needed.", doc);
     } else if (CACHE_FRAG_TYPE_HTTP_V23 == doc->doc_type) {
+      typedef cache_bc::HTTPCacheFragmentTable::FragOffset FragOffset;
       cache_bc::HTTPCacheAlt_v21* alt = reinterpret_cast<cache_bc::HTTPCacheAlt_v21*>(doc->hdr());
       if (alt && alt->is_unmarshalled_format()) {
         Ptr<IOBufferData> d_buf(ioDataAllocator.alloc());
@@ -2407,8 +2445,8 @@ static bool upgrade_doc_version(Ptr<IOBufferData>& buf) {
         char* src;
         char* dst;
         char* hdr_limit = doc->data();
-        HTTPInfo::FragOffset* frags = reinterpret_cast<HTTPInfo::FragOffset*>(static_cast<char*>(buf->data()) + cache_bc::sizeofDoc_v23);
-        int frag_count = doc->_flen / sizeof(HTTPInfo::FragOffset);
+        FragOffset* frags = reinterpret_cast<FragOffset*>(static_cast<char*>(buf->data()) + cache_bc::sizeofDoc_v23);
+        int frag_count = doc->_flen / sizeof(FragOffset);
         size_t n = 0;
         size_t content_size = doc->data_len();
 
@@ -2751,6 +2789,11 @@ LinterimRead:
   io.action = this;
   io.thread = mutex->thread_holding->tt == DEDICATED ? AIO_CALLBACK_THREAD_ANY : mutex->thread_holding;
   SET_HANDLER(&CacheVC::handleReadDone);
+  {
+    char xt[33];
+    Debug("amc", "cache read : key = %s %" PRId64 " bytes at stripe offset =% " PRId64
+          , key.toHexStr(xt), io.aiocb.aio_nbytes, io.aiocb.aio_offset);
+  }
   ink_assert(ink_aio_read(&io) >= 0);
   CACHE_DEBUG_INCREMENT_DYN_STAT(cache_pread_count_stat);
   return EVENT_CONT;
@@ -3597,7 +3640,6 @@ CacheProcessor::open_read(Continuation *cont, URL *url, bool cluster_cache_local
 #endif
   return caches[type]->open_read(cont, url, request, params, type);
 }
-
 
 //----------------------------------------------------------------------------
 Action *

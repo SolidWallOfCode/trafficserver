@@ -845,4 +845,24 @@ ink_atoui(const char *str)
     return static_cast<int>(val);
 }
 
+/** Convert a span of characters to an unsigned 64 bit value.
+
+    Parsing starts at @a s and continues for at most @a len characters.
+    Parsing stops when the first non-digit is encountered. Leading whitespace is not permitted.
+    @a *used is set to the number of characters parsed if @a used is not @c NULL.
+    If @a *used is set to 0 and 0 is returned, then no characters were parsed.
+
+    Key features
+
+    - No termination required.
+    - Number of parsed characters returned.
+    - Unsigned 64 bit return.
+    - Clip to UINT64_MAX;
+
+    @return The binary equivalent of @a s.
+
+    @internal All of these conversions and none work as I need. Sigh.
+*/
+uint64_t ats_strto64(char const* s, size_t len, size_t* used);
+
 #endif /* #if !defined (_ParseRules_h_) */
