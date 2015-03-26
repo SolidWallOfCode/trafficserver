@@ -179,10 +179,10 @@ struct Vol : public Continuation {
 
   int recover_data();
 
-  int open_write(CacheVC *cont, int allow_if_writers, int max_writers);
-  int open_write_lock(CacheVC *cont, int allow_if_writers, int max_writers);
-  int close_write(CacheVC *cont);
-  int close_write_lock(CacheVC *cont);
+  int open_write(CacheVC *cont);
+  int open_write_lock(CacheVC *cont);
+  void close_write(CacheVC *cont);
+  int close_write_lock(CacheVC *cont); // can fail lock
   int begin_read(CacheVC *cont);
   int begin_read_lock(CacheVC *cont);
   // unused read-write interlock code
@@ -496,7 +496,7 @@ free_EvacuationBlock(EvacuationBlock *b, EThread *t)
 TS_INLINE OpenDirEntry *
 Vol::open_read(const CryptoHash *key)
 {
-  return open_dir.open_read(key);
+  return open_dir.open_entry(this, *key, false);
 }
 
 TS_INLINE int
