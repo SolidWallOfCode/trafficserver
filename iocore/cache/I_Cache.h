@@ -276,6 +276,14 @@ struct CacheVConnection:public VConnection
   /// Someday we may want to do the exact range spec but we use the type for now because it's easier.
   virtual bool get_uncached(HTTPRangeSpec& result) = 0;
 
+  /** Set the range for the input (response content).
+      The incoming bytes will be written to this section of the object.
+      @note This range @b must be absolute.
+      @note The range is inclusive.
+      @return The # of bytes in the range.
+  */
+  virtual int64_t set_inbound_range(int64_t min, int64_t max) { return 1 + (max - min); }
+
 #endif
 
   virtual bool is_ram_cache_hit() const = 0;

@@ -5998,12 +5998,14 @@ HttpSM::setup_cache_write_transfer(HttpCacheSM * c_sm,
   store_info->request_sent_time_set(t_state.request_sent_time);
   store_info->response_received_time_set(t_state.response_received_time);
 
-  if (t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL && t_state.hdr_info.response_range.isValid())
-    store_info->object_size_set(t_state.hdr_info.response_content_size);
-                                 
+  if (t_state.hdr_info.response_range.isValid()) {
+    if (t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL)
+      store_info->object_size_set(t_state.hdr_info.response_content_size);
+    c_sm->cache_write_vc->set_inbound_range(t_state.hdr_info.response_range._min, t_state.hdr_info.response_range._max);
+  }
+
   c_sm->cache_write_vc->set_http_info(store_info);
   store_info->clear();
-
 
   tunnel.add_consumer(c_sm->cache_write_vc,
                       source_vc, &HttpSM::tunnel_handler_cache_write, HT_CACHE_WRITE, name, skip_bytes);

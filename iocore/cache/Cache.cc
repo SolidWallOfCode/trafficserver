@@ -478,6 +478,14 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
 }
 #endif
 
+int64_t
+CacheVC::set_inbound_range(int64_t min, int64_t max)
+{
+  resp_range.clear();
+  resp_range.getRangeSpec().add(min,max);
+  return 1 + (max - min);
+}
+
 void
 CacheVC::set_full_content_length(int64_t cl)
 {

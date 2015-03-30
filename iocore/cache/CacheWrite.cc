@@ -799,16 +799,18 @@ agg_copy(char *p, CacheVC *vc)
 #ifdef HTTP_CACHE
       if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
         ink_assert(vc->write_vector->count() > 0);
-        if (!vc->f.update && !vc->f.evac_vector) {
-          ink_assert(!(vc->first_key == zero_key));
-          CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
-          http_info->object_size_set(vc->total_len);
-        }
-        // update + data_written =>  Update case (b)
-        // need to change the old alternate's object length
-        if (vc->f.update && vc->total_len) {
-          CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
-          http_info->object_size_set(vc->total_len);
+        if (!vc->resp_range.hasRanges()) {
+          if (!vc->f.update && !vc->f.evac_vector) {
+            ink_assert(!(vc->first_key == zero_key));
+            CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
+            http_info->object_size_set(vc->total_len);
+          }
+          // update + data_written =>  Update case (b)
+          // need to change the old alternate's object length
+          if (vc->f.update && vc->total_len) {
+            CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
+            http_info->object_size_set(vc->total_len);
+          }
         }
         ink_assert(!(((uintptr_t) &doc->hdr()[0]) & HDR_PTR_ALIGNMENT_MASK));
         ink_assert(vc->header_len == vc->write_vector->marshal(doc->hdr(), vc->header_len));
@@ -1216,7 +1218,7 @@ CacheVC::openWriteCloseHead(int event, Event *e)
   cancel_trigger();
   f.use_first_key = 1;
   if (io.ok())
-    ink_assert(fragment || (length == (int64_t)total_len));
+    ink_assert(fragment || (length == (int64_t)total_len) || (resp_range.hasRanges() && alternate.object_size_get() > alternate.get_frag_fixed_size()));
   else
     return openWriteCloseDir(event, e);
   if (f.data_done) {
@@ -1264,7 +1266,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
 
   {
     MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
-    write_vector->write_complete(earliest_key, this, write_pos);
+    write_vector->write_complete(earliest_key, this, true);
   }
   
   write_pos += write_len;
@@ -1315,7 +1317,7 @@ CacheVC::openWriteClose(int event, Event *e)
       return openWriteCloseDir(event, e);
 #endif
     }
-    if (length && (fragment || length > MAX_FRAG_SIZE)) {
+    if (length && (fragment || length > MAX_FRAG_SIZE || alternate.object_size_get() > alternate.get_frag_fixed_size())) {
       SET_HANDLER(&CacheVC::openWriteCloseDataDone);
       this->updateWriteStateFromRange();
       write_len = length;

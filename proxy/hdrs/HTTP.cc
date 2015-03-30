@@ -2606,9 +2606,9 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
     }
 
     if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p) lidx = 0;
-    else while (lidx <= ridx && (*m_alt->m_fragments)[lidx].m_flag.cached_p) ++lidx;
+    else if (m_alt->m_fragments) while (lidx <= ridx && (*m_alt->m_fragments)[lidx].m_flag.cached_p) ++lidx;
 
-    while (lidx <= ridx && (*m_alt->m_fragments)[ridx].m_flag.cached_p) --ridx;
+    if (m_alt->m_fragments) while (lidx <= ridx && (*m_alt->m_fragments)[ridx].m_flag.cached_p) --ridx;
 
     if (lidx <= ridx) r = this->get_range_for_frags(lidx, ridx);
     if (m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())

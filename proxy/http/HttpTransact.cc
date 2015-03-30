@@ -4807,6 +4807,11 @@ HttpTransact::set_headers_for_cache_write(State* s, HTTPInfo* cache_info, HTTPHd
   cache_info->request_get()->field_delete(MIME_FIELD_VIA, MIME_LEN_VIA);
   // server 200 Ok for Range request
   cache_info->request_get()->field_delete(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+  if (NULL != cache_info->response_get()->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE)) {
+    cache_info->response_get()->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+    cache_info->response_get()->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
+    cache_info->response_get()->status_set(HTTP_STATUS_OK);
+  }
 
   // If we're ignoring auth, then we don't want to cache WWW-Auth
   //  headers
@@ -8824,7 +8829,7 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
   MIMEField *field = header->field_find(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
   char *reason_phrase;
 //  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
-  HTTPHdr* cached_response = find_appropriate_cached_resp(s);
+//  HTTPHdr* cached_response = find_appropriate_cached_resp(s);
 //  HTTPRangeSpec& rs = cache_read_vc->get_http_range_spec();
   HTTPRangeSpec& rs = s->state_machine->t_state.hdr_info.request_range;
 
@@ -8859,7 +8864,7 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
     n = snprintf(buff, sizeof(buff), "%s %" PRIu64"-%" PRIu64"/%" PRId64
                 , HTTP_VALUE_BYTES
                 , rs[0]._min, rs[0]._max
-                , cached_response->get_content_length()
+                , s->state_machine->t_state.hdr_info.response_content_size
       );
     field->value_set(header->m_heap, header->m_mime, buff, n);
     header->field_attach(field);

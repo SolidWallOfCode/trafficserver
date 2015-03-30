@@ -816,8 +816,10 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   if (dir_probe(&key, vol, &dir, &last_collision)) {
     SET_HANDLER(&CacheVC::openReadReadDone);
     int ret = do_read_call(&key);
-    if (ret == EVENT_RETURN)
-      goto Lcallreturn;
+    if (ret == EVENT_RETURN) {
+      lock.release();
+      return handleEvent(AIO_EVENT_DONE, 0);
+    }
     return EVENT_CONT;
   } else if (write_vc) {
     ink_release_assert(! "[amc] Handle case where fragment is not in the directory during read");
@@ -851,12 +853,11 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   Warning("Document %X truncated at %d of %d, missing fragment %X", first_key.slice32(1), (int)vio.ndone, (int)doc_len, key.slice32(1));
   // remove the directory entry
   dir_delete(&earliest_key, vol, &earliest_dir);
+  lock.release();
 //Lerror:
   return calluser(VC_EVENT_ERROR);
 //Leos:
   return calluser(VC_EVENT_EOS);
-Lcallreturn:
-  return handleEvent(AIO_EVENT_DONE, 0);
 }
 
 int
