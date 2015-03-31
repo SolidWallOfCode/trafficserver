@@ -799,7 +799,10 @@ agg_copy(char *p, CacheVC *vc)
 #ifdef HTTP_CACHE
       if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
         ink_assert(vc->write_vector->count() > 0);
-        if (!vc->resp_range.hasRanges()) {
+        if (vc->resp_range.hasRanges()) {
+          int64_t size = vc->alternate.object_size_get();
+          if (size >= 0) doc->total_len = size;
+        } else {
           if (!vc->f.update && !vc->f.evac_vector) {
             ink_assert(!(vc->first_key == zero_key));
             CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);

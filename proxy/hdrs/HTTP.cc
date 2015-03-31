@@ -2134,11 +2134,6 @@ HTTPInfo::mark_frag_write(unsigned int idx) {
 
   if (0 == idx) {
     m_alt->m_earliest.m_flag.cached_p = true;
-    // Handle the common case where there's only one fragment and we just wrote it.
-    if (1 == m_alt->m_frag_count && m_alt->m_flag.content_length_p) {
-      m_alt->m_flag.complete_p = true;
-      return;
-    }
   } else {
     this->force_frag_at(idx)->m_flag.cached_p = true;
   }
@@ -2149,7 +2144,8 @@ HTTPInfo::mark_frag_write(unsigned int idx) {
     while (j < m_alt->m_frag_count && (*m_alt->m_fragments)[j].m_flag.cached_p)
       ++j;
     m_alt->m_fragments->m_cached_idx = j - 1;
-    if (j >= m_alt->m_frag_count && m_alt->m_flag.content_length_p)
+    if (m_alt->m_flag.content_length_p &&
+        (this->get_frag_fixed_size() + this->get_frag_offset(j-1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
       m_alt->m_flag.complete_p = true;
   }
 }
@@ -2594,24 +2590,32 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
 
   if (m_alt && !m_alt->m_flag.complete_p) {
     HTTPRangeSpec::Range s = req.getConvexHull();
-    int32_t lidx;
-    int32_t ridx;
-    if (s.isValid()) {
-      lidx = this->get_frag_index_of(s._min);
-      ridx = this->get_frag_index_of(s._max);
-    } else { // not a range request, get hull of all uncached fragments
-      lidx = m_alt->m_fragments ? m_alt->m_fragments->m_cached_idx + 1 : 1;
-      // This really isn't valid if !content_length_p, need to deal with that at some point.
-      ridx = this->get_frag_index_of(this->object_size_get());
+    if (m_alt->m_fragments) {
+      int32_t lidx;
+      int32_t ridx;
+      if (s.isValid()) {
+        lidx = this->get_frag_index_of(s._min);
+        ridx = this->get_frag_index_of(s._max);
+      } else { // not a range request, get hull of all uncached fragments
+        lidx = m_alt->m_fragments->m_cached_idx + 1;
+        // This really isn't valid if !content_length_p, need to deal with that at some point.
+        ridx = this->get_frag_index_of(this->object_size_get());
+      }
+
+      if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p) lidx = 0;
+      else while (lidx <= ridx && (*m_alt->m_fragments)[lidx].m_flag.cached_p) ++lidx;
+
+      while (lidx <= ridx && (*m_alt->m_fragments)[ridx].m_flag.cached_p) --ridx;
+
+      if (lidx <= ridx) r = this->get_range_for_frags(lidx, ridx);
+    } else { // no fragments past earliest cached yet
+      r._min = m_alt->m_earliest.m_flag.cached_p ? this->get_frag_fixed_size() : 0;
+      if (s.isValid()) {
+        r._min = std::max(r._min, s._min);
+        r._max = s._max;
+      }
     }
-
-    if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p) lidx = 0;
-    else if (m_alt->m_fragments) while (lidx <= ridx && (*m_alt->m_fragments)[lidx].m_flag.cached_p) ++lidx;
-
-    if (m_alt->m_fragments) while (lidx <= ridx && (*m_alt->m_fragments)[ridx].m_flag.cached_p) --ridx;
-
-    if (lidx <= ridx) r = this->get_range_for_frags(lidx, ridx);
-    if (m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())
+    if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())
       r._max = this->object_size_get();
   }
   return r;
