@@ -1764,7 +1764,7 @@ HttpTransact::OSDNSLookup(State* s)
     } else {
       if ((s->cache_info.action == CACHE_DO_NO_ACTION) &&
           (((s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE) && !s->txn_conf->cache_range_write) ||
-            s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED))) {
+            s->range_setup == RANGE_NOT_SATISFIABLE))) {
         TRANSACT_RETURN(SM_ACTION_API_OS_DNS, HandleCacheOpenReadMiss);
       } else if (s->cache_lookup_result == HttpTransact::CACHE_LOOKUP_SKIPPED) {
         TRANSACT_RETURN(SM_ACTION_API_OS_DNS, LookupSkipOpenServer);
@@ -2690,9 +2690,23 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     }
   }
 
-  // Check if it's a range request and we need to get some data from the origin.
-  if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(range)) {
-    build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->current.server->http_version, &range);
+  // Check if we need to get some data from the origin.
+  if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range)) {
+    Debug("amc", "Request has uncached fragments");
+    find_server_and_update_current_info(s);
+    if (!ats_is_ip(&s->current.server->addr)) {
+      if (s->current.request_to == PARENT_PROXY) {
+        TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, PPDNSLookup);
+      } else if (s->current.request_to == ORIGIN_SERVER) {
+        TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, OSDNSLookup);
+      } else {
+        ink_assert(!"[amc] - where was this going?");
+        return;
+      }
+    }
+    build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->client_info.http_version, &range);
+    s->cache_info.action = CACHE_PREPARE_TO_WRITE;
+    s->range_setup = RANGE_PARTIAL_WRITE;
     s->next_action = how_to_open_connection(s);
     if (s->stale_icp_lookup && s->next_action == SM_ACTION_ORIGIN_SERVER_OPEN) {
       s->next_action = SM_ACTION_ICP_QUERY;
@@ -3028,6 +3042,8 @@ HttpTransact::HandleCacheOpenReadMiss(State* s)
 # endif
   } else {
     s->cache_info.action = CACHE_PREPARE_TO_WRITE;
+    if (s->hdr_info.request_range.hasRanges())
+      s->range_setup = RANGE_PARTIAL_WRITE;
   }
 
   // We should not issue an ICP lookup if the request has a
@@ -6055,9 +6071,6 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
     DebugTxn("http_trans", "[is_response_cacheable] " "request is not cache lookupable, response is not cachable");
     return (false);
   }
-  // already has a fresh copy in the cache
-  if (s->range_setup == RANGE_NOT_HANDLED)
-    return false;
 
   // Check whether the response is cachable based on its cookie
   // If there are cookies in response but a ttl is set, allow caching
@@ -6671,7 +6684,7 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
         break;
 
       case SOURCE_TRANSFORM:
-        if (s->range_setup == HttpTransact::RANGE_REQUESTED) {
+        if (s->hdr_info.request_range.hasRanges()) {
           header->set_content_length(s->range_output_cl);
           s->hdr_info.trust_response_cl = true;
         } else if (s->hdr_info.transform_response_cl == HTTP_UNDEFINED_CL) {
@@ -6705,7 +6718,7 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
         s->hdr_info.request_content_length = HTTP_UNDEFINED_CL;
         ink_assert(s->range_setup == RANGE_NONE);
       }
-      else if (s->range_setup == RANGE_NOT_TRANSFORM_REQUESTED) {
+      else if (s->hdr_info.response_range.isValid()) {
         // if we are doing a single Range: request, calculate the new
         // C-L: header
         change_response_header_because_of_range_request(s,header);
@@ -6728,7 +6741,6 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
         s->hdr_info.trust_response_cl = false;
       }
       header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
-      ink_assert(s->range_setup != RANGE_NOT_TRANSFORM_REQUESTED);
     }
   }
   return;

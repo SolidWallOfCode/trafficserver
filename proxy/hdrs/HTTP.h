@@ -1788,11 +1788,11 @@ HTTPInfo::operator =(const HTTPInfo & m)
   return *this;
 }
 
-  inline CryptoHash const&
-  HTTPInfo::object_key_get()
-  {
-    return m_alt->m_earliest.m_key;
-  }
+inline CryptoHash const&
+HTTPInfo::object_key_get()
+{
+  return m_alt->m_earliest.m_key;
+}
 
 inline void
 HTTPInfo::object_key_get(CryptoHash *key)

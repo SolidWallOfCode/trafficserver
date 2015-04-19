@@ -285,7 +285,7 @@ struct CacheVC: public CacheVConnection
     return -1;
   }
 
-  Action* do_init_write();
+  Action* do_write_init();
 
   //  bool writer_done();
   int calluser(int event);
@@ -387,7 +387,7 @@ struct CacheVC: public CacheVConnection
   virtual void set_full_content_length(int64_t size);
   virtual HTTPRangeSpec& get_http_range_spec();
   virtual bool is_http_partial_content();
-  virtual bool get_uncached(HTTPRangeSpec& result);
+  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result);
   virtual int64_t set_inbound_range(int64_t min, int64_t max);
 
 #endif

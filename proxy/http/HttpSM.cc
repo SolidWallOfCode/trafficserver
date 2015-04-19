@@ -1566,7 +1566,7 @@ HttpSM::handle_api_return()
 
        setup_blind_tunnel(true);
       } else {  
-        if (t_state.hdr_info.request_range.hasRanges() &&
+        if (t_state.range_setup == HttpTransact::RANGE_PARTIAL_WRITE &&
             HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action
           ) {
           Debug("amc", "Set up for partial read");
@@ -4230,6 +4230,10 @@ HttpSM::do_hostdb_update_if_necessary()
 void
 HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
 {
+  (void) field;
+  (void) content_length;
+  return;
+# if 0
   int prev_good_range = -1;
   const char *value;
   int value_len;
@@ -4388,15 +4392,20 @@ Lfaild:
   t_state.num_range_fields = -1;
   delete []ranges;
   return;
+# endif
 }
 
 void
 HttpSM::calculate_output_cl(int64_t content_length, int64_t num_chars)
 {
+# if 1
+  (void) content_length;
+  (void) num_chars;
+  return;
+# else
   int i;
 
-  if (t_state.range_setup != HttpTransact::RANGE_REQUESTED &&
-      t_state.range_setup != HttpTransact::RANGE_NOT_TRANSFORM_REQUESTED)
+  if (t_state.range_setup != HttpTransact::RANGE_REQUESTED)
     return;
 
   ink_assert(t_state.ranges);
@@ -4420,6 +4429,7 @@ HttpSM::calculate_output_cl(int64_t content_length, int64_t num_chars)
   }
 
   Debug("http_range", "Pre-calculated Content-Length for Range response is %" PRId64, t_state.range_output_cl);
+# endif
 }
 
 void

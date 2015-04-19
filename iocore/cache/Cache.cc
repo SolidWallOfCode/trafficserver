@@ -508,10 +508,10 @@ bool CacheVC::set_pin_in_cache(time_t time_pin)
 }
 
 bool
-CacheVC::get_uncached(HTTPRangeSpec& result)
+CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
 {
-  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, resp_range.getRangeSpec())
-    : alternate.get_uncached_hull(resp_range.getRangeSpec())
+  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, req)
+    : alternate.get_uncached_hull(req)
     ;
   if (r.isValid()) {
     result.add(r);
