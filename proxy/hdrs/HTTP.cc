@@ -2654,6 +2654,8 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
       if (s.isValid()) {
         r._min = std::max(r._min, s._min);
         r._max = s._max;
+      } else {
+        r._max = INT64_MAX;
       }
     }
     if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())

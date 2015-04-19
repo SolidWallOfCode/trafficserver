@@ -366,7 +366,6 @@ struct ClusterVConnectionBase : public CacheVConnection {
   virtual void set_full_content_length(int64_t) { } // only used when writing to cache
   virtual HTTPRangeSpec& get_http_range_spec() { return resp_range.getRangeSpec(); }
   virtual bool is_http_partial_content() { return false; }
-  virtual bool get_uncached(HTTPRangeSpec& r) { r.clear(); return false; }
 
   // Set the timeouts associated with this connection.
   // active_timeout is for the total elasped time of the connection.

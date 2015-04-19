@@ -263,11 +263,12 @@ struct CacheVConnection : public VConnection {
   /// Check if this is HTTP partial content (range request/response).
   virtual bool is_http_partial_content() = 0;
 
-  /// Get the unchanged ranges.
+  /// Get the unchanged ranges for the request range @a req.
+  /// If @a req is empty it is treated as a full request (non-partial).
   /// @return @c true if the @a result is not empty.
   /// @internal Currently this just returns the single range that is convex hull of the uncached request.
   /// Someday we may want to do the exact range spec but we use the type for now because it's easier.
-  virtual bool get_uncached(HTTPRangeSpec& result) = 0;
+  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result) { (void)req; (void)result; return false; }
 
   /** Set the range for the input (response content).
       The incoming bytes will be written to this section of the object.

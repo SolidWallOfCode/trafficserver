@@ -531,10 +531,9 @@ public:
 
   enum RangeSetup_t {
     RANGE_NONE = 0,
-    RANGE_REQUESTED,
     RANGE_NOT_SATISFIABLE,
-    RANGE_NOT_HANDLED,
-    RANGE_NOT_TRANSFORM_REQUESTED,
+    RANGE_PARTIAL_WRITE, // Do a partial write to the object.
+                         // Includes a partial request cache miss and a cache hit with uncached ranges
   };
 
   enum CacheAuth_t {

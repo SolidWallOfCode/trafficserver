@@ -1378,9 +1378,9 @@ CacheProcessor::get_fixed_fragment_size() const {
 
 
 Action*
-CacheVC::do_init_write()
+CacheVC::do_write_init()
 {
-  Debug("amc", "[do_init_write] vc=%p", this);
+  Debug("amc", "[do_write_init] vc=%p", this);
   SET_CONTINUATION_HANDLER(this, &CacheVC::openWriteInit);
   return EVENT_DONE == this->openWriteInit(EVENT_IMMEDIATE, 0) ? ACTION_RESULT_DONE : &_action;
 }
@@ -1399,7 +1399,11 @@ CacheVC::openWriteInit(int eid, Event* event)
     }
 
     // If we're not already in the alt vector, insert.
-    if (-1 == (alternate_index = get_alternate_index(write_vector, first_key))) {
+    if (earliest_key != alternate.object_key_get()) {
+      Debug("amc", "[CacheVC::openWriteInit] updating earliest key from alternate");
+      alternate.object_key_get(&earliest_key);
+    }
+    if (-1 == (alternate_index = get_alternate_index(write_vector, earliest_key))) {
       alternate_index = write_vector->insert(&alternate);
     }
     // mark us as an writer.
@@ -1420,6 +1424,7 @@ CacheVC::openWriteInit(int eid, Event* event)
 //  key = alternate.get_frag_key_of(write_pos);
   SET_HANDLER(&CacheVC::openWriteMain);
   return openWriteMain(eid, event);
+//  return callcont(CACHE_EVENT_OPEN_WRITE);
 //  return EVENT_DONE;
 }
 
@@ -1695,7 +1700,8 @@ Lsuccess:
   if (_action.cancelled)
     goto Lcancel;
   SET_HANDLER(&CacheVC::openWriteInit);
-  return this->openWriteInit(EVENT_IMMEDIATE, 0);
+  return callcont(CACHE_EVENT_OPEN_WRITE);
+//  return this->openWriteInit(EVENT_IMMEDIATE, 0);
 
 Lfailure:
   CACHE_INCREMENT_DYN_STAT(base_stat + CACHE_STAT_FAILURE);
@@ -1795,6 +1801,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheFragType frag_type, in
     SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
     c->callcont(CACHE_EVENT_OPEN_WRITE);
     return ACTION_RESULT_DONE;
+//    return c->do_write_init();
   } else {
     SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteOverwrite);
     if (c->openWriteOverwrite(EVENT_IMMEDIATE, 0) == EVENT_DONE)
@@ -1916,6 +1923,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
         goto Lmiss;
       } else {
         c->od->reading_vec = 1;
+        c->od->open_writer = c;
         // document exists, read vector
         SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteStartDone);
         switch (c->do_read_call(&c->first_key)) {
@@ -1935,7 +1943,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   }
 
 Lmiss:
-//  return c->do_init_write();
+//  return c->do_write_init();
   SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
   c->callcont(CACHE_EVENT_OPEN_WRITE);
   return ACTION_RESULT_DONE;

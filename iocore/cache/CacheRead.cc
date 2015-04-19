@@ -105,6 +105,9 @@ Cache::open_read(Continuation* cont, CacheVConnection* vc, HTTPHdr* client_reque
 
     c->vol = write_vc->vol;
     c->first_key = write_vc->first_key;
+    // [amc] Need to fix this as it's pointless. In general @a earliest_key in the write VC
+    // won't be the correct value - it's randomly generated and for a partial fill won't be
+    // set to the actual alternate value until later (in @c set_http_info).
     c->earliest_key = c->key = write_vc->earliest_key;
     c->vio.op = VIO::READ;
     c->base_stat = cache_read_active_stat;
@@ -257,7 +260,7 @@ CacheVC::openReadChooseWriter(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSE
 //  intptr_t err = ECACHE_DOC_BUSY;
 //  CacheVC *w = NULL;
 
-  ink_assert(vol->mutex->thread_holding == mutex->thread_holding && write_vc == NULL);
+  ink_assert(od->mutex->thread_holding == mutex->thread_holding && write_vc == NULL);
 
   if (frag_type != CACHE_FRAG_TYPE_HTTP) {
     ink_release_assert(! "[amc] Fix reader from writer for non-HTTP");
@@ -348,8 +351,9 @@ CacheVC::openReadFromWriter(int event, Event *e)
 
   MUTEX_RELEASE(lock); // we have the OD lock now, don't need the vol lock.
 
-  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), earliest_key))) {
+  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), write_vc->earliest_key))) {
     alternate.copy_shallow(od->vector.get(alternate_index));
+    key = earliest_key = alternate.object_key_get();
     MUTEX_RELEASE(lock_od);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
