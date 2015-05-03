@@ -143,7 +143,7 @@ OpenDir::close_write(CacheVC *cont)
     int b = h % OPEN_DIR_BUCKETS;
     bucket[b].remove(cont->od);
 //    delayed_readers.append(cont->od->readers);
-    signal_readers(0, 0);
+//    signal_readers(0, 0);
     cont->od->vector.clear();
     cont->od->mutex = 0;
     THREAD_FREE(cont->od, openDirEntryAllocator, cont->mutex->thread_holding);
@@ -216,12 +216,11 @@ OpenDirEntry::key_for(CacheKey const& alt_key, int64_t offset)
   return vector.key_for(alt_key, offset);
 }
 
-OpenDirEntry&
-OpenDirEntry::waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+bool
+OpenDirEntry::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
 {
   Debug("amc", "vc %p waiting for %" PRId64, vc, offset);
-  vector.waiting_for(alt_key, vc, offset);
-  return *this;
+  return vector.wait_for(alt_key, vc, offset);
 }
 
 OpenDirEntry&

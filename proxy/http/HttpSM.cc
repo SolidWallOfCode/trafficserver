@@ -1668,6 +1668,9 @@ HttpSM::handle_api_return()
         t_state.source = HttpTransact::SOURCE_CACHE;
         HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_cache_open_partial_read);
         cache_sm.cache_write_vc = save_write_vc;
+        // Close the read VC if it's there because it's less work than trying to reset the existing
+        // one (which doesn't have the ODE attached).
+        cache_sm.close_read();
         pending_action = cache_sm.open_partial_read(&t_state.hdr_info.client_request);
         cache_sm.cache_write_vc = NULL;
       } else {

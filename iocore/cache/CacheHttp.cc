@@ -315,15 +315,19 @@ CacheHTTPInfoVector::is_write_active(CacheKey const& alt_key, int64_t offset)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheHTTPInfoVector&
-CacheHTTPInfoVector::waiting_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+bool
+CacheHTTPInfoVector::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
 {
+  bool zret = true;
   int alt_idx = this->index_of(alt_key);
   Item& item = data[alt_idx];
   int frag_idx = item._alternate.get_frag_index_of(offset);
-  vc->fragment = frag_idx;
-  item._waiting.push(vc);
-  return *this;
+  vc->fragment = frag_idx; // really? Shouldn't this already be set?
+  if (item.has_writers())
+    item._waiting.push(vc);
+  else
+    zret = false;
+  return zret;
 }
 
 /*-------------------------------------------------------------------------

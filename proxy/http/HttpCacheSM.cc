@@ -277,6 +277,11 @@ HttpCacheSM::open_partial_read(HTTPHdr* client_request_hdr)
   // Simple because this requires an active write VC so we know the object is there (no retries).
   ink_assert(NULL != cache_write_vc);
 
+  // If this is a partial fill there will be a cache read VC. Resetting it to be used is challenging
+  // because it requires digging in to the internals of the VC or expanding its interface. At present
+  // it's better to just close it and re-open one that we know is valid with regard to the write VC.
+  this->close_read();
+
   SET_HANDLER(&HttpCacheSM::state_cache_open_partial_read);
   open_read_cb = false;
 

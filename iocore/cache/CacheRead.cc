@@ -354,6 +354,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
   if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), write_vc->earliest_key))) {
     alternate.copy_shallow(od->vector.get(alternate_index));
     key = earliest_key = alternate.object_key_get();
+    doc_len = alternate.object_size_get();
     MUTEX_RELEASE(lock_od);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
@@ -672,36 +673,13 @@ LreadMain:
 void
 CacheVC::update_key_to_frag_idx(int target)
 {
-  FragmentDescriptorTable& frags = (*alternate.get_frag_table());
-
   if (0 == target) {
     fragment = 0;
     key = earliest_key;
-  } else if (! frags[target].m_key.is_zero()) {
-    key = frags[target].m_key;
-  } else { // step through the hard way
-    if (target < fragment) { // going backwards
-      if (target < (fragment - target)) { // faster to go from start
-        fragment = 0;
-        key = earliest_key;
-      } else { // quicker to go from here to there
-        while (target < fragment) {
-          prev_CacheKey(&key, &key);
-          --fragment;
-          if (frags[fragment].m_key.is_zero())
-            frags[fragment].m_key = key; // might as well store it as we go.
-          else ink_assert(frags[fragment].m_key == key);
-        }
-      }
-    }
-    // advance to target if we're not already there.
-    while (target > fragment) {
-      next_CacheKey(&key, &key);
-      ++fragment;
-      if (frags[fragment].m_key.is_zero())
-        frags[fragment].m_key = key; // might as well store it as we go.
-      else ink_assert(frags[fragment].m_key == key);
-    }
+  } else {
+    FragmentDescriptor* frag = alternate.force_frag_at(target);
+    ink_assert(frag);
+    key = frag->m_key;
   }
 }
 
@@ -790,7 +768,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     int n_frags = alternate.get_frag_count();
 
     // Quick check for offset in next fragment - very common
-    if (target_offset >= frag_upper_bound && (!frags || fragment > n_frags || target_offset < (*frags)[fragment].m_offset)) {
+    if (target_offset >= frag_upper_bound && (!frags || fragment >= n_frags || target_offset <= (*frags)[fragment].m_offset)) {
       Debug("amc", "Non-seeking continuation to next fragment");
     } else {
       int target = -1; // target fragment index.
@@ -835,32 +813,16 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       return handleEvent(AIO_EVENT_DONE, 0);
     }
     return EVENT_CONT;
-  } else if (write_vc) {
-    ink_release_assert(! "[amc] Handle case where fragment is not in the directory during read");
-    /* Check for an OpenDirEntry - if none, no hope. If so, see if any of the writers in it are still
-       planning to write this fragment (might check against all fragments - if any aren't going to
-       be written, might just give up at that point rather than hope some other user agent will happen
-       to ask for the missing fragments. Although, if there's a herd, that might not be so far fetched).
-    */
-# if 0
-    if (writer_done()) {
-      last_collision = NULL;
-      while (dir_probe(&earliest_key, vol, &dir, &last_collision)) {
-        if (dir_offset(&dir) == dir_offset(&earliest_dir)) {
-          DDebug("cache_read_agg", "%p: key: %X ReadMain complete: %d",
-                 this, first_key.slice32(1), (int)vio.ndone);
-          doc_len = vio.ndone;
-          goto Leos;
-        }
-      }
+  } else {
+    if (!od->wait_for(earliest_key, this, target_offset)) {
       DDebug("cache_read_agg", "%p: key: %X ReadMain writer aborted: %d",
              this, first_key.slice32(1), (int)vio.ndone);
-      goto Lerror;
+      lock.release();
+      return calluser(VC_EVENT_ERROR);
     }
-    DDebug("cache_read_agg", "%p: key: %X ReadMain retrying: %d", this, first_key.slice32(1), (int)vio.ndone);
+    DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: %d", this, first_key.slice32(1), (int)vio.ndone);
     SET_HANDLER(&CacheVC::openReadMain);
-    VC_SCHED_WRITER_RETRY();
-# endif
+    return EVENT_CONT;
   }
   if (is_action_tag_set("cache"))
     ink_release_assert(false);
@@ -894,9 +856,7 @@ CacheVC::openReadWaitEarliest(int evid, Event*)
     od = NULL;
     key = first_key;
     return handleEvent(EVENT_IMMEDIATE, 0);
-  } else if (dir_probe(&key, vol, &earliest_dir, &last_collision) ||
-      dir_lookaside_probe(&key, vol, &earliest_dir, NULL))
-  {
+  } else if (dir_probe(&key, vol, &earliest_dir, &last_collision) || dir_lookaside_probe(&key, vol, &earliest_dir, NULL)) {
     dir = earliest_dir;
     SET_HANDLER(&self::openReadStartEarliest);
     if ((zret = do_read_call(&key)) == EVENT_RETURN) {
@@ -996,7 +956,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
     // It's OK if there's a writer for this alternate, we can wait on it.
     if (od && od->has_writer(earliest_key)) {
       wake_up_thread = mutex->thread_holding;
-      od->waiting_for(earliest_key, this, 0);
+      od->wait_for(earliest_key, this, 0);
       lock.release();
       // The SM must be signaled that the cache read is open even if we haven't got the earliest frag
       // yet because otherwise it won't set up the read side of the tunnel before the write side finishes

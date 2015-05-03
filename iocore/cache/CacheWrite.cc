@@ -1517,11 +1517,11 @@ Lagain:
         Debug("amc", "[CacheVC::openWriteMain] writing empty earliest");
       } else {
         // go on the wait list
-        od->waiting_for(earliest_key, this, 0);
+        od->wait_for(earliest_key, this, 0);
         not_writing = true;
       }
     } else if (od->is_write_active(earliest_key, write_pos)) {
-      od->waiting_for(earliest_key, this, write_pos);
+      od->wait_for(earliest_key, this, write_pos);
       not_writing = true;
     } else if (alternate.is_frag_cached(fragment)) {
       not_writing = true;

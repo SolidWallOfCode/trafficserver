@@ -91,6 +91,9 @@ struct CacheHTTPInfoVector {
       } f;
     };
     ///@}
+    /// Check if there are any writers.
+    /// @internal Need to augment this at some point to check for writers to a specific offset.
+    bool has_writers() const;
   };
 
   typedef CacheArray<Item> InfoVector;
@@ -135,7 +138,8 @@ struct CacheHTTPInfoVector {
   /// Indicate if a VC is currently writing to the fragment with this @a offset.
   bool is_write_active(CacheKey const &alt_key, int64_t offset);
   /// Mark a CacheVC as waiting for the fragment containing the byte at @a offset.
-  self &waiting_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
+  /// @return @c false if there is no writer scheduled to write that offset.
+  bool wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Get the fragment key for a specific @a offset.
   CacheKey const &key_for(CacheKey const &alt_key, int64_t offset);
   /// Close out anything related to this writer
@@ -255,6 +259,12 @@ protected:
   char _boundary[HTTP_RANGE_BOUNDARY_LEN];
   bool _pending_range_shift_p;
 };
+
+TS_INLINE bool
+CacheHTTPInfoVector::Item::has_writers() const
+{
+  return NULL != _writers.head;
+}
 
 TS_INLINE CacheHTTPInfo *
 CacheHTTPInfoVector::get(int idx)
