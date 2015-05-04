@@ -61,51 +61,39 @@ OpenDir::OpenDir()
   SET_HANDLER(&OpenDir::signal_readers);
 }
 
-/*
-   If allow_if_writers is false, open_write fails if there are other writers.
-   max_writers sets the maximum number of concurrent writers that are
-   allowed. Only The first writer can set the max_writers. It is ignored
-   for later writers.
-   Returns 1 on success and 0 on failure.
-   */
-int
-OpenDir::open_write(CacheVC *cont, int /* allow_if_writers */, int /* max_writers */)
+OpenDirEntry*
+OpenDir::open_entry(Vol* vol, CryptoHash const& key, bool force_p)
 {
-  ink_assert(cont->vol->mutex->thread_holding == this_ethread());
-  unsigned int h = cont->first_key.slice32(0);
+  ink_assert(vol->mutex->thread_holding == this_ethread());
+  unsigned int h = key.slice32(0);
   int b = h % OPEN_DIR_BUCKETS;
   for (OpenDirEntry *d = bucket[b].head; d; d = d->link.next) {
-    if (!(d->first_key == cont->first_key))
+    if (!(d->first_key == key))
       continue;
-//    if (allow_if_writers && d->num_writers < d->max_writers) {
-//      d->writers.push(cont);
-    // [amc] Need to think if we want to track writers per object and not just per alt.
-    // useful to know when to close out the OpenDirEntry.
-      d->num_writers++;
-      cont->od = d;
-      cont->write_vector = &d->vector;
-      return 1;
-//    }
-    return 0;
+    ++(d->num_active);
+//    cont->od = d;
+//    cont->write_vector = &d->vector;
+    return d;
   }
+
+  if (!force_p)
+    return NULL;
+
   OpenDirEntry *od = THREAD_ALLOC(openDirEntryAllocator,
-                                  cont->mutex->thread_holding);
-//  od->readers.head = NULL;
-//  od->writers.push(cont);
+                                  vol->mutex->thread_holding);
   od->mutex = new_ProxyMutex();
-  od->first_key = cont->first_key;
-  od->num_writers = 1;
-//  od->max_writers = max_writers;
+  od->first_key = key;
+  od->num_active = 1;
   od->vector.data.data = &od->vector.data.fast_data[0];
   od->dont_update_directory = 0;
   od->move_resident_alt = 0;
   od->reading_vec = 0;
   od->writing_vec = 0;
   dir_clear(&od->first_dir);
-  cont->od = od;
-  cont->write_vector = &od->vector;
+//  cont->od = od;
+//  cont->write_vector = &od->vector;
   bucket[b].push(od);
-  return 1;
+  return od;
 }
 
 int
@@ -133,25 +121,22 @@ OpenDir::signal_readers(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   return 0;
 }
 
-int
-OpenDir::close_write(CacheVC *cont)
+void
+OpenDir::close_entry(CacheVC* vc)
 {
-  ink_assert(cont->vol->mutex->thread_holding == this_ethread());
-//  cont->od->writers.remove(cont);
-  if (--(cont->od->num_writers) < 1) {
-    unsigned int h = cont->first_key.slice32(0);
+  ink_assert(vc->vol->mutex->thread_holding == this_ethread());
+  if (--(vc->od->num_active) < 1) {
+    unsigned int h = vc->od->first_key.slice32(0);
     int b = h % OPEN_DIR_BUCKETS;
-    bucket[b].remove(cont->od);
-//    delayed_readers.append(cont->od->readers);
-//    signal_readers(0, 0);
-    cont->od->vector.clear();
-    cont->od->mutex = 0;
-    THREAD_FREE(cont->od, openDirEntryAllocator, cont->mutex->thread_holding);
+    bucket[b].remove(vc->od);
+    vc->od->vector.clear();
+    vc->od->mutex = 0;
+    THREAD_FREE(vc->od, openDirEntryAllocator, vc->vol->mutex->thread_holding);
   }
-  cont->od = NULL;
-  return 0;
+  vc->od = NULL;
 }
 
+# if 0
 OpenDirEntry *
 OpenDir::open_read(INK_MD5 *key)
 {
@@ -163,7 +148,6 @@ OpenDir::open_read(INK_MD5 *key)
   return NULL;
 }
 
-# if 0
 int
 OpenDirEntry::wait(CacheVC *cont, int msec)
 {

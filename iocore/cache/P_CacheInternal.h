@@ -859,7 +859,7 @@ CacheVC::writer_done()
 }
 # endif
 
-TS_INLINE int
+TS_INLINE void
 Vol::close_write(CacheVC *cont)
 {
 #ifdef CACHE_STAT_PAGES
@@ -867,12 +867,12 @@ Vol::close_write(CacheVC *cont)
   stat_cache_vcs.remove(cont, cont->stat_link);
   ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
 #endif
-  return open_dir.close_write(cont);
+  open_dir.close_entry(cont);
 }
 
 // Returns 0 on success or a positive error code on failure
 TS_INLINE int
-Vol::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
+Vol::open_write(CacheVC *cont)
 {
   Vol *vol = this;
   bool agg_error = false;
@@ -892,7 +892,8 @@ Vol::open_write(CacheVC *cont, int allow_if_writers, int max_writers)
     m_result->notMigrate = true;
   }
 #endif
-  if (open_dir.open_write(cont, allow_if_writers, max_writers)) {
+  ink_assert(NULL == cont->od);
+  if (NULL != (cont->od = open_dir.open_entry(this, cont->first_key, true))) {
 #ifdef CACHE_STAT_PAGES
     ink_assert(cont->mutex->thread_holding == this_ethread());
     ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
@@ -910,26 +911,23 @@ Vol::close_write_lock(CacheVC *cont)
   CACHE_TRY_LOCK(lock, mutex, t);
   if (!lock.is_locked())
     return -1;
-  return close_write(cont);
+  this->close_write(cont);
+  return 0;
 }
 
 TS_INLINE int
-Vol::open_write_lock(CacheVC *cont, int allow_if_writers, int max_writers)
+Vol::open_write_lock(CacheVC *cont)
 {
   EThread *t = cont->mutex->thread_holding;
   CACHE_TRY_LOCK(lock, mutex, t);
-  if (!lock.is_locked())
-    return -1;
-  return open_write(cont, allow_if_writers, max_writers);
+  return lock.is_locked() ? this->open_write(cont) : -1;
 }
 
 TS_INLINE OpenDirEntry *
 Vol::open_read_lock(INK_MD5 *key, EThread *t)
 {
   CACHE_TRY_LOCK(lock, mutex, t);
-  if (!lock.is_locked())
-    return NULL;
-  return open_dir.open_read(key);
+  return lock.is_locked() ? open_dir.open_entry(this, *key, false) : NULL;
 }
 
 TS_INLINE int

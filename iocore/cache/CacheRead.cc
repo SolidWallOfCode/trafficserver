@@ -290,9 +290,9 @@ CacheVC::openReadChooseWriter(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSE
       alternate_index = 0;
     vector.clear(false);
     DDebug("cache_read_agg",
-          "%p: key: %X eKey: %d # alts: %d, ndx: %d, # writers: %d writer: %p",
+          "%p: key: %X eKey: %d # alts: %d, ndx: %d, # active: %d writer: %p",
           this, first_key.slice32(1), write_vc->earliest_key.slice32(1),
-          vector.count(), alternate_index, od->num_writers, write_vc);
+          vector.count(), alternate_index, od->num_active, write_vc);
   }
 #endif // HTTP_CACHE
   return EVENT_NONE;
@@ -967,7 +967,8 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
       return callcont(CACHE_EVENT_OPEN_READ); // must signal read is open
     } else if (frag_type == CACHE_FRAG_TYPE_HTTP) {
       // don't want any writers while we are evacuating the vector
-      if (!vol->open_write(this, false, 1)) {
+      ink_release_assert(!"[amc] Not handling multiple writers with vector evacuate");
+      if (!vol->open_write(this)) {
         Doc *doc1 = (Doc *)first_buf->data();
         uint32_t len = this->load_http_info(write_vector, doc1);
         ink_assert(len == doc1->hlen && write_vector->count() > 0);

@@ -585,6 +585,7 @@ Vol::close_read(CacheVC *cont)
   EThread *t = cont->mutex->thread_holding;
   ink_assert(t == this_ethread());
   ink_assert(t == mutex->thread_holding);
+  open_dir.close_entry(cont);
   if (dir_is_empty(&cont->earliest_dir))
     return 1;
   int i = dir_evac_bucket(&cont->earliest_dir);
@@ -2965,7 +2966,7 @@ CacheVC::removeEvent(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       goto Lfree;
     }
     if (!f.remove_aborted_writers) {
-      if (vol->open_write(this, true, 1)) {
+      if (vol->open_write(this)) {
         // writer  exists
         ink_release_assert(od = vol->open_read(&key));
         od->dont_update_directory = 1;

@@ -107,7 +107,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       alternate_index = write_vector->insert(&alternate, alternate_index);
     }
 
-    if (od->move_resident_alt && first_buf._ptr() && !od->has_multiple_writers()) {
+    if (od->move_resident_alt && first_buf._ptr() /* && !od->has_multiple_writers() */) {
       Doc *doc = (Doc *)first_buf->data();
       int small_doc = (int64_t)doc->data_len() < (int64_t)cache_config_alt_rewrite_max_size;
       int have_res_alt = doc->key == od->single_doc_key;
@@ -1607,7 +1607,7 @@ CacheVC::openWriteStartDone(int event, Event *e)
     if (!lock.is_locked())
       VC_LOCK_RETRY_EVENT();
 
-    if (_action.cancelled && (!od || !od->has_multiple_writers()))
+    if (_action.cancelled && (!od /* || !od->has_multiple_writers() */ ))
       goto Lcancel;
 
     if (event == AIO_EVENT_DONE) { // vector read done
@@ -1672,15 +1672,17 @@ CacheVC::openWriteStartDone(int event, Event *e)
     }
 
   Lcollision:
-    int if_writers = ((uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES);
+//    int if_writers = ((uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES);
     if (!od) {
-      if ((err = vol->open_write(this, if_writers, cache_config_http_max_alts > 1 ? cache_config_http_max_alts : 0)) > 0)
+      if ((err = vol->open_write(this)) > 0)
         goto Lfailure;
+/*
       if (od->has_multiple_writers()) {
         MUTEX_RELEASE(lock);
         SET_HANDLER(&CacheVC::openWriteInit);
         return this->openWriteInit(EVENT_IMMEDIATE, 0);
       }
+*/
     }
     // check for collision
     if (dir_probe(&first_key, vol, &dir, &last_collision)) {
@@ -1725,7 +1727,7 @@ CacheVC::openWriteStartBegin(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED
   cancel_trigger();
   if (_action.cancelled)
     return free_CacheVC(this);
-  if (((err = vol->open_write_lock(this, false, 1)) > 0)) {
+  if (((err = vol->open_write_lock(this)) > 0)) {
     CACHE_INCREMENT_DYN_STAT(base_stat + CACHE_STAT_FAILURE);
     free_CacheVC(this);
     _action.continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *)-err);
@@ -1785,7 +1787,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheFragType frag_type, in
   c->f.sync = (options & CACHE_WRITE_OPT_SYNC) == CACHE_WRITE_OPT_SYNC;
   c->pin_in_cache = (uint32_t)apin_in_cache;
 
-  if ((res = c->vol->open_write_lock(c, false, 1)) > 0) {
+  if ((res = c->vol->open_write_lock(c)) > 0) {
     // document currently being written, abort
     CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);
     cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *)-res);
@@ -1839,7 +1841,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
 
   ink_assert(caches[type] == this);
   intptr_t err = 0;
-  int if_writers = (uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES;
+//  int if_writers = (uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES;
   CacheVC *c = new_CacheVC(cont);
   ProxyMutex *mutex = cont->mutex;
   c->vio.op = VIO::WRITE;
@@ -1903,13 +1905,15 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   {
     CACHE_TRY_LOCK(lock, c->vol->mutex, cont->mutex->thread_holding);
     if (lock.is_locked()) {
-      if ((err = c->vol->open_write(c, if_writers, cache_config_http_max_alts > 1 ? cache_config_http_max_alts : 0)) > 0)
+      if ((err = c->vol->open_write(c)) > 0)
         goto Lfailure;
       // If there are multiple writers, then this one cannot be an update.
       // Only the first writer can do an update. If that's the case, we can
       // return success to the state machine now.;
+/*
       if (c->od->has_multiple_writers())
         goto Lmiss;
+*/
       if (!dir_probe(key, c->vol, &c->dir, &c->last_collision)) {
         if (c->f.update) {
           // fail update because vector has been GC'd

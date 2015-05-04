@@ -256,7 +256,7 @@ struct OpenDirEntry {
   Dir single_doc_dir;         // Directory for the resident alternate
   Dir first_dir;              // Dir for the vector. If empty, a new dir is
                               // inserted, otherwise this dir is overwritten
-  uint16_t num_writers;       // num of current writers
+  uint16_t num_active;        // num of VCs working with this entry
   uint16_t max_writers;       // max number of simultaneous writers allowed
   bool dont_update_directory; // if set, the first_dir is not updated.
   bool move_resident_alt;     // if set, single_doc_dir is inserted.
@@ -281,12 +281,6 @@ struct OpenDirEntry {
   LINK(OpenDirEntry, link);
 
   //  int wait(CacheVC *c, int msec);
-
-  bool
-  has_multiple_writers()
-  {
-    return num_writers > 1;
-  }
 
   /// Get the alternate index for the @a key.
   int index_of(CacheKey const &key);
@@ -316,9 +310,13 @@ struct OpenDir : public Continuation {
 
   DLL<OpenDirEntry> bucket[OPEN_DIR_BUCKETS];
 
-  int open_write(CacheVC *c, int allow_if_writers, int max_writers);
-  int close_write(CacheVC *c);
-  OpenDirEntry *open_read(CryptoHash *key);
+  /** Open a live directory entry for @a vc.
+
+      @a force_p is set to @c true to force the entry if it's not already there.
+  */
+  OpenDirEntry* open_entry(Vol* vol, CryptoHash const& key, bool force_p = false);
+  void close_entry(CacheVC *c);
+  //  OpenDirEntry *open_read(CryptoHash *key);
   int signal_readers(int event, Event *e);
 
   OpenDir();

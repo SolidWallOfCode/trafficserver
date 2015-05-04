@@ -413,8 +413,9 @@ CacheVC::scanOpenWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     }
 
     Debug("cache_scan", "trying for writer lock");
-    if (vol->open_write(this, false, 1)) {
-      writer_lock_retry++;
+    if (vol->open_write(this)) {
+      // [amc] This tried to restrict to one writer, must fix at some point.
+      ++writer_lock_retry;
       SET_HANDLER(&CacheVC::scanOpenWrite);
       mutex->thread_holding->schedule_in_local(this, scan_msec_delay);
       return EVENT_CONT;
