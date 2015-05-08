@@ -327,7 +327,7 @@ struct CacheVC: public CacheVConnection
   int openReadFromWriter(int event, Event *e);
   int openReadFromWriterMain(int event, Event *e);
   int openReadFromWriterFailure(int event, Event *);
-  int openReadChooseWriter(int event, Event *e);
+  //  int openReadChooseWriter(int event, Event *e);
 
   int openWriteCloseDir(int event, Event *e);
   int openWriteCloseHeadDone(int event, Event *e);
@@ -347,6 +347,8 @@ struct CacheVC: public CacheVConnection
   int updateReadDone(int event, Event *e);
   int updateVecWrite(int event, Event *e);
   int updateWriteStateFromRange();
+
+  int closeReadAndFree(int event, Event *e);
 
   int removeEvent(int event, Event *e);
 
@@ -400,10 +402,18 @@ struct CacheVC: public CacheVConnection
   virtual char const* get_http_range_boundary_string(int* len) const;
   virtual int64_t get_effective_content_size();
   virtual void set_full_content_length(int64_t size);
-  virtual HTTPRangeSpec& get_http_range_spec();
-  virtual bool is_http_partial_content();
   virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result);
+  /** This sets a range for data flowing in to the cache VC.
+      The CacheVC will write the incoming data to this part of the overall object.
+      @internal It's done this way to isolate the CacheVC from parsing range separators
+      in multi-range responses.
+  */
   virtual int64_t set_inbound_range(int64_t min, int64_t max);
+  /** Select the ranges to apply to the content.
+      @internal In this case the CacheVC has to know the entire set of ranges so it can correctly
+      compute the actual output size (vs. the content size).
+  */
+  virtual void set_content_range(HTTPRangeSpec const& range);
 
 #endif
 
@@ -894,6 +904,7 @@ Vol::open_write(CacheVC *cont)
 #endif
   ink_assert(NULL == cont->od);
   if (NULL != (cont->od = open_dir.open_entry(this, cont->first_key, true))) {
+    cont->write_vector = &cont->od->vector;
 #ifdef CACHE_STAT_PAGES
     ink_assert(cont->mutex->thread_holding == this_ethread());
     ink_assert(!cont->stat_link.next && !cont->stat_link.prev);

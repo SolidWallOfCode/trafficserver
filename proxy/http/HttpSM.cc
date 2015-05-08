@@ -2664,6 +2664,7 @@ HttpSM::state_cache_open_partial_read(int event, void *data)
 
     cache_sm.cache_read_vc->get_http_info(&t_state.cache_info.object_read);
     ink_assert(t_state.cache_info.object_read != 0);
+    cache_sm.cache_read_vc->set_content_range(t_state.hdr_info.request_range);
 
     t_state.next_action = HttpTransact::SM_ACTION_SERVE_FROM_CACHE;
     t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;

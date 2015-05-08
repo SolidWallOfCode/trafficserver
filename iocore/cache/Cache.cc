@@ -511,6 +511,13 @@ bool CacheVC::set_pin_in_cache(time_t time_pin)
   return true;
 }
 
+void
+CacheVC::set_content_range(HTTPRangeSpec const& r)
+{
+  resp_range.getRangeSpec() = r;
+  resp_range.start();
+}
+
 bool
 CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
 {

@@ -227,75 +227,35 @@ CacheVC::get_http_range_boundary_string(int* len) const
 int64_t
 CacheVC::get_effective_content_size()
 {
-  return this->is_http_partial_content() ? resp_range.calcContentLength() : alternate.object_size_get();
+  return resp_range.hasRanges() ? resp_range.calcContentLength() : alternate.object_size_get();
 }
 
-HTTPRangeSpec&
-CacheVC::get_http_range_spec()
+int
+CacheVC::closeReadAndFree(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
 {
-  return resp_range.getRangeSpec();
-}
-
-bool
-CacheVC::is_http_partial_content()
-{
-  return resp_range.hasRanges();
+//  cancel_trigger(); // ??
+  if (od) {
+    CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
+    if (!lock.is_locked()) {
+      SET_HANDLER(&CacheVC::closeReadAndFree);
+      VC_SCHED_LOCK_RETRY();
+    }
+    vol->close_read(this);
+  }
+  return free_CacheVC(this);
 }
 
 int
 CacheVC::openReadFromWriterFailure(int event, Event *e)
 {
-  od = NULL;
+  // od = NULL;
+  vol->close_read(this);
   vector.clear(false);
   CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
   CACHE_INCREMENT_DYN_STAT(cache_read_busy_failure_stat);
   _action.continuation->handleEvent(event, e);
   free_CacheVC(this);
   return EVENT_DONE;
-}
-
-int
-CacheVC::openReadChooseWriter(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
-{
-//  intptr_t err = ECACHE_DOC_BUSY;
-//  CacheVC *w = NULL;
-
-  ink_assert(od->mutex->thread_holding == mutex->thread_holding && write_vc == NULL);
-
-  if (frag_type != CACHE_FRAG_TYPE_HTTP) {
-    ink_release_assert(! "[amc] Fix reader from writer for non-HTTP");
-  }
-#ifdef HTTP_CACHE
-  else {
-    write_vector = &od->vector;
-    int write_vec_cnt = write_vector->count();
-    for (int c = 0; c < write_vec_cnt; c++)
-      vector.insert(write_vector->get(c));
-    if (!vector.count()) {
-      // [amc] Not sure of the utility of this now
-      if (od->reading_vec) {
-        // the writer(s) are reading the vector, so there is probably
-        // an old vector. Since this reader came before any of the
-        // current writers, we should return the old data
-        od = NULL;
-        return EVENT_RETURN;
-      }
-      return -ECACHE_NO_DOC;
-    }
-    if (cache_config_select_alternate) {
-      alternate_index = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
-      if (alternate_index < 0)
-        return -ECACHE_ALT_MISS;
-    } else
-      alternate_index = 0;
-    vector.clear(false);
-    DDebug("cache_read_agg",
-          "%p: key: %X eKey: %d # alts: %d, ndx: %d, # active: %d writer: %p",
-          this, first_key.slice32(1), write_vc->earliest_key.slice32(1),
-          vector.count(), alternate_index, od->num_active, write_vc);
-  }
-#endif // HTTP_CACHE
-  return EVENT_NONE;
 }
 
 int
@@ -314,33 +274,29 @@ CacheVC::openReadFromWriter(int event, Event *e)
     f.read_from_writer_called = 1;
   }
   cancel_trigger();
-  intptr_t err = ECACHE_DOC_BUSY;
   DDebug("cache_read_agg", "%p: key: %X In openReadFromWriter", this, first_key.slice32(1));
-#ifndef READ_WHILE_WRITER
-  return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *)-err);
-#else
+
   if (_action.cancelled) {
-    od = NULL; // only open for read so no need to close
-    return free_CacheVC(this);
+    return this->closeReadAndFree(0, NULL);
+//    od = NULL; // only open for read so no need to close
+//    return free_CacheVC(this);
   }
   CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
   if (!lock.is_locked())
     VC_SCHED_LOCK_RETRY();
-  od = vol->open_read(&first_key); // recheck in case the lock failed
-  if (!od) {
+  if (!od && NULL == (od = vol->open_read(&first_key))) {
     MUTEX_RELEASE(lock);
     write_vc = NULL;
     SET_HANDLER(&CacheVC::openReadStartHead);
     return openReadStartHead(event, e);
-  } else
-    ink_assert(od == vol->open_read(&first_key));
+  }
 
   CACHE_TRY_LOCK(lock_od, od->mutex, mutex->thread_holding);
   if (!lock_od.is_locked())
     VC_SCHED_LOCK_RETRY();
 
   if (od->open_writer) {
-    // Can't pick a writer yet, so wait for it.
+    // Alternates are in flux, wait for origin server response to update them.
     if (!od->open_waiting.in(this)) {
       wake_up_thread = mutex->thread_holding;
       od->open_waiting.push(this);
@@ -352,6 +308,8 @@ CacheVC::openReadFromWriter(int event, Event *e)
   MUTEX_RELEASE(lock); // we have the OD lock now, don't need the vol lock.
 
   if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), write_vc->earliest_key))) {
+    // Found the alternate for our write VC. Really, though, if we have a write_vc we should never fail to get
+    // the alternate - we should probably check for that.
     alternate.copy_shallow(od->vector.get(alternate_index));
     key = earliest_key = alternate.object_key_get();
     doc_len = alternate.object_size_get();
@@ -359,141 +317,22 @@ CacheVC::openReadFromWriter(int event, Event *e)
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
   } else {
-    int ret = openReadChooseWriter(event, e);
-    if (ret < 0) {
-      MUTEX_RELEASE(lock_od);
-      SET_HANDLER(&CacheVC::openReadFromWriterFailure);
-      return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(ret));
-    } else if (ret == EVENT_RETURN) {
-      MUTEX_RELEASE(lock_od);
-      SET_HANDLER(&CacheVC::openReadStartHead);
-      return openReadStartHead(event, e);
-    } else if (ret == EVENT_CONT) {
-      ink_assert(!write_vc);
-      if (writer_lock_retry < cache_config_read_while_writer_max_retries) {
-        VC_SCHED_WRITER_RETRY();
-      } else {
-        return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *)-err);
+    if (cache_config_select_alternate) {
+      alternate_index = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
+      if (alternate_index < 0) {
+        MUTEX_RELEASE(lock_od);
+        SET_HANDLER(&CacheVC::openReadFromWriterFailure);
+        return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(-ECACHE_ALT_MISS));
       }
-    } else
-      ink_assert(write_vc);
-  }
-#ifdef HTTP_CACHE
-  OpenDirEntry *cod = od;
-#endif
-  od = NULL;
-  // someone is currently writing the document
-  if (write_vc->closed < 0) {
-    MUTEX_RELEASE(lock_od);
-    write_vc = NULL;
-    // writer aborted, continue as if there is no writer
-    SET_HANDLER(&CacheVC::openReadStartHead);
-    return openReadStartHead(EVENT_IMMEDIATE, 0);
-  }
-  // allow reading from unclosed writer for http requests only.
-  ink_assert(frag_type == CACHE_FRAG_TYPE_HTTP || write_vc->closed);
-  if (!write_vc->closed && !write_vc->fragment) {
-    if (!cache_config_read_while_writer || frag_type != CACHE_FRAG_TYPE_HTTP ||
-        writer_lock_retry >= cache_config_read_while_writer_max_retries) {
-      MUTEX_RELEASE(lock);
-      return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *)-err);
-    }
-    DDebug("cache_read_agg", "%p: key: %X writer: closed:%d, fragment:%d, retry: %d", this, first_key.slice32(1), write_vc->closed,
-           write_vc->fragment, writer_lock_retry);
-    VC_SCHED_WRITER_RETRY();
-  }
-
-  CACHE_TRY_LOCK(writer_lock, write_vc->mutex, mutex->thread_holding);
-  if (!writer_lock.is_locked()) {
-    DDebug("cache_read_agg", "%p: key: %X lock miss", this, first_key.slice32(1));
-    VC_SCHED_LOCK_RETRY();
-  }
-  MUTEX_RELEASE(lock);
-
-  if (!write_vc->io.ok())
-    return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *)-err);
-#ifdef HTTP_CACHE
-  if (frag_type == CACHE_FRAG_TYPE_HTTP) {
-    DDebug("cache_read_agg", "%p: key: %X http passed stage 1, closed: %d, frag: %d", this, first_key.slice32(1), write_vc->closed,
-           write_vc->fragment);
-    if (!write_vc->alternate.valid())
-      return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, (Event *)-err);
-    alternate.copy(&write_vc->alternate);
-    vector.insert(&alternate);
-    alternate.object_key_get(&key);
-    write_vc->f.readers = 1;
-    if (!(write_vc->f.update && write_vc->total_len == 0)) {
-      key = write_vc->earliest_key;
-      if (!write_vc->closed)
-        alternate.object_size_set(write_vc->vio.nbytes);
-      else
-        alternate.object_size_set(write_vc->total_len);
     } else {
-      key = write_vc->update_key;
-      ink_assert(write_vc->closed);
-      DDebug("cache_read_agg", "%p: key: %X writer header update", this, first_key.slice32(1));
-      // Update case (b) : grab doc_len from the writer's alternate
-      doc_len = alternate.object_size_get();
-      if (write_vc->update_key == cod->single_doc_key && (cod->move_resident_alt || write_vc->f.rewrite_resident_alt) &&
-          write_vc->first_buf._ptr()) {
-        // the resident alternate is being updated and its a
-        // header only update. The first_buf of the writer has the
-        // document body.
-        Doc *doc = (Doc *)write_vc->first_buf->data();
-        writer_buf = new_IOBufferBlock(write_vc->first_buf, doc->data_len(), doc->prefix_len());
-        MUTEX_RELEASE(writer_lock);
-        ink_assert(doc_len == doc->data_len());
-        length = doc_len;
-        f.single_fragment = 1;
-        doc_pos = 0;
-        earliest_key = key;
-        dir_clean(&first_dir);
-        dir_clean(&earliest_dir);
-        SET_HANDLER(&CacheVC::openReadFromWriterMain);
-        CACHE_INCREMENT_DYN_STAT(cache_read_busy_success_stat);
-        return callcont(CACHE_EVENT_OPEN_READ);
-      }
-      // want to snarf the new headers from the writer
-      // and then continue as if nothing happened
-      last_collision = NULL;
-      MUTEX_RELEASE(writer_lock);
-      SET_HANDLER(&CacheVC::openReadStartEarliest);
-      return openReadStartEarliest(event, e);
+      alternate_index = 0;
     }
-  } else {
-#endif // HTTP_CACHE
-    DDebug("cache_read_agg", "%p: key: %X non-http passed stage 1", this, first_key.slice32(1));
-    key = write_vc->earliest_key;
-#ifdef HTTP_CACHE
+    MUTEX_RELEASE(lock_od);
+    SET_HANDLER(&CacheVC::openReadStartHead);
+    return openReadStartHead(event, e);
   }
-#endif
-  if (write_vc->fragment) {
-    doc_len = write_vc->vio.nbytes;
-    last_collision = NULL;
-    DDebug("cache_read_agg", "%p: key: %X closed: %d, fragment: %d, len: %d starting first fragment", this, first_key.slice32(1),
-           write_vc->closed, write_vc->fragment, (int)doc_len);
-    MUTEX_RELEASE(writer_lock);
-    // either a header + body update or a new document
-    SET_HANDLER(&CacheVC::openReadStartEarliest);
-    return openReadStartEarliest(event, e);
-  }
-  writer_buf = write_vc->blocks;
-  writer_offset = write_vc->offset;
-  length = write_vc->length;
-  // copy the vector
-  f.single_fragment = !write_vc->fragment; // single fragment doc
-  doc_pos = 0;
-  earliest_key = write_vc->earliest_key;
-  ink_assert(earliest_key == key);
-  doc_len = write_vc->total_len;
-  dir_clean(&first_dir);
-  dir_clean(&earliest_dir);
-  DDebug("cache_read_agg", "%p: key: %X %X: single fragment read", this, first_key.slice32(1), key.slice32(0));
-  MUTEX_RELEASE(writer_lock);
-  SET_HANDLER(&CacheVC::openReadFromWriterMain);
-  CACHE_INCREMENT_DYN_STAT(cache_read_busy_success_stat);
-  return callcont(CACHE_EVENT_OPEN_READ);
-#endif // READ_WHILE_WRITER
+  ink_assert(false);
+  return EVENT_DONE; // should not get here.
 }
 
 int
@@ -853,7 +692,7 @@ CacheVC::openReadWaitEarliest(int evid, Event*)
     // there's no explicit earliest frag.
     lock.release();
     SET_HANDLER(&self::openReadStartHead);
-    od = NULL;
+//    od = NULL;
     key = first_key;
     return handleEvent(EVENT_IMMEDIATE, 0);
   } else if (dir_probe(&key, vol, &earliest_dir, &last_collision) || dir_lookaside_probe(&key, vol, &earliest_dir, NULL)) {
@@ -1219,11 +1058,6 @@ CacheVC::openReadStartHead(int event, Event *e)
       alternate.object_key_get(&key);
       doc_len = alternate.object_size_get();
 
-      // Handle any range related setup.
-      if (!resp_range.init(&request)) { // shouldn't this have been checked earlier?
-        err = ECACHE_INVALID_RANGE;
-        goto Ldone;
-      }
       // If the object length is known we can check the range.
       // Otherwise we have to leave it vague and talk to the origin to get full length info.
       if (alternate.m_alt->m_flag.content_length_p && !resp_range.apply(doc_len)) {
@@ -1232,7 +1066,6 @@ CacheVC::openReadStartHead(int event, Event *e)
       }
       if (resp_range.isMulti())
         resp_range.setContentTypeFromResponse(alternate.response_get()).generateBoundaryStr(earliest_key);
-//      alternate.get_uncached(resp_range.getRangeSpec(), uncached_range.getRangeSpec());
 
       if (key == doc->key) {      // is this my data?
         f.single_fragment = doc->single_fragment();

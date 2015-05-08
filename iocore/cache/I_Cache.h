@@ -252,16 +252,9 @@ struct CacheVConnection : public VConnection {
   */
   virtual void set_full_content_length(int64_t) = 0;
 
-  /** Get the range spec for the response (request ranges modifed by content length).
-      @internal Need better comment - this is the range spec used for a response from ATS to the user agent
-      from cached data. Even better we have potentially 2 response ranges - that from the origin server to
-      ATS and that from ATS to the user agent which are only somewhat similar, depending on what exactly
-      is in the cache at the moment.
+  /** Set the output ranges for the content.
    */
-  virtual HTTPRangeSpec& get_http_range_spec() = 0;
-
-  /// Check if this is HTTP partial content (range request/response).
-  virtual bool is_http_partial_content() = 0;
+  virtual void set_content_range(HTTPRangeSpec const& range) = 0;
 
   /// Get the unchanged ranges for the request range @a req.
   /// If @a req is empty it is treated as a full request (non-partial).

@@ -361,11 +361,10 @@ struct ClusterVConnectionBase : public CacheVConnection {
   // I think the best approach is to foist the work off to the source peer and have it do
   // the range formatting which we then just pass through. For now, this just prevents
   // link problems so I can get the base case to work.
+  virtual void set_content_range(HTTPRangeSpec const&) { return; }
   virtual char const* get_http_range_boundary_string(int*) const { return NULL; }
   virtual int64_t get_effective_content_size() { return this->get_object_size(); }
   virtual void set_full_content_length(int64_t) { } // only used when writing to cache
-  virtual HTTPRangeSpec& get_http_range_spec() { return resp_range.getRangeSpec(); }
-  virtual bool is_http_partial_content() { return false; }
 
   // Set the timeouts associated with this connection.
   // active_timeout is for the total elasped time of the connection.

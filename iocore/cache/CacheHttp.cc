@@ -424,7 +424,7 @@ CacheRange::start()
 
   if (_r.hasRanges()) {
     _offset = _r[_idx = 0]._min;
-    _pending_range_shift_p = true;
+    _pending_range_shift_p = _r.isMulti();
     zret = true;
   }
   return zret;
