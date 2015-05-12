@@ -318,12 +318,13 @@ CacheVC::openReadFromWriter(int event, Event *e)
     return openReadStartEarliest(event, e);
   } else {
     if (cache_config_select_alternate) {
-      alternate_index = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
+      alternate_index = HttpTransactCache::SelectFromAlternates(&od->vector, &request, params);
       if (alternate_index < 0) {
         MUTEX_RELEASE(lock_od);
         SET_HANDLER(&CacheVC::openReadFromWriterFailure);
         return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(-ECACHE_ALT_MISS));
       }
+      write_vector = &od->vector;
     } else {
       alternate_index = 0;
     }

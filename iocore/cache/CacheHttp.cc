@@ -284,8 +284,10 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool s
   if (success) item._alternate.mark_frag_write(vc->fragment);
 
   // Kick all the waiters, success or fail.
-  while (NULL != (reader = item._waiting.pop()))
-    eventProcessor.schedule_imm(reader);
+  while (NULL != (reader = item._waiting.pop())) {
+    Debug("amc", "[write_complete] wake up %p", reader);
+    reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
+  }
 
   return *this;
 }
@@ -323,10 +325,12 @@ CacheHTTPInfoVector::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offs
   Item& item = data[alt_idx];
   int frag_idx = item._alternate.get_frag_index_of(offset);
   vc->fragment = frag_idx; // really? Shouldn't this already be set?
-  if (item.has_writers())
-    item._waiting.push(vc);
-  else
+  if (item.has_writers()) {
+    if (! item._waiting.in(vc))
+      item._waiting.push(vc);
+  } else {
     zret = false;
+  }
   return zret;
 }
 
@@ -342,7 +346,7 @@ CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
   item._writers.remove(vc);
   while (NULL != (reader = item._waiting.pop())) {
     Debug("amc", "[close_writer] wake up %p", reader);
-    reader->wake_up_thread->schedule_imm(reader);
+    reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
   }
   return *this;
 }
