@@ -1419,8 +1419,11 @@ CacheVC::openWriteInit(int eid, Event* event)
     }
   }
 
-  if (resp_range.hasRanges()) resp_range.start();
-//  write_pos = resp_range.getOffset();
+  if (resp_range.hasRanges()) {
+    resp_range.start();
+//    this->updateWriteStateFromRange();
+  }
+    
 //  key = alternate.get_frag_key_of(write_pos);
   SET_HANDLER(&CacheVC::openWriteMain);
   return openWriteMain(eid, event);
@@ -1457,7 +1460,7 @@ Lagain:
   int64_t towrite = avail + length;
   int64_t ffs = cacheProcessor.get_fixed_fragment_size();
 
-  Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64, ntodo, avail, towrite);
+  Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite, fragment);
 
   if (towrite > ntodo) {
     avail -= (towrite - ntodo);
@@ -1497,17 +1500,19 @@ Lagain:
   if (not_writing)
     return EVENT_CONT;
 
-  ink_assert(static_cast<int64_t>(write_pos) == alternate.get_frag_offset(fragment));
+  this->updateWriteStateFromRange();
+
   {
-    CacheHTTPInfo *alt = 0;
+    CacheHTTPInfo *alt = &alternate;
     MUTEX_LOCK(lock, od->mutex, this_ethread());
 
-    this->updateWriteStateFromRange();
+# if 0
     alternate_index = get_alternate_index(write_vector, earliest_key);
     if (alternate_index < 0)
       alternate_index = write_vector->insert(&alternate, alternate_index);
 
     alt = write_vector->get(alternate_index);
+# endif
 
     if (fragment != 0 && !alt->m_alt->m_earliest.m_flag.cached_p) {
       SET_HANDLER(&CacheVC::openWriteEmptyEarliestDone);

@@ -1587,7 +1587,12 @@ struct HTTPCacheAlt {
       m_size value) only the descriptors.
   */
   struct FragmentDescriptorTable {
-    uint32_t m_n; ///< The allocated number of entries in the table.
+    /** The number of entries in the table.
+	Because this is a 1 based array, this is also the largest valid index.
+	@note It is 1 less than the total number of fragment descriptors because earliest is stored
+	directly and not in this table.
+     */
+    uint32_t m_n;
 
     /** Fragment index of last initial segment cached.
 
@@ -1600,7 +1605,12 @@ struct HTTPCacheAlt {
     */
     uint32_t m_cached_idx;
 
-    /// 1 based array operator.
+    /** Array operator for fragments in the table (1-based).
+	This is a bit tricky. The earliest fragment is special and so is @b not stored in this table.
+	To make that easier to deal with this array is one based so the containing object can simply
+	pass the index on if it's not 0 (earliest). From an external point of view the array of fragments
+	is zero based.
+     */
     FragmentDescriptor &operator[](int idx);
     /// Calculate the allocation size needed for a maximum array index of @a n.
     static size_t calc_size(uint32_t n);
@@ -1644,7 +1654,7 @@ struct HTTPCacheAlt {
   /// This can be zero for a resident alternate.
   /// @internal In practice this is the high water mark for cached fragments.
   /// Contrast with the @a m_cached_idx in the fragment table - that marks the high
-  /// water of continguously cached fragments.
+  /// water of contiguously cached fragments.
   uint32_t m_frag_count;
 
   /** The target size for fragments in this alternate.
@@ -2162,10 +2172,7 @@ inline HTTPCacheAlt::FragmentDescriptor &HTTPCacheAlt::FragmentDescriptorTable::
 inline size_t
 HTTPCacheAlt::FragmentDescriptorTable::calc_size(uint32_t n)
 {
-  /* Get storage for @a n fragments. Because we store the earliest in the base structure, we only need
-     @a n - 1 entries in the table.
-  */
-  return n < 1 ? 0 : sizeof(FragmentDescriptorTable) + (n - 1) * sizeof(FragmentDescriptor);
+  return n < 1 ? 0 : sizeof(FragmentDescriptorTable) + n * sizeof(FragmentDescriptor);
 }
 
 #if 0

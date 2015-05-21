@@ -2145,7 +2145,8 @@ HTTPInfo::force_frag_at(unsigned int idx) {
       key = frag->m_key;
       old_size = FragmentDescriptorTable::calc_size(old_count);
       memcpy(m_alt->m_fragments, old_table, old_size);
-      ats_free(old_table);
+      if (m_alt->m_flag.table_allocated_p)
+        ats_free(old_table);
     } else {
       key = m_alt->m_earliest.m_key;
       m_alt->m_fragments->m_cached_idx = 0;
@@ -2154,7 +2155,7 @@ HTTPInfo::force_frag_at(unsigned int idx) {
     m_alt->m_flag.table_allocated_p = true;
     // fill out the new parts with offsets & keys.
     ++old_count; // left as the index of the last frag in the previous set.
-    for ( frag = &((*m_alt->m_fragments)[old_count]) ; old_count < n ; ++old_count, ++frag ) {
+    for ( frag = &((*m_alt->m_fragments)[old_count]) ; old_count <= n ; ++old_count, ++frag ) {
       key.next();
       offset += ff_size;
       frag->m_key = key;
@@ -2195,28 +2196,33 @@ int
 HTTPInfo::get_frag_index_of(int64_t offset)
 {
   int zret = 0;
-  int n = this->get_frag_count();
   uint32_t ff_size = this->get_frag_fixed_size();
-
-  if (n < 2) {
-    // Not multi-frag, so just compute the index.
+  FragmentDescriptorTable* table = this->get_frag_table();
+  if (!table) {
+    // Never the case that we have an empty earliest fragment *and* no frag table.
     zret = offset / ff_size;
   } else {
-    FragmentDescriptorTable* frags = this->get_frag_table();
-    zret = (offset / ff_size) + 1;
-    if ((*frags)[1].m_offset == 0) ++zret;
-    else if (static_cast<uint64_t>(offset) >= (*frags)[1].m_offset) { // otherwise it's in the earliest frag, index 0
+    FragmentDescriptorTable& frags = *table; // easier to work with.
+    int n = frags.m_n; // also the max valid frag table index and always >= 1.
+    // I should probably make @a m_offset int64_t to avoid casting issues like this...
+    uint64_t uoffset = static_cast<uint64_t>(offset);
+
+    if (uoffset >= frags[n].m_offset) {
+      // in or past the last fragment, compute the index by computing the # of @a ff_size chunks past the end.
+      zret = n + (static_cast<uint64_t>(offset) - frags[n].m_offset) / ff_size;
+    } else if (uoffset < frags[1].m_offset) {
+      zret = 0; // in the earliest fragment.
+    } else {
       // Need to handle old data where the offsets are not guaranteed to be regular.
-      // So we guess (which should be close) and if we're right, boom, else linear
-      // search.
-      while (0 < zret) {
-        if (static_cast<uint64_t>(offset) < (*frags)[zret].m_offset) {
+      // So we start with our guess (which should be close) and if we're right, boom, else linear
+      // search which should only be 1 or 2 steps.
+      zret = offset / ff_size;
+      if (frags[1].m_offset == 0 || 0 == zret) // zret can be zero if the earliest frag is less than @a ff_size
+        ++zret;
+      while (0 < zret && zret < n) {
+        if (uoffset < frags[zret].m_offset) {
           --zret;
-        } else if (zret >= n-1) {
-          // if we're at the last known fragment, just compute the index.
-          zret += (static_cast<uint64_t>(offset) - (*frags)[zret].m_offset) / ff_size;
-          break;
-        } else if (static_cast<uint64_t>(offset) >= (*frags)[zret+1].m_offset) {
+        } else if (uoffset >= frags[zret+1].m_offset) {
           ++zret;
         } else {
           break;
@@ -2632,21 +2638,25 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
   if (m_alt && !m_alt->m_flag.complete_p) {
     HTTPRangeSpec::Range s = req.getConvexHull();
     if (m_alt->m_fragments) {
+      FragmentDescriptorTable& fdt = *(m_alt->m_fragments);
       int32_t lidx;
       int32_t ridx;
       if (s.isValid()) {
         lidx = this->get_frag_index_of(s._min);
         ridx = this->get_frag_index_of(s._max);
       } else { // not a range request, get hull of all uncached fragments
-        lidx = m_alt->m_fragments->m_cached_idx + 1;
+        lidx = fdt.m_cached_idx + 1;
         // This really isn't valid if !content_length_p, need to deal with that at some point.
         ridx = this->get_frag_index_of(this->object_size_get());
       }
 
       if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p) lidx = 0;
-      else while (lidx <= ridx && (*m_alt->m_fragments)[lidx].m_flag.cached_p) ++lidx;
+      else {
+        if (0 == lidx) ++lidx; // because if we get here with lidx == 0, earliest is cached and we should skip ahead.
+        while (lidx <= ridx && fdt[lidx].m_flag.cached_p) ++lidx;
+      }
 
-      while (lidx <= ridx && (*m_alt->m_fragments)[ridx].m_flag.cached_p) --ridx;
+      while (lidx <= ridx && fdt[ridx].m_flag.cached_p) --ridx;
 
       if (lidx <= ridx) r = this->get_range_for_frags(lidx, ridx);
     } else { // no fragments past earliest cached yet

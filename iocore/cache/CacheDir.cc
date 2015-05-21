@@ -125,7 +125,7 @@ void
 OpenDir::close_entry(CacheVC* vc)
 {
   ink_assert(vc->vol->mutex->thread_holding == this_ethread());
-  if (--(vc->od->num_active) < 1) {
+  if (vc->od && --(vc->od->num_active) < 1) {
     unsigned int h = vc->od->first_key.slice32(0);
     int b = h % OPEN_DIR_BUCKETS;
     bucket[b].remove(vc->od);

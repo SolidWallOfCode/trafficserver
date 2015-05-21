@@ -1598,6 +1598,8 @@ HttpSM::state_api_callout(int event, void *data)
 void
 HttpSM::handle_api_return()
 {
+  HttpTunnelProducer* p = 0; // used as a scratch var in various cases.
+
   switch (t_state.api_next_action) {
   case HttpTransact::SM_ACTION_API_SM_START:
     if (t_state.client_info.port_attribute == HttpProxyPort::TRANSPORT_BLIND_TUNNEL) {
@@ -1644,12 +1646,11 @@ HttpSM::handle_api_return()
   }
 
   switch (t_state.next_action) {
-  case HttpTransact::SM_ACTION_TRANSFORM_READ: {
-    HttpTunnelProducer *p = setup_transfer_from_transform();
+  case HttpTransact::SM_ACTION_TRANSFORM_READ:
+    p = setup_transfer_from_transform();
     perform_transform_cache_write_action();
     tunnel.tunnel_run(p);
     break;
-  }
   case HttpTransact::SM_ACTION_SERVER_READ: {
     if (unlikely(t_state.did_upgrade_succeed)) {
       // We've sucessfully handled the upgrade, let's now setup
@@ -1674,14 +1675,15 @@ HttpSM::handle_api_return()
         pending_action = cache_sm.open_partial_read(&t_state.hdr_info.client_request);
         cache_sm.cache_write_vc = NULL;
       } else {
-        setup_server_transfer();
+        p = setup_server_transfer();
         perform_cache_write_action();
+        tunnel.tunnel_run(p);
       }
     }
     break;
   }
   case HttpTransact::SM_ACTION_SERVE_FROM_CACHE: {
-    HttpTunnelProducer *p = setup_cache_read_transfer();
+    p = setup_cache_read_transfer();
     tunnel.tunnel_run(p);
     break;
   }
