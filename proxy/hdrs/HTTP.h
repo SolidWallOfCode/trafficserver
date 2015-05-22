@@ -1941,6 +1941,19 @@ HTTPInfo::object_size_set(int64_t size)
 {
   m_alt->m_earliest.m_offset = size;
   m_alt->m_flag.content_length_p = true;
+  // Invariant - if a fragment is cached, all of that fragment is cached.
+  // Therefore if the last byte is in the initial cached fragments all of the data is cached.
+  if (!m_alt->m_flag.complete_p) {
+    int64_t mco = 0; // maximum cached offset + 1
+    if (m_alt->m_fragments) {
+      if (m_alt->m_fragments->m_cached_idx >= 0)
+	mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
+    } else if (m_alt->m_earliest.m_flag.cached_p) {
+      mco = this->get_frag_fixed_size();
+    }
+    if (mco > size)
+      m_alt->m_flag.complete_p = true;
+  }
 }
 
 inline HTTPInfo::FragmentDescriptorTable *

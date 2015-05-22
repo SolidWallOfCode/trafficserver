@@ -792,6 +792,7 @@ agg_copy(char *p, CacheVC *vc)
           int64_t size = vc->alternate.object_size_get();
           if (size >= 0) doc->total_len = size;
         } else {
+          // As the header is finalized the fragment vector should be trimmed if the object is complete.
           if (!vc->f.update && !vc->f.evac_vector) {
             ink_assert(!(vc->first_key == zero_key));
             CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
