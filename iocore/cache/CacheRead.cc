@@ -313,6 +313,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
     alternate.copy_shallow(od->vector.get(alternate_index));
     key = earliest_key = alternate.object_key_get();
     doc_len = alternate.object_size_get();
+    Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, alternate_index, alternate.m_alt);
     MUTEX_RELEASE(lock_od);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
@@ -324,6 +325,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
         SET_HANDLER(&CacheVC::openReadFromWriterFailure);
         return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(-ECACHE_ALT_MISS));
       }
+      Debug("amc", "[openReadFromWriter] select alt: %d %p (current %p)", alternate_index, od->vector.get(alternate_index)->m_alt, alternate.m_alt);
       write_vector = &od->vector;
     } else {
       alternate_index = 0;
@@ -910,6 +912,7 @@ CacheVC::openReadVecWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */
       if (od->move_resident_alt)
         dir_insert(&od->single_doc_key, vol, &od->single_doc_dir);
       int alt_ndx = HttpTransactCache::SelectFromAlternates(write_vector, &request, params);
+      Debug("amc", "[openReadVecWrite] select alt: %d %p (current %p)", alt_ndx, write_vector->get(alt_ndx)->m_alt, alternate.m_alt);
       vol->close_write(this);
       if (alt_ndx >= 0) {
         vector.clear();
@@ -1044,6 +1047,7 @@ CacheVC::openReadStartHead(int event, Event *e)
           err = ECACHE_ALT_MISS;
           goto Ldone;
         }
+        Debug("amc", "[openReadStartHead] select alt: %d %p (current %p, od %p)", alternate_index, vector.get(alternate_index)->m_alt, alternate.m_alt, od);
       } else if (CACHE_ALT_INDEX_DEFAULT == (alternate_index = get_alternate_index(&vector, earliest_key)))
         alternate_index = 0;
       alternate_tmp = vector.get(alternate_index);

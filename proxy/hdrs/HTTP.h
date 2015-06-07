@@ -1838,6 +1838,11 @@ public:
   {
     return m_alt->m_flag.complete_p;
   }
+  bool
+  is_writeable() const
+  {
+    return m_alt->m_flag.writeable_p;
+  }
 
   /** Compute the convex hull of uncached ranges.
 

@@ -1661,7 +1661,8 @@ HttpSM::handle_api_return()
 
       setup_blind_tunnel(true);
     } else {
-      if (t_state.range_setup == HttpTransact::RANGE_PARTIAL_WRITE && HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action) {
+      if ((t_state.range_setup == HttpTransact::RANGE_PARTIAL_WRITE || t_state.range_setup == HttpTransact::RANGE_PARTIAL_UPDATE) &&
+          HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action) {
         Debug("amc", "Set up for partial read");
         CacheVConnection *save_write_vc = cache_sm.cache_write_vc;
         tunnel.tunnel_run(setup_server_transfer_to_cache_only());
@@ -6070,21 +6071,26 @@ void
 HttpSM::setup_cache_write_transfer(HttpCacheSM *c_sm, VConnection *source_vc, HTTPInfo *store_info, int64_t skip_bytes,
                                    const char *name)
 {
+  bool partial_update_p = HttpTransact::RANGE_PARTIAL_UPDATE == t_state.range_setup;
   ink_assert(c_sm->cache_write_vc != NULL);
   ink_assert(t_state.request_sent_time > 0);
   ink_assert(t_state.response_received_time > 0);
+  ink_assert(store_info->valid() || partial_update_p);
 
-  store_info->request_sent_time_set(t_state.request_sent_time);
-  store_info->response_received_time_set(t_state.response_received_time);
+  if (!partial_update_p) {
+    store_info->request_sent_time_set(t_state.request_sent_time);
+    store_info->response_received_time_set(t_state.response_received_time);
 
-  if (t_state.hdr_info.response_range.isValid()) {
-    if (t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL)
+    if (t_state.hdr_info.response_range.isValid() && t_state.hdr_info.response_content_size != HTTP_UNDEFINED_CL)
       store_info->object_size_set(t_state.hdr_info.response_content_size);
-    c_sm->cache_write_vc->set_inbound_range(t_state.hdr_info.response_range._min, t_state.hdr_info.response_range._max);
+
+    c_sm->cache_write_vc->set_http_info(store_info);
+    store_info->clear();
   }
 
-  c_sm->cache_write_vc->set_http_info(store_info);
-  store_info->clear();
+  if (t_state.hdr_info.response_range.isValid())
+    c_sm->cache_write_vc->set_inbound_range(t_state.hdr_info.response_range._min, t_state.hdr_info.response_range._max);
+
 
   tunnel.add_consumer(c_sm->cache_write_vc, source_vc, &HttpSM::tunnel_handler_cache_write, HT_CACHE_WRITE, name, skip_bytes);
 

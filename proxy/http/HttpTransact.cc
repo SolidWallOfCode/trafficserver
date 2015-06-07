@@ -2697,7 +2697,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
 
   // Check if we need to get some data from the origin.
   if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range)) {
-    Debug("amc", "Request has uncached fragments");
+    Debug("amc", "Request touches uncached fragments");
     find_server_and_update_current_info(s);
     if (!ats_is_ip(&s->current.server->addr)) {
       if (s->current.request_to == PARENT_PROXY) {
@@ -2711,7 +2711,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
     }
     build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->client_info.http_version, &range);
     s->cache_info.action = CACHE_PREPARE_TO_WRITE;
-    s->range_setup = RANGE_PARTIAL_WRITE;
+    s->range_setup = RANGE_PARTIAL_UPDATE;
     s->next_action = how_to_open_connection(s);
     if (s->stale_icp_lookup && s->next_action == SM_ACTION_ORIGIN_SERVER_OPEN) {
       s->next_action = SM_ACTION_ICP_QUERY;
@@ -4491,7 +4491,10 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
   }
   ink_assert(base_response->valid());
 
-  if ((s->cache_info.action == CACHE_DO_WRITE) || (s->cache_info.action == CACHE_DO_REPLACE)) {
+  if (((s->cache_info.action == CACHE_DO_WRITE) || (s->cache_info.action == CACHE_DO_REPLACE)) &&
+      s->range_setup != RANGE_PARTIAL_UPDATE
+    ) {
+    // If it's a partial write then we already have the cached headers, no need to pass these in.
     set_headers_for_cache_write(s, &s->cache_info.object_store, &s->hdr_info.server_request, &s->hdr_info.server_response);
   }
   // 304, 412, and 416 responses are handled here

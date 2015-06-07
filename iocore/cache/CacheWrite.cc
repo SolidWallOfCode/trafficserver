@@ -1399,16 +1399,29 @@ CacheVC::openWriteInit(int eid, Event* event)
       return EVENT_CONT;
     }
 
-    // If we're not already in the alt vector, insert.
-    if (earliest_key != alternate.object_key_get()) {
+    if (alternate.valid() && earliest_key != alternate.object_key_get()) {
+      // When the VC is created it sets up for a new alternate write. If we're back filling we
+      // need to tweak that back to the existing alternate.
       Debug("amc", "[CacheVC::openWriteInit] updating earliest key from alternate");
       alternate.object_key_get(&earliest_key);
     }
+    // Get synchronized with the OD vector.
     if (-1 == (alternate_index = get_alternate_index(write_vector, earliest_key))) {
-      alternate_index = write_vector->insert(&alternate);
+      Debug("amc", "[openWriteInit] alt not found, inserted");
+      alternate_index = write_vector->insert(&alternate); // not there, add it
+    } else {
+      HTTPInfo* base = write_vector->get(alternate_index);
+      if (!base->is_writeable()) {
+        // The alternate instance is mapped directly on a read buffer, which we can't modify.
+        // It must be replaced with a live, mutable one.
+        Debug("amc", "Updating OD vector element %d : 0x%p with mutable version %p", alternate_index, base, alternate.m_alt);
+        alternate.copy(base); // make a local copy
+        base->copy_shallow(&alternate); // paste the mutable copy back.
+      }
     }
     // mark us as an writer.
     write_vector->data[alternate_index]._writers.push(this);
+    alternate.copy_shallow(write_vector->get(alternate_index));
 
     if (this == od->open_writer) {
       od->open_writer = NULL;
@@ -1531,9 +1544,12 @@ Lagain:
       not_writing = true;
     } else if (alternate.is_frag_cached(fragment)) {
       not_writing = true;
-      resp_range.consume(length); // just drop it.
       Debug("amc", "Fragment %d already cached", fragment);
-      // Need to consume the actual data too (in blocks/offset).
+      // Consume the data, as we won't be using it.
+      resp_range.consume(write_len);
+      blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+      // need to kick start things again or we'll stall.
+      return this->handleEvent(EVENT_IMMEDIATE);
     } else {
       od->write_active(earliest_key, this, write_pos);
     }
@@ -1852,17 +1868,23 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   ProxyMutex *mutex = cont->mutex;
   c->vio.op = VIO::WRITE;
   c->first_key = *key;
-  /*
-     The transition from single fragment document to a multi-fragment document
-     would cause a problem if the key and the first_key collide. In case of
-     a collision, old vector data could be served to HTTP. Need to avoid that.
-     Also, when evacuating a fragment, we have to decide if its the first_key
-     or the earliest_key based on the dir_tag.
-   */
-  do {
-    rand_CacheKey(&c->key, cont->mutex);
-  } while (DIR_MASK_TAG(c->key.slice32(2)) == DIR_MASK_TAG(c->first_key.slice32(2)));
-  c->earliest_key = c->key;
+  if (info) {
+    info->object_key_get(&c->key);
+    c->earliest_key = c->key;
+  } else {
+    /*
+      The transition from single fragment document to a multi-fragment document
+      would cause a problem if the key and the first_key collide. In case of
+      a collision, old vector data could be served to HTTP. Need to avoid that.
+      Also, when evacuating a fragment, we have to decide if its the first_key
+      or the earliest_key based on the dir_tag.
+    */
+    do {
+      rand_CacheKey(&c->key, cont->mutex);
+    } while (DIR_MASK_TAG(c->key.slice32(2)) == DIR_MASK_TAG(c->first_key.slice32(2)));
+    c->earliest_key = c->key;
+  }
+
   c->frag_type = CACHE_FRAG_TYPE_HTTP;
   c->vol = key_to_vol(key, hostname, host_len);
   Vol *vol = c->vol;

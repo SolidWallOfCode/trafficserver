@@ -1782,7 +1782,7 @@ HTTPCacheAlt::HTTPCacheAlt():
   , m_ext_buffer(NULL)
 {
   m_flags = 0; // set all flags to false.
-  m_flag.writeable_p = true;
+  m_flag.writeable_p = true; // except this one.
 }
 
 void
@@ -1820,10 +1820,13 @@ HTTPCacheAlt::copy(HTTPCacheAlt *that)
 
   m_request_sent_time = that->m_request_sent_time;
   m_response_received_time = that->m_response_received_time;
+  m_fixed_fragment_size = that->m_fixed_fragment_size;
 
   m_frag_count = that->m_frag_count;
 
-  ats_free(m_fragments);
+  if (m_flag.table_allocated_p)
+    ats_free(m_fragments);
+
   if (that->m_fragments) {
     size_t size = FragmentDescriptorTable::calc_size(that->m_fragments->m_n);
     m_fragments = static_cast<FragmentDescriptorTable*>(ats_malloc(size));
