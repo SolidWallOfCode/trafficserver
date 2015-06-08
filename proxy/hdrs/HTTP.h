@@ -609,8 +609,6 @@ struct HTTPRangeSpec {
                       int64_t quantum ///< Align ranges to multiples of this value.
                       ,
                       int64_t interstitial ///< Require gaps to be at least this large.
-                      ,
-                      int64_t initial ///< Require the initial gap to be at least this large.
                       ) const;
 
   /// Print the @a ranges.
@@ -1846,9 +1844,14 @@ public:
 
   /** Compute the convex hull of uncached ranges.
 
+      If the resulting range has a minimum that is less than @a initial @b and the earliest fragment
+      is not cached then the minimum will be changed to zero. Alternatively, the initial uncached
+      segment must be at least @a initial bytes long.
+
       @return An invalid range if all of the request is available in cache.
   */
   HTTPRangeSpec::Range get_uncached_hull(HTTPRangeSpec const &req ///< [in] UA request with content length applied
+					 , int64_t initial ///< Minimize size for uncached initial data
                                          );
 
   /// Get the fragment table.

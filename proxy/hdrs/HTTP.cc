@@ -1827,6 +1827,9 @@ HTTPCacheAlt::copy(HTTPCacheAlt *that)
   if (m_flag.table_allocated_p)
     ats_free(m_fragments);
 
+  // Safe to copy now, and we need to do that before we copy the fragment table.
+  m_flags = that->m_flags;
+
   if (that->m_fragments) {
     size_t size = FragmentDescriptorTable::calc_size(that->m_fragments->m_n);
     m_fragments = static_cast<FragmentDescriptorTable*>(ats_malloc(size));
@@ -1834,6 +1837,7 @@ HTTPCacheAlt::copy(HTTPCacheAlt *that)
     m_flag.table_allocated_p = true;
   } else {
     m_fragments = 0;
+    m_flag.table_allocated_p = false;
   }
 }
 
@@ -2189,7 +2193,7 @@ HTTPInfo::mark_frag_write(unsigned int idx) {
     while (j < m_alt->m_frag_count && (*m_alt->m_fragments)[j].m_flag.cached_p)
       ++j;
     m_alt->m_fragments->m_cached_idx = j - 1;
-    if (m_alt->m_flag.content_length_p &&
+    if (!m_alt->m_flag.content_length_p &&
         (this->get_frag_fixed_size() + this->get_frag_offset(j-1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
       m_alt->m_flag.complete_p = true;
   }
@@ -2563,10 +2567,10 @@ HTTPRangeSpec::print(char* buff, size_t len) const
 }
 
 int
-HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, int64_t initial) const
+HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial) const
 {
   static const int MAX_R = 20; // this needs to be promoted
-  // We will want a max # of ranges, probably a build time constant, in the not so distant
+  // We will want to have a max # of ranges limit, probably a build time constant, in the not so distant
   // future anyway, so might as well start here.
   int qrn = 0; // count of quantized ranges
   Range qr[MAX_R]; // quantized ranges
@@ -2585,7 +2589,6 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
       r._min = (r._min / quantum) * quantum;
       r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
     }
-    if (1 < initial && r._min < static_cast<uint64_t>(initial)) r._min = 0;
     // blend in to the current ranges
     for ( i = 0 ; i < qrn ; ++i ) {
       Range& cr = qr[i];
@@ -2634,7 +2637,7 @@ HTTPInfo::get_range_for_frags(int low, int high)
 */
 
 HTTPRangeSpec::Range
-HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
+HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req, int64_t initial)
 {
   HTTPRangeSpec::Range r;
 
@@ -2673,6 +2676,7 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req)
     }
     if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())
       r._max = this->object_size_get();
+    if (static_cast<int64_t>(r._min) < initial && !m_alt->m_earliest.m_flag.cached_p) r._min = 0;
   }
   return r;
 }

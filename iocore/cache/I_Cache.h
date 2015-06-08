@@ -261,7 +261,13 @@ struct CacheVConnection : public VConnection {
   /// @return @c true if the @a result is not empty.
   /// @internal Currently this just returns the single range that is convex hull of the uncached request.
   /// Someday we may want to do the exact range spec but we use the type for now because it's easier.
-  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result) { (void)req; (void)result; return false; }
+  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result, int64_t initial)
+  {
+    (void)req;
+    (void)result;
+    (void)initial;
+    return false;
+  }
 
   /** Set the range for the input (response content).
       The incoming bytes will be written to this section of the object.

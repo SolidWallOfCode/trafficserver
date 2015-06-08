@@ -148,7 +148,7 @@ struct CacheHTTPInfoVector {
 
       @return @c true if there is uncached data that must be retrieved.
    */
-  HTTPRangeSpec::Range get_uncached_hull(CacheKey const &alt_key, HTTPRangeSpec const &request);
+  HTTPRangeSpec::Range get_uncached_hull(CacheKey const &alt_key, HTTPRangeSpec const &request, int64_t initial);
 
   /** Sigh, yet another custom array class.
       @c Vec doesn't work because it really only works well with pointers, not objects.

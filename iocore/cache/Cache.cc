@@ -519,10 +519,10 @@ CacheVC::set_content_range(HTTPRangeSpec const& r)
 }
 
 bool
-CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
+CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result, int64_t initial)
 {
-  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, req)
-    : alternate.get_uncached_hull(req)
+  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, req, initial)
+    : alternate.get_uncached_hull(req, initial)
     ;
   if (r.isValid()) {
     result.add(r);

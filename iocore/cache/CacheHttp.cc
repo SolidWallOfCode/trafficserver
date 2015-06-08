@@ -355,7 +355,7 @@ CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
   -------------------------------------------------------------------------*/
 
 HTTPRangeSpec::Range
-CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec const& req)
+CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec const& req, int64_t initial)
 {
   int alt_idx = this->index_of(alt_key);
   Item& item = data[alt_idx];
@@ -364,7 +364,7 @@ CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec co
   CacheVC* cycle_vc = NULL;
   // Yeah, this need to be tunable.
   uint64_t DELTA = item._alternate.get_frag_fixed_size() * 16;
-  HTTPRangeSpec::Range r(item._alternate.get_uncached_hull(req));
+  HTTPRangeSpec::Range r(item._alternate.get_uncached_hull(req, initial));
 
   if (r.isValid()) {
     /* Now clip against the writers.
@@ -424,12 +424,15 @@ CacheRange::init(HTTPHdr* req)
 bool
 CacheRange::start()
 {
-  bool zret = false;
+  bool zret = true;
 
   if (_r.hasRanges()) {
     _offset = _r[_idx = 0]._min;
     _pending_range_shift_p = _r.isMulti();
-    zret = true;
+  } else if (_r.isEmpty()) {
+    _offset = 0;
+  } else {
+    zret = false;
   }
   return zret;
 }

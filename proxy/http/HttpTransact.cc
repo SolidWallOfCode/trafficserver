@@ -49,6 +49,11 @@
 
 static char const HTTP_RANGE_MULTIPART_CONTENT_TYPE[] = "multipart/byteranges; boundary=";
 
+/// If the intial uncached segment is less than this, expand the request to include the earliest fragment.
+/// Hardwired for now, this needs to be promoted to a config var at some point. It should also be a multiple
+/// of the fragment size.
+static int64_t const MIN_INITIAL_UNCACHED = 4 * 1<<20;
+
 #define HTTP_INCREMENT_TRANS_STAT(X) update_stat(s, X, 1);
 #define HTTP_SUM_TRANS_STAT(X, S) update_stat(s, X, (ink_statval_t)S);
 
@@ -2696,7 +2701,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   }
 
   // Check if we need to get some data from the origin.
-  if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range)) {
+  if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range, MIN_INITIAL_UNCACHED)) {
     Debug("amc", "Request touches uncached fragments");
     find_server_and_update_current_info(s);
     if (!ats_is_ip(&s->current.server->addr)) {

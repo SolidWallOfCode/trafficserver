@@ -1045,7 +1045,7 @@ HttpTransactHeaders::insert_request_range_header(HTTPHdr* header, HTTPRangeSpec 
  
   if (ranges->hasRanges()) {
     int64_t ffs = cacheProcessor.get_fixed_fragment_size();
-    n = ranges->print_quantized(buff, sizeof(buff), ffs, ffs, 4 * ffs);
+    n = ranges->print_quantized(buff, sizeof(buff), ffs, ffs);
     header->value_set(MIME_FIELD_RANGE, MIME_LEN_RANGE, buff, n);
   }
 }

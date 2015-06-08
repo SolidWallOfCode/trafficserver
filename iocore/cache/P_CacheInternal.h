@@ -402,7 +402,7 @@ struct CacheVC: public CacheVConnection
   virtual char const* get_http_range_boundary_string(int* len) const;
   virtual int64_t get_effective_content_size();
   virtual void set_full_content_length(int64_t size);
-  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result);
+  virtual bool get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result, int64_t initial);
   /** This sets a range for data flowing in to the cache VC.
       The CacheVC will write the incoming data to this part of the overall object.
       @internal It's done this way to isolate the CacheVC from parsing range separators
