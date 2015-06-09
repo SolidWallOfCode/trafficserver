@@ -52,7 +52,7 @@ static char const HTTP_RANGE_MULTIPART_CONTENT_TYPE[] = "multipart/byteranges; b
 /// If the intial uncached segment is less than this, expand the request to include the earliest fragment.
 /// Hardwired for now, this needs to be promoted to a config var at some point. It should also be a multiple
 /// of the fragment size.
-static int64_t const MIN_INITIAL_UNCACHED = 4 * 1<<20;
+static int64_t const MIN_INITIAL_UNCACHED = 4 * 1 << 20;
 
 #define HTTP_INCREMENT_TRANS_STAT(X) update_stat(s, X, 1);
 #define HTTP_SUM_TRANS_STAT(X, S) update_stat(s, X, (ink_statval_t)S);
@@ -4319,7 +4319,12 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
     }
 
     s->next_action = SM_ACTION_SERVER_READ;
-    client_response_code = server_response_code;
+    // If we got back 206 but the original request wasn't partial, then we're doing a partial update and need to return 200.
+    // Need to strip Content-Range at some point as well.
+    if (HTTP_STATUS_PARTIAL_CONTENT == server_response_code && s->hdr_info.request_range.isEmpty())
+      client_response_code = HTTP_STATUS_OK;
+    else
+      client_response_code = server_response_code;
     base_response = &s->hdr_info.server_response;
 
     s->negative_caching = is_negative_caching_appropriate(s) && cacheable;
@@ -4497,8 +4502,7 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
   ink_assert(base_response->valid());
 
   if (((s->cache_info.action == CACHE_DO_WRITE) || (s->cache_info.action == CACHE_DO_REPLACE)) &&
-      s->range_setup != RANGE_PARTIAL_UPDATE
-    ) {
+      s->range_setup != RANGE_PARTIAL_UPDATE) {
     // If it's a partial write then we already have the cached headers, no need to pass these in.
     set_headers_for_cache_write(s, &s->cache_info.object_store, &s->hdr_info.server_request, &s->hdr_info.server_response);
   }
@@ -4543,6 +4547,9 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
     if (((s->next_action == SM_ACTION_SERVE_FROM_CACHE) || (s->next_action == SM_ACTION_SERVER_READ)) &&
         s->state_machine->do_transform_open()) {
       set_header_for_transform(s, base_response);
+    } else if (s->hdr_info.request_range.isEmpty() && s->cache_info.object_read->valid()){
+      build_response(s, s->cache_info.object_read->response_get(), &s->hdr_info.client_response, s->client_info.http_version);
+      s->hdr_info.client_response.set_content_length(s->cache_info.object_read->object_size_get());
     } else {
       build_response(s, base_response, &s->hdr_info.client_response, s->client_info.http_version, client_response_code);
     }
@@ -4853,6 +4860,7 @@ HttpTransact::set_headers_for_cache_write(State *s, HTTPInfo *cache_info, HTTPHd
     cache_info->response_get()->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
     cache_info->response_get()->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
     cache_info->response_get()->status_set(HTTP_STATUS_OK);
+    cache_info->response_get()->reason_set(HTTP_STATUS_OK);
   }
 
   // If we're ignoring auth, then we don't want to cache WWW-Auth
@@ -7914,7 +7922,7 @@ HttpTransact::build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing
   if (base_response == NULL) {
     HttpTransactHeaders::build_base_response(outgoing_response, status_code, reason_phrase, strlen(reason_phrase), s->current.now);
   } else {
-    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get())) {
+    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get()) || (HTTP_STATUS_OK == status_code && HTTP_STATUS_PARTIAL_CONTENT == base_response->status_get())) {
       HttpTransactHeaders::copy_header_fields(base_response, outgoing_response, s->txn_conf->fwd_proxy_auth_to_parent);
 
       if (s->txn_conf->insert_age_in_response)
@@ -7928,6 +7936,7 @@ HttpTransact::build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing
       //  before processing the keep_alive headers
       //
       handle_content_length_header(s, outgoing_response, base_response);
+
     } else
       switch (status_code) {
       case HTTP_STATUS_NOT_MODIFIED:

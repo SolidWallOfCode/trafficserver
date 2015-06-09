@@ -867,6 +867,7 @@ public:
 
   const char *reason_get(int *length);
   void reason_set(const char *value, int length);
+  void reason_set(HTTPStatus status);
 
   MIMEParseResult parse_req(HTTPParser *parser, const char **start, const char *end, bool eof);
   MIMEParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, bool eof);
@@ -1478,6 +1479,16 @@ HTTPHdr::reason_set(const char *value, int length)
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
+
+inline void
+HTTPHdr::reason_set(HTTPStatus status)
+{
+  char const* phrase = http_hdr_reason_lookup(status);
+  this->reason_set(phrase, strlen(phrase));
+}
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
 
 inline MIMEParseResult
 HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof)
