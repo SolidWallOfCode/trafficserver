@@ -530,7 +530,7 @@ TransformControl::TransformControl()
 {
   SET_HANDLER(&TransformControl::handle_event);
 
-  m_hooks.append(transformProcessor.null_transform(new_ProxyMutex()));
+  m_hooks.add(transformProcessor.null_transform(new_ProxyMutex()), 1); // priority shouldn't matter, this is a singleton internal transform.
 }
 
 /*-------------------------------------------------------------------------
@@ -547,7 +547,7 @@ TransformControl::handle_event(int event, void * /* edata ATS_UNUSED */)
     if (http_global_hooks && http_global_hooks->get(TS_HTTP_RESPONSE_TRANSFORM_HOOK)) {
       m_tvc = transformProcessor.open(this, http_global_hooks->get(TS_HTTP_RESPONSE_TRANSFORM_HOOK));
     } else {
-      m_tvc = transformProcessor.open(this, m_hooks.get());
+      m_tvc = transformProcessor.open(this, m_hooks.head());
     }
     ink_assert(m_tvc != nullptr);
 

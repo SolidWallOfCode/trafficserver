@@ -154,6 +154,9 @@ public:
       client_vc->set_active_timeout(timeout_in);
   }
 
+  /// Add a callback @a cont to the hook @a id with @a priority.
+  void hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
+
   void
   set_inactivity_timeout(ink_hrtime timeout_in)
   {

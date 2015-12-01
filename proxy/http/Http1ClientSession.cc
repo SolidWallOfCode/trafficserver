@@ -129,22 +129,57 @@ Http1ClientSession::free()
 }
 
 void
+HttpClientSession::hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
+{
+  super::hook_add(id, cont, priority);
+  if (current_reader) {
+    current_reader->hooks_set = 1;
+  }
+}
+
+void
 Http1ClientSession::new_connection(NetVConnection *new_vc, MIOBuffer *iobuf, IOBufferReader *reader, bool backdoor)
 {
-  ink_assert(new_vc != nullptr);
-  ink_assert(client_vc == nullptr);
-  client_vc      = new_vc;
-  magic          = HTTP_CS_MAGIC_ALIVE;
-  mutex          = new_vc->mutex;
-  trans.mutex    = mutex; // Share this mutex with the transaction
-  ssn_start_time = Thread::get_hrtime();
-  in_destroy     = false;
+  ink_assert(current_reader == NULL);
+  PluginIdentity *pi = dynamic_cast<PluginIdentity *>(client_vc);
+
+  if (!pi && client_vc->add_to_active_queue() == false) {
+    // no room in the active queue close the connection
+    this->do_io_close();
+    return;
+  }
+
+
+  // Defensive programming, make sure nothing persists across
+  // connection re-use
+  half_close = false;
+
+  read_state = HCS_ACTIVE_READER;
+  current_reader = HttpSM::allocate();
+  current_reader->init();
+  transact_count++;
+  DebugHttpSsn("[%" PRId64 "] Starting transaction %d using sm [%" PRId64 "]", con_id, transact_count, current_reader->sm_id);
+  for ( HttpHookState::disabled_iterator spot(hook_state.disabled_begin()), limit(hook_state.disabled_end()) ; spot != limit ; ++spot ) {
+    current_reader->txn_plugin_enable(&*spot, false);
+  }
+
+  current_reader->attach_client_session(this, sm_reader);
+  if (pi) {
+    // it's a plugin VC of some sort with identify information.
+    // copy it to the SM.
+    current_reader->plugin_tag = pi->getPluginTag();
+    current_reader->plugin_id = pi->getPluginId();
+  }
+}
 
   MUTEX_TRY_LOCK(lock, mutex, this_ethread());
   ink_assert(lock.is_locked());
 
   // Disable hooks for backdoor connections.
   this->hooks_on = !backdoor;
+  // Freeze the list of disabled plugins
+  for ( PluginManager::disabled_iterator spot(pluginManager.disabled_begin()), limit(pluginManager.disabled_end()) ; spot != limit ; ++spot)
+    this->ssn_plugin_enable(&*spot, false);
 
   // Unique client session identifier.
   con_id = ProxyClientSession::next_connection_id();

@@ -50,7 +50,9 @@ CallbackHandler(TSCont this, TSEvent id, void *data)
     TSPluginMsg *msg = (TSPluginMsg *)data;
     TSDebug(PLUGIN_NAME, "Message to '%s' - %zu bytes of data", msg->tag, msg->data_size);
     break;
-  }
+  case TS_EVENT_LIFECYCLE_PLUGINS_LOADED:
+    TSDebug("lifecycle-plugin", "plugins loaded");
+    break;
   default:
     TSDebug(PLUGIN_NAME, "Unexpected event %d", id);
     break;
@@ -80,6 +82,7 @@ TSPluginInit(int argc, const char *argv[])
   TSLifecycleHookAdd(TS_LIFECYCLE_PORTS_READY_HOOK, cb);
   TSLifecycleHookAdd(TS_LIFECYCLE_CACHE_READY_HOOK, cb);
   TSLifecycleHookAdd(TS_LIFECYCLE_MSG_HOOK, cb);
+  TSLifecycleHookAdd(TS_LIFECYCLE_PLUGINS_LOADED_HOOK, cb);
 
   TSDebug(PLUGIN_NAME, "online");
 

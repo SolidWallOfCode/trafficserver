@@ -49,8 +49,9 @@ namespace utils
   class internal
   {
   public:
-    static TSHttpHookID convertInternalHookToTsHook(Plugin::HookType);
+    static TSHttpHookID convertInternalHookToTsHook(TransactionValues::HookType);
     static TSHttpHookID convertInternalTransformationTypeToTsHook(TransformationPlugin::Type type);
+    static TSLifecycleHookID convertInternalHookToTsHook(GlobalPlugin::LifecycleHookType hooktype);
     static void invokePluginForEvent(TransactionPlugin *, TSHttpTxn, TSEvent);
     static void invokePluginForEvent(GlobalPlugin *, TSHttpTxn, TSEvent);
     static HttpVersion getHttpVersion(TSMBuffer hdr_buf, TSMLoc hdr_loc);

@@ -264,6 +264,8 @@ private:
   EThread(const EThread &);
   EThread &operator=(const EThread &);
 
+  void executeSpawnEvents();
+
   /*-------------------------------------------------------*\
   |  UNIX Interface                                         |
   \*-------------------------------------------------------*/
@@ -274,7 +276,7 @@ public:
   EThread(ThreadType att, Event *e);
   virtual ~EThread();
 
-  Event *schedule_spawn(Continuation *cont);
+  static Event *schedule_spawn(Continuation *cont, int callback_event = EVENT_IMMEDIATE, void* cookie = NULL);
   Event *schedule(Event *e, bool fast_signal = false);
 
   /** Block of memory to allocate thread specific data e.g. stat system arrays. */
@@ -315,6 +317,11 @@ public:
   Event *oneevent; // For dedicated event thread
 
   ServerSessionPool *server_session_pool;
+
+  /// These events are dispatched when an EThread starts.
+  /// @internal Used to do per thread initialization.
+  /// @see schedule_spawn
+  static Que(Event, link) spawnQueue;
 };
 
 /**

@@ -3395,6 +3395,14 @@ Plug-in Configuration
 .. ts:cv:: CONFIG proxy.config.plugin.plugin_dir STRING config/plugins
 
    Specifies the location of Traffic Server plugins.
+   
+.. ts:cv:: CONFIG proxy.config.plugin.priority.default INT 1000
+
+    The maximum priority assigned to a plugin if not explicitly configured in :file:`plugin.config`.
+    
+.. ts:cv:: CONFIG proxy.config.pluign.priority.effective_gap INT 200
+
+    The initial effective priority of a plugin is this amount less than the maximum priority. A plugin can programmatically change its effective priority from this value but may not set it larger than its maximum priority. If the default priority is 1000 and this value is 200 then plugins will have by default an effective priority of 800 (1000 - 200).
 
 .. ts:cv:: CONFIG proxy.config.remap.num_remap_threads INT 0
 

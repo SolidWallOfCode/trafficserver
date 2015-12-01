@@ -32,6 +32,10 @@
 #include "ProxyConfig.h"
 #include "P_Cache.h"
 #include "I_Tasks.h"
+#include "Plugin.h"
+
+class ProxyClientSession;
+class HttpSM;
 
 #include "api/ts/InkAPIPrivateIOCore.h"
 #include "api/ts/experimental.h"
@@ -117,30 +121,84 @@ enum APIHookScope {
   API_HOOK_SCOPE_LOCAL,
 };
 
+/// Value used to mark no threshold set.
+static int const API_HOOK_THRESHOLD_UNSET = -2;
+
 /// A single API hook that can be invoked.
 class APIHook
 {
 public:
   INKContInternal *m_cont;
-  int invoke(int event, void *edata);
-  APIHook *next() const;
+  int m_priority; ///< Priority of this callback.
+
+  int invoke(int event, void *edata) const;
+
+  APIHook *next();
+  APIHook const *next() const;
+  APIHook *prev();
+  APIHook const *prev() const;
+
   LINK(APIHook, m_link);
 };
+
+inline APIHook *
+APIHook::next()
+{
+  return m_link.next;
+}
+
+inline APIHook const *
+APIHook::next() const
+{
+  return m_link.next;
+}
+
+inline APIHook *
+APIHook::prev()
+{
+  return m_link.prev;
+}
+
+inline APIHook const *
+APIHook::prev() const
+{
+  return m_link.prev;
+}
 
 /// A collection of API hooks.
 class APIHooks
 {
 public:
-  void prepend(INKContInternal *cont);
-  void append(INKContInternal *cont);
-  APIHook *get() const;
+  APIHooks() : m_threshold(API_HOOK_THRESHOLD_UNSET) {}
+  /// Add a hook at @a priority.
+  void add(INKContInternal *cont, int priority);
+  /// Get the first hook.
+  APIHook *head();
+  /// Get the first hook.
+  APIHook const *head() const;
+  /// Remove all hooks.
   void clear();
+  /// Check if there are no hooks.
   bool is_empty() const;
   void invoke(int event, void *data);
+
+  int m_threshold; ///< Priority threshold for invocation.
 
 private:
   Que(APIHook, m_link) m_hooks;
 };
+
+inline APIHook *
+APIHooks::head()
+{
+  return m_hooks.head;
+}
+
+inline APIHook const *
+APIHooks::head() const
+{
+  return m_hooks.head;
+}
 
 inline bool
 APIHooks::is_empty() const
@@ -175,12 +233,17 @@ public:
 
   /// Remove all hooks.
   void clear();
-  /// Add the hook @a cont to the front of the hooks for @a id.
-  void prepend(ID id, INKContInternal *cont);
-  /// Add the hook @a cont to the end of the hooks for @a id.
-  void append(ID id, INKContInternal *cont);
+  /// Add the callback @a cont to the hook @a id with @a priority.
+  void add(ID id, INKContInternal *cont, int priority);
   /// Get the list of hooks for @a id.
-  APIHook *get(ID id) const;
+  APIHook *get(ID id);
+  APIHook const *get(ID id) const;
+  /// Get the priority threshold.
+  int threshold() const;
+  /// Set the priority threshold.
+  void set_threshold(int priority);
+  /// Set the priority threshold for a specific hook.
+  void set_threshold(TSHttpHookID id, int priority);
   /// @return @c true if @a id is a valid id, @c false otherwise.
   static bool is_valid(ID id);
 
@@ -197,13 +260,18 @@ public:
   /// @return @c true if any hooks of type @a id are present.
   bool has_hooks_for(ID id) const;
 
+  /// Get a pointer to the set of hooks for a specific hook @ id
+  APIHooks *operator[](ID id);
+  APIHooks const *operator[](ID id) const;
+
 private:
-  bool hooks_p; ///< Flag for (not) empty container.
+  bool m_hooks_p;  ///< Flag for (not) empty container.
+  int m_threshold; ///< Invocation threshold.
   /// The array of hooks lists.
   APIHooks m_hooks[N];
 };
 
-template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : hooks_p(false)
+template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : m_hooks_p(false), m_threshold(API_HOOK_THRESHOLD_UNSET)
 {
 }
 
@@ -219,34 +287,41 @@ FeatureAPIHooks<ID, N>::clear()
   for (int i = 0; i < N; ++i) {
     m_hooks[i].clear();
   }
-  hooks_p = false;
+  m_hooks_p = false;
 }
 
 template <typename ID, ID N>
 void
-FeatureAPIHooks<ID, N>::prepend(ID id, INKContInternal *cont)
+FeatureAPIHooks<ID, N>::add(ID id, INKContInternal *cont, int priority)
 {
   if (likely(is_valid(id))) {
-    hooks_p = true;
-    m_hooks[id].prepend(cont);
-  }
-}
-
-template <typename ID, ID N>
-void
-FeatureAPIHooks<ID, N>::append(ID id, INKContInternal *cont)
-{
-  if (likely(is_valid(id))) {
-    hooks_p = true;
-    m_hooks[id].append(cont);
+    m_hooks_p = true;
+    m_hooks[id].add(cont, priority);
   }
 }
 
 template <typename ID, ID N>
 APIHook *
+FeatureAPIHooks<ID, N>::get(ID id)
+{
+  return likely(is_valid(id)) ? m_hooks[id].head() : NULL;
+}
+
+template <typename ID, ID N>
+APIHook const *
 FeatureAPIHooks<ID, N>::get(ID id) const
 {
-  return likely(is_valid(id)) ? m_hooks[id].get() : NULL;
+  return likely(is_valid(id)) ? m_hooks[id].head() : NULL;
+}
+
+template <typename ID, ID N> APIHooks *FeatureAPIHooks<ID, N>::operator[](ID id)
+{
+  return likely(is_valid(id)) ? &(m_hooks[id]) : NULL;
+}
+
+template <typename ID, ID N> APIHooks const *FeatureAPIHooks<ID, N>::operator[](ID id) const
+{
+  return likely(is_valid(id)) ? &(m_hooks[id]) : NULL;
 }
 
 template <typename ID, ID N>
@@ -262,7 +337,29 @@ template <typename ID, ID N>
 bool
 FeatureAPIHooks<ID, N>::has_hooks() const
 {
-  return hooks_p;
+  return m_hooks_p;
+}
+
+template <typename ID, ID N>
+int
+FeatureAPIHooks<ID, N>::threshold() const
+{
+  return m_threshold;
+}
+
+template <typename ID, ID N>
+void
+FeatureAPIHooks<ID, N>::set_threshold(int priority)
+{
+  m_threshold = priority;
+}
+
+template <typename ID, ID N>
+void
+FeatureAPIHooks<ID, N>::set_threshold(TSHttpHookID id, int priority)
+{
+  if (is_valid(id))
+    m_hooks[id].m_threshold = priority;
 }
 
 template <typename ID, ID N>
@@ -336,6 +433,163 @@ public:
 private:
   InkHashTable *cb_table;
 };
+
+/// Container for the state of HTTP API hook invocation.
+class HttpHookState
+{
+private:
+  typedef Vec<PluginInfo const *> PIVec;
+
+public:
+  /// Scope tags for interacting with a live instance.
+  enum ScopeTag { GLOBAL, SESSION, TRANSACTION };
+
+  struct disabled_iterator {
+  private:
+    typedef disabled_iterator self;
+
+  public:
+    disabled_iterator();
+    self &operator++();
+    bool operator==(self const &that) const;
+    bool operator!=(self const &that) const;
+    PluginInfo const &operator*() const;
+    PluginInfo const *operator->() const;
+
+  private:
+    disabled_iterator(PIVec const*v, unsigned int idx);
+
+    PIVec const*_v;
+    unsigned int _idx;
+
+    friend class HttpHookState;
+  };
+
+  /// Default constructor.
+  HttpHookState();
+
+  /// Initialize the hook state.
+  /// This tracks up to 3 sources of hooks. The argument order to this method is used
+  /// to break priority ties (callbacks from earlier args are invoked earlier).
+  /// The order in terms of @a ScopeTag is GLOBAL, SESSION, TRANSACTION.
+  void init(TSHttpHookID id, HttpAPIHooks const *global, HttpAPIHooks const *ua = NULL, HttpAPIHooks const *sm = NULL);
+  /// Set the hook invocation threshold for a specific scope.
+  void setThreshold(int t, ScopeTag scope);
+  /// Set the hook invocation threshold for a specific scope and hook.
+  void setThreshold(TSHttpHookID id, int t, ScopeTag scope);
+  /// Select a hook for invocation and advance the state to the next valid hook.
+  /// @return @c NULL if no current hook.
+  APIHook const *getNext();
+  /// Get the hook ID
+  TSHttpHookID id() const;
+  /// Override global plugin enable state.
+  /// The plugin is forced enabled if @a
+  void enable(PluginInfo const *pi, bool enable_p);
+  /// Check if a plugin is enabled, based on local overrides and global state.
+  bool is_enabled(PluginInfo const *pi);
+
+  disabled_iterator disabled_begin() const;
+  disabled_iterator disabled_end() const;
+
+protected:
+  /// Track the state of one scope of hooks.
+  struct Scope {
+    APIHook const *_c;    ///< Current hook (candidate for invocation).
+    APIHook const *_p;    ///< Previous hook (already invoked).
+    int _scope_threshold; ///< Threshold from the scope.
+    int _hook_threshold;  ///< Threshold for this set of hooks.
+
+    /// Initialize the scope.
+    void init(HttpAPIHooks const *scope, TSHttpHookID id);
+    /// Clear the scope.
+    void clear();
+    /// Return the current candidate for threshold @a t
+    /// Can update state to account for hooks added since last candidate.
+    APIHook const *candidate(int t, int prev_t);
+    /// Advance state to the next hook.
+    void operator++();
+    /// Get the effective threshold.
+    int get_effective_threshold() const;
+  };
+
+  /// Set @a _threshold based on the thresholds for the scopes.
+  /// @return @a _threhold after updating.
+  int update_effective_threshold();
+
+private:
+  TSHttpHookID _id;
+  Scope _global;      ///< Chain from global hooks.
+  Scope _ssn;         ///< Chain from session hooks.
+  Scope _txn;         ///< Chain from transaction hooks.
+  int _threshold;     ///< Effective threshold, gathered from the various sources.
+  int _last_priority; ///< Priority of the most recently invoked callback.
+                      /** Plugin enablement list.
+                          @internal A bit ugly but after much thought I think this is the minimal amount.
+                          The data is optimized on the assumption the set of plugins in play is small and
+                          usually zero. Therefore the pointers are stored munged, using the bottom bit to
+                          indicate whether the override is to enable (1) or disable (0).
+                      */
+  PIVec m_pi_list;
+};
+
+inline TSHttpHookID
+HttpHookState::id() const
+{
+  return _id;
+}
+
+inline HttpHookState::disabled_iterator
+HttpHookState::disabled_begin() const
+{
+  return disabled_iterator(&m_pi_list, 0);
+}
+
+inline HttpHookState::disabled_iterator
+HttpHookState::disabled_end() const
+{
+  return disabled_iterator(&m_pi_list, m_pi_list.n);
+}
+
+inline int
+HttpHookState::Scope::get_effective_threshold() const
+{
+  return _hook_threshold >= 0 ? _hook_threshold : _scope_threshold;
+}
+
+inline HttpHookState::disabled_iterator::disabled_iterator() : _v(NULL), _idx(-1)
+{
+}
+
+inline HttpHookState::disabled_iterator &HttpHookState::disabled_iterator::operator++()
+{
+  if (NULL != _v && _idx < _v->n)
+    ++_idx;
+  return *this;
+}
+
+inline bool HttpHookState::disabled_iterator::operator==(self const &that) const
+{
+  return _v == that._v && _idx == that._idx;
+}
+
+inline bool HttpHookState::disabled_iterator::operator!=(self const &that) const
+{
+  return !(*this == that);
+}
+
+inline PluginInfo const &HttpHookState::disabled_iterator::operator*() const
+{
+  return *((*_v)[_idx]);
+}
+
+inline PluginInfo const *HttpHookState::disabled_iterator::operator->() const
+{
+  return (*_v)[_idx];
+}
+
+inline HttpHookState::disabled_iterator::disabled_iterator(PIVec const*v, unsigned int idx) : _v(v), _idx(idx)
+{
+}
 
 void api_init();
 

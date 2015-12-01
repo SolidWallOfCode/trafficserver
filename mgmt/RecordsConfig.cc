@@ -1348,6 +1348,8 @@ static const RecordElement RecordsConfig[] =
   ,
   {RECT_CONFIG, "proxy.config.plugin.load_elevated", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_INT, "[0-1]", RECA_READ_ONLY}
   ,
+  {RECT_CONFIG, "proxy.config.plugin.priority.default", RECD_INT, "1000", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL },
+  {RECT_CONFIG, "proxy.config.plugin.priority.effective_gap", RECD_INT, "200", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL },
 
   // Interim configuration setting for obeying keepalive requests on internal
   // (PLuginVC) sessions. See TS-4960 and friends.

@@ -57,19 +57,16 @@ public:
   virtual const char *get_protocol_string() const = 0;
 
   virtual void
-  ssn_hook_append(TSHttpHookID id, INKContInternal *cont)
+  hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
   {
-    this->api_hooks.append(id, cont);
+    this->api_hooks.add(id, cont, priority);
   }
 
-  virtual void
-  ssn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-  {
-    this->api_hooks.prepend(id, cont);
-  }
+  virtual NetVConnection *get_netvc() const = 0;
+  virtual void release_netvc() = 0;
 
-  APIHook *
-  ssn_hook_get(TSHttpHookID id) const
+  APIHook const*
+  hook_get(TSHttpHookID id) const
   {
     return this->api_hooks.get(id);
   }
@@ -113,11 +110,10 @@ public:
     return this->api_hooks.has_hooks() || http_global_hooks->has_hooks();
   }
 
-  bool
-  is_active() const
-  {
-    return m_active;
-  }
+  HttpAPIHooks const* feature_hooks() const { return &api_hooks; }
+  void ssn_priority_threshold_set(int priority);
+  void ssn_hook_priority_threshold_set(TSHttpHookID id, int priority);
+  void ssn_plugin_enable(PluginInfo const* pi, bool enable_p);
 
   // Initiate an API hook invocation.
   void do_api_callout(TSHttpHookID id);
@@ -233,6 +229,8 @@ protected:
   // XXX Consider using a bitwise flags variable for the following flags, so
   // that we can make the best use of internal alignment padding.
 
+  HttpHookState hook_state;
+
   // Session specific debug flag.
   bool debug_on;
   bool hooks_on;
@@ -242,15 +240,7 @@ protected:
   Event *schedule_event;
 
 private:
-  ProxyClientSession(ProxyClientSession &);                  // noncopyable
-  ProxyClientSession &operator=(const ProxyClientSession &); // noncopyable
-
-  void handle_api_return(int event);
-  int state_api_callout(int event, void *edata);
-
-  APIHookScope api_scope;
-  TSHttpHookID api_hookid;
-  APIHook *api_current;
+  APIHook const* cur_hook;
   HttpAPIHooks api_hooks;
   void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 

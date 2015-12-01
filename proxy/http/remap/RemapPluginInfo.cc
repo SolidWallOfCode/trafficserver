@@ -46,10 +46,6 @@ remap_plugin_info::remap_plugin_info(char *_path)
 
 remap_plugin_info::~remap_plugin_info()
 {
-  ats_free(path);
-  if (dlh) {
-    dlclose(dlh);
-  }
 }
 
 //
@@ -63,7 +59,7 @@ remap_plugin_info::find_by_path(char *_path)
 
   if (likely(_path && (_path_size = strlen(_path)) > 0)) {
     for (pi = this; pi; pi = pi->next) {
-      if (pi->path && pi->path_size == _path_size && !strcmp(pi->path, _path)) {
+      if (pi->_file_path && pi->path_size == _path_size && !strcmp(pi->_file_path, _path))
         break;
       }
     }

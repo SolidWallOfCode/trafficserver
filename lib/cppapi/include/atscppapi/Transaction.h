@@ -42,6 +42,26 @@ namespace utils
   class internal;
 }
 
+struct TransactionValues
+{
+  /**
+   * A enumeration of the available types of Hooks. These are used with GlobalPlugin::registerHook()
+   * and TransactionPlugin::registerHook().
+   */
+  enum HookType {
+    HOOK_READ_REQUEST_HEADERS_PRE_REMAP = 0, /**< This hook will be fired before remap has occured. */
+    HOOK_READ_REQUEST_HEADERS_POST_REMAP,    /**< This hook will be fired directly after remap has occured. */
+    HOOK_SEND_REQUEST_HEADERS,               /**< This hook will be fired right before request headers are sent to the origin */
+    HOOK_READ_RESPONSE_HEADERS, /**< This hook will be fired right after response headers have been read from the origin */
+    HOOK_SEND_RESPONSE_HEADERS, /**< This hook will be fired right before the response headers are sent to the client */
+    HOOK_OS_DNS,                /**< This hook will be fired right after the OS DNS lookup */
+    HOOK_READ_REQUEST_HEADERS,  /**< This hook will be fired after the request is read. */
+    HOOK_READ_CACHE_HEADERS,    /**< This hook will be fired after the CACHE hdrs. */
+    HOOK_CACHE_LOOKUP_COMPLETE, /**< This hook will be fired after caceh lookup complete. */
+    HOOK_SELECT_ALT             /**< This hook will be fired after select alt. */
+  };
+};
+
 /**
  * @brief Transactions are the object containing all the state related to a HTTP Transaction
  *
@@ -49,9 +69,10 @@ namespace utils
  * created and destroyed as they are needed. Transactions should never be saved beyond the
  * scope of the function in which they are delivered otherwise undefined behaviour will result.
  */
-class Transaction : noncopyable
+ class Transaction : noncopyable, public TransactionValues
 {
 public:
+  
   /**
    * @brief ContextValues are a mechanism to share data between plugins using the atscppapi.
    *
@@ -371,6 +392,19 @@ public:
   bool configStringSet(TSOverridableConfigKey conf, std::string const &value);
   bool configStringGet(TSOverridableConfigKey conf, std::string &value);
   bool configFind(std::string const &name, TSOverridableConfigKey *conf, TSRecordDataType *type);
+
+  /**
+   * Set the transaction priority threshold.
+   *
+   * @return If the threshold was set to @a priority
+   */
+  bool setPriorityThreshold(int priority);
+  /**
+   * Set the transaction priority threshold for a specific hook.
+   *
+   * @return If the threshold was set to @a priority
+   */
+  bool setHookPriorityThreshold(HookType hook_type, int priority);
 
 private:
   TransactionState *state_;          //!< The internal TransactionState object tied to the current Transaction

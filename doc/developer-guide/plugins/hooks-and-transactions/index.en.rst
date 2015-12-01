@@ -36,6 +36,7 @@ This chapter contains the following sections:
    adding-hooks.en
    http-sessions.en
    http-transactions.en
+   plugin-priority.en
    intercepting-http-transactions.en
    initiate-http-connection.en
    http-alternate-selection.en

@@ -524,3 +524,18 @@ Transaction::resetHandles()
   state_->server_response_hdr_buf_ = nullptr;
   state_->server_response_hdr_loc_ = nullptr;
 }
+
+bool
+Transaction::setPriorityThreshold(int priority)
+{
+  LOG_DEBUG("Transaction tshttptxn=%p setting hook priority threshold: %d", state_->txn_, priority);
+  return TSHttpTxnPriorityThresholdSet(state_->txn_, priority) == TS_SUCCESS;
+}
+
+bool
+Transaction::setHookPriorityThreshold(Plugin::HookType hook_type, int priority)
+{
+  TSHttpHookID id = utils::internal::convertInternalHookToTsHook(hook_type);
+  LOG_DEBUG("Transaction tshttptxn=%p setting hook priority threshold: %d", state_->txn_, priority);
+  return TSHttpTxnHookPriorityThresholdSet(state_->txn_, id, priority) == TS_SUCCESS;
+}
