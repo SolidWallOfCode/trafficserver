@@ -524,11 +524,17 @@ remap_check_option(const char **argv, int argc, unsigned long findmode, int *_re
         if (argptr)
           *argptr = &argv[i][7];
         ret_flags |= REMAP_OPTFLG_PPARAM;
+      } else if (!strncasecmp(argv[i], "ppriority=", 10)) {
+        if ((findmode & REMAP_OPTFLG_PPRIORITY) != 0)
+          idx = i;
+        if (argptr)
+          *argptr = &argv[i][10];
+        ret_flags |= REMAP_OPTFLG_PPRIORITY;
       } else if (!strncasecmp(argv[i], "method=", 7)) {
         if ((findmode & REMAP_OPTFLG_METHOD) != 0)
           idx = i;
         if (argptr)
-          *argptr = &argv[i][7];
+          *argptr = &argv[i][10];
         ret_flags |= REMAP_OPTFLG_METHOD;
       } else if (!strncasecmp(argv[i], "src_ip=~", 8)) {
         if ((findmode & REMAP_OPTFLG_SRC_IP) != 0)
@@ -585,6 +591,7 @@ remap_load_plugin(const char **argv, int argc, url_mapping *mp, char *errbuf, in
   char *parv[1024];
   int idx = 0, retcode = 0;
   int parc = 0;
+  char const* optarg = NULL;
 
   *plugin_found_at = 0;
 
@@ -642,6 +649,23 @@ remap_load_plugin(const char **argv, int argc, url_mapping *mp, char *errbuf, in
 
   if (!remap_pi_list || (pi = remap_pi_list->find_by_path(c)) == 0) {
     pi = new remap_plugin_info(c);
+    optarg = strrchr(c, '/'); // use the base file name as part of the plugin name
+    snprintf(tmpbuf, sizeof(tmpbuf)-1, "remap:%s", optarg ? optarg+1 : c);
+    pi->_name = ats_strdup(tmpbuf);
+    pi->_max_priority = pluginManager.get_default_priority();
+    pi->_eff_priority = pluginManager.get_default_effective_priority();
+    if (remap_check_option(argv, argc, REMAP_OPTFLG_PPRIORITY, &idx, &optarg) & REMAP_OPTFLG_PPRIORITY) {
+      int a = -1, b = -1, x;
+      x = sscanf(optarg, "%d/%d", &a, &b);
+      if (x == 1) {
+        pi->_max_priority = a;
+        pi->_eff_priority = std::max(0, a - pluginManager.get_effective_priority_gap());
+      } else if (x == 2) {
+        pi->_max_priority = std::max(a,b);
+        pi->_eff_priority = std::min(a,b);
+      }
+    }
+    
     if (!remap_pi_list) {
       remap_pi_list = pi;
     } else {
@@ -693,7 +717,7 @@ remap_load_plugin(const char **argv, int argc, url_mapping *mp, char *errbuf, in
       ri.tsremap_version = TSREMAP_VERSION;
 
       if (pi->fp_tsremap_init(&ri, tmpbuf, sizeof(tmpbuf) - 1) != TS_SUCCESS) {
-        Warning("Failed to initialize plugin %s (non-zero retval) ... bailing out", pi->path);
+        Warning("Failed to initialize plugin %s (non-zero retval) ... bailing out", pi->_file_path.get());
         return -5;
       }
     } // done elevating access
@@ -741,7 +765,7 @@ remap_load_plugin(const char **argv, int argc, url_mapping *mp, char *errbuf, in
     Debug("url_rewrite", "Argument %d: %s", k, argv[k]);
   }
 
-  Debug("url_rewrite", "Viewing parsed plugin parameters for %s: [%d]", pi->path, *plugin_found_at);
+  Debug("url_rewrite", "Viewing parsed plugin parameters for %s: [%d]", pi->_file_path.get(), *plugin_found_at);
   for (int k = 0; k < parc; k++) {
     Debug("url_rewrite", "Argument %d: %s", k, parv[k]);
   }
@@ -761,7 +785,7 @@ remap_load_plugin(const char **argv, int argc, url_mapping *mp, char *errbuf, in
   if (res != TS_SUCCESS) {
     snprintf(errbuf, errbufsize, "Can't create new remap instance for plugin \"%s\" - %s", c,
              tmpbuf[0] ? tmpbuf : "Unknown plugin error");
-    Warning("Failed to create new instance for plugin %s (not a TS_SUCCESS return)", pi->path);
+    Warning("Failed to create new instance for plugin %s (not a TS_SUCCESS return)", pi->_file_path.get());
     return -8;
   }
 

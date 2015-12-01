@@ -44,6 +44,9 @@ CallbackHandler(TSCont this, TSEvent id, void *no_data)
   case TS_EVENT_LIFECYCLE_CACHE_READY:
     TSDebug("lifecycle-plugin", "Cache ready");
     break;
+  case TS_EVENT_LIFECYCLE_PLUGINS_LOADED:
+    TSDebug("lifecycle-plugin", "plugins loaded");
+    break;
   default:
     TSDebug("lifecycle-plugin", "Unexpected event %d", id);
     break;
@@ -104,6 +107,7 @@ TSPluginInit(int argc, const char *argv[])
   TSLifecycleHookAdd(TS_LIFECYCLE_PORTS_INITIALIZED_HOOK, cb);
   TSLifecycleHookAdd(TS_LIFECYCLE_PORTS_READY_HOOK, cb);
   TSLifecycleHookAdd(TS_LIFECYCLE_CACHE_READY_HOOK, cb);
+  TSLifecycleHookAdd(TS_LIFECYCLE_PLUGINS_LOADED_HOOK, cb);
 
   TSDebug("lifecycle-plugin", "online");
 

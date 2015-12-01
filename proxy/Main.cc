@@ -361,6 +361,28 @@ update_debug_client_ip(const char * /*name ATS_UNUSED */, RecDataT /* data_type 
   return 0;
 }
 
+namespace
+{
+/** Per thread initialization.
+
+    This is put in an event that is invoked when an EThread starts executing events.
+*/
+class EThreadInitializer : public Continuation
+{
+  typedef EThreadInitializer self;
+
+public:
+  EThreadInitializer() { SET_HANDLER(&self::init); }
+  int
+  init(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
+  {
+    pluginManager.initForThread();
+    return 0;
+  }
+};
+
+EThreadInitializer ethreadInitializer;
+}
 static int
 init_memory_tracker(const char *config_var, RecDataT /* type ATS_UNUSED */, RecData data, void * /* cookie ATS_UNUSED */)
 {
@@ -771,7 +793,7 @@ cmd_verify(char * /* cmd ATS_UNUSED */)
     fprintf(stderr, "INFO: Successfully loaded records.config\n\n");
   }
 
-  if (!plugin_init(true)) {
+  if (!pluginManager.init(true)) {
     exitStatus |= (1 << 2);
     fprintf(stderr, "ERROR: Failed to load plugin.config, exitStatus %d\n\n", exitStatus);
   } else {
@@ -1662,6 +1684,8 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     machine_addr.assign(HttpConfig::m_master.inbound_ip6);
   Machine::init(0, &machine_addr.sa);
 
+  EThread::schedule_spawn(&ethreadInitializer);
+
   // pmgmt->start() must occur after initialization of Diags but
   // before calling RecProcessInit()
 
@@ -1807,7 +1831,7 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     Log::init(remote_management_flag ? 0 : Log::NO_REMOTE_MANAGEMENT);
 
     // Init plugins as soon as logging is ready.
-    (void)plugin_init(); // plugin.config
+    (void)pluginManager.init(); // plugin.config
 
     SSLConfigParams::init_ssl_ctx_cb = init_ssl_ctx_callback;
     sslNetProcessor.start(getNumSSLThreads(), stacksize);

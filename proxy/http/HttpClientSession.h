@@ -111,9 +111,8 @@ public:
   // Used for the cache authenticated HTTP content feature
   HttpServerSession *get_bound_ss();
 
-  // Functions for manipulating api hooks
-  void ssn_hook_append(TSHttpHookID id, INKContInternal *cont);
-  void ssn_hook_prepend(TSHttpHookID id, INKContInternal *cont);
+  /// Add a callback @a cont to the hook @a id with @a priority.
+  void hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
 
   int
   get_transact_count() const

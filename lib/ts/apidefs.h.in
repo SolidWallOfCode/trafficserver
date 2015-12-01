@@ -74,10 +74,10 @@ extern "C" {
 /* Version info
  */
 #define TS_VERSION_STRING "@TS_VERSION_STRING@"
-#define TS_VERSION_NUMBER @TS_VERSION_NUMBER @
-#define TS_VERSION_MAJOR @TS_VERSION_MAJOR @
-#define TS_VERSION_MINOR @TS_VERSION_MINOR @
-#define TS_VERSION_MICRO @TS_VERSION_MICRO @
+#define TS_VERSION_NUMBER @TS_VERSION_NUMBER@
+#define TS_VERSION_MAJOR @TS_VERSION_MAJOR@
+#define TS_VERSION_MINOR @TS_VERSION_MINOR@
+#define TS_VERSION_MICRO @TS_VERSION_MICRO@
 
 #define TS_HTTP_VERSION(a, b) ((((a)&0xFFFF) << 16) | ((b)&0xFFFF))
 #define TS_HTTP_MINOR(v) ((v)&0xFFFF)
@@ -199,6 +199,10 @@ typedef enum {
   TS_HTTP_STATUS_NETWORK_AUTHENTICATION_REQUIRED = 511
 
 } TSHttpStatus;
+
+
+/// When working with hook priorities this value represents "unset" or "unspecified" and is ignored.
+enum { TS_HOOK_PRIORITY_UNSET = -2 };
 
 /**
     This set of enums represents the possible hooks where you can
@@ -343,6 +347,7 @@ typedef enum {
   TS_LIFECYCLE_CACHE_READY_HOOK,
   TS_LIFECYCLE_SERVER_SSL_CTX_INITIALIZED_HOOK,
   TS_LIFECYCLE_CLIENT_SSL_CTX_INITIALIZED_HOOK,
+  TS_LIFECYCLE_PLUGINS_LOADED_HOOK,
   TS_LIFECYCLE_LAST_HOOK
 } TSLifecycleHookID;
 
@@ -437,6 +442,7 @@ typedef enum {
   TS_EVENT_LIFECYCLE_SERVER_SSL_CTX_INITIALIZED = 60021,
   TS_EVENT_LIFECYCLE_CLIENT_SSL_CTX_INITIALIZED = 60022,
   TS_EVENT_VCONN_PRE_ACCEPT = 60023,
+  TS_EVENT_LIFECYCLE_PLUGINS_LOADED = 60024,
   TS_EVENT_MGMT_UPDATE = 60100,
 
   /* EVENTS 60200 - 60202 for internal use */
@@ -785,6 +791,8 @@ typedef struct tsapi_bufferblock *TSIOBufferBlock;
 typedef struct tsapi_bufferreader *TSIOBufferReader;
 typedef struct tsapi_hostlookupresult *TSHostLookupResult;
 typedef struct tsapi_aiocallback *TSAIOCallback;
+
+typedef struct tsapi_plugin_handle const *TSPluginHandle;
 
 typedef void *(*TSThreadFunc)(void *data);
 typedef int (*TSEventFunc)(TSCont contp, TSEvent event, void *edata);

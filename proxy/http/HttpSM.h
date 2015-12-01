@@ -258,9 +258,13 @@ public:
   void dump_state_hdr(HTTPHdr *h, const char *s);
 
   // Functions for manipulating api hooks
-  void txn_hook_append(TSHttpHookID id, INKContInternal *cont);
-  void txn_hook_prepend(TSHttpHookID id, INKContInternal *cont);
+  void txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
   APIHook *txn_hook_get(TSHttpHookID id);
+  /// Set the priority threshold for plugin callback dispatch.
+  void txn_priority_threshold_set(int priority);
+  /// Set the priority threshold for a specific hook.
+  void txn_hook_priority_threshold_set(TSHttpHookID id, int priority);
+  void txn_plugin_enable(PluginInfo const* pi, bool enable_p);
 
   void add_history_entry(const char *fileline, int event, int reentrant);
   void add_cache_sm();
@@ -520,7 +524,8 @@ public:
 
 protected:
   TSHttpHookID cur_hook_id;
-  APIHook *cur_hook;
+  APIHook const *cur_hook;
+  HttpHookState hook_state;
 
   //
   // Continuation time keeper
@@ -617,16 +622,9 @@ HttpSM::find_server_buffer_size()
 }
 
 inline void
-HttpSM::txn_hook_append(TSHttpHookID id, INKContInternal *cont)
+HttpSM::txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
 {
-  api_hooks.append(id, cont);
-  hooks_set = 1;
-}
-
-inline void
-HttpSM::txn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-{
-  api_hooks.prepend(id, cont);
+  api_hooks.add(id, cont, priority);
   hooks_set = 1;
 }
 

@@ -1,3 +1,4 @@
+
 /**
   Licensed to the Apache Software Foundation (ASF) under one
   or more contributor license agreements.  See the NOTICE file
@@ -23,6 +24,7 @@
 #include <ts/ts.h>
 #include <cstddef>
 #include <cassert>
+#include <map>
 #include "atscppapi/noncopyable.h"
 #include "utils_internal.h"
 #include "logging_internal.h"
@@ -36,6 +38,9 @@ struct atscppapi::GlobalPluginState : noncopyable {
   TSCont cont_;
   GlobalPlugin *global_plugin_;
   bool ignore_internal_transactions_;
+
+  typedef std::multimap<int, GlobalPlugin::LifecycleCallback> LifecycleCallbackMap;
+  LifecycleCallbackMap lifecycle_cbs_;
 
   GlobalPluginState(GlobalPlugin *global_plugin, bool ignore_internal_transactions)
     : global_plugin_(global_plugin), ignore_internal_transactions_(ignore_internal_transactions)
@@ -53,6 +58,11 @@ handleGlobalPluginEvents(TSCont cont, TSEvent event, void *edata)
   if (state->ignore_internal_transactions_ && (TSHttpIsInternalRequest(txn) == TS_SUCCESS)) {
     LOG_DEBUG("Ignoring event %d on internal transaction %p for global plugin %p", event, txn, state->global_plugin_);
     TSHttpTxnReenable(txn, TS_EVENT_HTTP_CONTINUE);
+  } else if (event == TS_EVENT_LIFECYCLE_PLUGINS_LOADED) {
+    std::pair<GlobalPluginState::LifecycleCallbackMap::iterator, GlobalPluginState::LifecycleCallbackMap::iterator> range = state->lifecycle_cbs_.equal_range(TS_LIFECYCLE_PLUGINS_LOADED_HOOK);
+    for ( GlobalPluginState::LifecycleCallbackMap::iterator spot = range.first ; spot != range.second ; ++spot) {
+      (state->global_plugin_->*(spot->second))(edata);
+    }
   } else {
     LOG_DEBUG("Invoking global plugin %p for event %d on transaction %p", state->global_plugin_, event, txn);
     utils::internal::invokePluginForEvent(state->global_plugin_, txn, event);
@@ -83,4 +93,12 @@ GlobalPlugin::registerHook(Plugin::HookType hook_type)
   TSHttpHookID hook_id = utils::internal::convertInternalHookToTsHook(hook_type);
   TSHttpHookAdd(hook_id, state_->cont_);
   LOG_DEBUG("Registered global plugin %p for hook %s", this, HOOK_TYPE_STRINGS[hook_type].c_str());
+}
+
+void
+GlobalPlugin::registerHook(LifecycleHookType id, LifecycleCallback cb)
+{
+  TSLifecycleHookID ts_id = utils::internal::convertInternalHookToTsHook(id);
+  state_->lifecycle_cbs_.insert(std::make_pair(ts_id, cb));
+  TSLifecycleHookAdd(ts_id, state_->cont_);
 }

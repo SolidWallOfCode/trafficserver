@@ -1208,13 +1208,18 @@ tsapi void TSLifecycleHookAdd(TSLifecycleHookID id, TSCont contp);
 /* --------------------------------------------------------------------------
    HTTP hooks */
 tsapi void TSHttpHookAdd(TSHttpHookID id, TSCont contp);
-
+tsapi TSPluginHandle TSPluginFindByName(char const *name);
+tsapi int TSPluginMaxPriorityGet(TSPluginHandle plugin);
+tsapi int TSPluginEffPriorityGet(TSPluginHandle plugin);
+tsapi TSReturnCode TSPluginEnable(TSPluginHandle plugin, int state);
 /* --------------------------------------------------------------------------
    HTTP sessions */
 tsapi void TSHttpSsnHookAdd(TSHttpSsn ssnp, TSHttpHookID id, TSCont contp);
 tsapi void TSHttpSsnReenable(TSHttpSsn ssnp, TSEvent event);
 tsapi int TSHttpSsnTransactionCount(TSHttpSsn ssnp);
-
+tsapi TSReturnCode TSHttpSsnPriorityThresholdSet(TSHttpSsn ssnp, int priority);
+tsapi TSReturnCode TSHttpSsnHookPriorityThresholdSet(TSHttpSsn ssnp, TSHttpHookID id, int priority);
+tsapi TSReturnCode TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle plugin, int state);
 /* --------------------------------------------------------------------------
    SSL connections */
 /// Re-enable an SSL connection from a hook.
@@ -1233,6 +1238,9 @@ tsapi int TSVConnIsSsl(TSVConn sslp);
 /* --------------------------------------------------------------------------
    HTTP transactions */
 tsapi void TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp);
+tsapi TSReturnCode TSHttpTxnPriorityThresholdSet(TSHttpTxn txnp, int priority);
+tsapi TSReturnCode TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, TSHttpHookID id, int priority);
+tsapi TSReturnCode TSHttpTxnPluginEnable(TSHttpTxn txnp, TSPluginHandle plugin, int state);
 tsapi TSHttpSsn TSHttpTxnSsnGet(TSHttpTxn txnp);
 
 /* Gets the client request header for a specified HTTP transaction. */

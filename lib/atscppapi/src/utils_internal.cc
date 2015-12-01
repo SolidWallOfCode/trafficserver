@@ -164,7 +164,7 @@ utils::internal::getTransactionPluginMutex(TransactionPlugin &transaction_plugin
 }
 
 TSHttpHookID
-utils::internal::convertInternalHookToTsHook(Plugin::HookType hooktype)
+utils::internal::convertInternalHookToTsHook(TransactionValues::HookType hooktype)
 {
   switch (hooktype) {
   case Plugin::HOOK_READ_REQUEST_HEADERS_POST_REMAP:
@@ -192,6 +192,19 @@ utils::internal::convertInternalHookToTsHook(Plugin::HookType hooktype)
     break;
   }
   return static_cast<TSHttpHookID>(-1);
+}
+
+TSLifecycleHookID
+utils::internal::convertInternalHookToTsHook(GlobalPlugin::LifecycleHookType hooktype)
+{
+  switch (hooktype) {
+  case GlobalPlugin::HOOK_PLUGINS_LOADED:
+    return TS_LIFECYCLE_PLUGINS_LOADED_HOOK;
+  default:
+    assert(false); // shouldn't happen, let's catch it early
+    break;
+  }
+  return static_cast<TSLifecycleHookID>(-1);
 }
 
 TSHttpHookID

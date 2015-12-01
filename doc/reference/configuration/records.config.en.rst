@@ -750,7 +750,7 @@ Value Effect
    Note that setting this parameter to (``2``) will not work correctly unless
    the dedicated SSL threads are disabled (:ts:cv:`proxy.config.ssl.number.threads`
    is set to (``-1``)).
-   
+
 .. ts:cv:: CONFIG proxy.config.http.auth_server_session_private INT 1
 
    If enabled (``1``) anytime a request contains a (``Authorization``), (``Proxy-Authorization``)
@@ -2666,6 +2666,14 @@ Plug-in Configuration
 
    Specifies the location of Traffic Server plugins.
 
+.. ts:cv:: CONFIG proxy.config.plugin.priority.default INT 1000
+
+    The maximum priority assigned to a plugin if not explicitly configured in :file:`plugin.config`.
+
+.. ts:cv:: CONFIG proxy.config.pluign.priority.effective_gap INT 200
+
+    The initial effective priority of a plugin is this amount less than the maximum priority. A plugin can programmatically change its effective priority from this value but may not set it larger than its maximum priority. If the default priority is 1000 and this value is 200 then plugins will have by default an effective priority of 800 (1000 - 200).
+
 .. ts:cv:: CONFIG proxy.config.remap.num_remap_threads INT 0
 
    When this variable is set to ``0``, plugin remap callbacks are
@@ -2674,6 +2682,38 @@ Plug-in Configuration
    Setting this variable to causes remap processing to take place
    on a dedicated thread pool, freeing the network threads to service
    additional requests.
+
+SOCKS Processor
+===============
+
+.. ts:cv::  CONFIG proxy.config.socks.socks_needed INT 0
+
+   Enables (``1``) or disables (``0``) the SOCKS processor
+
+.. ts:cv::  CONFIG proxy.config.socks.socks_version INT 4
+
+   Specifies the SOCKS version (``4``) or (``5``)
+
+.. ts:cv::  CONFIG proxy.config.socks.socks_config_file STRING socks.config
+
+   The socks_onfig file allows you to specify ranges of IP addresses
+   that will not be relayed to the SOCKS server. It can also be used
+   to configure AUTH information for SOCKSv5 servers.
+
+.. ts:cv::  CONFIG proxy.config.socks.socks_timeout INT 100
+
+   The activity timeout value (in seconds) for SOCKS server connections.
+
+.. ts:cv::  CONFIG proxy.config.socks.server_connect_timeout INT 10
+
+   The timeout value (in seconds) for SOCKS server connection attempts.
+
+.. ts:cv::  CONFIG proxy.config.socks.per_server_connection_attempts INT 1
+
+    The total number of connection attempts allowed per SOCKS server,
+    if multiple servers are used.
+
+.. ts:cv::  CONFIG proxy.config.socks.connection_attempts INT 4
 
 Sockets
 =======
