@@ -760,7 +760,7 @@ cmd_verify(char * /* cmd ATS_UNUSED */)
     fprintf(stderr, "INFO: Successfully loaded records.config\n\n");
   }
 
-  if (!plugin_init(true)) {
+  if (!pluginManager.init(true)) {
     exitStatus |= (1 << 2);
     fprintf(stderr, "ERROR: Failed to load plugin.config, exitStatus %d\n\n", exitStatus);
   } else {
@@ -1796,7 +1796,7 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     Log::init(remote_management_flag ? 0 : Log::NO_REMOTE_MANAGEMENT);
 
     // Init plugins as soon as logging is ready.
-    (void)plugin_init(); // plugin.config
+    (void)pluginManager.init(); // plugin.config
 
     SSLConfigParams::init_ssl_ctx_cb = init_ssl_ctx_callback;
     SSLConfigParams::load_ssl_file_cb = load_ssl_file_callback;

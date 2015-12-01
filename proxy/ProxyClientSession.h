@@ -44,22 +44,16 @@ public:
   virtual void new_connection(NetVConnection *new_vc, MIOBuffer *iobuf, IOBufferReader *reader, bool backdoor) = 0;
 
   virtual void
-  ssn_hook_append(TSHttpHookID id, INKContInternal *cont)
+  hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
   {
-    this->api_hooks.prepend(id, cont);
-  }
-
-  virtual void
-  ssn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-  {
-    this->api_hooks.prepend(id, cont);
+    this->api_hooks.add(id, cont, priority);
   }
 
   virtual NetVConnection *get_netvc() const = 0;
   virtual void release_netvc() = 0;
 
-  APIHook *
-  ssn_hook_get(TSHttpHookID id) const
+  APIHook const*
+  hook_get(TSHttpHookID id) const
   {
     return this->api_hooks.get(id);
   }
@@ -97,6 +91,8 @@ public:
     return this->api_hooks.has_hooks() || http_global_hooks->has_hooks();
   }
 
+  HttpAPIHooks const* feature_hooks() const { return &api_hooks; }
+
   // Initiate an API hook invocation.
   void do_api_callout(TSHttpHookID id);
 
@@ -111,10 +107,9 @@ protected:
   bool hooks_on;
 
 private:
-  APIHookScope api_scope;
-  TSHttpHookID api_hookid;
-  APIHook *api_current;
+  APIHook const* cur_hook;
   HttpAPIHooks api_hooks;
+  HttpHookState hook_state;
   void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 
   ProxyClientSession(ProxyClientSession &);                  // noncopyable

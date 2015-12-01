@@ -206,6 +206,19 @@ utils::internal::convertInternalHookToTsHook(Plugin::HookType hooktype)
   return static_cast<TSHttpHookID>(-1);
 }
 
+TSLifecycleHookID
+utils::internal::convertInternalHookToTsHook(GlobalPlugin::LifecycleHookType hooktype)
+{
+  switch (hooktype) {
+  case GlobalPlugin::HOOK_PLUGINS_LOADED:
+    return TS_LIFECYCLE_PLUGINS_LOADED_HOOK;
+  default:
+    assert(false); // shouldn't happen, let's catch it early
+    break;
+  }
+  return static_cast<TSLifecycleHookID>(-1);
+}
+
 TSHttpHookID
 utils::internal::convertInternalTransformationTypeToTsHook(TransformationPlugin::Type type)
 {

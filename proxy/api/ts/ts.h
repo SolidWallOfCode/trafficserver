@@ -1231,6 +1231,7 @@ tsapi int TSVConnIsSsl(TSVConn sslp);
 /* --------------------------------------------------------------------------
    HTTP transactions */
 tsapi void TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp);
+tsapi TSReturnCode TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, int priority);
 tsapi TSHttpSsn TSHttpTxnSsnGet(TSHttpTxn txnp);
 
 /* Gets the client request header for a specified HTTP transaction. */
