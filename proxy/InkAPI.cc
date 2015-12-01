@@ -950,13 +950,14 @@ INKContInternal::init(TSEventFunc funcp, TSMutex mutexp)
 
   mutex = (ProxyMutex *)mutexp;
   m_event_func = funcp;
+  m_info = PluginContext::get();
 }
 
 void
 INKContInternal::destroy()
 {
   if (m_free_magic == INKCONT_INTERN_MAGIC_DEAD) {
-    ink_release_assert(!"Plugin tries to use a continuation which is deleted");
+    Fatal("Plugin %s tried to use a continuation [%p] which is deleted", m_info ? m_info->_name : "*UNKNOWN*", this);
   }
   m_deleted = 1;
   if (m_deletable) {
@@ -1001,6 +1002,7 @@ INKContInternal::handle_event(int event, void *edata)
       INKContAllocator.free(this);
     }
   } else {
+    PluginContext ctx(m_info);
     return m_event_func((TSCont) this, (TSEvent)event, edata);
   }
   return EVENT_DONE;
@@ -1212,8 +1214,10 @@ INKVConnInternal::set_data(int id, void *data)
 ////////////////////////////////////////////////////////////////////
 
 int
-APIHook::invoke(int event, void *edata)
+APIHook::invoke(int event, void *edata) const
 {
+  PluginContext pc(m_cont->m_info);
+  
   if ((event == EVENT_IMMEDIATE) || (event == EVENT_INTERVAL)) {
     if (ink_atomic_increment((int *)&m_cont->m_event_count, 1) < 0) {
       ink_assert(!"not reached");
@@ -1222,39 +1226,21 @@ APIHook::invoke(int event, void *edata)
   return m_cont->handleEvent(event, edata);
 }
 
-APIHook *
-APIHook::next() const
-{
-  return m_link.next;
-}
-
-
 void
-APIHooks::prepend(INKContInternal *cont)
+APIHooks::add(INKContInternal *cont, int priority)
 {
-  APIHook *api_hook;
+  APIHook *api_hook, *h;
 
   api_hook = apiHookAllocator.alloc();
   api_hook->m_cont = cont;
+  api_hook->_priority = priority;
 
-  m_hooks.push(api_hook);
-}
-
-void
-APIHooks::append(INKContInternal *cont)
-{
-  APIHook *api_hook;
-
-  api_hook = apiHookAllocator.alloc();
-  api_hook->m_cont = cont;
-
-  m_hooks.enqueue(api_hook);
-}
-
-APIHook *
-APIHooks::get() const
-{
-  return m_hooks.head;
+  for ( h = m_hooks.tail ; NULL != h && h->_priority < priority ; h = h->prev() )
+    ;
+  if (NULL == h)
+    m_hooks.push(api_hook);
+  else
+    m_hooks.insert(api_hook, h);
 }
 
 void
@@ -1264,6 +1250,110 @@ APIHooks::clear()
   while (0 != (hook = m_hooks.pop())) {
     apiHookAllocator.free(hook);
   }
+}
+
+HttpHookState::HttpHookState() : _id(TS_HTTP_LAST_HOOK), _threshold(API_HOOK_THRESHOLD_UNSET)
+{
+}
+
+void
+HttpHookState::init(TSHttpHookID id,HttpAPIHooks const* global, HttpAPIHooks const* ua, HttpAPIHooks const* sm)
+{
+  int ttxn = API_HOOK_THRESHOLD_UNSET, tssn = API_HOOK_THRESHOLD_UNSET, tg = API_HOOK_THRESHOLD_UNSET;
+  _id = id;
+  
+  tg = _global.init(global, id);
+  
+  if (ua) tssn = _ssn.init(ua, id);
+  else _ssn.clear();
+    
+  if (sm) ttxn = _txn.init(sm, id);
+  else _txn.clear();
+  
+  _threshold = ttxn > 0 ? ttxn : (tssn > 0 ? tssn : tg);
+  _last_priority = API_HOOK_THRESHOLD_UNSET;
+}
+
+APIHook const *
+HttpHookState::getNext()
+{
+  APIHook const *zret = NULL;
+
+  APIHook const *hg = _global.candidate(_threshold, _last_priority);
+  APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
+  APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
+
+  Debug("plugin", "computing next hook with threshold %d", _threshold);
+  if (htxn && (NULL == hssn || htxn->_priority > hssn->_priority) && (NULL == hg || htxn->_priority > hg->_priority)) {
+    zret = htxn;
+    ++_txn;
+  } else if (hssn && (NULL == hg || hssn->_priority > hg->_priority)) {
+    zret = hssn;
+    ++_ssn;
+  } else if (hg) {
+    zret = hg;
+    ++_global;
+  }
+  return zret;
+}
+
+void
+HttpHookState::setThreshold(int t, ScopeTag scope)
+{
+  switch (scope) {
+  case GLOBAL: _global._threshold = t; break;
+  case SESSION: _ssn._threshold = t; break;
+  case TRANSACTION: _txn._threshold = t; break;
+  }
+  _threshold = API_HOOK_THRESHOLD_UNSET;
+  if (_txn._threshold >= 0) _threshold = _txn._threshold;
+  else if (_ssn._threshold >= 0) _threshold = _ssn._threshold;
+  else if (_global._threshold >= 0) _threshold = _global._threshold;
+}
+
+
+int
+HttpHookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
+{
+  APIHooks const *hooks = (*feature_hooks)[id];
+  _threshold = feature_hooks->threshold();
+
+  _c = _p = NULL;
+
+  if (hooks) {
+    int t = hooks->threshold();
+    if (t >= 0)
+      _threshold = t;
+    _c = hooks->head();
+  }
+  return _threshold;
+}
+
+APIHook const *
+HttpHookState::Scope::candidate(int t, int prev_t)
+{
+  APIHook const *x = NULL;
+  if (NULL != _c) {
+    // Back up if new hooks have been added at a low enough priority.
+    while (_p != (x = _c->prev()) && NULL != x && x->_priority <= prev_t) {
+      _c = x;
+    }
+    _p = _c->prev();
+    if (_c->_priority > t)
+      return _c;
+  }
+  return NULL;
+}
+
+void HttpHookState::Scope::operator++()
+{
+  _p = _c;
+  _c = _c->next();
+}
+
+void HttpHookState::Scope::clear()
+{
+  _p = _c = NULL;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -1780,32 +1870,32 @@ TSPluginDirGet(void)
 TSReturnCode
 TSPluginRegister(TSSDKVersion sdk_version, TSPluginRegistrationInfo *plugin_info)
 {
-  PluginSDKVersion version = (PluginSDKVersion)sdk_version;
-
-  if (!plugin_reg_current)
-    return TS_ERROR;
-
+  PluginSDKVersion version = static_cast<PluginSDKVersion>(sdk_version);
+  PluginInfo * p = const_cast<PluginInfo*>(PluginContext::get());
   sdk_assert(sdk_sanity_check_null_ptr((void *)plugin_info) == TS_SUCCESS);
 
-  plugin_reg_current->plugin_registered = true;
+  if (NULL == p)
+    return TS_ERROR;
+
+  p->_registered_p = true;
 
   // We're compatible only within the 3.x release
   if (version >= PLUGIN_SDK_VERSION_3_0 && version < PLUGIN_SDK_VERSION_4_0) {
-    plugin_reg_current->sdk_version = version;
+    p->sdk_version = version;
   } else {
-    plugin_reg_current->sdk_version = PLUGIN_SDK_VERSION_UNKNOWN;
+    p->sdk_version = PLUGIN_SDK_VERSION_UNKNOWN;
   }
 
   if (plugin_info->plugin_name) {
-    plugin_reg_current->plugin_name = ats_strdup(plugin_info->plugin_name);
+    p->_name = ats_strdup(plugin_info->plugin_name);
   }
 
   if (plugin_info->vendor_name) {
-    plugin_reg_current->vendor_name = ats_strdup(plugin_info->vendor_name);
+    p->_vendor = ats_strdup(plugin_info->vendor_name);
   }
 
   if (plugin_info->support_email) {
-    plugin_reg_current->support_email = ats_strdup(plugin_info->support_email);
+    p->_email = ats_strdup(plugin_info->support_email);
   }
 
   return TS_SUCCESS;
@@ -4381,6 +4471,7 @@ void
 TSHttpHookAdd(TSHttpHookID id, TSCont contp)
 {
   INKContInternal *icontp;
+  int pri = PluginContext::get()->_eff_priority;
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
@@ -4388,9 +4479,9 @@ TSHttpHookAdd(TSHttpHookID id, TSCont contp)
 
   if (id >= TS_SSL_FIRST_HOOK && id <= TS_SSL_LAST_HOOK) {
     TSSslHookInternalID internalId = static_cast<TSSslHookInternalID>(id - TS_SSL_FIRST_HOOK);
-    ssl_hooks->append(internalId, icontp);
+    ssl_hooks->add(internalId, icontp, pri);
   } else { // Follow through the regular HTTP hook framework
-    http_global_hooks->append(id, icontp);
+    http_global_hooks->add(id, icontp, pri);
   }
 }
 
@@ -4400,7 +4491,7 @@ TSLifecycleHookAdd(TSLifecycleHookID id, TSCont contp)
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_lifecycle_hook_id(id) == TS_SUCCESS);
 
-  lifecycle_hooks->append(id, (INKContInternal *)contp);
+  lifecycle_hooks->add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
 void
@@ -4426,7 +4517,7 @@ TSHttpSsnHookAdd(TSHttpSsn ssnp, TSHttpHookID id, TSCont contp)
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
   HttpClientSession *cs = (HttpClientSession *)ssnp;
-  cs->ssn_hook_append(id, (INKContInternal *)contp);
+  cs->hook_add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
 int
@@ -4485,17 +4576,36 @@ TSHttpSsnReenable(TSHttpSsn ssnp, TSEvent event)
 
 
 /* HTTP transactions */
-void
-TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
+TSReturnCode
+TSHttpTxnPriorityHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp, int priority)
 {
+  HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
+  
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
-  HttpSM *sm = (HttpSM *)txnp;
-  sm->txn_hook_append(id, (INKContInternal *)contp);
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  sm->txn_hook_add(id, reinterpret_cast<INKContInternal *>(contp), priority);
+  return TS_SUCCESS;
 }
 
+void
+TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
+{
+  TSHttpTxnPriorityHookAdd(txnp, id, contp, PluginContext::get()->_eff_priority);
+}
+
+TSReturnCode
+TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, int priority)
+{
+  HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+  
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  sm->set_plugin_threshold(priority);
+  return TS_SUCCESS;
+}
 
 // Private api function for gzip plugin.
 //  This function should only appear in TsapiPrivate.h

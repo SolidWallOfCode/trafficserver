@@ -39,6 +39,8 @@ enum INKContInternalMagic_t {
   INKCONT_INTERN_MAGIC_DEAD = 0xDEAD9631,
 };
 
+struct PluginInfo;
+
 class INKContInternal : public DummyVConnection
 {
 public:
@@ -51,7 +53,6 @@ public:
   void handle_event_count(int event);
   int handle_event(int event, void *edata);
 
-public:
   void *mdata;
   TSEventFunc m_event_func;
   volatile int m_event_count;
@@ -60,6 +61,8 @@ public:
   int m_deleted;
   // INKqa07670: Nokia memory leak bug fix
   INKContInternalMagic_t m_free_magic;
+
+  PluginInfo const* m_info;
 };
 
 class INKVConnInternal : public INKContInternal

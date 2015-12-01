@@ -22,9 +22,10 @@
  */
 
 #include <stdio.h>
-#include "ink_platform.h"
-#include "ink_file.h"
-#include "ParseRules.h"
+#include <limits>
+#include "ts/ink_platform.h"
+#include "ts/ink_file.h"
+#include "ts/ParseRules.h"
 #include "I_RecCore.h"
 #include "I_Layout.h"
 #include "InkAPIInternal.h"
@@ -34,7 +35,14 @@
 
 static const char *plugin_dir = ".";
 
+static const char OPT_PRIORITY[] = "priority";
+
 typedef void (*init_func_t)(int argc, char *argv[]);
+
+ink_thread_key PluginContext::THREAD_KEY;
+PluginInfo* PluginManager::Internal_Plugin_Info;
+
+PluginManager pluginManager;
 
 // Plugin registration vars
 //
@@ -47,22 +55,41 @@ typedef void (*init_func_t)(int argc, char *argv[]);
 //      is single threaded so we can get away with the
 //      global pointer
 //
-DLL<PluginRegInfo> plugin_reg_list;
-PluginRegInfo *plugin_reg_current = NULL;
+DLL<PluginInfo> plugin_reg_list;
 
-PluginRegInfo::PluginRegInfo()
-  : plugin_registered(false), plugin_path(NULL), sdk_version(PLUGIN_SDK_VERSION_UNKNOWN), plugin_name(NULL), vendor_name(NULL),
-    support_email(NULL)
+PluginInfo::PluginInfo()
+  : _registered_p(false), dlh(NULL)
 {
 }
 
-static bool
-plugin_load(int argc, char *argv[], bool validateOnly)
+PluginInfo::~PluginInfo()
+{
+  // We don't support unloading plugins once they are successfully loaded, so assert
+  // that we don't accidentally attempt this.
+  ink_release_assert(this->_registered_p == false);
+  ink_release_assert(this->link.prev == NULL);
+
+  ats_free(this->_file_path);
+  ats_free(this->_name);
+  ats_free(this->_vendor);
+  ats_free(this->_email);
+  if (dlh)
+    dlclose(dlh);
+}
+
+PluginManager::PluginManager()
+{
+  ink_thread_key_create(&PluginContext::THREAD_KEY, NULL);
+  ink_thread_setspecific(PluginContext::THREAD_KEY, NULL);
+}
+
+bool
+PluginManager::load(int argc, char *argv[], bool continueOnError)
 {
   char path[PATH_NAME_MAX + 1];
   void *handle;
   init_func_t init;
-  PluginRegInfo *plugin_reg_temp;
+  PluginInfo* info = NULL;
 
   if (argc < 1) {
     return true;
@@ -71,9 +98,9 @@ plugin_load(int argc, char *argv[], bool validateOnly)
 
   Note("loading plugin '%s'", path);
 
-  plugin_reg_temp = plugin_reg_list.head;
-  while (plugin_reg_temp) {
-    if (strcmp(plugin_reg_temp->plugin_path, path) == 0) {
+  for (PluginInfo *plugin_reg_temp = plugin_reg_list.head; plugin_reg_temp != NULL;
+       plugin_reg_temp = (plugin_reg_temp->link).next) {
+    if (strcmp(plugin_reg_temp->_file_path, path) == 0) {
       Warning("multiple loading of plugin %s", path);
       break;
     }
@@ -88,104 +115,126 @@ plugin_load(int argc, char *argv[], bool validateOnly)
 
     handle = dlopen(path, RTLD_NOW);
     if (!handle) {
-      if (validateOnly) {
-        return false;
-      }
-      Fatal("unable to load '%s': %s", path, dlerror());
+      if (!continueOnError)
+	Fatal("unable to load '%s': %s", path, dlerror());
+      return false;
     }
 
     // Allocate a new registration structure for the
     //    plugin we're starting up
-    ink_assert(plugin_reg_current == NULL);
-    plugin_reg_current = new PluginRegInfo;
-    plugin_reg_current->plugin_path = ats_strdup(path);
-
-    init = (init_func_t)dlsym(handle, "TSPluginInit");
+    info = new PluginInfo;
+    info->_file_path = ats_strdup(path);
+    info->dlh = handle;
+    
+    init = reinterpret_cast<init_func_t>(dlsym(info->dlh, "TSPluginInit"));
+    
     if (!init) {
-      if (validateOnly) {
-        return false;
-      }
-      Fatal("unable to find TSPluginInit function in '%s': %s", path, dlerror());
+      delete info;
+      if (!continueOnError)
+	Fatal("unable to find TSPluginInit function in '%s': %s", path, dlerror());
       return false; // this line won't get called since Fatal brings down ATS
     }
 
-    init(argc, argv);
+    // Process internal arguments
+    for ( int i = 1, j = 1, n = argc ; i < n ; ++i) {
+      if (argv[i][0] == '@') {
+        if (0 == strncasecmp(argv[i]+1, OPT_PRIORITY, sizeof(OPT_PRIORITY)-1)) {
+          int a = -1, b = -1, x;
+          char const* parm = argv[i]+sizeof(OPT_PRIORITY);
+          if ('=' == *parm) ++parm;
+          x = sscanf(parm, "%d/%d", &a, &b);
+          if (x == 1) {
+            info->_max_priority = a;
+            info->_eff_priority = std::max(0, a - _effective_priority_gap);
+          } else if (x == 2) {
+            info->_max_priority = std::max(a,b);
+            info->_eff_priority = std::min(a,b);
+          }
+        }
+        --argc;
+      } else {
+        if (i != j) argv[j] = argv[i];
+        ++j;
+      }
+    }
+
+    // Call the plugin to intialize.
+    {
+      PluginContext pc(info);
+      init(argc, argv);
+    }
+    
   } // done elevating access
 
-  plugin_reg_list.push(plugin_reg_current);
-  plugin_reg_current = NULL;
+  if (info->_registered_p) {
+    plugin_reg_list.push(info);
+  } else {
+    Fatal("plugin not registered by calling TSPluginRegister");
+    return false; // this line won't get called since Fatal brings down ATS
+  }
 
   return true;
 }
 
-static char *
-plugin_expand(char *arg)
+char *
+PluginManager::expand(char *arg)
 {
   RecDataT data_type;
   char *str = NULL;
 
-  if (*arg != '$') {
-    return (char *)NULL;
-  }
+  if (*arg != '$')
+    return NULL;
+  
   // skip the $ character
   arg += 1;
 
-  if (RecGetRecordDataType(arg, &data_type) != REC_ERR_OKAY) {
-    goto not_found;
+  if (RecGetRecordDataType(arg, &data_type) == REC_ERR_OKAY) {
+    switch (data_type) {
+    case RECD_STRING: {
+      RecString str_val;
+      if (RecGetRecordString_Xmalloc(arg, &str_val) == REC_ERR_OKAY) {
+	return static_cast<char*>(str_val);
+      }
+      break;
+    }
+    case RECD_FLOAT: {
+      RecFloat float_val;
+      if (RecGetRecordFloat(arg, &float_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%f", (float)float_val);
+	return str;
+      }
+      break;
+    }
+    case RECD_INT: {
+      RecInt int_val;
+      if (RecGetRecordInt(arg, &int_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%ld", (long int)int_val);
+	return str;
+      }
+      break;
+    }
+    case RECD_COUNTER: {
+      RecCounter count_val;
+      if (RecGetRecordCounter(arg, &count_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%ld", (long int)count_val);
+	return str;
+      }
+      break;
+    }
+    default:
+      break;
+    }
   }
 
-  switch (data_type) {
-  case RECD_STRING: {
-    RecString str_val;
-    if (RecGetRecordString_Xmalloc(arg, &str_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    return (char *)str_val;
-    break;
-  }
-  case RECD_FLOAT: {
-    RecFloat float_val;
-    if (RecGetRecordFloat(arg, &float_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%f", (float)float_val);
-    return str;
-    break;
-  }
-  case RECD_INT: {
-    RecInt int_val;
-    if (RecGetRecordInt(arg, &int_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%ld", (long int)int_val);
-    return str;
-    break;
-  }
-  case RECD_COUNTER: {
-    RecCounter count_val;
-    if (RecGetRecordCounter(arg, &count_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%ld", (long int)count_val);
-    return str;
-    break;
-  }
-  default:
-    goto not_found;
-    break;
-  }
-
-
-not_found:
   Warning("plugin.config: unable to find parameter %s", arg);
   return NULL;
 }
 
 bool
-plugin_init(bool validateOnly)
+PluginManager::init(bool continueOnError)
 {
   ats_scoped_str path;
   char line[1024], *p;
@@ -204,6 +253,21 @@ plugin_init(bool validateOnly)
     INIT_ONCE = false;
   }
 
+  // TS uses plugin mechanisms in various places and so needs a valid plugin info block
+  // for them. This is it.
+  Internal_Plugin_Info = new PluginInfo;
+  Internal_Plugin_Info->_name = ats_strdup("TrafficServer Internal");
+  Internal_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
+  Internal_Plugin_Info->_file_path = ats_strdup(".");
+  Internal_Plugin_Info->_email = ats_strdup("users@trafficserver.apache.org");
+  Internal_Plugin_Info->_max_priority = std::numeric_limits<int>::max();
+  Internal_Plugin_Info->_eff_priority = std::numeric_limits<int>::max();
+  
+  plugin_reg_list.push(Internal_Plugin_Info);
+
+  REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
+  REC_EstablishStaticConfigInt32(_effective_priority_gap, "proxy.config.plugin.priority.effective_gap");
+  
   path = RecConfigReadConfigPath(NULL, "plugin.config");
   fd = open(path, O_RDONLY);
   if (fd < 0) {
@@ -254,18 +318,26 @@ plugin_init(bool validateOnly)
     }
 
     for (i = 0; i < argc; i++) {
-      vars[i] = plugin_expand(argv[i]);
+      vars[i] = this->expand(argv[i]);
       if (vars[i]) {
         argv[i] = vars[i];
       }
     }
 
-    retVal = plugin_load(argc, argv, validateOnly);
+    retVal = this->load(argc, argv, continueOnError);
 
     for (i = 0; i < argc; i++)
       ats_free(vars[i]);
   }
 
   close(fd);
+
+  // Notification that plugin loading has finished.
+  APIHook *hook = lifecycle_hooks->get(TS_LIFECYCLE_PLUGINS_LOADED_HOOK);
+  while (hook) {
+    hook->invoke(TS_EVENT_LIFECYCLE_PLUGINS_LOADED, NULL);
+    hook = hook->next();
+  }
+
   return retVal;
 }

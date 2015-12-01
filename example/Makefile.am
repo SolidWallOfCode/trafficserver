@@ -32,6 +32,7 @@ plugins = \
   lifecycle-plugin.la \
   null-transform.la \
   output-header.la \
+  priority-plugin.la \
   protocol.la \
   psi.la \
   query-remap.la \
@@ -66,6 +67,7 @@ intercept_la_SOURCES = intercept/intercept.cc
 lifecycle_plugin_la_SOURCES = lifecycle-plugin/lifecycle-plugin.c
 null_transform_la_SOURCES = null-transform/null-transform.c
 output_header_la_SOURCES = output-header/output-header.c
+priority_plugin_la_SOURCES = priority-plugin/priority-plugin.c
 protocol_la_SOURCES = protocol/Protocol.c protocol/TxnSM.c
 query_remap_la_SOURCES = query-remap/query-remap.c
 remap_la_SOURCES = remap/remap.cc

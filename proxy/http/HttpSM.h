@@ -211,6 +211,9 @@ public:
     return server_session;
   }
 
+  /// Set the priority threshold for plugin callback dispatch.
+  void set_plugin_threshold(int priority);
+
   // Called by transact.  Updates are fire and forget
   //  so there are no callbacks and are safe to do
   //  directly from transact
@@ -258,8 +261,7 @@ public:
   void dump_state_hdr(HTTPHdr *h, const char *s);
 
   // Functions for manipulating api hooks
-  void txn_hook_append(TSHttpHookID id, INKContInternal *cont);
-  void txn_hook_prepend(TSHttpHookID id, INKContInternal *cont);
+  void txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
   APIHook *txn_hook_get(TSHttpHookID id);
 
   void add_history_entry(const char *fileline, int event, int reentrant);
@@ -520,7 +522,8 @@ public:
 
 protected:
   TSHttpHookID cur_hook_id;
-  APIHook *cur_hook;
+  APIHook const *cur_hook;
+  HttpHookState hook_state;
 
   //
   // Continuation time keeper
@@ -617,16 +620,9 @@ HttpSM::find_server_buffer_size()
 }
 
 inline void
-HttpSM::txn_hook_append(TSHttpHookID id, INKContInternal *cont)
+HttpSM::txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
 {
-  api_hooks.append(id, cont);
-  hooks_set = 1;
-}
-
-inline void
-HttpSM::txn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-{
-  api_hooks.prepend(id, cont);
+  api_hooks.add(id, cont, priority);
   hooks_set = 1;
 }
 

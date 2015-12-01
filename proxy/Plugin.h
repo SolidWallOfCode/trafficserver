@@ -25,6 +25,7 @@
 #define __PLUGIN_H__
 
 #include "List.h"
+#include <ts/ink_thread.h>
 
 // need to keep syncronized with TSSDKVersion
 //   in ts/ts.h.in
@@ -35,26 +36,94 @@ typedef enum {
   PLUGIN_SDK_VERSION_4_0
 } PluginSDKVersion;
 
-struct PluginRegInfo {
-  PluginRegInfo();
-  ~PluginRegInfo();
+struct PluginInfo {
+  PluginInfo();
+  ~PluginInfo();
 
-  bool plugin_registered;
-  char *plugin_path;
-
+  bool _registered_p;
   PluginSDKVersion sdk_version;
-  char *plugin_name;
-  char *vendor_name;
-  char *support_email;
 
-  LINK(PluginRegInfo, link);
+  /// Path to the implmentation (library, so, dll) file.
+  ats_scoped_str _file_path;
+  /// Name of the plugin.
+  ats_scoped_str _name;
+  /// Plugin vendor name.
+  ats_scoped_str _vendor;
+  /// email for vendor / author.
+  ats_scoped_str _email;
+
+  int _max_priority; ///< Maximum priority.
+  int _eff_priority; ///< Effective priority.
+
+  /// Library handle.
+  void *dlh;
+
+  LINK(PluginInfo, link);
 };
 
-// Plugin registration vars
-extern DLL<PluginRegInfo> plugin_reg_list;
-extern PluginRegInfo *plugin_reg_current;
+/** Manage the set of plugins.
+ */
+class PluginManager
+{
+public:
+  PluginManager();
 
-bool plugin_init(bool validateOnly = false);
+  /// Initialize all the plugins.
+  bool init(bool continueOnError = false);
+  /// Expand argument to plugin.
+  char *expand(char *);
+
+  int get_default_priority();
+  int get_default_effective_priority();
+
+  /// Used for plugin type continuations created and used by TS itself.
+  static PluginInfo* Internal_Plugin_Info;
+
+protected:
+  /// Load a single plugin.
+  bool load(int arg, char *argv[], bool continueOnError);
+
+  int32_t _default_priority;
+  int32_t _effective_priority_gap;
+};
+
+/// Globally accessible singleton.
+extern PluginManager pluginManager;
+
+/** Control and access a per thread plugin context.
+
+      This should be used to set the context when a plugin callback is invoked.
+      Static methods can then be used to get the current plugin.
+*/
+class PluginContext
+{
+public:
+  /// Set the plugin context in a scoped fashion.
+  /// This is re-entrant.
+  PluginContext(PluginInfo const* plugin)
+  {
+    _save = ink_thread_getspecific(THREAD_KEY);
+    // Unfortunately thread local storage won't preserve const
+    ink_thread_setspecific(THREAD_KEY, const_cast<PluginInfo*>(plugin));
+  }
+  ~PluginContext() { ink_thread_setspecific(THREAD_KEY, _save); }
+
+  /// Get the current plugin in context.
+  /// @return The plugin info or @c NULL if there is no plugin context.
+  static PluginInfo const *
+  get()
+  {
+    return static_cast<PluginInfo const*>(ink_thread_getspecific(THREAD_KEY));
+  }
+
+private:
+  void *_save; ///< Value to restore when context goes out of scope.
+
+  /// The key for the per thread context. This is initialized by the @c PluginManager singleton.
+  static ink_thread_key THREAD_KEY;
+
+  friend class PluginManager;
+};
 
 /** Abstract interface class for plugin based continuations.
 
