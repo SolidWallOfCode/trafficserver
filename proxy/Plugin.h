@@ -64,6 +64,42 @@ class PluginManager
   bool load_plugin(int arg, char * argv[], bool continueOnError);
 };
 
+/** Control and access a per thread plugin context.
+
+      This should be used to set the context when a plugin callback is invoked.
+      Static methods can then be used to get the current plugin.
+*/
+class PluginContext
+{
+ public:
+  /// Set the plugin context in a scoped fashion.
+  /// This is re-entrant.
+  PluginContext(PluginInfo* plugin)
+    {
+      _save = ink_thread_getspecific(THREAD_KEY);
+      ink_thread_setspecific(THREAD_KEY, plugin);
+    }
+  ~PluginContext()
+    {
+      ink_thread_setspecific(THREAD_KEY, _save);
+    }
+
+  /// Get the current plugin in context.
+  /// @return The plugin info or @c NULL if there is no plugin context.
+  static PluginInfo* get()
+  {
+    return static_cast<PluginInfo*>(ink_thread_getspecific(THREAD_KEY));
+  }
+  
+ private:
+  void* _save; ///< Value to restore when context goes out of scope.
+  
+  /// The key for the per thread context. This is initialized by the @c PluginManager singleton.
+  static ink_thread_key THREAD_KEY;
+
+ friend class PluginManager;
+};
+
 /** Abstract interface class for plugin based continuations.
 
     The primary intended use of this is for logging so that continuations
