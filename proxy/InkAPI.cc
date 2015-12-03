@@ -1777,24 +1777,24 @@ TSPluginDirGet(void)
 TSReturnCode
 TSPluginRegister(TSPluginRegistrationInfo *plugin_info)
 {
+  PluginInfo* p = PluginContext::get();
   sdk_assert(sdk_sanity_check_null_ptr((void *)plugin_info) == TS_SUCCESS);
 
-  if (!plugin_reg_current) {
+  if (NULL == p)
     return TS_ERROR;
-  }
 
-  plugin_reg_current->plugin_registered = true;
+  p->_registered_p = true;
 
   if (plugin_info->plugin_name) {
-    plugin_reg_current->plugin_name = ats_strdup(plugin_info->plugin_name);
+    p->_name = ats_strdup(plugin_info->plugin_name);
   }
 
   if (plugin_info->vendor_name) {
-    plugin_reg_current->vendor_name = ats_strdup(plugin_info->vendor_name);
+    p->_vendor = ats_strdup(plugin_info->vendor_name);
   }
 
   if (plugin_info->support_email) {
-    plugin_reg_current->support_email = ats_strdup(plugin_info->support_email);
+    p->_email = ats_strdup(plugin_info->support_email);
   }
 
   return TS_SUCCESS;

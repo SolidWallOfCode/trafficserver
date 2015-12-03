@@ -36,7 +36,9 @@ static const char *plugin_dir = ".";
 
 typedef void (*init_func_t)(int argc, char *argv[]);
 
-static ink_thread_key PluginContext::THREAD_KEY;
+ink_thread_key PluginContext::THREAD_KEY;
+
+PluginManager pluginManager;
 
 // Plugin registration vars
 //
@@ -49,25 +51,24 @@ static ink_thread_key PluginContext::THREAD_KEY;
 //      is single threaded so we can get away with the
 //      global pointer
 //
-DLL<PluginRegInfo> plugin_reg_list;
-PluginRegInfo *plugin_reg_current = NULL;
+DLL<PluginInfo> plugin_reg_list;
 
-PluginRegInfo::PluginRegInfo()
-  : plugin_registered(false), plugin_path(NULL), plugin_name(NULL), vendor_name(NULL), support_email(NULL), dlh(NULL)
+PluginInfo::PluginInfo()
+  : _registered_p(false), dlh(NULL)
 {
 }
 
-PluginRegInfo::~PluginRegInfo()
+PluginInfo::~PluginInfo()
 {
   // We don't support unloading plugins once they are successfully loaded, so assert
   // that we don't accidentally attempt this.
-  ink_release_assert(this->plugin_registered == false);
+  ink_release_assert(this->_registered_p == false);
   ink_release_assert(this->link.prev == NULL);
 
-  ats_free(this->plugin_path);
-  ats_free(this->plugin_name);
-  ats_free(this->vendor_name);
-  ats_free(this->support_email);
+  ats_free(this->_file_path);
+  ats_free(this->_name);
+  ats_free(this->_vendor);
+  ats_free(this->_email);
   if (dlh)
     dlclose(dlh);
 }
@@ -75,14 +76,15 @@ PluginRegInfo::~PluginRegInfo()
 PluginManager::PluginManager()
 {
   ink_thread_key_create(&PluginContext::THREAD_KEY, NULL);
-  ink_thread_setspecific(THREAD_KEY, NULL);
+  ink_thread_setspecific(PluginContext::THREAD_KEY, NULL);
 }
 
 bool
-PluginManager::plugin_load(int argc, char *argv[], bool continueOnError)
+PluginManager::load(int argc, char *argv[], bool continueOnError)
 {
   char path[PATH_NAME_MAX];
   init_func_t init;
+  PluginInfo* info = NULL;
 
   if (argc < 1) {
     return true;
@@ -91,9 +93,9 @@ PluginManager::plugin_load(int argc, char *argv[], bool continueOnError)
 
   Note("loading plugin '%s'", path);
 
-  for (PluginRegInfo *plugin_reg_temp = plugin_reg_list.head; plugin_reg_temp != NULL;
+  for (PluginInfo *plugin_reg_temp = plugin_reg_list.head; plugin_reg_temp != NULL;
        plugin_reg_temp = (plugin_reg_temp->link).next) {
-    if (strcmp(plugin_reg_temp->plugin_path, path) == 0) {
+    if (strcmp(plugin_reg_temp->_file_path, path) == 0) {
       Warning("multiple loading of plugin %s", path);
       break;
     }
@@ -108,40 +110,40 @@ PluginManager::plugin_load(int argc, char *argv[], bool continueOnError)
 
     void *handle = dlopen(path, RTLD_NOW);
     if (!handle) {
-      if (!continueOnError) {
-        return false;
-      }
-      Fatal("unable to load '%s': %s", path, dlerror());
+      if (!continueOnError)
+	Fatal("unable to load '%s': %s", path, dlerror());
+      return false;
     }
 
     // Allocate a new registration structure for the
     //    plugin we're starting up
-    ink_assert(plugin_reg_current == NULL);
-    plugin_reg_current = new PluginRegInfo;
-    plugin_reg_current->plugin_path = ats_strdup(path);
-    plugin_reg_current->dlh = handle;
-
-    init = (init_func_t)dlsym(plugin_reg_current->dlh, "TSPluginInit");
+    info = new PluginInfo;
+    info->_file_path = ats_strdup(path);
+    info->dlh = handle;
+    
+    init = reinterpret_cast<init_func_t>(dlsym(info->dlh, "TSPluginInit"));
+    
     if (!init) {
-      delete plugin_reg_current;
-      if (!continueOnError) {
-        return false;
-      }
-      Fatal("unable to find TSPluginInit function in '%s': %s", path, dlerror());
+      delete info;
+      if (!continueOnError)
+	Fatal("unable to find TSPluginInit function in '%s': %s", path, dlerror());
       return false; // this line won't get called since Fatal brings down ATS
     }
 
-    init(argc, argv);
+    // Call the plugin to intialize.
+    {
+      PluginContext pc(info);
+      init(argc, argv);
+    }
+    
   } // done elevating access
 
-  if (plugin_reg_current->plugin_registered) {
-    plugin_reg_list.push(plugin_reg_current);
+  if (info->_registered_p) {
+    plugin_reg_list.push(info);
   } else {
     Fatal("plugin not registered by calling TSPluginRegister");
     return false; // this line won't get called since Fatal brings down ATS
   }
-
-  plugin_reg_current = NULL;
 
   return true;
 }
@@ -288,7 +290,7 @@ PluginManager::init(bool continueOnError)
       }
     }
 
-    retVal = plugin_load(argc, argv, continueOnError);
+    retVal = this->load(argc, argv, continueOnError);
 
     for (i = 0; i < argc; i++)
       ats_free(vars[i]);

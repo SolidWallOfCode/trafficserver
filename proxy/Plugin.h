@@ -25,12 +25,13 @@
 #define __PLUGIN_H__
 
 #include <ts/List.h>
+#include <ts/ink_thread.h>
 
 struct PluginInfo {
   PluginInfo();
   ~PluginInfo();
 
-  bool plugin_registered;
+  bool _registered_p;
 
   /// Path to the implmentation (library, so, dll) file.
   ats_scoped_str _file_path;
@@ -50,8 +51,6 @@ struct PluginInfo {
   LINK(PluginInfo, link);
 };
 
-bool plugin_init(bool validateOnly = false);
-
 /** Manage the set of plugins.
  */
 class PluginManager
@@ -59,10 +58,13 @@ class PluginManager
  public:
   PluginManager();
 
-  bool load(bool continueOnError = false);
+  bool init(bool continueOnError = false);
  protected:
-  bool load_plugin(int arg, char * argv[], bool continueOnError);
+  bool load(int arg, char * argv[], bool continueOnError);
 };
+
+/// Globally accessible singleton.
+extern PluginManager pluginManager;
 
 /** Control and access a per thread plugin context.
 
