@@ -24,29 +24,45 @@
 #ifndef __PLUGIN_H__
 #define __PLUGIN_H__
 
-#include "ts/List.h"
+#include <ts/List.h>
 
-struct PluginRegInfo {
-  PluginRegInfo();
-  ~PluginRegInfo();
+struct PluginInfo {
+  PluginInfo();
+  ~PluginInfo();
 
   bool plugin_registered;
-  char *plugin_path;
 
-  char *plugin_name;
-  char *vendor_name;
-  char *support_email;
+  /// Path to the implmentation (library, so, dll) file.
+  ats_scoped_str _file_path;
+  /// Name of the plugin.
+  ats_scoped_str _name;
+  /// Plugin vendor name.
+  ats_scoped_str _vendor;
+  /// email for vendor / author.
+  ats_scoped_str _email;
 
+  int _max_priority; ///< Maximum priority.
+  int _default_priority; ///< Default priority.
+
+  /// Library handle.
   void *dlh;
 
-  LINK(PluginRegInfo, link);
+  LINK(PluginInfo, link);
 };
 
-// Plugin registration vars
-extern DLL<PluginRegInfo> plugin_reg_list;
-extern PluginRegInfo *plugin_reg_current;
-
 bool plugin_init(bool validateOnly = false);
+
+/** Manage the set of plugins.
+ */
+class PluginManager
+{
+ public:
+  PluginManager();
+
+  bool load(bool continueOnError = false);
+ protected:
+  bool load_plugin(int arg, char * argv[], bool continueOnError);
+};
 
 /** Abstract interface class for plugin based continuations.
 
