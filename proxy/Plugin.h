@@ -58,8 +58,12 @@ class PluginManager
  public:
   PluginManager();
 
+  /// Initialize all the plugins.
   bool init(bool continueOnError = false);
+  /// Expand argument to plugin.
+  char* expand(char*);
  protected:
+  /// Load a single plugin.
   bool load(int arg, char * argv[], bool continueOnError);
 };
 

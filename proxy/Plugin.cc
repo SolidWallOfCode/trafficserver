@@ -148,68 +148,59 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
   return true;
 }
 
-static char *
-plugin_expand(char *arg)
+char *
+PluginManager::expand(char *arg)
 {
   RecDataT data_type;
   char *str = NULL;
 
-  if (*arg != '$') {
-    return (char *)NULL;
-  }
+  if (*arg != '$')
+    return NULL;
+  
   // skip the $ character
   arg += 1;
 
-  if (RecGetRecordDataType(arg, &data_type) != REC_ERR_OKAY) {
-    goto not_found;
+  if (RecGetRecordDataType(arg, &data_type) == REC_ERR_OKAY) {
+    switch (data_type) {
+    case RECD_STRING: {
+      RecString str_val;
+      if (RecGetRecordString_Xmalloc(arg, &str_val) == REC_ERR_OKAY) {
+	return static_cast<char*>(str_val);
+      }
+      break;
+    }
+    case RECD_FLOAT: {
+      RecFloat float_val;
+      if (RecGetRecordFloat(arg, &float_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%f", (float)float_val);
+	return str;
+      }
+      break;
+    }
+    case RECD_INT: {
+      RecInt int_val;
+      if (RecGetRecordInt(arg, &int_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%ld", (long int)int_val);
+	return str;
+      }
+      break;
+    }
+    case RECD_COUNTER: {
+      RecCounter count_val;
+      if (RecGetRecordCounter(arg, &count_val) == REC_ERR_OKAY) {
+	str = static_cast<char*>(ats_malloc(128));
+	snprintf(str, 128, "%ld", (long int)count_val);
+	return str;
+      }
+      break;
+    }
+    default:
+      break;
+    }
   }
 
-  switch (data_type) {
-  case RECD_STRING: {
-    RecString str_val;
-    if (RecGetRecordString_Xmalloc(arg, &str_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    return (char *)str_val;
-    break;
-  }
-  case RECD_FLOAT: {
-    RecFloat float_val;
-    if (RecGetRecordFloat(arg, &float_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%f", (float)float_val);
-    return str;
-    break;
-  }
-  case RECD_INT: {
-    RecInt int_val;
-    if (RecGetRecordInt(arg, &int_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%ld", (long int)int_val);
-    return str;
-    break;
-  }
-  case RECD_COUNTER: {
-    RecCounter count_val;
-    if (RecGetRecordCounter(arg, &count_val) != REC_ERR_OKAY) {
-      goto not_found;
-    }
-    str = (char *)ats_malloc(128);
-    snprintf(str, 128, "%ld", (long int)count_val);
-    return str;
-    break;
-  }
-  default:
-    goto not_found;
-    break;
-  }
-
-
-not_found:
   Warning("plugin.config: unable to find parameter %s", arg);
   return NULL;
 }
@@ -284,7 +275,7 @@ PluginManager::init(bool continueOnError)
     }
 
     for (i = 0; i < argc; i++) {
-      vars[i] = plugin_expand(argv[i]);
+      vars[i] = this->expand(argv[i]);
       if (vars[i]) {
         argv[i] = vars[i];
       }
