@@ -26,7 +26,7 @@ Plugins have a priority system to provide a two key features needed in more
 complex deployments. If you do not have a need for these you can ignore
 priorities.
 
-*  Ordering control of plugin invocation.
+*  Controllling the order of plugin invocations.
 *  Transaction level control of which plugins run.
 
 Plugins are identified by the name passed in to :c:func:`TSPluginInit`. Names must be unique across
@@ -57,12 +57,13 @@ Basics
 As a result of this, a higher priority plugin will (in general) run before lower priority ones and
 can disable the lower priority plugins from running at all. A plugin can disable itself, but it
 cannot (in general) disable a higher priority plugin. The exception is if a plugin adds a callback
-to a hook at a lower priority. A plugin can always schedule a callback after the callback of another
-plugin.
+to a hook at a lower priority. Creating a callback with a lower priority can be used to have the
+callback invoked after another plugin.
 
 The default priority is intended to provide a space between that and the maximum priority of a
-plugin to allow another plugin to schedule itself before. Otherwise a set of plugins at the same
-priority could not do this cooperatively.
+plugin to allow another plugin to schedule a callback earlier. Otherwise a set of plugins at the same
+priority could not do this cooperatively. That is important in situations where priority used
+primiarly for ordering callback invocations rather than controllling which callbacks are invoked.
 
 Plugins have no control over their priority, that is set by the administrator.
 
