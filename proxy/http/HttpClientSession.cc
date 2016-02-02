@@ -98,18 +98,9 @@ HttpClientSession::destroy()
 }
 
 void
-HttpClientSession::ssn_hook_append(TSHttpHookID id, INKContInternal *cont)
+HttpClientSession::hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
 {
-  ProxyClientSession::ssn_hook_append(id, cont);
-  if (current_reader) {
-    current_reader->hooks_set = 1;
-  }
-}
-
-void
-HttpClientSession::ssn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-{
-  ProxyClientSession::ssn_hook_prepend(id, cont);
+  super::hook_add(id, cont, priority);
   if (current_reader) {
     current_reader->hooks_set = 1;
   }

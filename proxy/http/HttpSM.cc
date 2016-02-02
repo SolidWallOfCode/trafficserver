@@ -229,6 +229,82 @@ HttpVCTable::cleanup_all()
   }
 }
 
+HttpSM::HookState::HookState()
+{
+}
+
+void
+HttpSM::HookState::init(TSHttpHookID id, HttpSM *sm)
+{
+  int ttxn, tssn, tg;
+  _id = id;
+  tg = _global.init(http_global_hooks, id);
+  tssn = _ssn.init(sm->ua_session->feature_hooks(), id);
+  ttxn = _txn.init(&sm->api_hooks, id);
+  _threshold = ttxn > 0 ? ttxn : (tssn > 0 ? tssn : tg);
+  _last_priority = API_HOOK_THRESHOLD_UNSET;
+}
+
+APIHook const *
+HttpSM::HookState::getNext()
+{
+  APIHook const *zret = NULL;
+
+  APIHook const *hg = _global.candidate(_threshold, _last_priority);
+  APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
+  APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
+  if (htxn && (NULL == hssn || htxn->_priority > hssn->_priority) && (NULL == hg || htxn->_priority > hg->_priority)) {
+    zret = htxn;
+    ++_txn;
+  } else if (hssn && (NULL == hg || hssn->_priority > hg->_priority)) {
+    zret = hssn;
+    ++_ssn;
+  } else if (hg) {
+    zret = hg;
+    ++_global;
+  }
+  return zret;
+}
+
+int
+HttpSM::HookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
+{
+  APIHooks const *hooks = (*feature_hooks)[id];
+  int zret = feature_hooks->threshold();
+
+  _c = _p = NULL;
+
+  if (hooks) {
+    int t = hooks->threshold();
+    if (t >= 0)
+      zret = t;
+    _c = hooks->head();
+  }
+  return zret;
+}
+
+APIHook const *
+HttpSM::HookState::Scope::candidate(int t, int prev_t)
+{
+  APIHook const *x = NULL;
+  if (NULL != _c) {
+    // Back up if new hooks have been added at a low enough priority.
+    while (_p != (x = _c->prev()) && NULL != x && x->_priority <= prev_t) {
+      _c = x;
+    }
+    _p = _c->prev();
+    if (_c->_priority > t)
+      return _c;
+  }
+  return NULL;
+}
+
+void HttpSM::HookState::Scope::operator++()
+{
+  _p = _c;
+  _c = _c->next();
+}
+
 #define REMEMBER_EVENT_FILTER(e) 1
 
 #define __REMEMBER(x) #x
@@ -1319,81 +1395,61 @@ HttpSM::state_api_callout(int event, void *data)
   // FALLTHROUGH
   case EVENT_NONE:
   case HTTP_API_CONTINUE:
-    if ((cur_hook_id >= 0) && (cur_hook_id < TS_HTTP_LAST_HOOK)) {
-      if (!cur_hook) {
-        if (cur_hooks == 0) {
-          cur_hook = http_global_hooks->get(cur_hook_id);
-          cur_hooks++;
-        }
+    /// Move to next hook if not set.
+    if (NULL == cur_hook)
+      cur_hook = hook_state.getNext();
+
+    if (cur_hook) {
+      if (callout_state == HTTP_API_NO_CALLOUT) {
+        callout_state = HTTP_API_IN_CALLOUT;
       }
-      // even if ua_session is NULL, cur_hooks must
-      // be incremented otherwise cur_hooks is not set to 2 and
-      // transaction hooks (stored in api_hooks object) are not called.
-      if (!cur_hook) {
-        if (cur_hooks == 1) {
-          if (ua_session) {
-            cur_hook = ua_session->ssn_hook_get(cur_hook_id);
-          }
-          cur_hooks++;
+
+      /* The MUTEX_TRY_LOCK macro was changed so
+         that it can't handle NULL mutex'es.  The plugins
+         can use null mutexes so we have to do this manually.
+         We need to take a smart pointer to the mutex since
+         the plugin could release it's mutex while we're on
+         the callout
+      */
+      bool plugin_lock;
+      Ptr<ProxyMutex> plugin_mutex;
+      if (cur_hook->m_cont->mutex) {
+        plugin_mutex = cur_hook->m_cont->mutex;
+        plugin_lock = MUTEX_TAKE_TRY_LOCK(cur_hook->m_cont->mutex, mutex->thread_holding);
+
+        if (!plugin_lock) {
+          api_timer = -Thread::get_hrtime();
+          HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_api_callout);
+          ink_assert(pending_action == NULL);
+          pending_action = mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
+          return 0;
         }
+      } else {
+        plugin_lock = false;
       }
-      if (!cur_hook) {
-        if (cur_hooks == 2) {
-          cur_hook = api_hooks.get(cur_hook_id);
-          cur_hooks++;
-        }
+
+      DebugSM("http", "[%" PRId64 "] calling plugin on hook %s at hook %p", sm_id, HttpDebugNames::get_api_hook_name(cur_hook_id),
+              cur_hook);
+
+      APIHook const *hook = cur_hook;
+      // Need to delay the next hook update until after this hook is called to handle dynamic
+      // callback manipulation. cur_hook isn't needed to track state, that's all in hook_state.
+      cur_hook = NULL;
+      api_timer = Thread::get_hrtime();
+      hook->invoke(TS_EVENT_HTTP_READ_REQUEST_HDR + cur_hook_id, this);
+      if (api_timer > 0) {
+        milestone_update_api_time(milestones, api_timer);
+        api_timer = -Thread::get_hrtime(); // set in order to track non-active callout duration
+        // which means that if we get back from the invoke with api_timer < 0 we're already
+        // tracking a non-complete callout from a chain so just let it ride. It will get cleaned
+        // up in state_api_callback.
       }
-      if (cur_hook) {
-        if (callout_state == HTTP_API_NO_CALLOUT) {
-          callout_state = HTTP_API_IN_CALLOUT;
-        }
 
-        /* The MUTEX_TRY_LOCK macro was changed so
-           that it can't handle NULL mutex'es.  The plugins
-           can use null mutexes so we have to do this manually.
-           We need to take a smart pointer to the mutex since
-           the plugin could release it's mutex while we're on
-           the callout
-         */
-        bool plugin_lock;
-        Ptr<ProxyMutex> plugin_mutex;
-        if (cur_hook->m_cont->mutex) {
-          plugin_mutex = cur_hook->m_cont->mutex;
-          plugin_lock = MUTEX_TAKE_TRY_LOCK(cur_hook->m_cont->mutex, mutex->thread_holding);
-
-          if (!plugin_lock) {
-            api_timer = -Thread::get_hrtime();
-            HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_api_callout);
-            ink_assert(pending_action == NULL);
-            pending_action = mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
-            return 0;
-          }
-        } else {
-          plugin_lock = false;
-        }
-
-        DebugSM("http", "[%" PRId64 "] calling plugin on hook %s at hook %p", sm_id, HttpDebugNames::get_api_hook_name(cur_hook_id),
-                cur_hook);
-
-        APIHook *hook = cur_hook;
-        cur_hook = cur_hook->next();
-
-        api_timer = Thread::get_hrtime();
-        hook->invoke(TS_EVENT_HTTP_READ_REQUEST_HDR + cur_hook_id, this);
-        if (api_timer > 0) {
-          milestone_update_api_time(milestones, api_timer);
-          api_timer = -Thread::get_hrtime(); // set in order to track non-active callout duration
-          // which means that if we get back from the invoke with api_timer < 0 we're already
-          // tracking a non-complete callout from a chain so just let it ride. It will get cleaned
-          // up in state_api_callback.
-        }
-
-        if (plugin_lock) {
-          Mutex_unlock(plugin_mutex, mutex->thread_holding);
-        }
-
-        return 0;
+      if (plugin_lock) {
+        Mutex_unlock(plugin_mutex, mutex->thread_holding);
       }
+
+      return 0;
     }
     // Map the callout state into api_next
     switch (callout_state) {
@@ -4371,7 +4427,7 @@ HttpSM::do_range_setup_if_necessary()
         range_trans = transformProcessor.range_transform(mutex, t_state.ranges, t_state.num_range_fields,
                                                          &t_state.hdr_info.transform_response, content_type, field_content_type_len,
                                                          t_state.cache_info.object_read->object_size_get());
-        api_hooks.append(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans);
+        api_hooks.add(TS_HTTP_RESPONSE_TRANSFORM_HOOK, range_trans, PluginManager::Internal_Plugin_Info->_eff_priority);
       }
     }
   }
@@ -4909,6 +4965,8 @@ HttpSM::do_api_callout_internal()
     ink_assert(!"not reached");
   }
 
+  hook_state.init(cur_hook_id, this);
+
   cur_hook = NULL;
   cur_hooks = 0;
   state_api_callout(0, NULL);
@@ -4920,7 +4978,7 @@ HttpSM::do_post_transform_open()
   ink_assert(post_transform_info.vc == NULL);
 
   if (is_action_tag_set("http_post_nullt")) {
-    txn_hook_prepend(TS_HTTP_REQUEST_TRANSFORM_HOOK, transformProcessor.null_transform(mutex));
+    txn_hook_add(TS_HTTP_REQUEST_TRANSFORM_HOOK, transformProcessor.null_transform(mutex), PluginManager::Internal_Plugin_Info->_eff_priority);
   }
 
   post_transform_info.vc = transformProcessor.open(this, api_hooks.get(TS_HTTP_REQUEST_TRANSFORM_HOOK));
@@ -4941,7 +4999,7 @@ HttpSM::do_transform_open()
   APIHook *hooks;
 
   if (is_action_tag_set("http_nullt")) {
-    txn_hook_prepend(TS_HTTP_RESPONSE_TRANSFORM_HOOK, transformProcessor.null_transform(mutex));
+    txn_hook_add(TS_HTTP_RESPONSE_TRANSFORM_HOOK, transformProcessor.null_transform(mutex), PluginManager::Internal_Plugin_Info->_eff_priority);
   }
 
   hooks = api_hooks.get(TS_HTTP_RESPONSE_TRANSFORM_HOOK);

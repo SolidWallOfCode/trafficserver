@@ -31,24 +31,24 @@ priorities.
 
 Plugins are identified by the name passed in to :c:func:`TSPluginInit`. Names must be unique across
 all plugins. In addition to the name each plugin is assigned two values of :term:`priority`, a
-maximum priority and a default priority. This is controlled by :file:`plugin.config`. The default
+maximum priority and a effective priority. This is controlled by :file:`plugin.config`. The effective
 priority is the priority used unless a different value is explicitly specified. The maximum priority
 is a limit on operations that take a priority value - using a value higher than the maximum will
 result in an error.
 
 A maximum priority can be configured in :file:`records.config` for plugins which do not have a
 maximum priority specified in :file:`plugin.config`. This makes the case where priorities are not
-useful easy - all plugins get the same maximum and default priorities and no ordering or
+useful easy - all plugins get the same maximum and effective priorities and no ordering or
 control is imposed on the plugins.
 
 Basics
 ======
 
 *  Plugins are identified by name, as set in :c:func:`TSPluginInit`.
-*  Plugins have a maximum and default priority which can be set individually in :file:`plugin.config` or :file:`records.config` for all plugins.
+*  Plugins have a maximum and effective priority which can be set individually in :file:`plugin.config` or :file:`records.config` for all plugins.
 *  The lifecycle hook `TS_LIFECYCLE_PLUGINS_LOADED_HOOK` is invoked after all plugins are loaded.
 *  Plugins can examine the priorities of other plugins.
-*  Each callback in each hook has a priority. This is the plugin default priority unless explicitly specified. A callback priority can never be larger than the maximum priority of the plugin.
+*  Each callback in each hook has a priority. This is the plugin effective priority unless explicitly specified. A callback priority can never be larger than the maximum priority of the plugin.
 *  When a hook is invokved the callbacks are called in priority order, largest to smallest.
 *  A threshold can be set for hook callbacks in which case only callbacks with a priority *larger* than the threshold will be called.
 *  The hook threshold can be set but a plugin cannot set it higher than the plugin's maximum priority.
@@ -60,15 +60,15 @@ cannot (in general) disable a higher priority plugin. The exception is if a plug
 to a hook at a lower priority. Creating a callback with a lower priority can be used to have the
 callback invoked after another plugin.
 
-The default priority is intended to provide a space between that and the maximum priority of a
+The effective priority is intended to provide a space between that and the maximum priority of a
 plugin to allow another plugin to schedule a callback earlier. Otherwise a set of plugins at the same
 priority could not do this cooperatively. That is important in situations where priority used
 primiarly for ordering callback invocations rather than controllling which callbacks are invoked.
 
-Plugins have no control over their priority, that is set by the administrator.
+Plugins have no control over their maximum priority, that is set by the administrator in :file:`plugin.config`. The effective priority can be changed but can never be larger than the maximum priority.
 
 The priority threshold can be set at multiple levels. There is a global value that can be changed
-and is the default threshold for all hooks unless overrridden by a more specific action. This
+and is the effective threshold for all hooks unless overrridden by a more specific action. This
 mechanism enables global level control of which plugins run but not on a per hook or per transaction
 basis.
 
@@ -79,15 +79,15 @@ the most specific and override any other value. Note a plugin cannot set any thr
 that plugin's maximum priority. Because a callback needs a priority larger than the threshold a
 plugin can disable itself.
 
-Care must be taken because the default priority is in general lower than the maximum priority. This
+Care must be taken because the effective priority is in general lower than the maximum priority. This
 has implications. The first is a callback for a higher priority plugin can be disabled by a lower
-priority one if the maximum priority of the latter is still higher than the default priority of the
+priority one if the maximum priority of the latter is still higher than the effective priority of the
 former. The desirabilty of this depends on local cicrumstances so the administrator must adjust
 values to suit his particular situation. To avoid this behavior the administrator can place plugins
 in priority tiers that don't overlap or the plugins can adjust the priority for a given callback.
 
 .. note:: An example of a beneficial use of this is having plugins set the priority on their cleanup hook to be
-   higher than their default. This would enable a master plugin to disable most callbacks without
+   higher than their effective. This would enable a master plugin to disable most callbacks without
    disabling the cleanup callback.
 
 Use Cases
@@ -95,9 +95,9 @@ Use Cases
 
 The first use case is the most common one, where plugin A wants to run before or after plugin B. In
 this case A can run in the `TS_LIFECYCLE_PLUGINS_LOADED_HOOK` at which point it can find the
-priority of B and set its default priority to be one less than that. Or, if there are only specific
+priority of B and set its effective priority to be one less than that. Or, if there are only specific
 hooks in which this is required it can add those looks with the lower priority. To run before A can
-set its default priority to be one more than B. This works best when there are no chains of
+set its effective priority to be one more than B. This works best when there are no chains of
 dependencies but a key plugin on which other plugins coordinate, or there is only one hook that
 requires ordering.
 
@@ -144,12 +144,12 @@ API
    Return the maximum priority for a plugin. If :arg:`name` is :const:`NULL` the value for the current plugin is returned.
    A negative value indicates the plugin :arg:`name` was not found.
    
-.. c:function:: int TSPluginDefaultPriorityGet(char const* name)
-   Return the default priority for a plugin. If :arg:`name` is :const:`NULL` the value for the current plugin is returned.
+.. c:function:: int TSPlugineffectivePriorityGet(char const* name)
+   Return the effective priority for a plugin. If :arg:`name` is :const:`NULL` the value for the current plugin is returned.
    A negative value indicates the plugin :arg:`name` was not found.
    
 .. c:function:: TSReturnCode TSPluginDefaulPrioritySet(int pri)
-   Set the default priority for this plugin to :arg:`pri`. It is an error to set :arg:`pri` to be larger than the maximum priority of the plugin.
+   Set the effective priority for this plugin to :arg:`pri`. It is an error to set :arg:`pri` to be larger than the maximum priority of the plugin.
    
 .. c:function:: int TSHttpHookThresholdGet(TSHttpHookId hook)
    Return the current global threshold for hook callbacks.

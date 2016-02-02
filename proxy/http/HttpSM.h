@@ -183,6 +183,48 @@ class HttpSM : public Continuation
   friend class HttpPagesHandler;
   friend class CoreUtils;
 
+  /// Container for the state of API hook invocation.
+  class HookState
+  {
+  public:
+    /// Default constructor.
+    HookState();
+
+    /// This will draw on three sources of hooks: global, session, and transaction.
+    /// Internal state is updated via @a sm
+    void init(TSHttpHookID id, HttpSM* sm);
+    /// Set the hook invocation threshold.
+    void setThreshhold(int t);
+    /// Select a hook for invocation and advance the state to the next valid hook.
+    /// @return @c NULL if no current hook.
+    APIHook const*getNext();
+
+  protected:
+    
+    /// Track the state of one scope of hooks.
+    struct Scope {
+      APIHook const* _c; ///< Current hook (candidate for invocation).
+      APIHook const* _p; ///< Previous hook (already invoked).
+
+      /// Initialize the scope.
+      /// Return the threshold value for this scope.
+      int init(HttpAPIHooks const* scope, TSHttpHookID id);
+      /// Return the current candidate for threshold @a t
+      /// Can update state to account for hooks added since last candidate.
+      APIHook const* candidate(int t, int prev_t);
+      /// Advance state to the next hook.
+      void operator ++ ();
+    };
+
+  private:
+    TSHttpHookID _id;
+    Scope _global; ///< Chain from global hooks.
+    Scope _ssn; ///< Chain from session hooks.
+    Scope _txn; ///< Chain from transaction hooks.
+    int _threshold; ///< Effective threshold, gathered from the various sources.
+    int _last_priority; ///< Priority of the most recently invoked callback.
+  };
+
 public:
   HttpSM();
   void cleanup();
@@ -256,8 +298,7 @@ public:
   void dump_state_hdr(HTTPHdr *h, const char *s);
 
   // Functions for manipulating api hooks
-  void txn_hook_append(TSHttpHookID id, INKContInternal *cont);
-  void txn_hook_prepend(TSHttpHookID id, INKContInternal *cont);
+  void txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
   APIHook *txn_hook_get(TSHttpHookID id);
 
   void add_history_entry(const char *fileline, int event, int reentrant);
@@ -517,7 +558,8 @@ public:
 
 protected:
   TSHttpHookID cur_hook_id;
-  APIHook *cur_hook;
+  APIHook const *cur_hook;
+  HookState hook_state;
 
   //
   // Continuation time keeper
@@ -614,16 +656,9 @@ HttpSM::find_server_buffer_size()
 }
 
 inline void
-HttpSM::txn_hook_append(TSHttpHookID id, INKContInternal *cont)
+HttpSM::txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority)
 {
-  api_hooks.append(id, cont);
-  hooks_set = 1;
-}
-
-inline void
-HttpSM::txn_hook_prepend(TSHttpHookID id, INKContInternal *cont)
-{
-  api_hooks.prepend(id, cont);
+  api_hooks.add(id, cont, priority);
   hooks_set = 1;
 }
 

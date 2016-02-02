@@ -124,30 +124,95 @@ enum APIHookScope {
   API_HOOK_SCOPE_LOCAL,
 };
 
+/// Value used to mark no threshold set.
+static int const API_HOOK_THRESHOLD_UNSET = -2;
+
 /// A single API hook that can be invoked.
 class APIHook
 {
 public:
   INKContInternal *m_cont;
-  int invoke(int event, void *edata);
-  APIHook *next() const;
+  int threshold; ///< Priority threshold for this hook.
+  int invoke(int event, void *edata) const;
+
+  APIHook *next();
+  APIHook const *next() const;
+  APIHook *prev();
+  APIHook const *prev() const;
+
   LINK(APIHook, m_link);
+
+  int _priority; ///< Priority of this callback.
 };
+
+inline APIHook *
+APIHook::next()
+{
+  return m_link.next;
+}
+
+inline APIHook const *
+APIHook::next() const
+{
+  return m_link.next;
+}
+
+inline APIHook *
+APIHook::prev()
+{
+  return m_link.prev;
+}
+
+inline APIHook const *
+APIHook::prev() const
+{
+  return m_link.prev;
+}
 
 /// A collection of API hooks.
 class APIHooks
 {
 public:
-  void prepend(INKContInternal *cont);
-  void append(INKContInternal *cont);
-  APIHook *get() const;
+  APIHooks() : m_threshold(API_HOOK_THRESHOLD_UNSET) {}
+  /// Add a hook at @a priority.
+  void add(INKContInternal *cont, int priority);
+  /// Get the first hook.
+  APIHook *head();
+  /// Get the first hook.
+  APIHook const *head() const;
+  /// Remove all hooks.
   void clear();
+  /// Check if there are no hooks.
   bool is_empty() const;
   void invoke(int event, void *data);
 
+  /// Return the priority threshold for this set of hooks.
+  int threshold() const;
+  /// Set the priority threshold.
+  void setThreshold(int priority);
+
 private:
+  int m_threshold; ///< Priority threshold for invocation.
   Que(APIHook, m_link) m_hooks;
 };
+
+inline APIHook *
+APIHooks::head()
+{
+  return m_hooks.head;
+}
+
+inline APIHook const *
+APIHooks::head() const
+{
+  return m_hooks.head;
+}
+
+inline int
+APIHooks::threshold() const
+{
+  return m_threshold;
+}
 
 inline bool
 APIHooks::is_empty() const
@@ -182,12 +247,13 @@ public:
 
   /// Remove all hooks.
   void clear();
-  /// Add the hook @a cont to the front of the hooks for @a id.
-  void prepend(ID id, INKContInternal *cont);
-  /// Add the hook @a cont to the end of the hooks for @a id.
-  void append(ID id, INKContInternal *cont);
+  /// Add the callback @a cont to the hook @a id with @a priority.
+  void add(ID id, INKContInternal *cont, int priority);
   /// Get the list of hooks for @a id.
-  APIHook *get(ID id) const;
+  APIHook *get(ID id);
+  APIHook const *get(ID id) const;
+  /// Get the priority threshold.
+  int threshold() const;
   /// @return @c true if @a id is a valid id, @c false otherwise.
   static bool is_valid(ID id);
 
@@ -204,13 +270,18 @@ public:
   /// @return @c true if any hooks of type @a id are present.
   bool has_hooks_for(ID id) const;
 
+  /// Get a pointer to the set of hooks for a specific hook @ id
+  APIHooks *operator[](ID id);
+  APIHooks const *operator[](ID id) const;
+
 private:
-  bool hooks_p; ///< Flag for (not) empty container.
+  bool m_hooks_p; ///< Flag for (not) empty container.
+  int m_threshold; ///< Invocation threshold.
   /// The array of hooks lists.
   APIHooks m_hooks[N];
 };
 
-template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : hooks_p(false)
+template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : m_hooks_p(false)
 {
 }
 
@@ -226,34 +297,41 @@ FeatureAPIHooks<ID, N>::clear()
   for (int i = 0; i < N; ++i) {
     m_hooks[i].clear();
   }
-  hooks_p = false;
+  m_hooks_p = false;
 }
 
 template <typename ID, ID N>
 void
-FeatureAPIHooks<ID, N>::prepend(ID id, INKContInternal *cont)
+FeatureAPIHooks<ID, N>::add(ID id, INKContInternal *cont, int priority)
 {
   if (likely(is_valid(id))) {
-    hooks_p = true;
-    m_hooks[id].prepend(cont);
-  }
-}
-
-template <typename ID, ID N>
-void
-FeatureAPIHooks<ID, N>::append(ID id, INKContInternal *cont)
-{
-  if (likely(is_valid(id))) {
-    hooks_p = true;
-    m_hooks[id].append(cont);
+    m_hooks_p = true;
+    m_hooks[id].add(cont, priority);
   }
 }
 
 template <typename ID, ID N>
 APIHook *
+FeatureAPIHooks<ID, N>::get(ID id)
+{
+  return likely(is_valid(id)) ? m_hooks[id].head() : NULL;
+}
+
+template <typename ID, ID N>
+APIHook const *
 FeatureAPIHooks<ID, N>::get(ID id) const
 {
-  return likely(is_valid(id)) ? m_hooks[id].get() : NULL;
+  return likely(is_valid(id)) ? m_hooks[id].head() : NULL;
+}
+
+template <typename ID, ID N> APIHooks *FeatureAPIHooks<ID, N>::operator[](ID id)
+{
+  return likely(is_valid(id)) ? &(m_hooks[id]) : NULL;
+}
+
+template <typename ID, ID N> APIHooks const *FeatureAPIHooks<ID, N>::operator[](ID id) const
+{
+  return likely(is_valid(id)) ? &(m_hooks[id]) : NULL;
 }
 
 template <typename ID, ID N>
@@ -269,7 +347,14 @@ template <typename ID, ID N>
 bool
 FeatureAPIHooks<ID, N>::has_hooks() const
 {
-  return hooks_p;
+  return m_hooks_p;
+}
+
+template <typename ID, ID N>
+int
+FeatureAPIHooks<ID, N>::threshold() const
+{
+  return m_threshold;
 }
 
 template <typename ID, ID N>

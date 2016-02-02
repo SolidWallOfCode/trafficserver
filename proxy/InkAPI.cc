@@ -951,13 +951,14 @@ INKContInternal::init(TSEventFunc funcp, TSMutex mutexp)
 
   mutex = (ProxyMutex *)mutexp;
   m_event_func = funcp;
+  m_info = PluginContext::get();
 }
 
 void
 INKContInternal::destroy()
 {
   if (m_free_magic == INKCONT_INTERN_MAGIC_DEAD) {
-    ink_release_assert(!"Plugin tries to use a continuation which is deleted");
+    Fatal("Plugin %s tried to use a continuation [%p] which is deleted", m_info ? m_info->_name : "*UNKNOWN*", this);
   }
   m_deleted = 1;
   if (m_deletable) {
@@ -1002,6 +1003,7 @@ INKContInternal::handle_event(int event, void *edata)
       INKContAllocator.free(this);
     }
   } else {
+    PluginContext ctx(m_info);
     return m_event_func((TSCont) this, (TSEvent)event, edata);
   }
   return EVENT_DONE;
@@ -1213,8 +1215,10 @@ INKVConnInternal::set_data(int id, void *data)
 ////////////////////////////////////////////////////////////////////
 
 int
-APIHook::invoke(int event, void *edata)
+APIHook::invoke(int event, void *edata) const
 {
+  PluginContext pc(m_cont->m_info);
+  
   if ((event == EVENT_IMMEDIATE) || (event == EVENT_INTERVAL)) {
     if (ink_atomic_increment((int *)&m_cont->m_event_count, 1) < 0) {
       ink_assert(!"not reached");
@@ -1223,39 +1227,21 @@ APIHook::invoke(int event, void *edata)
   return m_cont->handleEvent(event, edata);
 }
 
-APIHook *
-APIHook::next() const
-{
-  return m_link.next;
-}
-
-
 void
-APIHooks::prepend(INKContInternal *cont)
+APIHooks::add(INKContInternal *cont, int priority)
 {
-  APIHook *api_hook;
+  APIHook *api_hook, *h;
 
   api_hook = apiHookAllocator.alloc();
   api_hook->m_cont = cont;
+  api_hook->_priority = priority;
 
-  m_hooks.push(api_hook);
-}
-
-void
-APIHooks::append(INKContInternal *cont)
-{
-  APIHook *api_hook;
-
-  api_hook = apiHookAllocator.alloc();
-  api_hook->m_cont = cont;
-
-  m_hooks.enqueue(api_hook);
-}
-
-APIHook *
-APIHooks::get() const
-{
-  return m_hooks.head;
+  for ( h = m_hooks.tail ; NULL != h && h->_priority < priority ; h = h->prev() )
+    ;
+  if (NULL == h)
+    m_hooks.push(api_hook);
+  else
+    m_hooks.insert(api_hook, h);
 }
 
 void
@@ -1777,7 +1763,7 @@ TSPluginDirGet(void)
 TSReturnCode
 TSPluginRegister(TSPluginRegistrationInfo *plugin_info)
 {
-  PluginInfo* p = PluginContext::get();
+  PluginInfo * p = const_cast<PluginInfo*>(PluginContext::get());
   sdk_assert(sdk_sanity_check_null_ptr((void *)plugin_info) == TS_SUCCESS);
 
   if (NULL == p)
@@ -4366,6 +4352,7 @@ void
 TSHttpHookAdd(TSHttpHookID id, TSCont contp)
 {
   INKContInternal *icontp;
+  int pri = PluginContext::get()->_eff_priority;
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
@@ -4373,9 +4360,9 @@ TSHttpHookAdd(TSHttpHookID id, TSCont contp)
 
   if (id >= TS_SSL_FIRST_HOOK && id <= TS_SSL_LAST_HOOK) {
     TSSslHookInternalID internalId = static_cast<TSSslHookInternalID>(id - TS_SSL_FIRST_HOOK);
-    ssl_hooks->append(internalId, icontp);
+    ssl_hooks->add(internalId, icontp, pri);
   } else { // Follow through the regular HTTP hook framework
-    http_global_hooks->append(id, icontp);
+    http_global_hooks->add(id, icontp, pri);
   }
 }
 
@@ -4385,7 +4372,7 @@ TSLifecycleHookAdd(TSLifecycleHookID id, TSCont contp)
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_lifecycle_hook_id(id) == TS_SUCCESS);
 
-  lifecycle_hooks->append(id, (INKContInternal *)contp);
+  lifecycle_hooks->add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
 void
@@ -4411,7 +4398,7 @@ TSHttpSsnHookAdd(TSHttpSsn ssnp, TSHttpHookID id, TSCont contp)
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
   HttpClientSession *cs = (HttpClientSession *)ssnp;
-  cs->ssn_hook_append(id, (INKContInternal *)contp);
+  cs->hook_add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
 int
@@ -4478,7 +4465,7 @@ TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
   HttpSM *sm = (HttpSM *)txnp;
-  sm->txn_hook_append(id, (INKContInternal *)contp);
+  sm->txn_hook_add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
 

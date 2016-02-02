@@ -22,6 +22,7 @@
  */
 
 #include <stdio.h>
+#include <limits>
 #include "ts/ink_platform.h"
 #include "ts/ink_file.h"
 #include "ts/ParseRules.h"
@@ -225,6 +226,18 @@ PluginManager::init(bool continueOnError)
     INIT_ONCE = false;
   }
 
+  // TS uses plugin mechanisms in various places and so needs a valid plugin info block
+  // for them. This is it.
+  Internal_Plugin_Info = new PluginInfo;
+  Internal_Plugin_Info->_name = ats_strdup("TrafficServer Internal");
+  Internal_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
+  Internal_Plugin_Info->_file_path = ats_strdup(".");
+  Internal_Plugin_Info->_email = ats_strdup("users@trafficserver.apache.org");
+  Internal_Plugin_Info->_max_priority = std::numeric_limits<int>::max();
+  Internal_Plugin_Info->_eff_priority = std::numeric_limits<int>::max();
+  
+  plugin_reg_list.push(Internal_Plugin_Info);
+
   path = RecConfigReadConfigPath(NULL, "plugin.config");
   fd = open(path, O_RDONLY);
   if (fd < 0) {
@@ -288,5 +301,9 @@ PluginManager::init(bool continueOnError)
   }
 
   close(fd);
+
+  REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
+  REC_EstablishStaticConfigInt32(_effective_priority_gap, "proxy.config.plubin.priority.effective_gap");
+  
   return retVal;
 }
