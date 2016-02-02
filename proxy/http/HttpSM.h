@@ -183,48 +183,6 @@ class HttpSM : public Continuation
   friend class HttpPagesHandler;
   friend class CoreUtils;
 
-  /// Container for the state of API hook invocation.
-  class HookState
-  {
-  public:
-    /// Default constructor.
-    HookState();
-
-    /// This will draw on three sources of hooks: global, session, and transaction.
-    /// Internal state is updated via @a sm
-    void init(TSHttpHookID id, HttpSM* sm);
-    /// Set the hook invocation threshold.
-    void setThreshhold(int t);
-    /// Select a hook for invocation and advance the state to the next valid hook.
-    /// @return @c NULL if no current hook.
-    APIHook const*getNext();
-
-  protected:
-    
-    /// Track the state of one scope of hooks.
-    struct Scope {
-      APIHook const* _c; ///< Current hook (candidate for invocation).
-      APIHook const* _p; ///< Previous hook (already invoked).
-
-      /// Initialize the scope.
-      /// Return the threshold value for this scope.
-      int init(HttpAPIHooks const* scope, TSHttpHookID id);
-      /// Return the current candidate for threshold @a t
-      /// Can update state to account for hooks added since last candidate.
-      APIHook const* candidate(int t, int prev_t);
-      /// Advance state to the next hook.
-      void operator ++ ();
-    };
-
-  private:
-    TSHttpHookID _id;
-    Scope _global; ///< Chain from global hooks.
-    Scope _ssn; ///< Chain from session hooks.
-    Scope _txn; ///< Chain from transaction hooks.
-    int _threshold; ///< Effective threshold, gathered from the various sources.
-    int _last_priority; ///< Priority of the most recently invoked callback.
-  };
-
 public:
   HttpSM();
   void cleanup();
@@ -559,7 +517,7 @@ public:
 protected:
   TSHttpHookID cur_hook_id;
   APIHook const *cur_hook;
-  HookState hook_state;
+  HttpHookState hook_state;
 
   //
   // Continuation time keeper

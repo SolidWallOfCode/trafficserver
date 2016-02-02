@@ -1253,6 +1253,93 @@ APIHooks::clear()
   }
 }
 
+HttpHookState::HttpHookState()
+{
+}
+
+void
+HttpHookState::init(TSHttpHookID id,HttpAPIHooks const* global, HttpAPIHooks const* ua, HttpAPIHooks const* sm)
+{
+  int ttxn = API_HOOK_THRESHOLD_UNSET, tssn = API_HOOK_THRESHOLD_UNSET, tg = API_HOOK_THRESHOLD_UNSET;
+  _id = id;
+  
+  tg = _global.init(global, id);
+  
+  if (ua) tssn = _ssn.init(ua, id);
+  else _ssn.clear();
+    
+  if (sm) ttxn = _txn.init(sm, id);
+  else _txn.clear();
+  
+  _threshold = ttxn > 0 ? ttxn : (tssn > 0 ? tssn : tg);
+  _last_priority = API_HOOK_THRESHOLD_UNSET;
+}
+
+APIHook const *
+HttpHookState::getNext()
+{
+  APIHook const *zret = NULL;
+
+  APIHook const *hg = _global.candidate(_threshold, _last_priority);
+  APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
+  APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
+  if (htxn && (NULL == hssn || htxn->_priority > hssn->_priority) && (NULL == hg || htxn->_priority > hg->_priority)) {
+    zret = htxn;
+    ++_txn;
+  } else if (hssn && (NULL == hg || hssn->_priority > hg->_priority)) {
+    zret = hssn;
+    ++_ssn;
+  } else if (hg) {
+    zret = hg;
+    ++_global;
+  }
+  return zret;
+}
+
+int
+HttpHookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
+{
+  APIHooks const *hooks = (*feature_hooks)[id];
+  int zret = feature_hooks->threshold();
+
+  _c = _p = NULL;
+
+  if (hooks) {
+    int t = hooks->threshold();
+    if (t >= 0)
+      zret = t;
+    _c = hooks->head();
+  }
+  return zret;
+}
+
+APIHook const *
+HttpHookState::Scope::candidate(int t, int prev_t)
+{
+  APIHook const *x = NULL;
+  if (NULL != _c) {
+    // Back up if new hooks have been added at a low enough priority.
+    while (_p != (x = _c->prev()) && NULL != x && x->_priority <= prev_t) {
+      _c = x;
+    }
+    _p = _c->prev();
+    if (_c->_priority > t)
+      return _c;
+  }
+  return NULL;
+}
+
+void HttpHookState::Scope::operator++()
+{
+  _p = _c;
+  _c = _c->next();
+}
+
+void HttpHookState::Scope::clear()
+{
+  _p = _c = NULL;
+}
+
 ////////////////////////////////////////////////////////////////////
 //
 // ConfigUpdateCbTable

@@ -107,10 +107,9 @@ protected:
   bool hooks_on;
 
 private:
-  APIHookScope api_scope;
-  TSHttpHookID api_hookid;
-  APIHook *api_current;
+  APIHook const* cur_hook;
   HttpAPIHooks api_hooks;
+  HttpHookState hook_state;
   void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 
   ProxyClientSession(ProxyClientSession &);                  // noncopyable

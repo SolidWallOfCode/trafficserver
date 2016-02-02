@@ -38,6 +38,7 @@ static const char *plugin_dir = ".";
 typedef void (*init_func_t)(int argc, char *argv[]);
 
 ink_thread_key PluginContext::THREAD_KEY;
+PluginInfo* PluginManager::Internal_Plugin_Info;
 
 PluginManager pluginManager;
 
