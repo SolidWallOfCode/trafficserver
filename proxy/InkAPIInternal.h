@@ -282,6 +282,8 @@ private:
   int m_threshold; ///< Invocation threshold.
   /// The array of hooks lists.
   APIHooks m_hooks[N];
+  /// List of plugins that are disabled.
+  Vec<PluginInfo*> m_disable;
 };
 
 template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : m_hooks_p(false)

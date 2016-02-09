@@ -30,9 +30,9 @@ priorities.
 *  Transaction level control of which plugins run.
 
 Plugins are identified by the name passed in to :c:func:`TSPluginInit`. Names must be unique across
-all plugins. In addition to the name each plugin is assigned two values of :term:`priority`, a
+all plugins. In addition to a name each plugin is assigned two values of :term:`priority`, a
 maximum priority and a effective priority. This is controlled by :file:`plugin.config`. The effective
-priority is the priority used unless a different value is explicitly specified. The maximum priority
+priority is the priority used for setting callbacks unless a different value is explicitly specified. The maximum priority
 is a limit on operations that take a priority value - using a value higher than the maximum will
 result in an error.
 
@@ -50,9 +50,9 @@ Basics
 *  Plugins can examine the priorities of other plugins.
 *  Each callback in each hook has a priority. This is the plugin effective priority unless explicitly specified. A callback priority can never be larger than the maximum priority of the plugin.
 *  When a hook is invokved the callbacks are called in priority order, largest to smallest.
-*  A threshold can be set for hook callbacks in which case only callbacks with a priority *larger* than the threshold will be called.
-*  The hook threshold can be set but a plugin cannot set it higher than the plugin's maximum priority.
-*  Callbacks can be removed from a hook by plugin.
+*  A threshold can be set for hook callbacks in which case only callbacks with a priority *larger* than the threshold will be called. A plugin cannot set a threshold larger than its maximum priority.
+*  Callbacks can be removed from a hook via the API.
+*  All callbacks from a specific plugin can be disabled if the disabling plugin has a higher priority than the disabled plugin.
 
 As a result of this, a higher priority plugin will (in general) run before lower priority ones and
 can disable the lower priority plugins from running at all. A plugin can disable itself, but it
@@ -62,19 +62,17 @@ callback invoked after another plugin.
 
 The effective priority is intended to provide a space between that and the maximum priority of a
 plugin to allow another plugin to schedule a callback earlier. Otherwise a set of plugins at the same
-priority could not do this cooperatively. That is important in situations where priority used
+priority could not do this cooperatively. That is important in situations where priority is used
 primiarly for ordering callback invocations rather than controllling which callbacks are invoked.
 
 Plugins have no control over their maximum priority, that is set by the administrator in :file:`plugin.config`. The effective priority can be changed but can never be larger than the maximum priority.
 
 The priority threshold can be set at multiple levels. There is a global value that can be changed
-and is the effective threshold for all hooks unless overrridden by a more specific action. This
-mechanism enables global level control of which plugins run but not on a per hook or per transaction
-basis.
+and is the effective threshold for all hooks unless overrridden by more specific thresholds at the session and transaction level.
 
 A particular hook can have a threshold which determines the callbacks which are invoked from that
 hook. Such a threshold is set at the session or transaction level[#fn1]_. A threshold for a session
-applies unless overridden for a specific transaciton[#fn2]_. Thresholds set for a transaction are
+applies unless overridden for a specific transaction[#fn1]_. Thresholds set for a transaction are
 the most specific and override any other value. Note a plugin cannot set any threshold larger than
 that plugin's maximum priority. Because a callback needs a priority larger than the threshold a
 plugin can disable itself.
@@ -86,9 +84,9 @@ former. The desirabilty of this depends on local cicrumstances so the administra
 values to suit his particular situation. To avoid this behavior the administrator can place plugins
 in priority tiers that don't overlap or the plugins can adjust the priority for a given callback.
 
-.. note:: An example of a beneficial use of this is having plugins set the priority on their cleanup hook to be
-   higher than their effective. This would enable a master plugin to disable most callbacks without
-   disabling the cleanup callback.
+.. note:: An example of a beneficial use of this is having plugins set the priority on their cleanup
+   hook to be higher than their effective. This would enable a master plugin to disable most
+   callbacks without disabling the cleanup callback.
 
 Use Cases
 =========
@@ -97,11 +95,10 @@ The first use case is the most common one, where plugin A wants to run before or
 this case A can run in the `TS_LIFECYCLE_PLUGINS_LOADED_HOOK` at which point it can find the
 priority of B and set its effective priority to be one less than that. Or, if there are only specific
 hooks in which this is required it can add those looks with the lower priority. To run before A can
-set its effective priority to be one more than B. This works best when there are no chains of
-dependencies but a key plugin on which other plugins coordinate, or there is only one hook that
-requires ordering.
+set its effective priority to be one more than B. This works best when there is a key plugin on
+which other plugins coordinate, or there is only one hook that requires ordering.
 
-Alternatively the admistrator can determine a correct odering and set the priorities for the plugins
+Alternatively the admistrator can determine a correct ordering and set the priorities for the plugins
 appropriately in :file:`plugins.config`. If multiple plugins need coordination this is likely to be
 the easiest and most robust solution.
 
@@ -196,7 +193,5 @@ API
    Remove the :arg:`idx` th callback in :arg:`hook` in the transaction :arg:`txnp`. An error return indicates that either :arg:`idx` was out of bounds or the callback had a priority larger than the maximum priority of the plugin that called this function.
 
 .. rubric:: Footnotes
-
-.. [#fn1] This was considered and no use cases to justify the complexity were known. It is always possible to just set the per session / transaction value for every transaction to get the same effect.
 
 .. [#fn2] Useful for control of plugins based on the IP address of a user agent. The threshold can be set once and then all transactions for that session will use that threshold for hooks.
