@@ -35,6 +35,8 @@
 
 static const char *plugin_dir = ".";
 
+static const char OPT_PRIORITY[] = "priority";
+
 typedef void (*init_func_t)(int argc, char *argv[]);
 
 ink_thread_key PluginContext::THREAD_KEY;
@@ -130,6 +132,29 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
       if (!continueOnError)
 	Fatal("unable to find TSPluginInit function in '%s': %s", path, dlerror());
       return false; // this line won't get called since Fatal brings down ATS
+    }
+
+    // Process internal arguments
+    for ( int i = 1, j = 1, n = argc ; i < n ; ++i) {
+      if (argv[i][0] == '@') {
+        if (0 == strncasecmp(argv[i]+1, OPT_PRIORITY, sizeof(OPT_PRIORITY)-1)) {
+          int a = -1, b = -1, x;
+          char const* parm = argv[i]+sizeof(OPT_PRIORITY);
+          if ('=' == *parm) ++parm;
+          x = sscanf(parm, "%d/%d", &a, &b);
+          if (x == 1) {
+            info->_max_priority = a;
+            info->_eff_priority = std::max(0, a - _effective_priority_gap);
+          } else if (x == 2) {
+            info->_max_priority = std::max(a,b);
+            info->_eff_priority = std::min(a,b);
+          }
+        }
+        --argc;
+      } else {
+        if (i != j) argv[j] = argv[i];
+        ++j;
+      }
     }
 
     // Call the plugin to intialize.
@@ -239,6 +264,9 @@ PluginManager::init(bool continueOnError)
   
   plugin_reg_list.push(Internal_Plugin_Info);
 
+  REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
+  REC_EstablishStaticConfigInt32(_effective_priority_gap, "proxy.config.plugin.priority.effective_gap");
+  
   path = RecConfigReadConfigPath(NULL, "plugin.config");
   fd = open(path, O_RDONLY);
   if (fd < 0) {
@@ -303,8 +331,12 @@ PluginManager::init(bool continueOnError)
 
   close(fd);
 
-  REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
-  REC_EstablishStaticConfigInt32(_effective_priority_gap, "proxy.config.plubin.priority.effective_gap");
-  
+  // Notification that plugin loading has finished.
+  APIHook *hook = lifecycle_hooks->get(TS_LIFECYCLE_PLUGINS_LOADED_HOOK);
+  while (hook) {
+    hook->invoke(TS_EVENT_LIFECYCLE_PLUGINS_LOADED, NULL);
+    hook = hook->next();
+  }
+
   return retVal;
 }

@@ -194,4 +194,4 @@ API
 
 .. rubric:: Footnotes
 
-.. [#fn2] Useful for control of plugins based on the IP address of a user agent. The threshold can be set once and then all transactions for that session will use that threshold for hooks.
+.. [#fn1] Useful for control of plugins based on the IP address of a user agent. The threshold can be set once and then all transactions for that session will use that threshold for hooks.

@@ -32,7 +32,7 @@ namespace atscppapi
 struct GlobalPluginState;
 
 /**
- * @brief The interface used when creating a GlobalPlugin.
+ * @Brief The interface used when creating a GlobalPlugin.
  *
  * A GlobalPlugin is a Plugin that will fire for a given hook on all Transactions.
  * In otherwords, a GlobalPlugin is not tied to a specific plugin, a Transaction
@@ -60,6 +60,13 @@ class GlobalPlugin : public Plugin
 {
 public:
   /**
+   * Enumeration of supported life cycle hooks.
+   */
+  enum LifecycleHookType { HOOK_PLUGINS_LOADED };
+  /// Signature for lifecyle hook, which must be a method a subclass of @c GlobalPlugin
+  typedef void (GlobalPlugin::*LifecycleCallback)(void* data);
+
+  /**
    * registerHook is the mechanism used to attach a global hook.
    *
    * \note Whenever you register a hook you must have the appropriate callback definied in your GlobalPlugin
@@ -71,6 +78,7 @@ public:
    * @see Plugin
    */
   void registerHook(Plugin::HookType);
+  void registerHook(LifecycleHookType, LifecycleCallback f);
   virtual ~GlobalPlugin();
 
 protected:
