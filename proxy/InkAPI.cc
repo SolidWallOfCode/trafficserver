@@ -1253,7 +1253,7 @@ APIHooks::clear()
   }
 }
 
-HttpHookState::HttpHookState()
+HttpHookState::HttpHookState() : _id(TS_HTTP_LAST_HOOK), _threshold(API_HOOK_THRESHOLD_UNSET)
 {
 }
 
@@ -1283,6 +1283,8 @@ HttpHookState::getNext()
   APIHook const *hg = _global.candidate(_threshold, _last_priority);
   APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
   APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
+
+  Debug("plugin", "computing next hook with threshold %d", _threshold);
   if (htxn && (NULL == hssn || htxn->_priority > hssn->_priority) && (NULL == hg || htxn->_priority > hg->_priority)) {
     zret = htxn;
     ++_txn;

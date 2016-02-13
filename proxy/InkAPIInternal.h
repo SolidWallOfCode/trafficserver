@@ -286,7 +286,7 @@ private:
   Vec<PluginInfo*> m_disable;
 };
 
-template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : m_hooks_p(false)
+template <typename ID, ID N> FeatureAPIHooks<ID, N>::FeatureAPIHooks() : m_hooks_p(false), m_threshold(API_HOOK_THRESHOLD_UNSET)
 {
 }
 
