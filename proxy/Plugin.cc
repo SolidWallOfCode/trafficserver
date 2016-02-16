@@ -68,11 +68,6 @@ PluginInfo::~PluginInfo()
   // that we don't accidentally attempt this.
   ink_release_assert(this->_registered_p == false);
   ink_release_assert(this->link.prev == NULL);
-
-  ats_free(this->_file_path);
-  ats_free(this->_name);
-  ats_free(this->_vendor);
-  ats_free(this->_email);
   if (dlh)
     dlclose(dlh);
 }
