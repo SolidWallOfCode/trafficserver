@@ -1,3 +1,4 @@
+
 /**
   Licensed to the Apache Software Foundation (ASF) under one
   or more contributor license agreements.  See the NOTICE file
@@ -23,7 +24,7 @@
 #include <ts/ts.h>
 #include <cstddef>
 #include <cassert>
-#include <unordered_map>
+#include <map>
 #include "atscppapi/noncopyable.h"
 #include "utils_internal.h"
 #include "logging_internal.h"
@@ -38,7 +39,7 @@ struct atscppapi::GlobalPluginState : noncopyable {
   GlobalPlugin *global_plugin_;
   bool ignore_internal_transactions_;
 
-  std::unordered_multimap<int, GlobalPlugin::LifecycleCallback> lifecycle_cbs_;
+  std::multimap<int, GlobalPlugin::LifecycleCallback> lifecycle_cbs_;
 
   GlobalPluginState(GlobalPlugin *global_plugin, bool ignore_internal_transactions)
     : global_plugin_(global_plugin), ignore_internal_transactions_(ignore_internal_transactions)
