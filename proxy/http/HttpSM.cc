@@ -7715,3 +7715,10 @@ HttpSM::is_redirect_required()
   }
   return redirect_required;
 }
+
+void
+HttpSM::set_plugin_threshold(int priority)
+{
+  api_hooks.set_threshold(priority);
+  hook_state.setThreshold(priority, HttpHookState::TRANSACTION);
+}

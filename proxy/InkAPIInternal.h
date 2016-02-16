@@ -257,6 +257,8 @@ public:
   APIHook const *get(ID id) const;
   /// Get the priority threshold.
   int threshold() const;
+  /// Set the priority threshold.
+  void set_threshold(int priority);
   /// @return @c true if @a id is a valid id, @c false otherwise.
   static bool is_valid(ID id);
 
@@ -363,6 +365,13 @@ FeatureAPIHooks<ID, N>::threshold() const
 }
 
 template <typename ID, ID N>
+void
+FeatureAPIHooks<ID, N>::set_threshold(int priority)
+{
+  m_threshold = priority;
+}
+
+template <typename ID, ID N>
 bool
 FeatureAPIHooks<ID, N>::is_valid(ID id)
 {
@@ -438,15 +447,21 @@ private:
 class HttpHookState
 {
  public:
+  /// Scope tags for interacting with a live instance.
+  enum ScopeTag {
+    GLOBAL, SESSION, TRANSACTION
+  };
+  
   /// Default constructor.
   HttpHookState();
 
   /// Initialize the hook state.
   /// This tracks up to 3 sources of hooks. The argument order to this method is used
   /// to break priority ties (callbacks from earlier args are invoked earlier).
+  /// The order in terms of @a ScopeTag is GLOBAL, SESSION, TRANSACTION.
   void init(TSHttpHookID id, HttpAPIHooks const* global, HttpAPIHooks const* ua = NULL, HttpAPIHooks const* sm = NULL);
-  /// Set the hook invocation threshold.
-  void setThreshhold(int t);
+  /// Set the hook invocation threshold for a specific scope.
+  void setThreshold(int t, ScopeTag scope);
   /// Select a hook for invocation and advance the state to the next valid hook.
   /// @return @c NULL if no current hook.
   APIHook const*getNext();
@@ -459,6 +474,7 @@ class HttpHookState
   struct Scope {
     APIHook const* _c; ///< Current hook (candidate for invocation).
     APIHook const* _p; ///< Previous hook (already invoked).
+    int _threshold; ///< Threshold for this set of hooks.
 
     /// Initialize the scope.
     /// Return the threshold value for this scope.

@@ -209,6 +209,9 @@ public:
     return server_session;
   }
 
+  /// Set the priority threshold for plugin callback dispatch.
+  void set_plugin_threshold(int priority);
+
   // Called by transact.  Updates are fire and forget
   //  so there are no callbacks and are safe to do
   //  directly from transact

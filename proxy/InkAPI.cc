@@ -1298,21 +1298,36 @@ HttpHookState::getNext()
   return zret;
 }
 
+void
+HttpHookState::setThreshold(int t, ScopeTag scope)
+{
+  switch (scope) {
+  case GLOBAL: _global._threshold = t; break;
+  case SESSION: _ssn._threshold = t; break;
+  case TRANSACTION: _txn._threshold = t; break;
+  }
+  _threshold = API_HOOK_THRESHOLD_UNSET;
+  if (_txn._threshold >= 0) _threshold = _txn._threshold;
+  else if (_ssn._threshold >= 0) _threshold = _ssn._threshold;
+  else if (_global._threshold >= 0) _threshold = _global._threshold;
+}
+
+
 int
 HttpHookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
 {
   APIHooks const *hooks = (*feature_hooks)[id];
-  int zret = feature_hooks->threshold();
+  _threshold = feature_hooks->threshold();
 
   _c = _p = NULL;
 
   if (hooks) {
     int t = hooks->threshold();
     if (t >= 0)
-      zret = t;
+      _threshold = t;
     _c = hooks->head();
   }
-  return zret;
+  return _threshold;
 }
 
 APIHook const *
@@ -4546,17 +4561,36 @@ TSHttpSsnReenable(TSHttpSsn ssnp, TSEvent event)
 
 
 /* HTTP transactions */
-void
-TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
+TSReturnCode
+TSHttpTxnPriorityHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp, int priority)
 {
+  HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
+  
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
 
-  HttpSM *sm = (HttpSM *)txnp;
-  sm->txn_hook_add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  sm->txn_hook_add(id, reinterpret_cast<INKContInternal *>(contp), priority);
+  return TS_SUCCESS;
 }
 
+void
+TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
+{
+  TSHttpTxnPriorityHookAdd(txnp, id, contp, PluginContext::get()->_eff_priority);
+}
+
+TSReturnCode
+TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, int priority)
+{
+  HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+  
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  sm->set_plugin_threshold(priority);
+  return TS_SUCCESS;
+}
 
 // Private api function for gzip plugin.
 //  This function should only appear in TsapiPrivate.h
