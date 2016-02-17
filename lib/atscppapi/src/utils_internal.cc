@@ -176,7 +176,7 @@ utils::internal::getTransactionPluginMutex(TransactionPlugin &transaction_plugin
 }
 
 TSHttpHookID
-utils::internal::convertInternalHookToTsHook(Plugin::HookType hooktype)
+utils::internal::convertInternalHookToTsHook(TransactionValues::HookType hooktype)
 {
   switch (hooktype) {
   case Plugin::HOOK_READ_REQUEST_HEADERS_POST_REMAP:

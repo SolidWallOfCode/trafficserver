@@ -27,9 +27,9 @@
 #include <string>
 #include "ts/ink_memory.h"
 #include "atscppapi/shared_ptr.h"
-#include "logging_internal.h"
 #include "utils_internal.h"
-#include "atscppapi/noncopyable.h"
+#include "logging_internal.h"
+
 using std::map;
 using std::string;
 using namespace atscppapi;
@@ -500,3 +500,19 @@ Transaction::initCachedResponse(TSEvent event)
   LOG_DEBUG("Initializing cached response, event %d", event);
   state_->cached_response_.init(state_->cached_response_hdr_buf_, state_->cached_response_hdr_loc_);
 }
+
+bool
+Transaction::setPriorityThreshold(int priority)
+{
+  LOG_DEBUG("Transaction tshttptxn=%p setting hook priority threshold: %d", state_->txn_, priority);
+  return TSHttpTxnPriorityThresholdSet(state_->txn_, priority) == TS_SUCCESS;
+}
+
+bool
+Transaction::setHookPriorityThreshold(Plugin::HookType hook_type, int priority)
+{
+  TSHttpHookID id = utils::internal::convertInternalHookToTsHook(hook_type);
+  LOG_DEBUG("Transaction tshttptxn=%p setting hook priority threshold: %d", state_->txn_, priority);
+  return TSHttpTxnHookPriorityThresholdSet(state_->txn_, id, priority) == TS_SUCCESS;
+}
+

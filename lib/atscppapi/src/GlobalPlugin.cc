@@ -39,7 +39,8 @@ struct atscppapi::GlobalPluginState : noncopyable {
   GlobalPlugin *global_plugin_;
   bool ignore_internal_transactions_;
 
-  std::multimap<int, GlobalPlugin::LifecycleCallback> lifecycle_cbs_;
+  typedef std::multimap<int, GlobalPlugin::LifecycleCallback> LifecycleCallbackMap;
+  LifecycleCallbackMap lifecycle_cbs_;
 
   GlobalPluginState(GlobalPlugin *global_plugin, bool ignore_internal_transactions)
     : global_plugin_(global_plugin), ignore_internal_transactions_(ignore_internal_transactions)
@@ -58,8 +59,8 @@ handleGlobalPluginEvents(TSCont cont, TSEvent event, void *edata)
     LOG_DEBUG("Ignoring event %d on internal transaction %p for global plugin %p", event, txn, state->global_plugin_);
     TSHttpTxnReenable(txn, TS_EVENT_HTTP_CONTINUE);
   } else if (event == TS_EVENT_LIFECYCLE_PLUGINS_LOADED) {
-    auto range = state->lifecycle_cbs_.equal_range(TS_LIFECYCLE_PLUGINS_LOADED_HOOK);
-    for ( auto spot = range.first ; spot != range.second ; ++spot) {
+    std::pair<GlobalPluginState::LifecycleCallbackMap::iterator, GlobalPluginState::LifecycleCallbackMap::iterator> range = state->lifecycle_cbs_.equal_range(TS_LIFECYCLE_PLUGINS_LOADED_HOOK);
+    for ( GlobalPluginState::LifecycleCallbackMap::iterator spot = range.first ; spot != range.second ; ++spot) {
       (state->global_plugin_->*(spot->second))(edata);
     }
   } else {
