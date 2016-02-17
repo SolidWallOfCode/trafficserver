@@ -958,7 +958,7 @@ void
 INKContInternal::destroy()
 {
   if (m_free_magic == INKCONT_INTERN_MAGIC_DEAD) {
-    Fatal("Plugin %s tried to use a continuation [%p] which is deleted", m_info ? m_info->_name : "*UNKNOWN*", this);
+    Fatal("Plugin %s tried to use a continuation [%p] which is deleted", m_info ? m_info->_name.get() : "*UNKNOWN*", this);
   }
   m_deleted = 1;
   if (m_deletable) {
