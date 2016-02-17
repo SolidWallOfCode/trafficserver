@@ -92,6 +92,8 @@ public:
   }
 
   HttpAPIHooks const* feature_hooks() const { return &api_hooks; }
+  void ssn_priority_threshold_set(int priority);
+  void ssn_hook_priority_threshold_set(TSHttpHookID id, int priority);
 
   // Initiate an API hook invocation.
   void do_api_callout(TSHttpHookID id);
