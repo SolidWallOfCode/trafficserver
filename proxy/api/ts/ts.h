@@ -1212,6 +1212,8 @@ tsapi void TSHttpHookAdd(TSHttpHookID id, TSCont contp);
 tsapi void TSHttpSsnHookAdd(TSHttpSsn ssnp, TSHttpHookID id, TSCont contp);
 tsapi void TSHttpSsnReenable(TSHttpSsn ssnp, TSEvent event);
 tsapi int TSHttpSsnTransactionCount(TSHttpSsn ssnp);
+tsapi TSReturnCode TSHttpSsnPriorityThresholdSet(TSHttpSsn ssnp, int priority);
+tsapi TSReturnCode TSHttpSsnHookPriorityThresholdSet(TSHttpSsn ssnp, TSHttpHookID id, int priority);
 
 /* --------------------------------------------------------------------------
    SSL connections */

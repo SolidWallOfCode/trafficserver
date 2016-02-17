@@ -66,6 +66,20 @@ ProxyClientSession::destroy()
   this->mutex.clear();
 }
 
+void
+ProxyClientSession::ssn_priority_threshold_set(int priority)
+{
+  api_hooks.set_threshold(priority);
+  hook_state.setThreshold(priority, HttpHookState::SESSION);
+}
+
+void
+ProxyClientSession::ssn_hook_priority_threshold_set(TSHttpHookID id, int priority)
+{
+  api_hooks.set_threshold(id, priority);
+  hook_state.setThreshold(id, priority, HttpHookState::SESSION);
+}
+
 int
 ProxyClientSession::state_api_callout(int event, void * /* data ATS_UNUSED */)
 {

@@ -4527,6 +4527,29 @@ TSHttpSsnHookAdd(TSHttpSsn ssnp, TSHttpHookID id, TSCont contp)
   cs->hook_add(id, reinterpret_cast<INKContInternal *>(contp), PluginContext::get()->_eff_priority);
 }
 
+TSReturnCode
+TSHttpSsnPriorityThresholdSet(TSHttpSsn ssnp, int priority)
+{
+  HttpClientSession *cs = reinterpret_cast<HttpClientSession *>(ssnp);
+  sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
+  
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  cs->ssn_priority_threshold_set(priority);
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpSsnHookPriorityThresholdSet(TSHttpSsn ssnp, TSHttpHookID id, int priority)
+{
+  HttpClientSession *cs = reinterpret_cast<HttpClientSession *>(ssnp);
+  sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
+  
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  cs->ssn_hook_priority_threshold_set(id, priority);
+  return TS_SUCCESS;
+}
+
 int
 TSHttpSsnTransactionCount(TSHttpSsn ssnp)
 {
