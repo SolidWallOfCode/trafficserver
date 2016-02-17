@@ -135,7 +135,8 @@ class APIHook
 {
 public:
   INKContInternal *m_cont;
-  int threshold; ///< Priority threshold for this hook.
+  int m_priority; ///< Priority of this callback.
+  
   int invoke(int event, void *edata) const;
 
   APIHook *next();
@@ -145,7 +146,6 @@ public:
 
   LINK(APIHook, m_link);
 
-  int _priority; ///< Priority of this callback.
 };
 
 inline APIHook *
@@ -189,13 +189,9 @@ public:
   bool is_empty() const;
   void invoke(int event, void *data);
 
-  /// Return the priority threshold for this set of hooks.
-  int threshold() const;
-  /// Set the priority threshold.
-  void setThreshold(int priority);
-
-private:
   int m_threshold; ///< Priority threshold for invocation.
+  
+private:
   Que(APIHook, m_link) m_hooks;
 };
 
@@ -209,12 +205,6 @@ inline APIHook const *
 APIHooks::head() const
 {
   return m_hooks.head;
-}
-
-inline int
-APIHooks::threshold() const
-{
-  return m_threshold;
 }
 
 inline bool
@@ -259,6 +249,8 @@ public:
   int threshold() const;
   /// Set the priority threshold.
   void set_threshold(int priority);
+  /// Set the priority threshold for a specific hook.
+  void set_threshold(TSHttpHookID id, int priority);
   /// @return @c true if @a id is a valid id, @c false otherwise.
   static bool is_valid(ID id);
 
@@ -372,6 +364,13 @@ FeatureAPIHooks<ID, N>::set_threshold(int priority)
 }
 
 template <typename ID, ID N>
+void
+FeatureAPIHooks<ID, N>::set_threshold(TSHttpHookID id, int priority)
+{
+  if (is_valid(id)) m_hooks[id].m_threshold = priority;
+}
+
+template <typename ID, ID N>
 bool
 FeatureAPIHooks<ID, N>::is_valid(ID id)
 {
@@ -462,6 +461,8 @@ class HttpHookState
   void init(TSHttpHookID id, HttpAPIHooks const* global, HttpAPIHooks const* ua = NULL, HttpAPIHooks const* sm = NULL);
   /// Set the hook invocation threshold for a specific scope.
   void setThreshold(int t, ScopeTag scope);
+  /// Set the hook invocation threshold for a specific scope and hook.
+  void setThreshold(TSHttpHookID id, int t, ScopeTag scope);
   /// Select a hook for invocation and advance the state to the next valid hook.
   /// @return @c NULL if no current hook.
   APIHook const*getNext();
@@ -474,11 +475,11 @@ class HttpHookState
   struct Scope {
     APIHook const* _c; ///< Current hook (candidate for invocation).
     APIHook const* _p; ///< Previous hook (already invoked).
-    int _threshold; ///< Threshold for this set of hooks.
+    int _scope_threshold; ///< Threshold from the scope.
+    int _hook_threshold; ///< Threshold for this set of hooks.
 
     /// Initialize the scope.
-    /// Return the threshold value for this scope.
-    int init(HttpAPIHooks const* scope, TSHttpHookID id);
+    void init(HttpAPIHooks const* scope, TSHttpHookID id);
     /// Clear the scope.
     void clear();
     /// Return the current candidate for threshold @a t
@@ -486,7 +487,11 @@ class HttpHookState
     APIHook const* candidate(int t, int prev_t);
     /// Advance state to the next hook.
     void operator ++ ();
+    /// Get the effective threshold.
+    int get_effective_threshold() const;
   };
+
+  int update_effective_threshold();
 
  private:
   TSHttpHookID _id;
@@ -498,6 +503,8 @@ class HttpHookState
 };
 
 inline TSHttpHookID HttpHookState::id() const { return _id; }
+
+inline int HttpHookState::Scope::get_effective_threshold() const { return _hook_threshold >= 0 ? _hook_threshold : _scope_threshold; }
 
 void api_init();
 

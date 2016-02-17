@@ -211,9 +211,6 @@ public:
     return server_session;
   }
 
-  /// Set the priority threshold for plugin callback dispatch.
-  void set_plugin_threshold(int priority);
-
   // Called by transact.  Updates are fire and forget
   //  so there are no callbacks and are safe to do
   //  directly from transact
@@ -263,6 +260,11 @@ public:
   // Functions for manipulating api hooks
   void txn_hook_add(TSHttpHookID id, INKContInternal *cont, int priority);
   APIHook *txn_hook_get(TSHttpHookID id);
+  /// Set the priority threshold for plugin callback dispatch.
+  void txn_priority_threshold_set(int priority);
+  /// Set the priority threshold for a specific hook.
+  void txn_hook_priority_threshold_set(TSHttpHookID id, int priority);
+
 
   void add_history_entry(const char *fileline, int event, int reentrant);
   void add_cache_sm();

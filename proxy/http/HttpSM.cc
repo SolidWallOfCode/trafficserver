@@ -7812,8 +7812,15 @@ HttpSM::is_redirect_required()
 }
 
 void
-HttpSM::set_plugin_threshold(int priority)
+HttpSM::txn_priority_threshold_set(int priority)
 {
   api_hooks.set_threshold(priority);
   hook_state.setThreshold(priority, HttpHookState::TRANSACTION);
+}
+
+void
+HttpSM::txn_hook_priority_threshold_set(TSHttpHookID id, int priority)
+{
+  api_hooks.set_threshold(id, priority);
+  hook_state.setThreshold(id, priority, HttpHookState::TRANSACTION);
 }

@@ -1233,9 +1233,9 @@ APIHooks::add(INKContInternal *cont, int priority)
 
   api_hook = apiHookAllocator.alloc();
   api_hook->m_cont = cont;
-  api_hook->_priority = priority;
+  api_hook->m_priority = priority;
 
-  for ( h = m_hooks.tail ; NULL != h && h->_priority < priority ; h = h->prev() )
+  for ( h = m_hooks.tail ; NULL != h && h->m_priority < priority ; h = h->prev() )
     ;
   if (NULL == h)
     m_hooks.push(api_hook);
@@ -1259,18 +1259,18 @@ HttpHookState::HttpHookState() : _id(TS_HTTP_LAST_HOOK), _threshold(API_HOOK_THR
 void
 HttpHookState::init(TSHttpHookID id,HttpAPIHooks const* global, HttpAPIHooks const* ua, HttpAPIHooks const* sm)
 {
-  int ttxn = API_HOOK_THRESHOLD_UNSET, tssn = API_HOOK_THRESHOLD_UNSET, tg = API_HOOK_THRESHOLD_UNSET;
   _id = id;
+
+  if (global) _global.init(global, id);
+  else _global.clear();
   
-  tg = _global.init(global, id);
-  
-  if (ua) tssn = _ssn.init(ua, id);
+  if (ua) _ssn.init(ua, id);
   else _ssn.clear();
     
-  if (sm) ttxn = _txn.init(sm, id);
+  if (sm) _txn.init(sm, id);
   else _txn.clear();
-  
-  _threshold = ttxn > 0 ? ttxn : (tssn > 0 ? tssn : tg);
+
+  this->update_effective_threshold();
   _last_priority = API_HOOK_THRESHOLD_UNSET;
 }
 
@@ -1284,10 +1284,10 @@ HttpHookState::getNext()
   APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
 
   Debug("plugin", "computing next hook with threshold %d", _threshold);
-  if (htxn && (NULL == hssn || htxn->_priority > hssn->_priority) && (NULL == hg || htxn->_priority > hg->_priority)) {
+  if (htxn && (NULL == hssn || htxn->m_priority > hssn->m_priority) && (NULL == hg || htxn->m_priority > hg->m_priority)) {
     zret = htxn;
     ++_txn;
-  } else if (hssn && (NULL == hg || hssn->_priority > hg->_priority)) {
+  } else if (hssn && (NULL == hg || hssn->m_priority > hg->m_priority)) {
     zret = hssn;
     ++_ssn;
   } else if (hg) {
@@ -1297,36 +1297,58 @@ HttpHookState::getNext()
   return zret;
 }
 
+int
+HttpHookState::update_effective_threshold()
+{
+  if ( (_threshold = _txn.get_effective_threshold()) < 0) {
+    if ( (_threshold = _ssn.get_effective_threshold()) < 0) {
+      _threshold = _global.get_effective_threshold();
+    }
+  }
+  return _threshold;
+}
+
 void
 HttpHookState::setThreshold(int t, ScopeTag scope)
 {
   switch (scope) {
-  case GLOBAL: _global._threshold = t; break;
-  case SESSION: _ssn._threshold = t; break;
-  case TRANSACTION: _txn._threshold = t; break;
+  case GLOBAL: _global._scope_threshold = t; break;
+  case SESSION: _ssn._scope_threshold = t; break;
+  case TRANSACTION: _txn._scope_threshold = t; break;
   }
-  _threshold = API_HOOK_THRESHOLD_UNSET;
-  if (_txn._threshold >= 0) _threshold = _txn._threshold;
-  else if (_ssn._threshold >= 0) _threshold = _ssn._threshold;
-  else if (_global._threshold >= 0) _threshold = _global._threshold;
+  this->update_effective_threshold();
+}
+
+void
+HttpHookState::setThreshold(TSHttpHookID id, int t, ScopeTag scope)
+{
+  // This makes a difference only if the hook specified is the active hook.
+  // Otherwise it's either irrelevant (past the hook) or it will get picked up when
+  // the hook state is initialized for that hook.
+  if (id == _id) {
+    switch (scope) {
+    case GLOBAL: _global._hook_threshold = t; break;
+    case SESSION: _ssn._hook_threshold = t; break;
+    case TRANSACTION: _txn._hook_threshold = t; break;
+    }
+    this->update_effective_threshold();
+  }
 }
 
 
-int
+void
 HttpHookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
 {
   APIHooks const *hooks = (*feature_hooks)[id];
-  _threshold = feature_hooks->threshold();
+  _scope_threshold = feature_hooks->threshold();
+  _hook_threshold = TS_HOOK_PRIORITY_UNSET;
 
   _c = _p = NULL;
 
   if (hooks) {
-    int t = hooks->threshold();
-    if (t >= 0)
-      _threshold = t;
+    _hook_threshold = hooks->m_threshold;
     _c = hooks->head();
   }
-  return _threshold;
 }
 
 APIHook const *
@@ -1335,11 +1357,11 @@ HttpHookState::Scope::candidate(int t, int prev_t)
   APIHook const *x = NULL;
   if (NULL != _c) {
     // Back up if new hooks have been added at a low enough priority.
-    while (_p != (x = _c->prev()) && NULL != x && x->_priority <= prev_t) {
+    while (_p != (x = _c->prev()) && NULL != x && x->m_priority <= prev_t) {
       _c = x;
     }
     _p = _c->prev();
-    if (_c->_priority > t)
+    if (_c->m_priority > t)
       return _c;
   }
   return NULL;
@@ -4597,13 +4619,25 @@ TSHttpTxnHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp)
 }
 
 TSReturnCode
-TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, int priority)
+TSHttpTxnPriorityThresholdSet(TSHttpTxn txnp, int priority)
 {
   HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
   
   if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
-  sm->set_plugin_threshold(priority);
+  sm->txn_priority_threshold_set(priority);
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, TSHttpHookID id, int priority)
+{
+  HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+  sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
+  
+  if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
+  sm->txn_hook_priority_threshold_set(id, priority);
   return TS_SUCCESS;
 }
 

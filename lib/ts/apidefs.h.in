@@ -200,6 +200,12 @@ typedef enum {
 
 } TSHttpStatus;
 
+
+/// When working with hook priorities this value represents "unset" or "unspecified" and is ignored.
+enum {  
+  TS_HOOK_PRIORITY_UNSET = -2
+};
+
 /**
     This set of enums represents the possible hooks where you can
     set up continuation callbacks. The functions used to register a
