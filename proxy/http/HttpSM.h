@@ -264,7 +264,7 @@ public:
   void txn_priority_threshold_set(int priority);
   /// Set the priority threshold for a specific hook.
   void txn_hook_priority_threshold_set(TSHttpHookID id, int priority);
-
+  void txn_plugin_enable(PluginInfo const* pi, bool enable_p);
 
   void add_history_entry(const char *fileline, int event, int reentrant);
   void add_cache_sm();

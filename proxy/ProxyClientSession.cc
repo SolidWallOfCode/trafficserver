@@ -80,6 +80,12 @@ ProxyClientSession::ssn_hook_priority_threshold_set(TSHttpHookID id, int priorit
   hook_state.setThreshold(id, priority, HttpHookState::SESSION);
 }
 
+void
+ProxyClientSession::ssn_plugin_enable(PluginInfo const* pi, bool enable_p)
+{
+  hook_state.enable(pi, enable_p);
+}
+
 int
 ProxyClientSession::state_api_callout(int event, void *data)
 {

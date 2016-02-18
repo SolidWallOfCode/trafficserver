@@ -56,17 +56,19 @@ PluginManager pluginManager;
 //      global pointer
 //
 DLL<PluginInfo> plugin_reg_list;
+DLL<PluginInfo, PluginInfo::Link_disabled_link> plugin_disabled_list;
 
 PluginInfo::PluginInfo()
-  : _registered_p(false), dlh(NULL)
+  : _magic(MAGIC), dlh(NULL)
 {
+  _flags._all = 0; // clear all flags.
 }
 
 PluginInfo::~PluginInfo()
 {
   // We don't support unloading plugins once they are successfully loaded, so assert
   // that we don't accidentally attempt this.
-  ink_release_assert(this->_registered_p == false);
+  ink_release_assert(!this->_flags._flag._registered == false);
   ink_release_assert(this->link.prev == NULL);
   if (dlh)
     dlclose(dlh);
@@ -173,7 +175,7 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
     
   } // done elevating access
 
-  if (info->_registered_p) {
+  if (info->_flags._flag._registered) {
     plugin_reg_list.push(info);
   } else {
     Fatal("plugin not registered by calling TSPluginRegister");
@@ -344,4 +346,37 @@ PluginManager::init(bool continueOnError)
   }
 
   return retVal;
+}
+
+PluginInfo const*
+PluginManager::find(char const* name)
+{
+  for ( PluginInfo* pi = plugin_reg_list.head ; NULL != pi ; pi = pi->link.next ) {
+    if (0 == strcasecmp(name, pi->_name)) return pi;
+  }
+  return NULL;
+}
+
+void
+PluginManager::enable(PluginInfo const* tag, bool enable_p)
+{
+  PluginInfo* pi = const_cast<PluginInfo*>(tag);
+  pi->_flags._flag._disabled = enable_p ? 0 : 1;
+  if (enable_p) {
+    if (plugin_disabled_list.in(pi)) plugin_disabled_list.remove(pi);
+  } else {
+    if (!plugin_disabled_list.in(pi)) plugin_disabled_list.push(pi);
+  }
+}
+
+PluginManager::disabled_iterator
+PluginManager::disabled_begin() const
+{
+  return plugin_disabled_list.head;
+}
+
+PluginManager::disabled_iterator
+PluginManager::disabled_end() const
+{
+  return NULL;
 }

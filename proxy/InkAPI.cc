@@ -1278,22 +1278,25 @@ APIHook const *
 HttpHookState::getNext()
 {
   APIHook const *zret = NULL;
+  
+  do {
+    APIHook const *hg = _global.candidate(_threshold, _last_priority);
+    APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
+    APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
 
-  APIHook const *hg = _global.candidate(_threshold, _last_priority);
-  APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
-  APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
-
-  Debug("plugin", "computing next callback for hook %d with threshold %d", _id, _threshold);
-  if (htxn && (NULL == hssn || htxn->m_priority > hssn->m_priority) && (NULL == hg || htxn->m_priority > hg->m_priority)) {
-    zret = htxn;
-    ++_txn;
-  } else if (hssn && (NULL == hg || hssn->m_priority > hg->m_priority)) {
-    zret = hssn;
-    ++_ssn;
-  } else if (hg) {
-    zret = hg;
-    ++_global;
-  }
+    Debug("plugin", "computing next callback for hook %d with threshold %d", _id, _threshold);
+    if (htxn && (NULL == hssn || htxn->m_priority > hssn->m_priority) && (NULL == hg || htxn->m_priority > hg->m_priority)) {
+      zret = htxn;
+      ++_txn;
+    } else if (hssn && (NULL == hg || hssn->m_priority > hg->m_priority)) {
+      zret = hssn;
+      ++_ssn;
+    } else if (hg) {
+      zret = hg;
+      ++_global;
+    }
+  } while (NULL != zret && !this->is_enabled(zret->m_cont->m_info));
+  
   return zret;
 }
 
@@ -1335,6 +1338,18 @@ HttpHookState::setThreshold(TSHttpHookID id, int t, ScopeTag scope)
   }
 }
 
+void
+HttpHookState::enable(PluginInfo const* pi, bool enabled_p)
+{
+  if (enabled_p) m_pi_list.set_remove(pi);
+  else m_pi_list.set_add(pi);
+}
+
+bool
+HttpHookState::is_enabled(PluginInfo const* pi)
+{
+  return NULL == m_pi_list.set_in(pi);
+}
 
 void
 HttpHookState::Scope::init(HttpAPIHooks const *feature_hooks, TSHttpHookID id)
@@ -1899,7 +1914,7 @@ TSPluginRegister(TSSDKVersion sdk_version, TSPluginRegistrationInfo *plugin_info
   if (NULL == p)
     return TS_ERROR;
 
-  p->_registered_p = true;
+  p->_flags._flag._registered = true;
 
   // We're compatible only within the 3.x release
   if (version >= PLUGIN_SDK_VERSION_3_0 && version < PLUGIN_SDK_VERSION_4_0) {
@@ -1921,6 +1936,12 @@ TSPluginRegister(TSSDKVersion sdk_version, TSPluginRegistrationInfo *plugin_info
   }
 
   return TS_SUCCESS;
+}
+
+TSPluginHandle
+TSPluginFindByName(char const* name)
+{
+  return reinterpret_cast<TSPluginHandle>(pluginManager.find(name));
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -9022,4 +9043,52 @@ TSVConnReenable(TSVConn vconn)
       ssl_vc->reenable(ssl_vc->nh);
     }
   }
+}
+
+TSReturnCode
+TSPluginEnable(TSPluginHandle handle, bool state)
+{
+  TSReturnCode zret = TS_SUCCESS;
+  PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
+  
+  if (pi->_magic == PluginInfo::MAGIC)
+    pluginManager.enable(pi, state);
+  else
+    zret = TS_ERROR;
+  
+  return zret;
+}
+
+TSReturnCode
+TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle handle, bool state)
+{
+  TSReturnCode zret = TS_SUCCESS;
+  PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
+  HttpClientSession* cs = reinterpret_cast<HttpClientSession*>(ssnp);
+
+  sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
+
+  if (pi->_magic == PluginInfo::MAGIC)
+    cs->ssn_plugin_enable(pi, state);
+  else
+    zret = TS_ERROR;
+  
+  return zret;
+}
+
+TSReturnCode
+TSHttpTxnPluginEnable(TSHttpTxn txnp, TSPluginHandle handle, bool state)
+{
+  TSReturnCode zret = TS_SUCCESS;
+  PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
+  HttpSM* sm = reinterpret_cast<HttpSM*>(txnp);
+
+  sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
+
+  if (pi->_magic == PluginInfo::MAGIC)
+    sm->txn_plugin_enable(pi, state);
+  else
+    zret = TS_ERROR;
+  
+  return zret;
 }

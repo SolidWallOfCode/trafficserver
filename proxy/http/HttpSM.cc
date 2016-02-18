@@ -7824,3 +7824,9 @@ HttpSM::txn_hook_priority_threshold_set(TSHttpHookID id, int priority)
   api_hooks.set_threshold(id, priority);
   hook_state.setThreshold(id, priority, HttpHookState::TRANSACTION);
 }
+
+void
+HttpSM::txn_plugin_enable(PluginInfo const* pi, bool enable_p)
+{
+  hook_state.enable(pi, enable_p);
+}
