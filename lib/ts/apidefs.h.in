@@ -205,9 +205,7 @@ typedef enum {
 
 
 /// When working with hook priorities this value represents "unset" or "unspecified" and is ignored.
-enum {  
-  TS_HOOK_PRIORITY_UNSET = -2
-};
+enum { TS_HOOK_PRIORITY_UNSET = -2 };
 
 /**
     This set of enums represents the possible hooks where you can
@@ -794,6 +792,8 @@ typedef struct tsapi_bufferblock *TSIOBufferBlock;
 typedef struct tsapi_bufferreader *TSIOBufferReader;
 typedef struct tsapi_hostlookupresult *TSHostLookupResult;
 typedef struct tsapi_aiocallback *TSAIOCallback;
+
+typedef struct tsapi_plugin_handle const *TSPluginHandle;
 
 typedef void *(*TSThreadFunc)(void *data);
 typedef int (*TSEventFunc)(TSCont contp, TSEvent event, void *edata);

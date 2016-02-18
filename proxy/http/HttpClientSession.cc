@@ -128,6 +128,9 @@ HttpClientSession::new_transaction()
   current_reader->init();
   transact_count++;
   DebugHttpSsn("[%" PRId64 "] Starting transaction %d using sm [%" PRId64 "]", con_id, transact_count, current_reader->sm_id);
+  for ( HttpHookState::disabled_iterator spot(hook_state.disabled_begin()), limit(hook_state.disabled_end()) ; spot != limit ; ++spot ) {
+    current_reader->txn_plugin_enable(&*spot, false);
+  }
 
   current_reader->attach_client_session(this, sm_reader);
   if (pi) {
@@ -151,6 +154,9 @@ HttpClientSession::new_connection(NetVConnection *new_vc, MIOBuffer *iobuf, IOBu
 
   // Disable hooks for backdoor connections.
   this->hooks_on = !backdoor;
+  // Freeze the list of disabled plugins
+  for ( PluginManager::disabled_iterator spot(pluginManager.disabled_begin()), limit(pluginManager.disabled_end()) ; spot != limit ; ++spot)
+    this->ssn_plugin_enable(&*spot, false);
 
   // Unique client session identifier.
   con_id = ProxyClientSession::next_connection_id();

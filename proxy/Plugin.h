@@ -27,11 +27,15 @@
 #include <ts/List.h>
 #include <ts/ink_thread.h>
 
+#if defined(MAGIC)
+// Who the beep is defining this? That's a bad choice of name to hard code with a define.
+#undef MAGIC
+#endif
+
 struct PluginInfo {
+  enum { MAGIC = 0xabacab56 };
   PluginInfo();
   ~PluginInfo();
-
-  bool _registered_p;
 
   /// Path to the implmentation (library, so, dll) file.
   ats_scoped_str _file_path;
@@ -42,13 +46,25 @@ struct PluginInfo {
   /// email for vendor / author.
   ats_scoped_str _email;
 
+  uint64_t _magic;
+
   int _max_priority; ///< Maximum priority.
   int _eff_priority; ///< Effective priority.
 
   /// Library handle.
   void *dlh;
 
+  /// Status flags.
+  union {
+    unsigned int _all:32;
+    struct {
+      unsigned int _registered : 1;
+      unsigned int _disabled : 1;
+    } _flag;
+  } _flags;
+
   LINK(PluginInfo, link);
+  LINK(PluginInfo, disabled_link);
 };
 
 /** Manage the set of plugins.
@@ -56,6 +72,26 @@ struct PluginInfo {
 class PluginManager
 {
 public:
+  
+  struct disabled_iterator {
+  private:
+    typedef disabled_iterator self;
+
+  public:
+    disabled_iterator();
+    self &operator++();
+    bool operator==(self const & that) const;
+    bool operator!=(self const & that) const;
+    PluginInfo const &operator*() const;
+    PluginInfo const *operator->() const;
+
+  private:
+    disabled_iterator(PluginInfo const *pi);
+
+    PluginInfo const *_pi;
+    friend class PluginManager;
+  };
+
   PluginManager();
 
   /// Initialize all the plugins.
@@ -66,11 +102,23 @@ public:
   int get_default_priority();
   int get_default_effective_priority();
 
+  /// Locate a plugin by @a name.
+  PluginInfo const* find(char const* name);
+
+  /// Enable/disable a plugin globally.
+  /// If @a enable_p is @c true then plugin is marked enabled, otherwise it is marked disabled.
+  /// This can be overridden per session or transaction.
+  void enable(PluginInfo const* pi, bool enable_p);
+
   /// Used for plugin type continuations created and used by TS itself.
   static PluginInfo *Internal_Plugin_Info;
 
+  /// Initialize thread local storage needed for plugin management.
   void initForThread();
 
+  disabled_iterator disabled_begin() const;
+  disabled_iterator disabled_end() const;
+  
 protected:
   /// Load a single plugin.
   bool load(int arg, char *argv[], bool continueOnError);
@@ -165,5 +213,39 @@ public:
     return 0;
   }
 };
+
+inline PluginManager::disabled_iterator::disabled_iterator() : _pi(NULL)
+{
+}
+
+inline PluginManager::disabled_iterator &PluginManager::disabled_iterator::operator++()
+{
+  if (NULL != _pi) _pi = _pi->disabled_link.next;
+  return *this;
+}
+
+inline bool PluginManager::disabled_iterator::operator==(self const &that) const
+{
+  return _pi == that._pi;
+}
+
+inline bool PluginManager::disabled_iterator::operator!=(self const &that) const
+{
+  return _pi != that._pi;
+}
+
+inline PluginInfo const &PluginManager::disabled_iterator::operator*() const
+{
+  return *_pi;
+}
+
+inline PluginInfo const *PluginManager::disabled_iterator::operator->() const
+{
+  return _pi;
+}
+
+inline PluginManager::disabled_iterator::disabled_iterator(PluginInfo const* pi) : _pi(pi)
+{
+}
 
 #endif /* __PLUGIN_H__ */

@@ -94,6 +94,7 @@ public:
   HttpAPIHooks const* feature_hooks() const { return &api_hooks; }
   void ssn_priority_threshold_set(int priority);
   void ssn_hook_priority_threshold_set(TSHttpHookID id, int priority);
+  void ssn_plugin_enable(PluginInfo const* pi, bool enable_p);
 
   // Initiate an API hook invocation.
   void do_api_callout(TSHttpHookID id);
@@ -104,6 +105,8 @@ protected:
   // XXX Consider using a bitwise flags variable for the following flags, so that we can make the best
   // use of internal alignment padding.
 
+  HttpHookState hook_state;
+  
   // Session specific debug flag.
   bool debug_on;
   bool hooks_on;
@@ -111,7 +114,6 @@ protected:
 private:
   APIHook const* cur_hook;
   HttpAPIHooks api_hooks;
-  HttpHookState hook_state;
   void *user_args[HTTP_SSN_TXN_MAX_USER_ARG];
 
   ProxyClientSession(ProxyClientSession &);                  // noncopyable
