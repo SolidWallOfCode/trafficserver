@@ -1284,7 +1284,7 @@ HttpHookState::getNext()
   APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
   APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
 
-  Debug("plugin", "computing next hook with threshold %d", _threshold);
+  Debug("plugin", "computing next callback for hook %d with threshold %d", _id, _threshold);
   if (htxn && (NULL == hssn || htxn->m_priority > hssn->m_priority) && (NULL == hg || htxn->m_priority > hg->m_priority)) {
     zret = htxn;
     ++_txn;

@@ -37,10 +37,14 @@
 const int DELAY_FOR_RETRY = HRTIME_MSECONDS(10);
 
 TS_INLINE Event *
-EThread::schedule_spawn(Continuation *cont)
+EThread::schedule_spawn(Continuation *cont, int callback_event, void* cookie)
 {
-  Event *e = EVENT_ALLOC(eventAllocator, this);
-  return schedule(e->init(cont, 0, 0));
+  Event *e = ::eventAllocator.alloc();
+  e->callback_event = callback_event;
+  e->cookie = cookie;
+  e->init(cont, 0, 0);
+  spawnQueue.enqueue(e);
+  return e;
 }
 
 TS_INLINE Event *

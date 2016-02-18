@@ -40,6 +40,7 @@ struct AIOCallback;
 #define NO_ETHREAD_ID -1
 
 bool shutdown_event_system = false;
+Que(Event, link) EThread::spawnQueue;
 
 EThread::EThread()
   : generator((uint64_t)ink_get_hrtime_internal() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
@@ -148,6 +149,14 @@ EThread::process_event(Event *e, int calling_code)
   }
 }
 
+void
+EThread::executeSpawnEvents()
+{
+  for ( Event* e = spawnQueue.head ; NULL != e ; e = e->link.next) {
+    e->continuation->handleEvent(e->callback_event, e);
+  }
+}
+
 //
 // void  EThread::execute()
 //
@@ -167,6 +176,8 @@ EThread::execute()
     Event *e;
     Que(Event, link) NegativeQueue;
     ink_hrtime next_time = 0;
+
+    this->executeSpawnEvents();
 
     // give priority to immediate events
     for (;;) {

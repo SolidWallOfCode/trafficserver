@@ -76,6 +76,18 @@ PluginManager::PluginManager()
 {
   ink_thread_key_create(&PluginContext::THREAD_KEY, NULL);
   ink_thread_setspecific(PluginContext::THREAD_KEY, NULL);
+  // TS uses plugin mechanisms in various places and so needs a valid plugin info block
+  // for them. This is it. This needs to be very early because threads get started before
+  // PluginManager::init is called. This data is all effectively static so it can be done
+  // earlier than configuration for actual plugins.
+  Internal_Plugin_Info = new PluginInfo;
+  Internal_Plugin_Info->_name = ats_strdup("TrafficServer Internal");
+  Internal_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
+  Internal_Plugin_Info->_file_path = ats_strdup(".");
+  Internal_Plugin_Info->_email = ats_strdup("users@trafficserver.apache.org");
+  Internal_Plugin_Info->_max_priority = std::numeric_limits<int>::max();
+  Internal_Plugin_Info->_eff_priority = std::numeric_limits<int>::max();
+  
 }
 
 bool
@@ -227,6 +239,13 @@ PluginManager::expand(char *arg)
   return NULL;
 }
 
+void
+PluginManager::initForThread()
+{
+  PluginContext::setDefaultPluginInfo(Internal_Plugin_Info);
+  printf("Plugin Context %p for thread %p [%" PRIx64 "]\n", Internal_Plugin_Info, this_ethread(), this_ethread()->tid);
+}
+
 bool
 PluginManager::init(bool continueOnError)
 {
@@ -247,16 +266,6 @@ PluginManager::init(bool continueOnError)
     INIT_ONCE = false;
   }
 
-  // TS uses plugin mechanisms in various places and so needs a valid plugin info block
-  // for them. This is it.
-  Internal_Plugin_Info = new PluginInfo;
-  Internal_Plugin_Info->_name = ats_strdup("TrafficServer Internal");
-  Internal_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
-  Internal_Plugin_Info->_file_path = ats_strdup(".");
-  Internal_Plugin_Info->_email = ats_strdup("users@trafficserver.apache.org");
-  Internal_Plugin_Info->_max_priority = std::numeric_limits<int>::max();
-  Internal_Plugin_Info->_eff_priority = std::numeric_limits<int>::max();
-  
   plugin_reg_list.push(Internal_Plugin_Info);
 
   REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
