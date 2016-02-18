@@ -49,6 +49,8 @@ char const *const EThread::STAT_NAME[] = {
 
 int const EThread::SAMPLE_COUNT[N_EVENT_TIMESCALES] = {10, 100, 1000};
 
+Que(Event, link) EThread::spawnQueue;
+
 EThread::EThread()
   : generator((uint64_t)ink_get_hrtime_internal() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
     n_ethreads_to_be_signalled(0), main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), tail_cb(&default_tail_handler),
@@ -160,6 +162,14 @@ EThread::process_event(Event *e, int calling_code)
       }
     } else if (!e->in_the_prot_queue && !e->in_the_priority_queue)
       free_event(e);
+  }
+}
+
+void
+EThread::executeSpawnEvents()
+{
+  for ( Event* e = spawnQueue.head ; NULL != e ; e = e->link.next) {
+    e->continuation->handleEvent(e->callback_event, e);
   }
 }
 
@@ -301,6 +311,7 @@ EThread::execute()
 {
   switch (tt) {
   case REGULAR:
+    this->executeSpawnEvents();
     this->execute_regular();
     break;
 

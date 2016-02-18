@@ -77,7 +77,9 @@ public:
   int get_default_effective_priority();
 
   /// Used for plugin type continuations created and used by TS itself.
-  static PluginInfo* Internal_Plugin_Info;
+  static PluginInfo *Internal_Plugin_Info;
+
+  void initForThread();
 
 protected:
   /// Load a single plugin.
@@ -100,11 +102,11 @@ class PluginContext
 public:
   /// Set the plugin context in a scoped fashion.
   /// This is re-entrant.
-  PluginContext(PluginInfo const* plugin)
+  PluginContext(PluginInfo const *plugin)
   {
     _save = ink_thread_getspecific(THREAD_KEY);
     // Unfortunately thread local storage won't preserve const
-    ink_thread_setspecific(THREAD_KEY, const_cast<PluginInfo*>(plugin));
+    ink_thread_setspecific(THREAD_KEY, const_cast<PluginInfo *>(plugin));
   }
   ~PluginContext() { ink_thread_setspecific(THREAD_KEY, _save); }
 
@@ -113,10 +115,19 @@ public:
   static PluginInfo const *
   get()
   {
-    return static_cast<PluginInfo const*>(ink_thread_getspecific(THREAD_KEY));
+    return static_cast<PluginInfo const *>(ink_thread_getspecific(THREAD_KEY));
   }
 
 private:
+  /// Set a default plugin context if none in play.
+  /// @internal This is used to set the internal plugin info as the default so that it is used when
+  /// hook calls are made from core code. This needs to be called on each thread once when the thread starts.
+  static void
+  setDefaultPluginInfo(PluginInfo const *p)
+  {
+    ink_thread_setspecific(THREAD_KEY, const_cast<PluginInfo *>(p));
+  }
+
   void *_save; ///< Value to restore when context goes out of scope.
 
   /// The key for the per thread context. This is initialized by the @c PluginManager singleton.
