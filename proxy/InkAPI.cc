@@ -9046,7 +9046,7 @@ TSVConnReenable(TSVConn vconn)
 }
 
 TSReturnCode
-TSPluginEnable(TSPluginHandle handle, bool state)
+TSPluginEnable(TSPluginHandle handle, int state)
 {
   TSReturnCode zret = TS_SUCCESS;
   PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
@@ -9060,7 +9060,7 @@ TSPluginEnable(TSPluginHandle handle, bool state)
 }
 
 TSReturnCode
-TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle handle, bool state)
+TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle handle, int state)
 {
   TSReturnCode zret = TS_SUCCESS;
   PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
@@ -9077,7 +9077,7 @@ TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle handle, bool state)
 }
 
 TSReturnCode
-TSHttpTxnPluginEnable(TSHttpTxn txnp, TSPluginHandle handle, bool state)
+TSHttpTxnPluginEnable(TSHttpTxn txnp, TSPluginHandle handle, int state)
 {
   TSReturnCode zret = TS_SUCCESS;
   PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
