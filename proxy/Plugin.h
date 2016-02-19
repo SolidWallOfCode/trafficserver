@@ -35,18 +35,16 @@
 struct PluginInfo {
   enum { MAGIC = 0xabacab56 };
   PluginInfo();
-  ~PluginInfo();
+  // Subclasses will get stored in lists as this base class so make sure their
+  // destructors are accessible.
+  virtual ~PluginInfo();
 
   /// Path to the implmentation (library, so, dll) file.
   ats_scoped_str _file_path;
   /// Name of the plugin.
   ats_scoped_str _name;
-  /// Plugin vendor name.
-  ats_scoped_str _vendor;
-  /// email for vendor / author.
-  ats_scoped_str _email;
 
-  uint64_t _magic;
+  uint64_t _magic; ///< Standard magic value for validity checks.
 
   int _max_priority; ///< Maximum priority.
   int _eff_priority; ///< Effective priority.
@@ -56,15 +54,24 @@ struct PluginInfo {
 
   /// Status flags.
   union {
-    unsigned int _all:32;
+    unsigned int _all : 32;
     struct {
       unsigned int _registered : 1;
       unsigned int _disabled : 1;
     } _flag;
   } _flags;
 
+  /// For the overall registration list.
   LINK(PluginInfo, link);
+  /// Disabled list.
   LINK(PluginInfo, disabled_link);
+};
+
+struct GlobalPluginInfo : public PluginInfo {
+  /// Plugin vendor name.
+  ats_scoped_str _vendor;
+  /// email for vendor / author.
+  ats_scoped_str _email;
 };
 
 /** Manage the set of plugins.
@@ -72,23 +79,24 @@ struct PluginInfo {
 class PluginManager
 {
 public:
-  
+  /// Iterator for disabled plugins.
   struct disabled_iterator {
   private:
-    typedef disabled_iterator self;
+    typedef disabled_iterator self; ///< Self reference type.
 
   public:
-    disabled_iterator();
-    self &operator++();
-    bool operator==(self const & that) const;
-    bool operator!=(self const & that) const;
+    disabled_iterator(); ///< Default constructor.
+    self &operator++(); ///< Move to next disabled plugin.
+    bool operator==(self const &that) const;
+    bool operator!=(self const &that) const;
     PluginInfo const &operator*() const;
     PluginInfo const *operator->() const;
 
   private:
+    /// Internal constructor for use by container.
     disabled_iterator(PluginInfo const *pi);
 
-    PluginInfo const *_pi;
+    PluginInfo const *_pi; ///< Current element (with embedded next pointer).
     friend class PluginManager;
   };
 
@@ -99,26 +107,34 @@ public:
   /// Expand argument to plugin.
   char *expand(char *);
 
-  int get_default_priority();
-  int get_default_effective_priority();
+  /// Get the current configured default (maximum) priority.
+  int get_default_priority() const;
+  /// Get the current configured default effective prirority.
+  int get_default_effective_priority() const;
+  /// Get the configured default different between maximum and effective priorities.
+  int get_effective_priority_gap() const;
 
   /// Locate a plugin by @a name.
-  PluginInfo const* find(char const* name);
+  PluginInfo const *find(char const *name);
 
   /// Enable/disable a plugin globally.
   /// If @a enable_p is @c true then plugin is marked enabled, otherwise it is marked disabled.
   /// This can be overridden per session or transaction.
-  void enable(PluginInfo const* pi, bool enable_p);
+  void enable(PluginInfo const *pi, bool enable_p);
 
   /// Used for plugin type continuations created and used by TS itself.
-  static PluginInfo *Internal_Plugin_Info;
+  static GlobalPluginInfo *Internal_Plugin_Info;
+  /// Used primarily for remap plugins which are not required to register.
+  static GlobalPluginInfo *Default_Plugin_Info;
 
   /// Initialize thread local storage needed for plugin management.
   void initForThread();
 
+  /// Iterator for the first disabled plugin.
   disabled_iterator disabled_begin() const;
+  /// Iterator for one past the last disabled plugin.
   disabled_iterator disabled_end() const;
-  
+
 protected:
   /// Load a single plugin.
   bool load(int arg, char *argv[], bool continueOnError);
@@ -214,13 +230,32 @@ public:
   }
 };
 
+inline int
+PluginManager::get_default_priority() const
+{
+  return _default_priority;
+}
+
+inline int
+PluginManager::get_default_effective_priority() const
+{
+  return _default_priority - _effective_priority_gap;
+}
+
+inline int
+PluginManager::get_effective_priority_gap() const
+{
+  return _effective_priority_gap;
+}
+
 inline PluginManager::disabled_iterator::disabled_iterator() : _pi(NULL)
 {
 }
 
 inline PluginManager::disabled_iterator &PluginManager::disabled_iterator::operator++()
 {
-  if (NULL != _pi) _pi = _pi->disabled_link.next;
+  if (NULL != _pi)
+    _pi = _pi->disabled_link.next;
   return *this;
 }
 
@@ -244,7 +279,7 @@ inline PluginInfo const *PluginManager::disabled_iterator::operator->() const
   return _pi;
 }
 
-inline PluginManager::disabled_iterator::disabled_iterator(PluginInfo const* pi) : _pi(pi)
+inline PluginManager::disabled_iterator::disabled_iterator(PluginInfo const *pi) : _pi(pi)
 {
 }
 

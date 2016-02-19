@@ -1904,7 +1904,7 @@ TSPluginDirGet(void)
 TSReturnCode
 TSPluginRegister(TSPluginRegistrationInfo *plugin_info)
 {
-  PluginInfo * p = const_cast<PluginInfo*>(PluginContext::get());
+  GlobalPluginInfo * p = const_cast<GlobalPluginInfo*>(static_cast<GlobalPluginInfo const*>(PluginContext::get()));
   sdk_assert(sdk_sanity_check_null_ptr((void *)plugin_info) == TS_SUCCESS);
 
   if (NULL == p)
