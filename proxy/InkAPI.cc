@@ -1908,7 +1908,7 @@ TSReturnCode
 TSPluginRegister(TSSDKVersion sdk_version, TSPluginRegistrationInfo *plugin_info)
 {
   PluginSDKVersion version = static_cast<PluginSDKVersion>(sdk_version);
-  PluginInfo * p = const_cast<PluginInfo*>(PluginContext::get());
+  GlobalPluginInfo * p = static_cast<GlobalPluginInfo*>(const_cast<PluginInfo*>(PluginContext::get()));
   sdk_assert(sdk_sanity_check_null_ptr((void *)plugin_info) == TS_SUCCESS);
 
   if (NULL == p)

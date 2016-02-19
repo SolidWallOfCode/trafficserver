@@ -40,7 +40,8 @@ static const char OPT_PRIORITY[] = "priority";
 typedef void (*init_func_t)(int argc, char *argv[]);
 
 ink_thread_key PluginContext::THREAD_KEY;
-PluginInfo* PluginManager::Internal_Plugin_Info;
+GlobalPluginInfo* PluginManager::Internal_Plugin_Info;
+GlobalPluginInfo* PluginManager::Default_Plugin_Info;
 
 PluginManager pluginManager;
 
@@ -82,13 +83,27 @@ PluginManager::PluginManager()
   // for them. This is it. This needs to be very early because threads get started before
   // PluginManager::init is called. This data is all effectively static so it can be done
   // earlier than configuration for actual plugins.
-  Internal_Plugin_Info = new PluginInfo;
+  Internal_Plugin_Info = new GlobalPluginInfo;
   Internal_Plugin_Info->_name = ats_strdup("TrafficServer Internal");
   Internal_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
   Internal_Plugin_Info->_file_path = ats_strdup(".");
-  Internal_Plugin_Info->_email = ats_strdup("users@trafficserver.apache.org");
+  Internal_Plugin_Info->_email = ats_strdup("dev@trafficserver.apache.org");
   Internal_Plugin_Info->_max_priority = std::numeric_limits<int>::max();
   Internal_Plugin_Info->_eff_priority = std::numeric_limits<int>::max();
+
+  // For instances where real plugin info isn't available for various reasons.
+  Default_Plugin_Info = new GlobalPluginInfo;
+  Default_Plugin_Info->_name = ats_strdup("TrafficServer Default");
+  Default_Plugin_Info->_vendor = ats_strdup("Apache Software Foundation");
+  Default_Plugin_Info->_file_path = ats_strdup(".");
+  Default_Plugin_Info->_email = ats_strdup("dev@trafficserver.apache.org");
+  // These values are initially hardwired but should be updated in @c PluginManager::init
+  // This constructor is called too early in startup to reliably access the configuration
+  // values. Until then the primary purpose of this is to cover regression tests.
+  // By the time the remap plugins are loaded the values should be updated.
+  // Nevertheless, it would be prudent to keep these values in sync with the config defaults.
+  Default_Plugin_Info->_max_priority = 1000;
+  Default_Plugin_Info->_eff_priority = 800;
   
 }
 
@@ -131,9 +146,11 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
 
     // Allocate a new registration structure for the
     //    plugin we're starting up
-    info = new PluginInfo;
+    info = new GlobalPluginInfo;
     info->_file_path = ats_strdup(path);
     info->dlh = handle;
+    info->_max_priority = _default_priority;
+    info->_eff_priority = _default_priority - _effective_priority_gap;
     
     init = reinterpret_cast<init_func_t>(dlsym(info->dlh, "TSPluginInit"));
     
@@ -245,8 +262,8 @@ PluginManager::expand(char *arg)
 void
 PluginManager::initForThread()
 {
-  PluginContext::setDefaultPluginInfo(Internal_Plugin_Info);
-  printf("Plugin Context %p for thread %p [%" PRIx64 "]\n", Internal_Plugin_Info, this_ethread(), this_ethread()->tid);
+  PluginContext::setDefaultPluginInfo(Default_Plugin_Info);
+  Debug("plugin", "Plugin Context %p [%d/%d] for thread %p [%" PRIx64 "]\n", Default_Plugin_Info, Default_Plugin_Info->_eff_priority, Default_Plugin_Info->_max_priority, this_ethread(), this_ethread()->tid);
 }
 
 bool
@@ -269,10 +286,12 @@ PluginManager::init(bool continueOnError)
     INIT_ONCE = false;
   }
 
-  plugin_reg_list.push(Internal_Plugin_Info);
-
   REC_EstablishStaticConfigInt32(_default_priority, "proxy.config.plugin.priority.default");
   REC_EstablishStaticConfigInt32(_effective_priority_gap, "proxy.config.plugin.priority.effective_gap");
+
+  // Get these updated now that the configured values are available.
+  Default_Plugin_Info->_max_priority = _default_priority;
+  Default_Plugin_Info->_eff_priority = _default_priority - _effective_priority_gap;
   
   path = RecConfigReadConfigPath(NULL, "plugin.config");
   fd = open(path, O_RDONLY);

@@ -26,6 +26,7 @@
 #include "libts.h"
 #include "api/ts/ts.h"
 #include "api/ts/remap.h"
+#include "Plugin.h"
 
 #define TSREMAP_FUNCNAME_INIT "TSRemapInit"
 #define TSREMAP_FUNCNAME_DONE "TSRemapDone"
@@ -39,7 +40,7 @@ class url_mapping;
 /**
  *
 **/
-class remap_plugin_info
+class remap_plugin_info : public PluginInfo
 {
 public:
   typedef TSReturnCode _tsremap_init(TSRemapInterface *api_info, char *errbuf, int errbuf_size);
@@ -50,9 +51,7 @@ public:
   typedef void _tsremap_os_response(void *ih, TSHttpTxn rh, int os_response_type);
 
   remap_plugin_info *next;
-  char *path;
   int path_size;
-  void *dlh; /* "handle" for the dynamic library */
   _tsremap_init *fp_tsremap_init;
   _tsremap_done *fp_tsremap_done;
   _tsremap_new_instance *fp_tsremap_new_instance;
