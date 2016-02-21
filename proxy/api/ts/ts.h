@@ -1208,7 +1208,7 @@ tsapi void TSLifecycleHookAdd(TSLifecycleHookID id, TSCont contp);
 /* --------------------------------------------------------------------------
    HTTP hooks */
 tsapi void TSHttpHookAdd(TSHttpHookID id, TSCont contp);
-tsapi TSPluginHandle TSHttpPluginFindByName(char const *name);
+tsapi TSPluginHandle TSPluginFindByName(char const *name);
 tsapi TSReturnCode TSPluginEnable(TSPluginHandle plugin, int state);
 /* --------------------------------------------------------------------------
    HTTP sessions */

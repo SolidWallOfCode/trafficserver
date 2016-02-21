@@ -104,7 +104,7 @@ PluginManager::PluginManager()
   // Nevertheless, it would be prudent to keep these values in sync with the config defaults.
   Default_Plugin_Info->_max_priority = 1000;
   Default_Plugin_Info->_eff_priority = 800;
-  
+
 }
 
 bool
@@ -128,7 +128,6 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
       Warning("multiple loading of plugin %s", path);
       break;
     }
-    plugin_reg_temp = (plugin_reg_temp->link).next;
   }
   // elevate the access to read files as root if compiled with capabilities, if not
   // change the effective user to root
@@ -151,9 +150,9 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
     info->dlh = handle;
     info->_max_priority = _default_priority;
     info->_eff_priority = _default_priority - _effective_priority_gap;
-    
+
     init = reinterpret_cast<init_func_t>(dlsym(info->dlh, "TSPluginInit"));
-    
+
     if (!init) {
       delete info;
       if (!continueOnError)
@@ -189,7 +188,7 @@ PluginManager::load(int argc, char *argv[], bool continueOnError)
       PluginContext pc(info);
       init(argc, argv);
     }
-    
+
   } // done elevating access
 
   if (info->_flags._flag._registered) {
@@ -210,7 +209,7 @@ PluginManager::expand(char *arg)
 
   if (*arg != '$')
     return NULL;
-  
+
   // skip the $ character
   arg += 1;
 
@@ -292,7 +291,7 @@ PluginManager::init(bool continueOnError)
   // Get these updated now that the configured values are available.
   Default_Plugin_Info->_max_priority = _default_priority;
   Default_Plugin_Info->_eff_priority = _default_priority - _effective_priority_gap;
-  
+
   path = RecConfigReadConfigPath(NULL, "plugin.config");
   fd = open(path, O_RDONLY);
   if (fd < 0) {
