@@ -1217,7 +1217,7 @@ int
 APIHook::invoke(int event, void *edata) const
 {
   PluginContext pc(m_cont->m_info);
-  
+
   if ((event == EVENT_IMMEDIATE) || (event == EVENT_INTERVAL)) {
     if (ink_atomic_increment((int *)&m_cont->m_event_count, 1) < 0) {
       ink_assert(!"not reached");
@@ -1263,10 +1263,10 @@ HttpHookState::init(TSHttpHookID id,HttpAPIHooks const* global, HttpAPIHooks con
 
   if (global) _global.init(global, id);
   else _global.clear();
-  
+
   if (ua) _ssn.init(ua, id);
   else _ssn.clear();
-    
+
   if (sm) _txn.init(sm, id);
   else _txn.clear();
 
@@ -1278,11 +1278,12 @@ APIHook const *
 HttpHookState::getNext()
 {
   APIHook const *zret = NULL;
-  
+
   do {
     APIHook const *hg = _global.candidate(_threshold, _last_priority);
     APIHook const *hssn = _ssn.candidate(_threshold, _last_priority);
     APIHook const *htxn = _txn.candidate(_threshold, _last_priority);
+    zret = NULL;
 
     Debug("plugin", "computing next callback for hook %d with threshold %d", _id, _threshold);
     if (htxn && (NULL == hssn || htxn->m_priority > hssn->m_priority) && (NULL == hg || htxn->m_priority > hg->m_priority)) {
@@ -1296,7 +1297,7 @@ HttpHookState::getNext()
       ++_global;
     }
   } while (NULL != zret && !this->is_enabled(zret->m_cont->m_info));
-  
+
   return zret;
 }
 
@@ -4568,7 +4569,7 @@ TSHttpSsnPriorityThresholdSet(TSHttpSsn ssnp, int priority)
 {
   HttpClientSession *cs = reinterpret_cast<HttpClientSession *>(ssnp);
   sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
-  
+
   if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
   cs->ssn_priority_threshold_set(priority);
   return TS_SUCCESS;
@@ -4580,7 +4581,7 @@ TSHttpSsnHookPriorityThresholdSet(TSHttpSsn ssnp, TSHttpHookID id, int priority)
   HttpClientSession *cs = reinterpret_cast<HttpClientSession *>(ssnp);
   sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
-  
+
   if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
   cs->ssn_hook_priority_threshold_set(id, priority);
   return TS_SUCCESS;
@@ -4646,7 +4647,7 @@ TSReturnCode
 TSHttpTxnPriorityHookAdd(TSHttpTxn txnp, TSHttpHookID id, TSCont contp, int priority)
 {
   HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
-  
+
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_continuation(contp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
@@ -4667,7 +4668,7 @@ TSHttpTxnPriorityThresholdSet(TSHttpTxn txnp, int priority)
 {
   HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
-  
+
   if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
   sm->txn_priority_threshold_set(priority);
   return TS_SUCCESS;
@@ -4679,7 +4680,7 @@ TSHttpTxnHookPriorityThresholdSet(TSHttpTxn txnp, TSHttpHookID id, int priority)
   HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
   sdk_assert(sdk_sanity_check_hook_id(id) == TS_SUCCESS);
-  
+
   if (priority > PluginContext::get()->_max_priority) return TS_ERROR;
   sm->txn_hook_priority_threshold_set(id, priority);
   return TS_SUCCESS;
@@ -9050,12 +9051,12 @@ TSPluginEnable(TSPluginHandle handle, int state)
 {
   TSReturnCode zret = TS_SUCCESS;
   PluginInfo const* pi = reinterpret_cast<PluginInfo const*>(handle);
-  
+
   if (pi->_magic == PluginInfo::MAGIC)
     pluginManager.enable(pi, state);
   else
     zret = TS_ERROR;
-  
+
   return zret;
 }
 
@@ -9072,7 +9073,7 @@ TSHttpSsnPluginEnable(TSHttpSsn ssnp, TSPluginHandle handle, int state)
     cs->ssn_plugin_enable(pi, state);
   else
     zret = TS_ERROR;
-  
+
   return zret;
 }
 
@@ -9089,6 +9090,6 @@ TSHttpTxnPluginEnable(TSHttpTxn txnp, TSPluginHandle handle, int state)
     sm->txn_plugin_enable(pi, state);
   else
     zret = TS_ERROR;
-  
+
   return zret;
 }
