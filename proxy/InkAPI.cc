@@ -1945,6 +1945,30 @@ TSPluginFindByName(char const* name)
   return reinterpret_cast<TSPluginHandle>(pluginManager.find(name));
 }
 
+int
+TSPluginMaxPriorityGet(TSPluginHandle ph)
+{
+  int zret = API_HOOK_THRESHOLD_UNSET;
+  PluginInfo const* pi = NULL == ph ? PluginContext::get() : reinterpret_cast<PluginInfo const*>(ph);
+
+  if (pi->_magic == PluginInfo::MAGIC)
+    zret = pi->_max_priority;
+  
+  return zret;
+}
+
+int
+TSPluginEffPriorityGet(TSPluginHandle ph)
+{
+  int zret = API_HOOK_THRESHOLD_UNSET;
+  PluginInfo const* pi = NULL == ph ? PluginContext::get() : reinterpret_cast<PluginInfo const*>(ph);
+  
+  if (pi->_magic == PluginInfo::MAGIC)
+    zret = pi->_eff_priority;
+  
+  return zret;
+}
+
 ////////////////////////////////////////////////////////////////////
 //
 // API file management
