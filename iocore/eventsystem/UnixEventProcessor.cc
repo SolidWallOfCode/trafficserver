@@ -29,41 +29,131 @@
 #endif
 #include "ts/ink_defs.h"
 
+/// Global singleton.
+class EventProcessor eventProcessor;
+
 EventType
-EventProcessor::spawn_event_threads(int n_threads, const char *et_name, size_t stacksize)
+EventProcessor::registerEventType(char const *name)
+{
+  ThreadGroupDescriptor *tg = &(thread_group[n_thread_groups++]);
+  ink_release_assert(n_thread_groups <= MAX_EVENT_TYPES); // check for overflow
+
+  tg->_name = ats_strdup(name);
+  return n_thread_groups - 1;
+}
+
+EventType
+EventProcessor::spawn_event_threads(int n_threads, char const* name, size_t stacksize)
+{
+  int ev_type = this->registerEventType(name);
+  this->spawn_event_threads(ev_type, n_threads, stacksize);
+  return ev_type;
+}
+
+EventType
+EventProcessor::spawn_event_threads(EventType ev_type, int n_threads, size_t stacksize)
 {
   char thr_name[MAX_THREAD_NAME_LENGTH];
   EventType new_thread_group_id;
   int i;
+  ThreadGroupDescriptor *tg = &(thread_groups[ev_type]);
 
   ink_release_assert(n_threads > 0);
   ink_release_assert((n_ethreads + n_threads) <= MAX_EVENT_THREADS);
-  ink_release_assert(n_thread_groups < MAX_EVENT_TYPES);
+  ink_release_assert(ev_type < MAX_EVENT_TYPES);
 
-  new_thread_group_id = (EventType)n_thread_groups;
-
-  for (i = 0; i < n_threads; i++) {
+  for (i = 0; i < n_threads; ++i) {
     EThread *t = new EThread(REGULAR, n_ethreads + i);
     all_ethreads[n_ethreads + i] = t;
-    eventthread[new_thread_group_id][i] = t;
-    t->set_event_type(new_thread_group_id);
+    tg->_threads[i] = t;
+    t->set_event_type(ev_type);
+    t->schedule_spawn(thread_initializer);
   }
+  tg->_count = n_threads;
 
-  n_threads_for_type[new_thread_group_id] = n_threads;
   for (i = 0; i < n_threads; i++) {
-    snprintf(thr_name, MAX_THREAD_NAME_LENGTH, "[%s %d]", et_name, i);
-    eventthread[new_thread_group_id][i]->start(thr_name, stacksize);
+    snprintf(thr_name, MAX_THREAD_NAME_LENGTH, "[%s %d]", tg->_name.get(), i);
+    tg->threads[i]->start(thr_name, stacksize);
   }
 
-  n_thread_groups++;
   n_ethreads += n_threads;
   Debug("iocore_thread", "Created thread group '%s' id %d with %d threads", et_name, new_thread_group_id, n_threads);
 
-  return new_thread_group_id;
+  return ev_type; // useless but not sure what would be better.
 }
 
+void
+EventProcessor::initThreadState(EThread* t)
+{
+  for ( int i = o ; i < MAX_EVENT_TYPES ; ++i ) {
+    if (t->is_event_type(i)) {
+      for ( Event * ev = thread_group[i]._spawnQueue.head ; NULL != ev ; ev = ev->link.next )
+        ev->continuation->handleEvent(ev->callback_event, ev);
+    }
+  }
+}
 
-class EventProcessor eventProcessor;
+void EventProcessor::ThreadAffinity::init()
+{
+#if TS_USE_HWLOC
+  int affinity = 1;
+  REC_ReadConfigInteger(affinity, "proxy.config.exec_thread.affinity");
+
+  switch (affinity) {
+  case 4: // assign threads to logical processing units
+  // Older versions of libhwloc (eg. Ubuntu 10.04) don't have HWLOC_OBJ_PU.
+#if HAVE_HWLOC_OBJ_PU
+    _type = HWLOC_OBJ_PU;
+    _name = "Logical Processor";
+    break;
+#endif
+  case 3: // assign threads to real cores
+    _type = HWLOC_OBJ_CORE;
+    _name = "Core";
+    break;
+  case 1: // assign threads to NUMA nodes (often 1:1 with sockets)
+    _type = HWLOC_OBJ_NODE;
+    _name = "NUMA Node";
+    if (hwloc_get_nbobjs_by_type(ink_get_topology(), _type) > 0) {
+      break;
+    }
+  case 2: // assign threads to sockets
+    _type = HWLOC_OBJ_SOCKET;
+    _name = "Socket";
+    break;
+  default: // assign threads to the machine as a whole (a level below SYSTEM)
+    _type = HWLOC_OBJ_MACHINE;
+    _name = "Machine";
+  }
+
+  _count = hwloc_get_nbobjs_by_type(ink_get_topology(), _type);
+  Debug("iocore_thread", "Affinity: %d %ss: %d PU: %d", affinity, obj_name, obj_count, ink_number_of_processors());
+#endif
+}
+
+void EventProcessor::ThreadAffinity::set_affinity(int, Event*)
+{
+#if TS_USE_HWLOC
+  hwloc_obj_t obj;
+  EThread* t = this_ethread();
+  
+  if (_count > 0) {
+    obj = hwloc_get_obj_by_type(ink_get_topology(), _type, t->id % _count);
+#if HWLOC_API_VERSION >= 0x00010100
+    int cpu_mask_len = hwloc_bitmap_snprintf(NULL, 0, obj->cpuset) + 1;
+    char *cpu_mask = (char *)alloca(cpu_mask_len);
+    hwloc_bitmap_snprintf(cpu_mask, cpu_mask_len, obj->cpuset);
+    Debug("iocore_thread", "EThread: %d %s: %d CPU Mask: %s\n", i, _name, obj->logical_index, cpu_mask);
+#else
+    Debug("iocore_thread", "EThread: %d %s: %d\n", i, _name, obj->logical_index);
+#endif // HWLOC_API_VERSION
+    hwloc_set_thread_cpubind(ink_get_topology(), t->tid, obj->cpuset, HWLOC_CPUBIND_STRICT);
+  } else {
+    Warning("hwloc returned an unexpected number of objects -- CPU affinity disabled");
+  }
+#endif // TS_USE_HWLOC
+  return 0;
+}
 
 int
 EventProcessor::start(int n_event_threads, size_t stacksize)
@@ -79,6 +169,9 @@ EventProcessor::start(int n_event_threads, size_t stacksize)
 
   n_ethreads = n_event_threads;
   n_thread_groups = 1;
+  thread_groups[ET_CALL]._name = ats_strdup("ET_NET");
+  thread_affinity.init();
+  this->schedule_spawn(&thread_affinity, ET_CALL);
 
   for (i = 0; i < n_event_threads; i++) {
     EThread *t = new EThread(REGULAR, i);
@@ -89,8 +182,8 @@ EventProcessor::start(int n_event_threads, size_t stacksize)
     }
     all_ethreads[i] = t;
 
-    eventthread[ET_CALL][i] = t;
-    t->set_event_type((EventType)ET_CALL);
+    thread_groups[0]._threads[i] = t;
+    t->set_event_type(static_cast<EventType>(ET_CALL));
   }
   n_threads_for_type[ET_CALL] = n_event_threads;
 

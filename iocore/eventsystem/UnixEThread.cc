@@ -42,15 +42,15 @@ struct AIOCallback;
 bool shutdown_event_system = false;
 
 EThread::EThread()
-  : generator((uint64_t)Thread::get_hrtime_updated() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
-    n_ethreads_to_be_signalled(0), main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(REGULAR)
+  : generator(Thread::get_hrtime()_updated ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
+    n_ethreads_to_be_signalled(0), main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(REGULAR), start_event(NULL)
 {
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
 EThread::EThread(ThreadType att, int anid)
-  : generator((uint64_t)Thread::get_hrtime_updated() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
-    n_ethreads_to_be_signalled(0), main_accept_index(-1), id(anid), event_types(0), signal_hook(0), tt(att),
+  : generator(Thread::get_hrtime_updated() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
+    n_ethreads_to_be_signalled(0), main_accept_index(-1), id(anid), event_types(0), signal_hook(0), tt(att), start_event(NULL),
     server_session_pool(NULL)
 {
   ethreads_to_be_signalled = (EThread **)ats_malloc(MAX_EVENT_THREADS * sizeof(EThread *));
@@ -82,8 +82,8 @@ EThread::EThread(ThreadType att, int anid)
 }
 
 EThread::EThread(ThreadType att, Event *e)
-  : generator((uint32_t)((uintptr_t)time(NULL) ^ (uintptr_t) this)), ethreads_to_be_signalled(NULL), n_ethreads_to_be_signalled(0),
-    main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(att), oneevent(e)
+  : generator(Thread::get_hrtime_updated() ^ static_cast<uintptr_t>(this))), ethreads_to_be_signalled(NULL), n_ethreads_to_be_signalled(0),
+    main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(att), start_event(e)
 {
   ink_assert(att == DEDICATED);
   memset(thread_private, 0, PER_THREAD_DATA);
@@ -104,7 +104,7 @@ EThread::~EThread()
 bool
 EThread::is_event_type(EventType et)
 {
-  return !!(event_types & (1 << (int)et));
+  return (event_types & (1 << static_cast<int>(et))) != 0;
 }
 
 void
@@ -164,6 +164,13 @@ EThread::execute()
 {
   switch (tt) {
   case REGULAR: {
+    
+    if (start_event) {
+      start_event->continuation->handleEvent(start_event->callback_event, start_event);
+      free_event(start_event);
+      start_event = NULL;
+    }
+    
     Event *e;
     Que(Event, link) NegativeQueue;
     ink_hrtime next_time = 0;
@@ -276,10 +283,10 @@ EThread::execute()
 
   case DEDICATED: {
     // coverity[lock]
-    MUTEX_TAKE_LOCK_FOR(oneevent->mutex, this, oneevent->continuation);
-    oneevent->continuation->handleEvent(EVENT_IMMEDIATE, oneevent);
-    MUTEX_UNTAKE_LOCK(oneevent->mutex, this);
-    free_event(oneevent);
+    MUTEX_TAKE_LOCK_FOR(start_event->mutex, this, start_event->continuation);
+    start_event->continuation->handleEvent(EVENT_IMMEDIATE, start_event);
+    MUTEX_UNTAKE_LOCK(start_event->mutex, this);
+    free_event(start_event);
     break;
   }
 
