@@ -74,8 +74,6 @@ class ProxyMutex;
 #define THREADAPI_RETURN_TYPE void *
 typedef THREADAPI_RETURN_TYPE(THREADAPI *ThreadFunction)(void *arg);
 
-extern ProxyMutex *global_mutex;
-
 static const int MAX_THREAD_NAME_LENGTH = 16;
 static const int DEFAULT_STACKSIZE = 1048576; // 1MB
 

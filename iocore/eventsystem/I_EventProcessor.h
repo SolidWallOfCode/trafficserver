@@ -239,12 +239,15 @@ public:
   /// Schedule an @a event on continuation @a c when a thread of type @a ev_type is spawned.
   /// The @a cookie is attached to the event instance passed to the continuation.
   /// @return The scheduled event.
-  Event *schedule_spawn(Continuation *c, EventType ev_type, int event, void *cookie = NULL);
+  Event *schedule_spawn(Continuation *c, EventType ev_type, int event = EVENT_IMMEDIATE, void *cookie = NULL);
+
+  /// Schedule the function @a f to be called in a thread of type @a ev_type when it is spawned.
+  Event* schedule_spawn(void (*f)(EThread*), EventType ev_type);
 
   /// Schedule an @a event on continuation @a c to be called when a thread is spawned by this processor.
   /// The @a cookie is attached to the event instance passed to the continuation.
   /// @return The scheduled event.
-  Event *schedule_spawn(Continuation *c, int event, void *cookie = NULL);
+  //  Event *schedule_spawn(Continuation *c, int event, void *cookie = NULL);
 
   EventProcessor();
 
@@ -336,7 +339,7 @@ public:
   volatile int thread_data_used;
 
 private:
-  void initThreadState();
+  void initThreadState(EThread*);
 
   /// Used to generate a callback at the start of thread execution.
   class ThreadInit : public Continuation
@@ -349,31 +352,12 @@ private:
     int
     init(int /* event ATS_UNUSED */, Event *ev)
     {
-      _evp->initThreadState(ev->thread);
+      _evp->initThreadState(ev->ethread);
       return 0;
     }
   };
   friend class ThreadInit;
   ThreadInit thread_initializer;
-
-  class ThreadAffinity : public Continuation
-  {
-    typedef ThreadAffinity self; ///< Self reference type.
-  public:
-    ThreadAffinity() { SET_HANDLER(&self::set_affinity); }
-
-    init();
-
-    int set_affinity(int /* event */, Event * /* ev */);
-
-#if defined(HAVE_HWLOC_OBJ_PU)
-  private:
-    hwloc_ob_type _type;
-    int _count;
-    char const* _name;
-#endif
-  };
-  ThreadAffinity thread_affinity;
 };
 
 extern inkcoreapi class EventProcessor eventProcessor;

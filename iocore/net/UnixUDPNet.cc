@@ -91,15 +91,12 @@ UDPNetProcessorInternal::start(int n_upd_threads, size_t stacksize)
   if (n_upd_threads < 1)
     return -1;
 
-  ET_UDP = eventProcessor.spawn_event_threads(n_upd_threads, "ET_UDP", stacksize);
-  if (ET_UDP < 0) // Probably can't happen, maybe at some point EventType should be unsigned ?
-    return -1;
+  ET_UDP = eventProcessor.registerEventType("ET_UDP");
+  eventProcessor.schedule_spawn(&initialize_thread_for_udp_net);
+  eventProcessor.spawn_event_threads(n_upd_threads, "ET_UDP", stacksize);
 
   pollCont_offset = eventProcessor.allocate(sizeof(PollCont));
   udpNetHandler_offset = eventProcessor.allocate(sizeof(UDPNetHandler));
-
-  for (int i = 0; i < eventProcessor.n_threads_for_type[ET_UDP]; i++)
-    initialize_thread_for_udp_net(eventProcessor.eventthread[ET_UDP][i]);
 
   return 0;
 }

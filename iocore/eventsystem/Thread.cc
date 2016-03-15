@@ -37,11 +37,10 @@
 
 static ink_thread_key init_thread_key();
 
-ProxyMutex *global_mutex = NULL;
-ink_hrtime Thread::cur_time = 0;
+ink_hrtime Thread::cur_time = ink_get_hrtime_internal();
 inkcoreapi ink_thread_key Thread::thread_data_key = init_thread_key();
 
-Thread::Thread()
+Thread::Thread() : tid(0)
 {
   mutex = new_ProxyMutex();
   mutex_ptr = mutex;

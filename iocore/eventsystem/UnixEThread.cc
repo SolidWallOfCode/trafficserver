@@ -42,14 +42,14 @@ struct AIOCallback;
 bool shutdown_event_system = false;
 
 EThread::EThread()
-  : generator(Thread::get_hrtime()_updated ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
+  : generator(Thread::get_hrtime_updated() ^ reinterpret_cast<uintptr_t>(this)), ethreads_to_be_signalled(NULL),
     n_ethreads_to_be_signalled(0), main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(REGULAR), start_event(NULL)
 {
   memset(thread_private, 0, PER_THREAD_DATA);
 }
 
 EThread::EThread(ThreadType att, int anid)
-  : generator(Thread::get_hrtime_updated() ^ (uint64_t)(uintptr_t) this), ethreads_to_be_signalled(NULL),
+  : generator(Thread::get_hrtime_updated() ^ reinterpret_cast<uintptr_t>(this)), ethreads_to_be_signalled(NULL),
     n_ethreads_to_be_signalled(0), main_accept_index(-1), id(anid), event_types(0), signal_hook(0), tt(att), start_event(NULL),
     server_session_pool(NULL)
 {
@@ -82,7 +82,7 @@ EThread::EThread(ThreadType att, int anid)
 }
 
 EThread::EThread(ThreadType att, Event *e)
-  : generator(Thread::get_hrtime_updated() ^ static_cast<uintptr_t>(this))), ethreads_to_be_signalled(NULL), n_ethreads_to_be_signalled(0),
+  : generator(Thread::get_hrtime_updated() ^ reinterpret_cast<uintptr_t>(this)), ethreads_to_be_signalled(NULL), n_ethreads_to_be_signalled(0),
     main_accept_index(-1), id(NO_ETHREAD_ID), event_types(0), signal_hook(0), tt(att), start_event(e)
 {
   ink_assert(att == DEDICATED);

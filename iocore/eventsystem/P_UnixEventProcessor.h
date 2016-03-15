@@ -31,11 +31,13 @@ const int LOAD_BALANCE_INTERVAL = 1;
 
 
 TS_INLINE
-EventProcessor::EventProcessor() : n_thread_groups(0), n_ethreads(0), n_dthreads(0), thread_data_used(0)
+EventProcessor::EventProcessor() : n_thread_groups(0), n_ethreads(0), n_dthreads(0), thread_data_used(0), thread_initializer(this)
 {
-  memset(all_ethreads, 0, sizeof(all_ethreads));
-  memset(all_dthreads, 0, sizeof(all_dthreads));
+  ink_zero(all_ethreads);
+  ink_zero(all_dthreads);
   ink_zero(thread_group);
+  // Because ET_NET is compile time set to 0 it *must* be the first type registered.
+  this->registerEventType("ET_NET");
 }
 
 TS_INLINE off_t
