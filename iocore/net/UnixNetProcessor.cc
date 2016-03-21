@@ -391,11 +391,28 @@ NetProcessor::connect_s(Continuation *cont, sockaddr const *target, int timeout,
 
 
 struct PollCont;
-
-// This is a little odd, in that the actual threads are created before calling the processor.
-int
-UnixNetProcessor::start(int, size_t)
+namespace {
+struct UnixNetProcessorThreadInit : public Continuation
 {
+  typedef UnixNetProcessorThreadInit self;
+  
+public:
+  UnixNetProcessorThreadInit() { SET_HANDLER(&self::do_thread_init); }
+  int do_thread_init(int, Event*)
+  {
+    EThread* t = this_ethread();
+    
+    initialize_thread_for_net(t);
+    initialize_thread_for_http_sessions(t, t->id);
+  }
+} UnixNetProcessor_Thread_Init;
+}
+
+// This needs to be called before the ET_NET threads are started.
+int
+UnixNetProcessor::init()
+{
+  extern void initialize_thread_for_http_sessions(EThread * thread);
   EventType etype = ET_NET;
 
   netHandler_offset = eventProcessor.allocate(sizeof(NetHandler));
@@ -405,14 +422,12 @@ UnixNetProcessor::start(int, size_t)
   // and      ET_SSL for sslNetProcessor
   upgradeEtype(etype);
 
-  n_netthreads = eventProcessor.n_threads_for_type[etype];
-  netthreads = eventProcessor.eventthread[etype];
-  for (int i = 0; i < n_netthreads; ++i) {
-    initialize_thread_for_net(netthreads[i]);
-    extern void initialize_thread_for_http_sessions(EThread * thread, int thread_index);
-    initialize_thread_for_http_sessions(netthreads[i], i);
-  }
+  if (0 == accept_mss)
+    REC_ReadConfigInteger(accept_mss, "proxy.config.net.sock_mss_in");
 
+  EventProcessor::schedule_spawn(&initialize_thread_for_net, etype);
+  EventProcessof::schedule_spawn(&initialize_thread_for_http_sessions, etype);
+  
   RecData d;
   d.rec_int = 0;
   change_net_connections_throttle(NULL, RECD_INT, d, NULL);
@@ -430,15 +445,6 @@ UnixNetProcessor::start(int, size_t)
       socks_conf_stuff = netProcessor.socks_conf_stuff;
     }
   }
-
-  // commented by vijay -  bug 2489945
-  /*if (use_accept_thread) // 0
-     { NetAccept * na = createNetAccept();
-     SET_CONTINUATION_HANDLER(na,&NetAccept::acceptLoopEvent);
-     accept_thread_event = eventProcessor.spawn_thread(na);
-     if (!accept_thread_event) delete na;
-     } */
-
 
   /*
    * Stat pages

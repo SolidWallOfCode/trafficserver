@@ -610,8 +610,8 @@ void
 NetHandler::configure_per_thread()
 {
   // figure out the number of threads and calculate the number of connections per thread
-  int threads = eventProcessor.n_threads_for_type[ET_NET];
-  threads += (ET_NET == SSLNetProcessor::ET_SSL) ? 0 : eventProcessor.n_threads_for_type[SSLNetProcessor::ET_SSL];
+  int threads = eventProcessor.thread_group[ET_NET]._count;
+  threads += (ET_NET == SSLNetProcessor::ET_SSL) ? 0 : eventProcessor.thread_group[SSLNetProcessor::ET_SSL]._count;
   max_connections_per_thread_in = max_connections_in / threads;
   max_connections_active_per_thread_in = max_connections_active_in / threads;
   Debug("net_queue", "max_connections_per_thread_in updated to %d threads: %d", max_connections_per_thread_in, threads);

@@ -91,7 +91,7 @@ struct NetAccept : public Continuation {
   uint32_t packet_mark;
   uint32_t packet_tos;
   EventType etype;
-  UnixNetVConnection *epoll_vc; // only storage for epoll events
+  //  UnixNetVConnection *epoll_vc; // only storage for epoll events
   EventIO ep;
 
   virtual EventType getEtype() const;

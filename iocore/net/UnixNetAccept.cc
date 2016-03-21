@@ -189,13 +189,13 @@ NetAccept::init_accept_per_thread(bool isTransparent)
   period = -HRTIME_MSECONDS(net_accept_period);
 
   NetAccept *a;
-  n = eventProcessor.n_threads_for_type[ET_NET];
+  n = eventProcessor.thread_group[ET_NET]._count;
   for (i = 0; i < n; i++) {
     if (i < n - 1)
       a = clone();
     else
       a = this;
-    EThread *t = eventProcessor.eventthread[ET_NET][i];
+    EThread *t = eventProcessor.thread_group[ET_NET]._thread[i];
     PollDescriptor *pd = get_PollDescriptor(t);
     if (a->ep.start(pd, a, EVENTIO_READ) < 0)
       Warning("[NetAccept::init_accept_per_thread]:error starting EventIO");

@@ -38,7 +38,7 @@
 
 // Initialize a thread to handle HTTP session management
 void
-initialize_thread_for_http_sessions(EThread *thread, int /* thread_index ATS_UNUSED */)
+initialize_thread_for_http_sessions(EThread *thread)
 {
   thread->server_session_pool = new ServerSessionPool;
 }
