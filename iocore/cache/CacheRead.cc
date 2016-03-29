@@ -662,7 +662,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       lock.release();
       return calluser(VC_EVENT_ERROR);
     }
-    DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: %d", this, first_key.slice32(1), (int)vio.ndone);
+    DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: Key[1]=%d", this, first_key.slice32(1), (int)vio.ndone);
     SET_HANDLER(&CacheVC::openReadMain);
     return EVENT_CONT;
   }

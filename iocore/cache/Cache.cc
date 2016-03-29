@@ -487,6 +487,7 @@ CacheVC::set_inbound_range(int64_t min, int64_t max)
 {
   resp_range.clear();
   resp_range.getRangeSpec().add(min,max);
+  Debug("amc", "%p inbound range set to %" PRId64 "-%" PRId64 , this, min, max);
   return 1 + (max - min);
 }
 
@@ -1731,8 +1732,10 @@ Vol::handle_recover_from_data(int event, void * /* data ATS_UNUSED */)
       if (s > e)
         s -= round_to_approx_size(doc->len);
       recover_pos -= e - s;
-      if (recover_pos >= skip + len)
+      if (recover_pos >= skip + len) {
         recover_pos = start;
+        recover_wrapped = 1;
+      }
       io.aiocb.aio_nbytes = RECOVERY_SIZE;
       if ((off_t)(recover_pos + io.aiocb.aio_nbytes) > (off_t)(skip + len))
         io.aiocb.aio_nbytes = (skip + len) - recover_pos;

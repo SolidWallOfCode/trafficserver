@@ -2642,7 +2642,7 @@ HttpSM::state_cache_open_read(int event, void *data)
 
 //////////////////////////////////////////////////////////////////////////
 //
-//  HttpSM::state_cache_open_read_from_writer()
+//  HttpSM::state_cache_open_partial_read()
 //
 //  Handle the case where a partial request had a cache miss and we sent
 //  a request to the origin which has now come back successfully. We

@@ -726,7 +726,7 @@ agg_copy(char *p, CacheVC *vc)
     IOBufferBlock *res_alt_blk = 0;
 
     uint32_t len = vc->write_len + vc->header_len + vc->frag_len + sizeofDoc;
-    ink_assert(vc->frag_type != CACHE_FRAG_TYPE_HTTP || len != sizeofDoc || 0 == vc->fragment);
+    ink_assert(vc->frag_type != CACHE_FRAG_TYPE_HTTP || len != sizeofDoc || 0 == vc->fragment || vc->f.write_empty_earliest);
     ink_assert(vol->round_to_approx_size(len) == vc->agg_len);
     // update copy of directory entry for this document
     dir_set_approx_size(&vc->dir, vc->agg_len);
@@ -1077,30 +1077,8 @@ Lwait:
 int
 CacheVC::openWriteEmptyEarliestDone(int event, Event *e)
 {
-  cancel_trigger();
-  if (event == AIO_EVENT_DONE)
-    set_io_not_in_progress();
-  else if (is_io_in_progress())
-    return EVENT_CONT;
-
-  {
-    MUTEX_LOCK(lock, od->mutex, this_ethread());
-    alternate_index = get_alternate_index(write_vector, this->earliest_key);
-    od->write_complete(key, this, io.ok()); // in any case, the IO is over.
-    key = od->key_for(earliest_key, write_pos);
-  }
-
-  SET_HANDLER(&CacheVC::openWriteMain);
-
-  // on error terminate if we're already closed, otherwise notify external continuation.
-  if (!io.ok()) {
-    if (closed) {
-      closed = -1;
-      return die();
-    }
-    return calluser(VC_EVENT_ERROR);
-  }
-  return this->openWriteMain(event, e); // go back to writing our actual data.
+  f.write_empty_earliest = false;
+  return this->openWriteWriteDone(event, e); // Do the normal write complete stuff.
 }
 
 int
@@ -1426,6 +1404,7 @@ CacheVC::openWriteInit(int eid, Event* event)
     if (this == od->open_writer) {
       od->open_writer = NULL;
       CacheVC* reader;
+      // This wakes up the readers after the alternate vector has been updated.
       while (NULL != (reader = od->open_waiting.pop())) {
         Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
         reader->wake_up_thread->schedule_imm(reader);
@@ -1448,10 +1427,12 @@ CacheVC::openWriteInit(int eid, Event* event)
 int
 CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
+  int64_t ffs = alternate.get_fixed_fragment_size();
+  bool called_user = false; // made IO event callback to continuation using this VC.
+  
   cancel_trigger();
-  int called_user = 0;
   ink_assert(!is_io_in_progress());
-  Debug("amc", "[CacheVC::openWriteMain]");
+  
 Lagain:
   if (!vio.buffer.writer()) {
     if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
@@ -1459,7 +1440,9 @@ Lagain:
     if (!vio.buffer.writer())
       return EVENT_CONT;
   }
-  if (vio.ntodo() <= 0) {
+  // Switch to clean up state if there's not more bytes to consume and there is at most 1 fragment
+  // left to write to disk.
+  if (vio.ntodo() <= 0 && length <= ffs) {
     called_user = 1;
     if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
       return EVENT_DONE;
@@ -1472,7 +1455,6 @@ Lagain:
   int64_t total_avail = vio.buffer.reader()->read_avail();
   int64_t avail = total_avail;
   int64_t towrite = avail + length;
-  int64_t ffs = cacheProcessor.get_fixed_fragment_size();
 
   Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite, fragment);
 
@@ -1494,13 +1476,9 @@ Lagain:
     vio.ndone += avail;
     total_len += avail;
   }
-  length = (uint64_t)towrite;
-  // [amc] Need to change this to be exactly the fixed fragment size for this alternate.
-  if (length > ffs &&
-      (length < ffs + ffs / 4))
-    write_len = ffs;
-  else
-    write_len = length;
+  length = static_cast<uint64_t>(towrite);
+  write_len = std::min(ffs, length);
+  
   bool not_writing = towrite != ntodo && towrite < ffs;
   if (!called_user) {
     if (not_writing) {
@@ -1508,12 +1486,13 @@ Lagain:
       if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
         return EVENT_DONE;
       goto Lagain;
-    } else if (vio.ntodo() <= 0)
+    } else if (vio.ntodo() <= 0 && towrite <= ffs)
       goto Lagain;
   }
   if (not_writing)
     return EVENT_CONT;
 
+  // Going to write, update the write state variables.
   this->updateWriteStateFromRange();
 
   {
@@ -1533,6 +1512,9 @@ Lagain:
       if (!od->is_write_active(earliest_key, 0)) {
         write_len = 0;
         key = earliest_key;
+        fragment = 0;
+        f.write_empty_earliest = true;
+        od->write_active(earliest_key, this, 0);
         Debug("amc", "[CacheVC::openWriteMain] writing empty earliest");
       } else {
         // go on the wait list
@@ -1558,7 +1540,13 @@ Lagain:
   if (0 == write_len) // need to set up the write not under OpenDir lock.
     return do_write_lock_call();
 
-  if (towrite == ntodo && f.close_complete) {
+  // For now force additional writes to prevent the last fragment from being not written via absorption
+  // in to the next to last in this case. In the future more should be done to allow this to avoid the
+  // extra write / fragment when reasonable. This is potentially tricky.
+  // 1) The fragment table needs to be adjusted to drop the last entry.
+  // 2) If there are readers waiting on that last entry they need to be woken up so they can wait on the
+  //    former next to last fragment (which should be easy since the wait is keyed by offset, not fragment index).
+  if (towrite == ntodo && f.close_complete && ntodo <= ffs) {
     closed = 1;
     SET_HANDLER(&CacheVC::openWriteClose);
     return openWriteClose(EVENT_NONE, NULL);
@@ -1567,7 +1555,7 @@ Lagain:
   }
 
   SET_HANDLER(&CacheVC::openWriteWriteDone);
-  Debug("amc", "[CacheVC::openWriteMain] doing write call");
+  Debug("amc", "[CacheVC::openWriteMain] [%p] write towrite=%" PRId64 " @%" PRId64 " frag=%d", this, towrite, write_pos, fragment);
   return do_write_lock_call();
 }
 
@@ -1845,7 +1833,7 @@ CacheVC::updateWriteStateFromRange()
   key = alternate.get_frag_key(fragment);
   {
     char tmp[64];
-    Debug("amc", "[writeMain] pos=%" PRId64 " frag=%d/%" PRId64 " key=%s", write_pos, fragment, alternate.get_frag_offset(fragment), key.toHexStr(tmp));
+    Debug("amc", "[updateWriteStateFromRange] pos=%" PRId64 " frag=%d/%" PRId64 " key=%s", write_pos, fragment, alternate.get_frag_offset(fragment), key.toHexStr(tmp));
   }
   return write_pos;
 }

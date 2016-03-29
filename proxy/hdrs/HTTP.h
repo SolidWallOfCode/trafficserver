@@ -609,6 +609,8 @@ struct HTTPRangeSpec {
                       int64_t quantum ///< Align ranges to multiples of this value.
                       ,
                       int64_t interstitial ///< Require gaps to be at least this large.
+                      ,
+                      uint64_t limit ///< All requested bytes will be less than this if > 0
                       ) const;
 
   /// Print the @a ranges.
@@ -1600,6 +1602,7 @@ struct HTTPCacheAlt {
 	Because this is a 1 based array, this is also the largest valid index.
 	@note It is 1 less than the total number of fragment descriptors because earliest is stored
 	directly and not in this table.
+        @note This is never zero because in that case the table isn't created at all.
      */
     uint32_t m_n;
 
@@ -1609,7 +1612,7 @@ struct HTTPCacheAlt {
 
         @note A simple effort to minimize the cost of detecting a complete object.
         In the normal case we'll get all the fragments in order so this will roll along nicely.
-        Otherwise we may have to do a lot of work on a single fragment, but that' still better
+        Otherwise we may have to do a lot of work on a single fragment, but that is better
         than doing it every time for every fragment.
     */
     uint32_t m_cached_idx;
@@ -1659,11 +1662,12 @@ struct HTTPCacheAlt {
   int32_t m_id;
   int32_t m_rid;
 
-  /// # of fragments in the alternate, including the earliest fragment.
+  /// # of fragments in the cached version of the alternate, including the earliest fragment.
   /// This can be zero for a resident alternate.
-  /// @internal In practice this is the high water mark for cached fragments.
+  /// @internal In practice this is the high water mark for cached fragments, the maximum index of cached fragments.
+  /// This tracks in effect the minimum content size of the actual object - it must be at least this many fragments.
   /// Contrast with the @a m_cached_idx in the fragment table - that marks the high
-  /// water of contiguously cached fragments.
+  /// water of cached initial fragments.
   uint32_t m_frag_count;
 
   /** The target size for fragments in this alternate.
@@ -1852,6 +1856,11 @@ public:
   {
     return m_alt->m_flag.writeable_p;
   }
+  int64_t
+  get_fixed_fragment_size() const
+  {
+    return m_alt->m_fixed_fragment_size;
+  }
 
   /** Compute the convex hull of uncached ranges.
 
@@ -2003,12 +2012,6 @@ inline CryptoHash const &
 HTTPInfo::get_frag_key(unsigned int idx)
 {
   return 0 == idx ? m_alt->m_earliest.m_key : this->force_frag_at(idx)->m_key;
-}
-
-inline int64_t
-HTTPInfo::get_frag_offset(unsigned int idx)
-{
-  return 0 == idx ? 0 : (*m_alt->m_fragments)[idx].m_offset;
 }
 
 inline bool

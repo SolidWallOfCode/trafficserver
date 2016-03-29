@@ -253,6 +253,7 @@ struct CacheVConnection : public VConnection {
   virtual void set_full_content_length(int64_t) = 0;
 
   /** Set the output ranges for the content.
+      This controls the content that will be sent to the user agent from the cache.
    */
   virtual void set_content_range(HTTPRangeSpec const& range) = 0;
 
@@ -269,8 +270,8 @@ struct CacheVConnection : public VConnection {
     return false;
   }
 
-  /** Set the range for the input (response content).
-      The incoming bytes will be written to this section of the object.
+  /** Set the range for the input (response content from origin).
+      The incoming bytes from the origin will be written to this section of the object.
       @note This range @b must be absolute.
       @note The range is inclusive.
       @return The # of bytes in the range.

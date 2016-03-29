@@ -2111,6 +2111,29 @@ HTTPInfo::get_handle(char *buf, int len)
   return -1;
 }
 
+int64_t
+HTTPInfo::get_frag_offset(unsigned int idx)
+{
+  int64_t zret = 0;
+  // fragment 0 must always have an offset of 0.
+  if (idx > 0) {
+    if (m_alt->m_fragments) {
+      unsigned int last_idx = m_alt->m_fragments->m_n;
+      // @a last_idx is the limit of data in the fragment table - past that the offset must be computed
+      // based on the last stored offset plus the appropriate number of fixed fragment sizes. This handles
+      // the empty earliest case.
+      if (idx > last_idx) {
+        zret = (*m_alt->m_fragments)[last_idx].m_offset + m_alt->m_fixed_fragment_size * (idx - last_idx);
+      } else {
+        zret = (*m_alt->m_fragments)[idx].m_offset;
+      }
+    } else {
+      zret = m_alt->m_fixed_fragment_size * idx;
+    }
+  }
+  return zret;
+}
+
 HTTPInfo::FragmentDescriptor*
 HTTPInfo::force_frag_at(unsigned int idx) {
   FragmentDescriptor* frag;
@@ -2125,30 +2148,37 @@ HTTPInfo::force_frag_at(unsigned int idx) {
     int64_t obj_size = this->object_size_get();
     uint32_t ff_size = this->get_frag_fixed_size();
     unsigned int n = 0; // set if we need to allocate, this is max array index needed.
+    size_t size = 0;
+    size_t old_size = 0;
+    unsigned int old_count = 0;
+    int64_t offset = 0;
+    CryptoHash key;
+
 
     ink_assert(ff_size);
 
     if (0 == m_alt->m_fragments && obj_size > 0) {
       n = (obj_size + ff_size - 1) / ff_size;
       if (idx > n) n = idx;
-      if (!m_alt->m_earliest.m_flag.cached_p) ++n; // going to have an empty earliest fragment.
+      if (m_alt->m_earliest.m_flag.cached_p) {
+        // Computed as if all the data is in the fragment table. If the earliest is not empty the
+        // one fragment worth of data will be there. This is the common case so worth optimizing.
+        --n;
+        offset += ff_size;
+      }
     } else {
       n = idx + MAX(4, idx>>1); // grow by 50% and at least 4
       old_table = m_alt->m_fragments;
     }
 
-    size_t size = FragmentDescriptorTable::calc_size(n);
-    size_t old_size = 0;
-    unsigned int old_count = 0;
-    int64_t offset = 0;
-    CryptoHash key;
-
+    size = FragmentDescriptorTable::calc_size(n);
+    
     m_alt->m_fragments = static_cast<FragmentDescriptorTable*>(ats_malloc(size));
     ink_zero(*(m_alt->m_fragments)); // just need to zero the base struct.
     if (old_table) {
       old_count = old_table->m_n;
       frag = &((*old_table)[old_count]);
-      offset = frag->m_offset;
+      offset = frag->m_offset + ff_size;
       key = frag->m_key;
       old_size = FragmentDescriptorTable::calc_size(old_count);
       memcpy(m_alt->m_fragments, old_table, old_size);
@@ -2164,10 +2194,10 @@ HTTPInfo::force_frag_at(unsigned int idx) {
     ++old_count; // left as the index of the last frag in the previous set.
     for ( frag = &((*m_alt->m_fragments)[old_count]) ; old_count <= n ; ++old_count, ++frag ) {
       key.next();
-      offset += ff_size;
       frag->m_key = key;
       frag->m_offset = offset;
       frag->m_flags = 0;
+      offset += ff_size;
     }
   }
   ink_assert(idx > m_alt->m_fragments->m_cached_idx);
@@ -2567,7 +2597,7 @@ HTTPRangeSpec::print(char* buff, size_t len) const
 }
 
 int
-HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial) const
+HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, uint64_t rlimit) const
 {
   static const int MAX_R = 20; // this needs to be promoted
   // We will want to have a max # of ranges limit, probably a build time constant, in the not so distant
@@ -2589,7 +2619,8 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
       r._min = (r._min / quantum) * quantum;
       r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
     }
-    // blend in to the current ranges
+    if (rlimit >= 0) r._max = std::min(r._max, rlimit - 1);
+    // blend in to the current ranges. 
     for ( i = 0 ; i < qrn ; ++i ) {
       Range& cr = qr[i];
       if ((r._max + interstitial) < cr._min) {
@@ -2625,11 +2656,7 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
 HTTPRangeSpec::Range
 HTTPInfo::get_range_for_frags(int low, int high)
 {
-  HTTPRangeSpec::Range zret;
-  zret._min = low < 1 ? 0 : (*m_alt->m_fragments)[low].m_offset;
-  zret._max = (high >= static_cast<int>(m_alt->m_frag_count) - 1 ? this->object_size_get()
-               : (*m_alt->m_fragments)[high+1].m_offset) - 1;
-  return zret;
+  return HTTPRangeSpec::Range(this->get_frag_offset(low),this->get_frag_offset(high+1)-1);
 }
 
 /* Note - we're not handling unspecified content length and trailing segments at all here.
@@ -2674,8 +2701,8 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req, int64_t initial)
         r._max = INT64_MAX;
       }
     }
-    if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) > this->object_size_get())
-      r._max = this->object_size_get();
+    if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) >= this->object_size_get())
+      r._max = this->object_size_get() - 1;
     if (static_cast<int64_t>(r._min) < initial && !m_alt->m_earliest.m_flag.cached_p) r._min = 0;
   }
   return r;

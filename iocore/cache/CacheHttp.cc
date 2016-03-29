@@ -263,7 +263,6 @@ CacheHTTPInfoVector::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t 
 
   Debug("amc", "[CacheHTTPInfoVector::write_active] VC %p write %" PRId64, vc, offset);
 
-  vc->fragment = item._alternate.get_frag_index_of(offset);
   item._active.push(vc);
   return *this;
 }

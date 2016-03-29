@@ -2145,6 +2145,7 @@ HttpTransact::HandleCacheOpenRead(State *s)
   bool read_successful = true;
 
   if (s->cache_info.object_read == 0) {
+    /// AMC - fix for collapsed forwarding
     read_successful = false;
     //
     // If somebody else was writing the document, proceed just like it was
@@ -2722,6 +2723,10 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
       s->next_action = SM_ACTION_ICP_QUERY;
     }
     return;
+  } else {
+    // Everything needed is present, update the existing read VC and proceed.
+    s->state_machine->get_cache_sm().cache_read_vc->set_content_range(s->hdr_info.request_range);
+    s->hdr_info.response_content_size = s->cache_info.object_read->object_size_get();
   }
 
   // cache hit, document is fresh, does not authorization,
@@ -4547,9 +4552,11 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
     if (((s->next_action == SM_ACTION_SERVE_FROM_CACHE) || (s->next_action == SM_ACTION_SERVER_READ)) &&
         s->state_machine->do_transform_open()) {
       set_header_for_transform(s, base_response);
+#if 0
     } else if (s->hdr_info.request_range.isEmpty() && s->cache_info.object_read->valid()){
       build_response(s, s->cache_info.object_read->response_get(), &s->hdr_info.client_response, s->client_info.http_version);
       s->hdr_info.client_response.set_content_length(s->cache_info.object_read->object_size_get());
+#endif
     } else {
       build_response(s, base_response, &s->hdr_info.client_response, s->client_info.http_version, client_response_code);
     }
@@ -6729,7 +6736,8 @@ HttpTransact::handle_content_length_header(State *s, HTTPHdr *header, HTTPHdr *b
       case SOURCE_HTTP_ORIGIN_SERVER:
         // We made our decision about whether to trust the
         //   response content length in init_state_vars_from_response()
-        if (s->hdr_info.request_range.hasRanges()) {
+        // There is a potential need to update headers if there are ranges in the request or response.
+        if (s->hdr_info.request_range.hasRanges() || s->hdr_info.response_range.isValid()) {
           change_response_header_because_of_range_request(s, header);
           s->hdr_info.trust_response_cl = true;
         }
@@ -6791,7 +6799,7 @@ HttpTransact::handle_content_length_header(State *s, HTTPHdr *header, HTTPHdr *b
         s->hdr_info.trust_response_cl = false;
         s->hdr_info.request_content_length = HTTP_UNDEFINED_CL;
         ink_assert(s->range_setup == RANGE_NONE);
-      } else if (s->hdr_info.response_range.isValid()) {
+      } else if (s->hdr_info.request_range.hasRanges()) {
         // if we are doing a single Range: request, calculate the new
         // C-L: header
         change_response_header_because_of_range_request(s, header);
@@ -7790,8 +7798,10 @@ HttpTransact::build_request(State *s, HTTPHdr *base_request, HTTPHdr *outgoing_r
   HttpTransactHeaders::remove_privacy_headers_from_request(s->http_config_param, s->txn_conf, outgoing_request);
   HttpTransactHeaders::add_global_user_agent_header_to_request(s->txn_conf, outgoing_request);
   handle_request_keep_alive_headers(s, outgoing_version, outgoing_request);
-  if (ranges)
-    HttpTransactHeaders::insert_request_range_header(outgoing_request, ranges);
+  if (ranges) {
+    int64_t cl = s->cache_info.object_read ? s->cache_info.object_read->object_size_get() : 0;
+    HttpTransactHeaders::insert_proxy_request_range_header(outgoing_request, ranges, cl);
+  }
 
   // handle_conditional_headers appears to be obsolete.  Nothing happens
   // unelss s->cache_info.action == HttpTransact::CACHE_DO_UPDATE.  In that
@@ -9011,22 +9021,31 @@ void
 HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr *header)
 {
   MIMEField *field = header->field_find(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
-  char *reason_phrase;
   //  CacheVConnection* cache_read_vc = s->state_machine->get_cache_sm().cache_read_vc;
   //  HTTPHdr* cached_response = find_appropriate_cached_resp(s);
   //  HTTPRangeSpec& rs = cache_read_vc->get_http_range_spec();
-  HTTPRangeSpec &rs = s->state_machine->t_state.hdr_info.request_range;
+  HTTPRangeSpec &rs = s->hdr_info.request_range;
+  int64_t cl = HTTP_UNDEFINED_CL;
+  if (s->cache_info.object_read) cl = s->cache_info.object_read->object_size_get();
+  if (cl == HTTP_UNDEFINED_CL && s->hdr_info.response_range.isValid()) cl = s->hdr_info.response_range._max-1;
 
-  Debug("http_trans", "Partial content requested, re-calculating content-length");
+  Debug("http_trans", "Partial content handling, re-calculating content-length");
 
-  header->status_set(HTTP_STATUS_PARTIAL_CONTENT);
-  reason_phrase = (char *)(http_hdr_reason_lookup(HTTP_STATUS_PARTIAL_CONTENT));
-  header->reason_set(reason_phrase, strlen(reason_phrase));
+  if (rs.hasRanges()) {
+    char const *reason_phrase;
+    header->status_set(HTTP_STATUS_PARTIAL_CONTENT);
+    reason_phrase = http_hdr_reason_lookup(HTTP_STATUS_PARTIAL_CONTENT);
+    header->reason_set(reason_phrase, strlen(reason_phrase));
+    // Need to clip the request range by the actual maximum content available.
+    // We should check this at some point to handle completley invalid requests.
+    if (cl != HTTP_UNDEFINED_CL) rs.apply(cl);
+  }
 
   // set the right Content-Type for multiple entry Range
   if (rs.isMulti()) { // means we need a boundary string.
     ink_release_assert(!"[amc] Computation of boundary string not correct working");
 #if 0
+    // Leaving this code in until I can fix it.
     int rbs_len;
     char const* rbs = cache_read_vc->get_http_range_boundary_string(&rbs_len);
     char buff[(sizeof(HTTP_RANGE_MULTIPART_CONTENT_TYPE)-1) + HTTP_RANGE_BOUNDARY_LEN];
@@ -9042,14 +9061,29 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
 #endif
   } else if (rs.isSingle()) {
     int n;
+    //    int64_t cl = s->cache_info.object_read->object_size_get();
     char buff[HTTP_LEN_BYTES + (18 + 1) * 3];
     header->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
     field = header->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+    # if 1
     n = snprintf(buff, sizeof(buff), "%s %" PRIu64 "-%" PRIu64 "/%" PRId64, HTTP_VALUE_BYTES, rs[0]._min, rs[0]._max,
                  s->state_machine->t_state.hdr_info.response_content_size);
+    # else
+    n = snprintf(buff, sizeof(buff), "%s %" PRIu64 "-%" PRIu64 "/", HTTP_VALUE_BYTES, rs[0]._min, rs[0]._max);
+    
+    if (cl >= 0)
+      n += snprintf(buff+n, sizeof(buff)-n, "%" PRId64, cl);
+    else
+      n += snprintf(buff+n, sizeof(buff)-n, "*");
+    # endif
     field->value_set(header->m_heap, header->m_mime, buff, n);
     header->field_attach(field);
     header->set_content_length(rs.size());
+  } else {
+    // origin response had ranges but the user agent response shouldn't.
+    header->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+    if (cl >= 0) header->set_content_length(cl);
+    else header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
   }
   //  header->set_content_length(cache_read_vc->get_effective_content_size());
 }

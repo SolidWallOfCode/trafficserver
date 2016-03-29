@@ -553,6 +553,7 @@ struct CacheVC: public CacheVConnection
       unsigned int readers : 1;
       unsigned int doc_from_ram_cache : 1;
       unsigned int hit_evacuate : 1;
+      unsigned int write_empty_earliest : 1;
 #if TS_USE_INTERIM_CACHE == 1
       unsigned int read_from_interim : 1;
       unsigned int write_into_interim : 1;

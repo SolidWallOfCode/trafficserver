@@ -751,7 +751,9 @@ public:
                                      // server.
     int64_t transform_request_cl;
     int64_t transform_response_cl;
+    /// The range spec from the user agent request.
     HTTPRangeSpec request_range;
+    /// The range sent in the proxy request if any.
     HTTPRangeSpec::Range response_range;
     ts::ConstBuffer response_range_boundary; // not used yet
     bool client_req_is_server_style;
