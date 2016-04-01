@@ -1266,6 +1266,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
 int
 CacheVC::openWriteClose(int event, Event *e)
 {
+  Debug("amc", "[openWriteClose] %p", this);
   cancel_trigger();
   if (is_io_in_progress()) {
     if (event != AIO_EVENT_DONE)
@@ -1427,136 +1428,111 @@ CacheVC::openWriteInit(int eid, Event* event)
 int
 CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
-  int64_t ffs = alternate.get_fixed_fragment_size();
-  bool called_user = false; // made IO event callback to continuation using this VC.
-  
   cancel_trigger();
   ink_assert(!is_io_in_progress());
-  
-Lagain:
-  if (!vio.buffer.writer()) {
-    if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
-      return EVENT_DONE;
-    if (!vio.buffer.writer())
-      return EVENT_CONT;
-  }
-  // Switch to clean up state if there's not more bytes to consume and there is at most 1 fragment
-  // left to write to disk.
-  if (vio.ntodo() <= 0 && length <= ffs) {
-    called_user = 1;
-    if (calluser(VC_EVENT_WRITE_COMPLETE) == EVENT_DONE)
-      return EVENT_DONE;
-    ink_assert(!f.close_complete || !"close expected after write COMPLETE");
-    if (vio.ntodo() <= 0)
-      return EVENT_CONT;
-  }
 
-  int64_t ntodo = (int64_t)(vio.ntodo() + length);
-  int64_t total_avail = vio.buffer.reader()->read_avail();
-  int64_t avail = total_avail;
-  int64_t towrite = avail + length;
-
-  Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite, fragment);
-
-  if (towrite > ntodo) {
-    avail -= (towrite - ntodo);
-    towrite = ntodo;
-  }
-  if (towrite > MAX_FRAG_SIZE) {
-    avail -= (towrite - MAX_FRAG_SIZE);
-    towrite = MAX_FRAG_SIZE;
-  }
-  if (!blocks && towrite) {
-    blocks = vio.buffer.reader()->block;
-    offset = vio.buffer.reader()->start_offset;
-  }
-
-  if (avail > 0) {
-    vio.buffer.reader()->consume(avail);
-    vio.ndone += avail;
-    total_len += avail;
-  }
-  length = static_cast<uint64_t>(towrite);
-  write_len = std::min(ffs, length);
-  
-  bool not_writing = towrite != ntodo && towrite < ffs;
-  if (!called_user) {
-    if (not_writing) {
-      called_user = 1;
+  do {
+    // Verify there is a buffer that is active. If not, signal VC is ready for data.
+    // If that doesn't work return @c EVENT_CONT to indicate the VC is waiting for data.
+    if (!vio.buffer.writer()) {
       if (calluser(VC_EVENT_WRITE_READY) == EVENT_DONE)
         return EVENT_DONE;
-      goto Lagain;
-    } else if (vio.ntodo() <= 0 && towrite <= ffs)
-      goto Lagain;
-  }
-  if (not_writing)
-    return EVENT_CONT;
-
-  // Going to write, update the write state variables.
-  this->updateWriteStateFromRange();
-
-  {
-    CacheHTTPInfo *alt = &alternate;
-    MUTEX_LOCK(lock, od->mutex, this_ethread());
-
-# if 0
-    alternate_index = get_alternate_index(write_vector, earliest_key);
-    if (alternate_index < 0)
-      alternate_index = write_vector->insert(&alternate, alternate_index);
-
-    alt = write_vector->get(alternate_index);
-# endif
-
-    if (fragment != 0 && !alt->m_alt->m_earliest.m_flag.cached_p) {
-      SET_HANDLER(&CacheVC::openWriteEmptyEarliestDone);
-      if (!od->is_write_active(earliest_key, 0)) {
-        write_len = 0;
-        key = earliest_key;
-        fragment = 0;
-        f.write_empty_earliest = true;
-        od->write_active(earliest_key, this, 0);
-        Debug("amc", "[CacheVC::openWriteMain] writing empty earliest");
-      } else {
-        // go on the wait list
-        od->wait_for(earliest_key, this, 0);
-        not_writing = true;
-      }
-    } else if (od->is_write_active(earliest_key, write_pos)) {
-      od->wait_for(earliest_key, this, write_pos);
-      not_writing = true;
-    } else if (alternate.is_frag_cached(fragment)) {
-      not_writing = true;
-      Debug("amc", "Fragment %d already cached", fragment);
-      // Consume the data, as we won't be using it.
-      resp_range.consume(write_len);
-      blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
-      // need to kick start things again or we'll stall.
-      return this->handleEvent(EVENT_IMMEDIATE);
-    } else {
-      od->write_active(earliest_key, this, write_pos);
+      if (!vio.buffer.writer())
+        return EVENT_CONT;
     }
-  }
 
-  if (0 == write_len) // need to set up the write not under OpenDir lock.
+    int64_t ffs = alternate.get_fixed_fragment_size();
+    int64_t ntodo = static_cast<int64_t>(vio.ntodo() + length);
+    int64_t total_avail = vio.buffer.reader()->read_avail();
+    int64_t avail = std::min(total_avail, vio.ntodo()); // Must not read more than total bytes for IO operation.
+    int64_t towrite = avail + length;
+
+    Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite, fragment);
+
+    if (!blocks && towrite) {
+      blocks = vio.buffer.reader()->block;
+      offset = vio.buffer.reader()->start_offset;
+    }
+
+    // Mark the incoming data as consumed.
+    if (avail > 0) {
+      vio.buffer.reader()->consume(avail);
+      vio.ndone += avail;
+      total_len += avail;
+      length += avail;
+    }
+  
+    write_len = std::min(ffs, towrite);
+
+    if (write_len != ntodo && write_len < ffs) {
+      return calluser(VC_EVENT_WRITE_READY) == EVENT_DONE ? EVENT_DONE : EVENT_CONT;
+    }
+    
+    if (ntodo == 0 && write_len == 0) {
+      f.data_done = 1;
+      if (f.close_complete) {
+        Debug("amc", "[openWriteMain] close_complete");
+        closed = 1;
+        SET_HANDLER(&self::openWriteClose);
+        return this->openWriteClose(EVENT_NONE, NULL);
+      }
+      Debug("amc", "[openWriteMain] WRITE_COMPLETE");
+      if (EVENT_DONE == calluser(VC_EVENT_WRITE_COMPLETE))
+        return EVENT_DONE;
+      if (vio.ntodo() <= 0) // call back didn't yield any more data
+        return EVENT_CONT;
+      f.data_done = 0; // not anymore, there is more data to process.
+      continue;
+    }
+
+    // Either there is enough data to write a complete fragment or all the data has arrived.
+    // Make sure the VC state members are up to date for the write.
+    this->updateWriteStateFromRange();
+
+    { // lock scope
+      CacheHTTPInfo *alt = &alternate;
+      MUTEX_LOCK(lock, od->mutex, this_ethread());
+
+      if (alternate.is_frag_cached(fragment)) {
+        Debug("amc", "Fragment %d already cached", fragment);
+        // Drop the data, it's useless.
+        resp_range.consume(write_len);
+        blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+        continue;
+      } else if (write_len == ntodo) {
+        
+      } else if (fragment != 0 && !alt->m_alt->m_earliest.m_flag.cached_p) {
+        // No earliest fragment, wait for one to be created.
+        SET_HANDLER(&CacheVC::openWriteEmptyEarliestDone);
+        if (!od->is_write_active(earliest_key, 0)) {
+          // Nobody is working on it yet, create it from here.
+          write_len = 0;
+          key = earliest_key;
+          fragment = 0;
+          f.write_empty_earliest = true;
+          od->write_active(earliest_key, this, 0);
+          Debug("amc", "[CacheVC::openWriteMain] writing empty earliest");
+        } else { // go on the wait list
+          od->wait_for(earliest_key, this, 0);
+          Debug("amc", "[CacheVC::openWriteMain] waiting for empty earliest");
+          return EVENT_CONT;
+        }
+      } else if (od->is_write_active(earliest_key, write_pos)) {
+        // Fragment already being written.  Leave the data for now. If the current writer fails this
+        // data can be written.  Otherwise the data will be discarded on wake up if the fragment was
+        // successfully written to cache.
+        od->wait_for(earliest_key, this, write_pos);
+        Debug("amc", "[CacheVC::openWriteMain] waiting for write at %" PRId64, write_pos);
+        return EVENT_CONT;
+      } else {
+        od->write_active(earliest_key, this, write_pos);
+      }
+    }
+
+    SET_HANDLER(&CacheVC::openWriteWriteDone);
+    Debug("amc", "[CacheVC::openWriteMain] [%p] write towrite=%" PRId64 " @%" PRId64 " frag=%d", this, towrite, write_pos, fragment);
     return do_write_lock_call();
-
-  // For now force additional writes to prevent the last fragment from being not written via absorption
-  // in to the next to last in this case. In the future more should be done to allow this to avoid the
-  // extra write / fragment when reasonable. This is potentially tricky.
-  // 1) The fragment table needs to be adjusted to drop the last entry.
-  // 2) If there are readers waiting on that last entry they need to be woken up so they can wait on the
-  //    former next to last fragment (which should be easy since the wait is keyed by offset, not fragment index).
-  if (towrite == ntodo && f.close_complete && ntodo <= ffs) {
-    closed = 1;
-    SET_HANDLER(&CacheVC::openWriteClose);
-    return openWriteClose(EVENT_NONE, NULL);
-  } else if (not_writing) {
-    return EVENT_CONT;
-  }
-
-  SET_HANDLER(&CacheVC::openWriteWriteDone);
-  Debug("amc", "[CacheVC::openWriteMain] [%p] write towrite=%" PRId64 " @%" PRId64 " frag=%d", this, towrite, write_pos, fragment);
-  return do_write_lock_call();
+  } while (true);
 }
 
 // begin overwrite
@@ -1653,21 +1629,6 @@ CacheVC::openWriteStartDone(int event, Event *e)
         goto Lfailure;
       }
       ink_assert(write_vector->count() > 0);
-#if TS_USE_INTERIM_CACHE == 1
-    Lagain:
-      if (dir_ininterim(&dir)) {
-        dir_delete(&first_key, vol, &dir);
-        last_collision = NULL;
-        if (dir_probe(&first_key, vol, &dir, &last_collision)) {
-          goto Lagain;
-        } else {
-          if (f.update) {
-            // fail update because vector has been GC'd
-            goto Lfailure;
-          }
-        }
-      }
-#endif
       od->first_dir = dir;
       first_dir = dir;
       if (doc->single_fragment()) {
