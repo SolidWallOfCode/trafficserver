@@ -2583,9 +2583,17 @@ HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
       buff[zret++] = ',';
     }
 
-    n = snprintf(buff + zret, len - zret, "%" PRIu64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
-    if (n + zret >= len) break; // ran out of room
-    else zret += n;
+    if (rv[i]._max == UINT64_MAX)
+      n = snprintf(buff + zret, len - zret, "%" PRIu64 "-", rv[i]._min);
+    else
+      n = snprintf(buff + zret, len - zret, "%" PRIu64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
+    
+    if (n + zret >= len) {
+      buff[zret - (first ? 0 : 1)] = 0; // clip partial output.
+      break;
+    }
+    
+    zret += n;
   }
   return zret;
 }
