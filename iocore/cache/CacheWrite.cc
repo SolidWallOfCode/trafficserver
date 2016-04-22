@@ -44,7 +44,8 @@ get_alternate_index(CacheHTTPInfoVector *cache_vector, CacheKey key, int idx)
     return idx;
   // Otherwise scan the vector.
   for (int i = 0; i < alt_count; i++) {
-    if (i == idx) continue; // already checked that one.
+    if (i == idx)
+      continue; // already checked that one.
     obj = cache_vector->get(i);
     if (obj->compare_object_key(&key)) {
       // Debug("cache_key", "Resident alternate key  %X", key.slice32(0));
@@ -76,13 +77,15 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     if (f.update) {
       // all Update cases. Need to get the alternate index.
       alternate_index = get_alternate_index(write_vector, update_key, alternate_index);
-      Debug("cache_update", "updating alternate index %d frags %d", alternate_index, alternate_index >=0 ? write_vector->get(alternate_index)->get_frag_count() : -1);
+      Debug("cache_update", "updating alternate index %d frags %d", alternate_index,
+            alternate_index >= 0 ? write_vector->get(alternate_index)->get_frag_count() : -1);
       // if its an alternate delete
       if (!vec) {
         ink_assert(!total_len);
         if (alternate_index >= 0) {
           MUTEX_TRY_LOCK(stripe_lock, vol->mutex, mutex->thread_holding);
-          if (!stripe_lock.is_locked()) VC_SCHED_LOCK_RETRY();
+          if (!stripe_lock.is_locked())
+            VC_SCHED_LOCK_RETRY();
           write_vector->remove(alternate_index, true);
           alternate_index = CACHE_ALT_REMOVED;
           if (!write_vector->count())
@@ -316,8 +319,8 @@ Vol::aggWriteDone(int event, Event *e)
     header->last_write_pos = header->write_pos;
     header->write_pos += io.aiocb.aio_nbytes;
     ink_assert(header->write_pos >= start);
-    Debug("cache_agg", "Dir %s, Write: %" PRIu64 ", last Write: %" PRIu64 "\n",
-          hash_text.get(), header->write_pos, header->last_write_pos);
+    Debug("cache_agg", "Dir %s, Write: %" PRIu64 ", last Write: %" PRIu64 "\n", hash_text.get(), header->write_pos,
+          header->last_write_pos);
     ink_assert(header->write_pos == header->agg_pos);
     if (header->write_pos + EVACUATION_SIZE > scan_pos)
       periodic_scan();
@@ -790,7 +793,8 @@ agg_copy(char *p, CacheVC *vc)
         ink_assert(vc->write_vector->count() > 0);
         if (vc->resp_range.hasRanges()) {
           int64_t size = vc->alternate.object_size_get();
-          if (size >= 0) doc->total_len = size;
+          if (size >= 0)
+            doc->total_len = size;
         } else {
           // As the header is finalized the fragment vector should be trimmed if the object is complete.
           if (!vc->f.update && !vc->f.evac_vector) {
@@ -1082,7 +1086,7 @@ CacheVC::openWriteEmptyEarliestDone(int event, Event *e)
 }
 
 int
-CacheVC::openWriteCloseDir(int /* event ATS_UNUSED */, Event */* e ATS_UNUSED */)
+CacheVC::openWriteCloseDir(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
   cancel_trigger();
   {
@@ -1194,7 +1198,8 @@ CacheVC::openWriteCloseHead(int event, Event *e)
   cancel_trigger();
   f.use_first_key = 1;
   if (io.ok())
-    ink_assert(fragment || (length == (int64_t)total_len) || (resp_range.hasRanges() && alternate.object_size_get() > alternate.get_frag_fixed_size()));
+    ink_assert(fragment || (length == (int64_t)total_len) ||
+               (resp_range.hasRanges() && alternate.object_size_get() > alternate.get_frag_fixed_size()));
   else
     return openWriteCloseDir(event, e);
   if (f.data_done) {
@@ -1241,10 +1246,13 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     earliest_dir = dir;
 
   {
+    CacheBuffer c;
+    c._data.write(blocks, write_len);
+    c._position = write_pos;
     MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
-    write_vector->write_complete(earliest_key, this, true);
+    write_vector->write_complete(earliest_key, this, c, true);
   }
-  
+
   write_pos += write_len;
   blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
   next_CacheKey(&key, &key);
@@ -1260,7 +1268,6 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
   f.data_done = 1;
   return openWriteCloseHead(event, e); // must be called under vol lock from here
                                        // [amc] don't see why, guess we'll find out.
-
 }
 
 int
@@ -1335,9 +1342,13 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   if (key == earliest_key)
     earliest_dir = dir;
 
+  CacheBuffer cb;
+  cb._data.write(blocks, write_len);
+  cb._position = write_pos;
+
   {
     MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
-    write_vector->write_complete(earliest_key, this, true);
+    write_vector->write_complete(earliest_key, this, cb, true);
   }
 
   DDebug("cache_insert", "WriteDone: %X, %X, %d", key.slice32(0), first_key.slice32(0), write_len);
@@ -1352,12 +1363,13 @@ CacheVC::openWriteWriteDone(int event, Event *e)
 }
 
 int64_t
-CacheProcessor::get_fixed_fragment_size() const {
+CacheProcessor::get_fixed_fragment_size() const
+{
   return cache_config_target_fragment_size - sizeofDoc;
 }
 
 
-Action*
+Action *
 CacheVC::do_write_init()
 {
   Debug("amc", "[do_write_init] vc=%p", this);
@@ -1368,7 +1380,7 @@ CacheVC::do_write_init()
 /* Do some initial setup and then switch over to openWriteMain
  */
 int
-CacheVC::openWriteInit(int eid, Event* event)
+CacheVC::openWriteInit(int eid, Event *event)
 {
   Debug("amc", "[openWriteInit] vc=%p", this);
   {
@@ -1389,12 +1401,12 @@ CacheVC::openWriteInit(int eid, Event* event)
       Debug("amc", "[openWriteInit] alt not found, inserted");
       alternate_index = write_vector->insert(&alternate); // not there, add it
     } else {
-      HTTPInfo* base = write_vector->get(alternate_index);
+      HTTPInfo *base = write_vector->get(alternate_index);
       if (!base->is_writeable()) {
         // The alternate instance is mapped directly on a read buffer, which we can't modify.
         // It must be replaced with a live, mutable one.
         Debug("amc", "Updating OD vector element %d : 0x%p with mutable version %p", alternate_index, base, alternate.m_alt);
-        alternate.copy(base); // make a local copy
+        alternate.copy(base);           // make a local copy
         base->copy_shallow(&alternate); // paste the mutable copy back.
       }
     }
@@ -1404,7 +1416,7 @@ CacheVC::openWriteInit(int eid, Event* event)
 
     if (this == od->open_writer) {
       od->open_writer = NULL;
-      CacheVC* reader;
+      CacheVC *reader;
       // This wakes up the readers after the alternate vector has been updated.
       while (NULL != (reader = od->open_waiting.pop())) {
         Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
@@ -1415,14 +1427,14 @@ CacheVC::openWriteInit(int eid, Event* event)
 
   if (resp_range.hasRanges()) {
     resp_range.start();
-//    this->updateWriteStateFromRange();
+    //    this->updateWriteStateFromRange();
   }
-    
-//  key = alternate.get_frag_key_of(write_pos);
+
+  //  key = alternate.get_frag_key_of(write_pos);
   SET_HANDLER(&CacheVC::openWriteMain);
   return openWriteMain(eid, event);
-//  return callcont(CACHE_EVENT_OPEN_WRITE);
-//  return EVENT_DONE;
+  //  return callcont(CACHE_EVENT_OPEN_WRITE);
+  //  return EVENT_DONE;
 }
 
 int
@@ -1447,7 +1459,8 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     int64_t avail = std::min(total_avail, vio.ntodo()); // Must not read more than total bytes for IO operation.
     int64_t towrite = avail + length;
 
-    Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite, fragment);
+    Debug("amc", "[CacheVC::openWriteMain] ntodo=%" PRId64 " avail=%" PRId64 " towrite=%" PRId64 " frag=%d", ntodo, avail, towrite,
+          fragment);
 
     if (!blocks && towrite) {
       blocks = vio.buffer.reader()->block;
@@ -1461,13 +1474,13 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       total_len += avail;
       length += avail;
     }
-  
+
     write_len = std::min(ffs, towrite);
 
     if (write_len != ntodo && write_len < ffs) {
       return calluser(VC_EVENT_WRITE_READY) == EVENT_DONE ? EVENT_DONE : EVENT_CONT;
     }
-    
+
     if (ntodo == 0 && write_len == 0) {
       f.data_done = 1;
       if (f.close_complete) {
@@ -1479,18 +1492,19 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       Debug("amc", "[openWriteMain] WRITE_COMPLETE");
       if (EVENT_DONE == calluser(VC_EVENT_WRITE_COMPLETE))
         return EVENT_DONE;
-      if (vio.ntodo() <= 0) // call back didn't yield any more data
+      if (vio.ntodo() <= 0) // callback didn't yield any more data
         return EVENT_CONT;
-      f.data_done = 0; // not anymore, there is more data to process.
+      f.data_done = 0; // data done rescinded by callback, there is more data to process.
       continue;
     }
 
-    // Either there is enough data to write a complete fragment or all the data has arrived.
-    // Make sure the VC state members are up to date for the write.
+    // If the response is not aligned with the fragment, clip the non-aligned part and put it
+    // on the content lookaside buffer.
     this->updateWriteStateFromRange();
 
-    { // lock scope
-      CacheHTTPInfo *alt = &alternate;
+    { // lock scoping
+      int64_t frag_offset = alternate.get_frag_offset(fragment);
+      int64_t object_size = alternate.object_size_get();
       MUTEX_LOCK(lock, od->mutex, this_ethread());
 
       if (alternate.is_frag_cached(fragment)) {
@@ -1499,9 +1513,20 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         resp_range.consume(write_len);
         blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
         continue;
-      } else if (write_len == ntodo) {
-        
-      } else if (fragment != 0 && !alt->m_alt->m_earliest.m_flag.cached_p) {
+      } else if ((static_cast<int64_t>(write_pos) != frag_offset) || // not at start of fixed sized fragment
+                 // if not writing a full fragment, then it needs to be all of the last fragment.
+                 //                   v- unknown object length    v- not the full trailing fragment
+                 (write_len < ffs && (object_size < 0 || static_cast<int64_t>(write_pos + write_len) < (object_size - 1)))) {
+        // clip to not go past next fragment boundary.
+        write_len = std::min(write_len, static_cast<uint32_t>((frag_offset + ffs) - write_pos));
+
+        write_vector->addCacheBuffer(earliest_key, blocks, write_len, write_pos);
+        resp_range.consume(write_len);
+        blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+        Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len,
+              frag_offset, write_pos);
+        continue;
+      } else if (fragment != 0 && !alternate.m_alt->m_earliest.m_flag.cached_p) {
         // No earliest fragment, wait for one to be created.
         SET_HANDLER(&CacheVC::openWriteEmptyEarliestDone);
         if (!od->is_write_active(earliest_key, 0)) {
@@ -1530,7 +1555,8 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     }
 
     SET_HANDLER(&CacheVC::openWriteWriteDone);
-    Debug("amc", "[CacheVC::openWriteMain] [%p] write towrite=%" PRId64 " @%" PRId64 " frag=%d", this, towrite, write_pos, fragment);
+    Debug("amc", "[CacheVC::openWriteMain] [%p] write towrite=%" PRId64 " @%" PRId64 " frag=%d", this, towrite, write_pos,
+          fragment);
     return do_write_lock_call();
   } while (true);
 }
@@ -1593,7 +1619,7 @@ CacheVC::openWriteStartDone(int event, Event *e)
     if (!lock.is_locked())
       VC_LOCK_RETRY_EVENT();
 
-    if (_action.cancelled && (!od /* || !od->has_multiple_writers() */ ))
+    if (_action.cancelled && (!od /* || !od->has_multiple_writers() */))
       goto Lcancel;
 
     if (event == AIO_EVENT_DONE) { // vector read done
@@ -1643,17 +1669,17 @@ CacheVC::openWriteStartDone(int event, Event *e)
     }
 
   Lcollision:
-//    int if_writers = ((uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES);
+    //    int if_writers = ((uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES);
     if (!od) {
       if ((err = vol->open_write(this)) > 0)
         goto Lfailure;
-/*
-      if (od->has_multiple_writers()) {
-        MUTEX_RELEASE(lock);
-        SET_HANDLER(&CacheVC::openWriteInit);
-        return this->openWriteInit(EVENT_IMMEDIATE, 0);
-      }
-*/
+      /*
+            if (od->has_multiple_writers()) {
+              MUTEX_RELEASE(lock);
+              SET_HANDLER(&CacheVC::openWriteInit);
+              return this->openWriteInit(EVENT_IMMEDIATE, 0);
+            }
+      */
     }
     // check for collision
     if (dir_probe(&first_key, vol, &dir, &last_collision)) {
@@ -1774,7 +1800,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheFragType frag_type, in
     SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
     c->callcont(CACHE_EVENT_OPEN_WRITE);
     return ACTION_RESULT_DONE;
-//    return c->do_write_init();
+    //    return c->do_write_init();
   } else {
     SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteOverwrite);
     if (c->openWriteOverwrite(EVENT_IMMEDIATE, 0) == EVENT_DONE)
@@ -1794,7 +1820,8 @@ CacheVC::updateWriteStateFromRange()
   key = alternate.get_frag_key(fragment);
   {
     char tmp[64];
-    Debug("amc", "[updateWriteStateFromRange] pos=%" PRId64 " frag=%d/%" PRId64 " key=%s", write_pos, fragment, alternate.get_frag_offset(fragment), key.toHexStr(tmp));
+    Debug("amc", "[updateWriteStateFromRange] pos=%" PRId64 " frag=%d/%" PRId64 " key=%s", write_pos, fragment,
+          alternate.get_frag_offset(fragment), key.toHexStr(tmp));
   }
   return write_pos;
 }
@@ -1812,7 +1839,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
 
   ink_assert(caches[type] == this);
   intptr_t err = 0;
-//  int if_writers = (uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES;
+  //  int if_writers = (uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES;
   CacheVC *c = new_CacheVC(cont);
   ProxyMutex *mutex = cont->mutex;
   c->vio.op = VIO::WRITE;
@@ -1887,10 +1914,10 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
       // If there are multiple writers, then this one cannot be an update.
       // Only the first writer can do an update. If that's the case, we can
       // return success to the state machine now.;
-/*
-      if (c->od->has_multiple_writers())
-        goto Lmiss;
-*/
+      /*
+            if (c->od->has_multiple_writers())
+              goto Lmiss;
+      */
       if (!dir_probe(key, c->vol, &c->dir, &c->last_collision)) {
         if (c->f.update) {
           // fail update because vector has been GC'd
@@ -1924,7 +1951,7 @@ Cache::open_write(Continuation *cont, CacheKey *key, CacheHTTPInfo *info, time_t
   }
 
 Lmiss:
-//  return c->do_write_init();
+  //  return c->do_write_init();
   SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
   c->callcont(CACHE_EVENT_OPEN_WRITE);
   return ACTION_RESULT_DONE;

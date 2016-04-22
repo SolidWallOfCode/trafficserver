@@ -1663,7 +1663,7 @@ HttpSM::handle_api_return()
     } else {
       if ((t_state.range_setup == HttpTransact::RANGE_PARTIAL_WRITE || t_state.range_setup == HttpTransact::RANGE_PARTIAL_UPDATE) &&
           HttpTransact::CACHE_DO_WRITE == t_state.cache_info.action) {
-        Debug("amc", "Set up for partial read");
+        Debug("amc", "Set up for partial write from server request");
         CacheVConnection *save_write_vc = cache_sm.cache_write_vc;
         tunnel.tunnel_run(setup_server_transfer_to_cache_only());
         t_state.next_action = HttpTransact::SM_ACTION_CACHE_OPEN_PARTIAL_READ;

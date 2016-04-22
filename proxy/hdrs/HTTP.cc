@@ -2377,10 +2377,21 @@ HTTPRangeSpec::add(Range const& r)
 }
 
 bool
-HTTPRangeSpec::apply(uint64_t len)
+HTTPRangeSpec::hasOpenRange() const
+{
+  if (!this->hasRanges()) return false;
+  else if (_single.isSuffix() || _single.isPrefix()) return false;
+  for ( RangeBox::const_iterator spot = _ranges.begin(), limit = _ranges.end() ; spot != limit && EMPTY == _state ; ++spot ) {
+    if (spot->isSuffix() || spot->isPrefix()) return false;
+  }
+  return true;
+}
+
+bool
+HTTPRangeSpec::apply(int64_t len)
 {
   if (!this->hasRanges()) {
-    // nothing - simplifying later logic.
+    // nothing - makes other cases simpler.
   } else if (0 == len) {
     /* Must special case zero length content
        - suffix ranges are OK but other ranges are not.
@@ -2570,26 +2581,29 @@ HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
   if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
 
   for ( int i = 0 ; i < count ; ++i ) {
-    int n;
+    int n = 0;
 
     if (first) {
       memcpy(buff, HTTP_VALUE_BYTES, HTTP_LEN_BYTES);
       buff[HTTP_LEN_BYTES] = '=';
-      zret += HTTP_LEN_BYTES + 1;
+      n += HTTP_LEN_BYTES + 1;
       first = false;
     } else if (len < zret + 4) {
       break;
     } else {
-      buff[zret++] = ',';
+      buff[zret] = ',';
+      ++n;
     }
 
-    if (rv[i]._max == UINT64_MAX)
-      n = snprintf(buff + zret, len - zret, "%" PRIu64 "-", rv[i]._min);
+    if (rv[i].isSuffix())
+      n += snprintf(buff + zret, len - zret, "-%" PRId64, rv[i]._min);
+    else if (rv[i].isPrefix())
+      n += snprintf(buff + zret, len - zret, "%" PRId64 "-", rv[i]._min);
     else
-      n = snprintf(buff + zret, len - zret, "%" PRIu64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
+      n += snprintf(buff + zret, len - zret, "%" PRId64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
     
     if (n + zret >= len) {
-      buff[zret - (first ? 0 : 1)] = 0; // clip partial output.
+      buff[zret] = 0; // clip partial output.
       break;
     }
     
@@ -2605,13 +2619,14 @@ HTTPRangeSpec::print(char* buff, size_t len) const
 }
 
 int
-HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, uint64_t rlimit) const
+HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, int64_t rlimit) const
 {
   static const int MAX_R = 20; // this needs to be promoted
   // We will want to have a max # of ranges limit, probably a build time constant, in the not so distant
   // future anyway, so might as well start here.
   int qrn = 0; // count of quantized ranges
-  Range qr[MAX_R]; // quantized ranges
+  int64_t trailer = -1; // Union of trailing ranges.
+  Range qr[MAX_R+1]; // quantized ranges - leave one for the trailing range, if any.
 
   // Can't possibly write a range in less than this size buffer.
   if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
@@ -2622,41 +2637,48 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
 
   for ( const_iterator spot = this->begin(), limit = this->end() ; spot != limit ; ++spot ) {
     Range r(*spot);
-    int i;
-    if (quantum > 1) {
-      r._min = (r._min / quantum) * quantum;
-      r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
-    }
-    if (rlimit >= 0) r._max = std::min(r._max, rlimit - 1);
-    // blend in to the current ranges. 
-    for ( i = 0 ; i < qrn ; ++i ) {
-      Range& cr = qr[i];
-      if ((r._max + interstitial) < cr._min) {
-        memmove(qr, qr+1, sizeof(*qr) * qrn);
-        ++qrn;
-        qr[0] = r;
-        i = -1;
-        break;
-      } else if (cr._max + interstitial >= r._min) {
-        int j = i + 1;
-        cr._min = std::min(cr._min, r._min);
-        cr._max = std::max(cr._max, r._max);
-        while ( j < qrn) {
-          if (qr[j]._min < cr._max + interstitial)
-            cr._max = std::max(cr._max, qr[j]._max);
-          ++j;
-        }
-        if (j < qrn)
-          memmove(qr + i + 1, qr + j, sizeof(*qr) * qrn - j);
-        qrn -= j - i;
-        i = -1;
-        break;   
+    if (r.isSuffix()) {
+      trailer == std::max(trailer, r._min);
+    } else {
+      if (quantum > 1) {
+        r._min = (r._min / quantum) * quantum;
+        r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
       }
+      int i; // need to persist past @c for loop.
+      if (rlimit >= 0) r._max = std::min(r._max, rlimit - 1);
+      // blend in to the current ranges. 
+      for ( i = 0 ; i < qrn ; ++i ) {
+        Range& cr = qr[i];
+        if ((r._max + interstitial) < cr._min) {
+          memmove(qr, qr+1, sizeof(*qr) * qrn);
+          ++qrn;
+          qr[0] = r;
+          i = -1;
+          break;
+        } else if (cr._max + interstitial >= r._min) {
+          int j = i + 1;
+          cr._min = std::min(cr._min, r._min);
+          cr._max = std::max(cr._max, r._max);
+          while ( j < qrn) {
+            if (qr[j]._min < cr._max + interstitial)
+              cr._max = std::max(cr._max, qr[j]._max);
+            ++j;
+          }
+          if (j < qrn)
+            memmove(qr + i + 1, qr + j, sizeof(*qr) * qrn - j);
+          qrn -= j - i;
+          i = -1;
+          break;   
+        }
+      }
+      if (i >= qrn)
+        qr[qrn++] = r;
+      ink_assert(qrn <= MAX_R);
     }
-    if (i >= qrn)
-      qr[qrn++] = r;
-    ink_assert(qrn <= MAX_R);
   }
+
+  if (trailer)
+    qr[qrn++].setSuffix(trailer);
 
   return this->print_array(buff, len, qr, qrn);
 }

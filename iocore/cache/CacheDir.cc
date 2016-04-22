@@ -181,10 +181,10 @@ OpenDirEntry::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
 }
 
 OpenDirEntry&
-OpenDirEntry::write_complete(CacheKey const& alt_key, CacheVC* vc, bool success)
+OpenDirEntry::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheBuffer const& data, bool success)
 {
   Debug("amc", "[OpenDir::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
-  vector.write_complete(alt_key, vc, success);
+  vector.write_complete(alt_key, vc, data, success);
   return *this;
 }
 

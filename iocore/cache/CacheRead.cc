@@ -426,38 +426,20 @@ CacheVC::openReadReadDone(int event, Event *e)
     if (last_collision &&     // no missed lock
         dir_valid(vol, &dir)) // object still valid
     {
-      doc = (Doc *)buf->data();
+      doc = reinterpret_cast<Doc *>(buf->data());
       if (doc->magic != DOC_MAGIC) {
         char tmpstring[100];
         if (doc->magic == DOC_CORRUPT)
           Warning("Middle: Doc checksum does not match for %s", key.toHexStr(tmpstring));
         else
           Warning("Middle: Doc magic does not match for %s", key.toHexStr(tmpstring));
-#if TS_USE_INTERIM_CACHE == 1
-        if (dir_ininterim(&dir)) {
-          dir_delete(&key, vol, &dir);
-          goto Lread;
-        }
-#endif
         goto Lerror;
       }
       if (doc->key == key)
         goto LreadMain;
-#if TS_USE_INTERIM_CACHE == 1
-      else if (dir_ininterim(&dir)) {
-        dir_delete(&key, vol, &dir);
-        last_collision = NULL;
-      }
-#endif
     }
-#if TS_USE_INTERIM_CACHE == 1
-    if (last_collision && dir_get_offset(&dir) != dir_get_offset(last_collision))
-      last_collision = 0;
-  Lread:
-#else
     if (last_collision && dir_offset(&dir) != dir_offset(last_collision))
       last_collision = 0; // object has been/is being overwritten
-#endif
     if (dir_probe(&key, vol, &dir, &last_collision)) {
       int ret = do_read_call(&key);
       if (ret == EVENT_RETURN)
@@ -469,11 +451,7 @@ CacheVC::openReadReadDone(int event, Event *e)
       if (writer_done()) {
         last_collision = NULL;
         while (dir_probe(&earliest_key, vol, &dir, &last_collision)) {
-#if TS_USE_INTERIM_CACHE == 1
-          if (dir_get_offset(&dir) == dir_get_offset(&earliest_dir)) {
-#else
           if (dir_offset(&dir) == dir_offset(&earliest_dir)) {
-#endif
             DDebug("cache_read_agg", "%p: key: %X ReadRead complete: %d", this, first_key.slice32(1), (int)vio.ndone);
             doc_len = vio.ndone;
             goto Ldone;
@@ -503,58 +481,150 @@ Lerror:
 Lcallreturn:
   return handleEvent(AIO_EVENT_DONE, 0);
 LreadMain:
-  ++fragment;
+  wait_buffer.write(buf, doc->data_len(), doc->prefix_len()); // just the content part.
+  wait_position = alternate.get_frag_offset(fragment);
+  // I think these are all useless now.
   doc_pos = doc->prefix_len();
   doc_pos += resp_range.getOffset() - frag_upper_bound; // used before update!
   frag_upper_bound += doc->data_len();
-  next_CacheKey(&key, &key);
   SET_HANDLER(&CacheVC::openReadMain);
   return openReadMain(event, e);
 }
 
-void
-CacheVC::update_key_to_frag_idx(int target)
+// Content is ready to go out to the user agent. Ship it.
+//
+// The content is presumed to be either left or consumed in toto. If the output VIO is too full nothing
+// is done. Otherwise as much of the content as possible is shipped. Content is discarded if there is too
+// much to fit in the current range or the VIO write operation is finished (although it's wrong if the VIO
+// finishes but not the range).
+int64_t
+CacheVC::shipContent()
 {
-  if (0 == target) {
-    fragment = 0;
-    key = earliest_key;
-  } else {
-    FragmentDescriptor* frag = alternate.force_frag_at(target);
-    ink_assert(frag);
-    key = frag->m_key;
+  MIOBuffer* writer = vio.buffer.writer();
+  Ptr<IOBufferBlock> block;
+  int64_t bytes;
+  
+  // If some data has been written, don't write more than the high water mark. This prevents
+  // internal IO buffers from filling when a slow user agent requests a large object.
+  if (vio.ndone > 0 && writer->water_mark < writer->max_read_avail()) return -1;
+  
+  bytes = std::min(wait_buffer.length(), vio.ntodo()); // clip content length by VIO limit.
+  bytes = std::min(bytes, static_cast<int64_t>(resp_range.getRemnantSize())); // and then by range
+
+  // Ship it.
+  if (bytes > 0) {
+    int64_t offset = 0;
+    int64_t r_pos = resp_range.getOffset();
+    
+    // If there is a pending range shift then the last range was filled and the range spec advanced to
+    // the next range. We have data for that range now so it's appropriate to write out the range
+    // header.
+    if (resp_range.hasPendingRangeShift()) {
+      int b_len;
+      char const* b_str = resp_range.getBoundaryStr(&b_len);
+      size_t r_idx = resp_range.getIdx();
+
+      vio.ndone += HTTPRangeSpec::writePartBoundary(vio.buffer.writer(), b_str, b_len
+                                                    , doc_len, resp_range[r_idx]._min, resp_range[r_idx]._max
+                                                    , resp_range.getContentTypeField(), r_idx >= (resp_range.count() - 1)
+        );
+      resp_range.consumeRangeShift();
+      Debug("amc", "Range boundary for range %" PRIu64, r_idx);
+    }
+
+    // The available content can be potentially shared. A new buffer block is therefore required.
+    // Direct append to avoid allocating and copying to new buffer data blocks.
+    if (wait_position < r_pos) offset = r_pos - wait_position;
+    bytes = writer->write(wait_buffer.head(), bytes, offset);
+    resp_range.consume(bytes);
+    wait_buffer.clear();
+    wait_position = -1;
+    Debug("amc", "shipped %" PRId64 " bytes at range offset %" PRIu64, bytes, r_pos);
   }
+
+  // shipped, set up to start work on next piece of content.
+  SET_HANDLER(&CacheVC::openReadMain);
+  
+  if (vio.ntodo() <= 0)
+    return calluser(VC_EVENT_READ_COMPLETE);
+  else if (calluser(VC_EVENT_READ_READY) == EVENT_DONE)
+    return EVENT_DONE;
+  return this->openReadMain(EVENT_IMMEDIATE, NULL);
 }
 
-int
-CacheVC::frag_idx_for_offset(uint64_t offset)
-{
-  FragmentDescriptorTable* frags = alternate.get_frag_table();
-  int count = alternate.get_frag_count();
-  uint32_t ffs = alternate.get_frag_fixed_size();
-  int idx = count / 2;
-
-  ink_assert(offset < doc_len);
-
-  if (ffs) idx = offset / ffs; // good guess as to the right offset.
-
-  if (count > 1 && 0 == (*frags)[1].m_offset) ++idx;
-
-  do {
-    uint64_t upper = idx >= count ? doc_len : (*frags)[idx+1].m_offset;
-    uint64_t lower = idx <= 0 ? 0 : (*frags)[idx].m_offset;
-    if (offset < lower) idx = idx / 2;
-    else if (offset >= upper) idx = (count + idx + 1)/2;
-    else break;
-  } while (true);
-  return idx;
-}
-
-/* There is a fragment available, decide what do to next.
- */
+// Ship content if available or set up to get content to ship.
 int
 CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
   cancel_trigger();
+
+  if (wait_position >= 0) { // Data has arrived, ship it.
+    return this->shipContent();
+  } else if (resp_range.getRemnantSize()) {
+    int64_t target_position = resp_range.getOffset();
+    fragment = alternate.get_frag_index_of(target_position);
+    if (alternate.is_frag_cached(fragment)) {
+      key = alternate.get_frag_key(fragment);
+      return this->fetchFromCache(EVENT_IMMEDIATE, NULL);
+    } else if (NULL == od) {
+      // If it's not in cache and there is no OD then there are no writers, fail.
+      Debug("amc", "[CacheVC::openReadMain] Uncached fragment %d at offset %" PRId64 " and no ODE", fragment, target_position);
+      return calluser(VC_EVENT_ERROR);
+    } else if (!od->wait_for(earliest_key, this, target_position)) {
+      DDebug("cache_read_agg", "%p: key: %X ReadMain writer aborted: %d",
+             this, first_key.slice32(1), (int)vio.ndone);
+      return calluser(VC_EVENT_ERROR);
+    } else {
+      DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: Key[1]=%d", this, first_key.slice32(1), (int)vio.ndone);
+      SET_HANDLER(&CacheVC::openReadMain);
+      return EVENT_CONT;
+    }
+  } else if (vio.ntodo() > 0) {
+    return calluser(VC_EVENT_EOS);
+  }
+  return calluser(VC_EVENT_DONE);
+}
+
+int
+CacheVC::fetchFromCache(int, Event*)
+{
+  cancel_trigger();
+  
+  Debug("amc", "[CacheVC::fetchFromCache] Fragment %d at offset %" PRIu64, fragment, resp_range.getOffset());
+  
+  last_collision = 0;
+  writer_lock_retry = 0;
+  // if the state machine calls reenable on the callback from the cache,
+  // we set up a schedule_imm event. The openReadReadDone discards
+  // EVENT_IMMEDIATE events. So, we have to cancel that trigger and set
+  // a new EVENT_INTERVAL event.
+  CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
+  if (!lock.is_locked()) {
+    SET_HANDLER(&CacheVC::fetchFromCache);
+    VC_SCHED_LOCK_RETRY();
+  }
+  if (dir_probe(&key, vol, &dir, &last_collision)) {
+    SET_HANDLER(&CacheVC::openReadReadDone);
+    int ret = do_read_call(&key);
+    if (ret == EVENT_RETURN) {
+      lock.release();
+      return handleEvent(AIO_EVENT_DONE, 0);
+    }
+    return EVENT_CONT;
+  }
+  if (is_action_tag_set("cache"))
+    ink_release_assert(false);
+  Warning("Document %X truncated at %d of %d, missing fragment %X", first_key.slice32(1), (int)vio.ndone, (int)doc_len, key.slice32(1));
+  // remove the directory entry
+  dir_delete(&earliest_key, vol, &earliest_dir);
+  lock.release();
+//Lerror:
+  return calluser(VC_EVENT_ERROR);
+//Leos:
+  return calluser(VC_EVENT_EOS);
+}
+
+# if 0
   Doc *doc = (Doc *) buf->data();
   int64_t bytes = vio.ntodo();
   IOBufferBlock *b = NULL;
@@ -603,80 +673,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       return EVENT_DONE;
   }
 
-
-#ifdef HTTP_CACHE
-  if (resp_range.getRemnantSize()) {
-    FragmentDescriptorTable* frags = alternate.get_frag_table();
-    int n_frags = alternate.get_frag_count();
-
-    // Quick check for offset in next fragment - very common
-    if (target_offset >= frag_upper_bound && (!frags || fragment >= n_frags || target_offset <= (*frags)[fragment].m_offset)) {
-      Debug("amc", "Non-seeking continuation to next fragment");
-    } else {
-      int target = -1; // target fragment index.
-
-      if (is_debug_tag_set("amc")) {
-        char b[33], c[33];
-        Debug("amc", "Seek @ %" PRIu64 " [r#=%d] in %s from #%d @ %" PRIu64 "/%d/%" PRId64 ":%s%s",
-              target_offset, resp_range.getIdx(), first_key.toHexStr(b), fragment, frag_upper_bound, doc->len, doc->total_len, doc->key.toHexStr(c)
-              , (frags ? "" : "no frag table")
-          );
-      }
-
-      target = this->frag_idx_for_offset(target_offset);
-      this->update_key_to_frag_idx(target);
-      /// one frag short, because it gets bumped when the fragment is actually read.
-      frag_upper_bound = target > 0 ? (*frags)[target].m_offset : 0;
-      Debug("amc", "Fragment seek from %d to %d target offset %" PRIu64, fragment - 1, target, target_offset);
-    }
-  }
-#endif
-
-  if (vio.ntodo() > 0 && 0 == resp_range.getRemnantSize())
-    // reached the end of the document and the user still wants more
-    return calluser(VC_EVENT_EOS);
-  last_collision = 0;
-  writer_lock_retry = 0;
-  // if the state machine calls reenable on the callback from the cache,
-  // we set up a schedule_imm event. The openReadReadDone discards
-  // EVENT_IMMEDIATE events. So, we have to cancel that trigger and set
-  // a new EVENT_INTERVAL event.
-  cancel_trigger();
-  CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
-  if (!lock.is_locked()) {
-    SET_HANDLER(&CacheVC::openReadMain);
-    VC_SCHED_LOCK_RETRY();
-  }
-  if (dir_probe(&key, vol, &dir, &last_collision)) {
-    SET_HANDLER(&CacheVC::openReadReadDone);
-    int ret = do_read_call(&key);
-    if (ret == EVENT_RETURN) {
-      lock.release();
-      return handleEvent(AIO_EVENT_DONE, 0);
-    }
-    return EVENT_CONT;
-  } else {
-    if (!od->wait_for(earliest_key, this, target_offset)) {
-      DDebug("cache_read_agg", "%p: key: %X ReadMain writer aborted: %d",
-             this, first_key.slice32(1), (int)vio.ndone);
-      lock.release();
-      return calluser(VC_EVENT_ERROR);
-    }
-    DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: Key[1]=%d", this, first_key.slice32(1), (int)vio.ndone);
-    SET_HANDLER(&CacheVC::openReadMain);
-    return EVENT_CONT;
-  }
-  if (is_action_tag_set("cache"))
-    ink_release_assert(false);
-  Warning("Document %X truncated at %d of %d, missing fragment %X", first_key.slice32(1), (int)vio.ndone, (int)doc_len, key.slice32(1));
-  // remove the directory entry
-  dir_delete(&earliest_key, vol, &earliest_dir);
-  lock.release();
-//Lerror:
-  return calluser(VC_EVENT_ERROR);
-//Leos:
-  return calluser(VC_EVENT_EOS);
-}
+# endif
 
 int
 CacheVC::openReadWaitEarliest(int evid, Event*)
@@ -1065,7 +1062,7 @@ CacheVC::openReadStartHead(int event, Event *e)
 
       // If the object length is known we can check the range.
       // Otherwise we have to leave it vague and talk to the origin to get full length info.
-      if (alternate.m_alt->m_flag.content_length_p && !resp_range.apply(doc_len)) {
+      if (alternate.m_alt->m_flag.content_length_p && !resp_range.resolve(doc_len)) {
         err = ECACHE_UNSATISFIABLE_RANGE;
         goto Ldone;
       }

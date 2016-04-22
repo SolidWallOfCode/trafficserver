@@ -495,7 +495,7 @@ void
 CacheVC::set_full_content_length(int64_t cl)
 {
   alternate.object_size_set(cl);
-  resp_range.apply(cl);
+  resp_range.resolve(cl);
 }
 
 bool CacheVC::set_pin_in_cache(time_t time_pin)

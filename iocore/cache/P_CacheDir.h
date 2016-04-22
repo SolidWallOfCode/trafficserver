@@ -278,6 +278,7 @@ struct OpenDirEntry {
    */
   DLL<CacheVC, Link_CacheVC_Active_Link> open_waiting;
 
+  /// Link for stripe global hash table.
   LINK(OpenDirEntry, link);
 
   //  int wait(CacheVC *c, int msec);
@@ -290,7 +291,7 @@ struct OpenDirEntry {
   self &write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.
   /// If the write is not @a success then the fragment is not marked as cached.
-  self &write_complete(CacheKey const &alt_key, CacheVC *vc, bool success = true);
+  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const& data, bool success = true);
   /// Indicate if a VC is currently writing to the fragment with this @a offset.
   bool is_write_active(CacheKey const &alt_key, int64_t offset);
   /// Get the fragment key for a specific @a offset.

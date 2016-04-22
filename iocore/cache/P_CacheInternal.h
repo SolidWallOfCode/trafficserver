@@ -314,6 +314,7 @@ struct CacheVC: public CacheVConnection
   int do_write_lock();
   int do_write_lock_call();
   int do_sync(uint32_t target_write_serial);
+  int64_t shipContent();
 
   int openReadClose(int event, Event *e);
   int openReadReadDone(int event, Event *e);
@@ -328,6 +329,8 @@ struct CacheVC: public CacheVConnection
   int openReadFromWriterMain(int event, Event *e);
   int openReadFromWriterFailure(int event, Event *);
   //  int openReadChooseWriter(int event, Event *e);
+  int fetchFromCache(int event, Event *e);
+  int openReadWaitForTrailing(int event, Event *e);
 
   int openWriteCloseDir(int event, Event *e);
   int openWriteCloseHeadDone(int event, Event *e);
@@ -394,11 +397,6 @@ struct CacheVC: public CacheVConnection
    */
   virtual uint32_t load_http_info(CacheHTTPInfoVector* info, struct Doc* doc, RefCountObj * block_ptr = NULL);
 
-  /// Change member @a key to be the key for the @a idx 'th fragment.
-  void update_key_to_frag_idx(int idx);
-  /// Compute the index of the fragment that contains the byte at content location @a offset.
-  int frag_idx_for_offset(uint64_t offset);
-
   virtual char const* get_http_range_boundary_string(int* len) const;
   virtual int64_t get_effective_content_size();
   virtual void set_full_content_length(int64_t size);
@@ -459,6 +457,10 @@ struct CacheVC: public CacheVConnection
   Ptr<IOBufferData> first_buf;
   Ptr<IOBufferBlock> blocks; // data available to write
   Ptr<IOBufferBlock> writer_buf;
+  /// Data transfered directly from writer VC to this (reader) VC because this VC was waiting for the writer.
+  IOBufferChain wait_buffer;
+  /// Content based offset of the data in @a wait_buf
+  int64_t wait_position;
 
   OpenDirEntry *od;
   AIOCallbackInternal io;

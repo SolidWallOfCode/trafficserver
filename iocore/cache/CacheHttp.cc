@@ -29,6 +29,41 @@
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
+void
+CacheHTTPInfoVector::Item::addCacheBuffer(IOBufferBlock* block, int64_t length, int64_t position)
+{
+  IOBufferChain data;
+
+  // Blend in to overlapping existing buffer or insert in order.
+  CacheBuffer* cb = _content_buffers.head;
+  while (NULL != cb) {
+    int64_t last;
+    if (cb->_position <= position && position <= (last = cb->_position + cb->_data.length())) {
+      int64_t delta = last - position; // length of overlapping trailing section of current data
+      cb->_data.write(block, length - delta, delta);
+    } else if (position <= cb->_position && cb->_position <= (last = position + length + 1)) {
+      int64_t delta = cb->_position - position; // length of non-overlapping initial section of incoming data
+      IOBufferChain tmp_buf = cb->_data; // save this
+      cb->_data.clear();
+      cb->_data.write(block, delta);
+      cb->_data += tmp_buf;
+    } if (position < cb->_position) {
+      CacheBuffer* n = new CacheBuffer;
+      n->_data.write(block, length);
+      n->_position = position;
+      // no overlap and the new content is so it can be inserted before @a cb.
+      _content_buffers.insert(n, _content_buffers.prev(cb)); // insert after previous -> insert before.
+      break;
+    }
+    cb = cb->link.next;
+  }
+  data.write(block, length); // first make a detached chain.
+  
+  
+}
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
 // Guaranteed to be all zero?
 static CacheHTTPInfoVector::Item default_vec_info;
 
@@ -271,11 +306,12 @@ CacheHTTPInfoVector::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t 
   -------------------------------------------------------------------------*/
 
 CacheHTTPInfoVector&
-CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool success)
+CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheBuffer const& cb, bool success)
 {
   int idx = this->index_of(alt_key);
   Item& item = data[idx];
   CacheVC* reader;
+  DLL<CacheVC, Link_CacheVC_Active_Link> waiters;
 
   Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
 
@@ -283,9 +319,16 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool s
   if (success) item._alternate.mark_frag_write(vc->fragment);
 
   // Kick all the waiters, success or fail.
-  while (NULL != (reader = item._waiting.pop())) {
-    Debug("amc", "[write_complete] wake up %p", reader);
-    reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
+  std::swap(waiters, item._waiting); // moves all waiting VCs to local list.
+  while (NULL != (reader = waiters.pop())) {
+    if (reader->fragment == vc->fragment) {
+      Debug("amc", "[write_complete] wake up %p", reader);
+      reader->wait_buffer = cb._data;
+      reader->wait_position = cb._position;
+      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
+    } else {
+      item._waiting.push(reader); // not waiting for this, put it back.
+    }
   }
 
   return *this;
@@ -293,6 +336,15 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, bool s
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
+
+CacheHTTPInfoVector&
+CacheHTTPInfoVector::addCacheBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position)
+{
+  int idx = this->index_of(alt_key);
+  Item& item = data[idx];
+  item.addCacheBuffer(block, len, position);
+  return *this;
+}
 
 bool
 CacheHTTPInfoVector::has_writer(CacheKey const& alt_key)
@@ -343,9 +395,12 @@ CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
   int alt_idx = this->index_of(alt_key);
   Item& item = data[alt_idx];
   item._writers.remove(vc);
-  while (NULL != (reader = item._waiting.pop())) {
-    Debug("amc", "[close_writer] wake up %p", reader);
-    reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
+  if (item._writers.empty()) {
+    // if there are no more writers, none of these will ever wake up normally so kick them all now.
+    while (NULL != (reader = item._waiting.pop())) {
+      Debug("amc", "[close_writer] no writers left wake up %p", reader);
+      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x112);
+    }
   }
   return *this;
 }
@@ -362,7 +417,7 @@ CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec co
   CacheVC* vc;
   CacheVC* cycle_vc = NULL;
   // Yeah, this need to be tunable.
-  uint64_t DELTA = item._alternate.get_frag_fixed_size() * 16;
+  int64_t DELTA = item._alternate.get_frag_fixed_size() * 16;
   HTTPRangeSpec::Range r(item._alternate.get_uncached_hull(req, initial));
 
   if (r.isValid()) {
@@ -373,8 +428,8 @@ CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec co
     writers.append(item._writers);
     item._writers.clear();
     while (r._min < r._max && NULL != (vc = writers.pop())) {
-      uint64_t base = static_cast<int64_t>(writers.head->resp_range.getOffset());
-      uint64_t delta = static_cast<int64_t>(writers.head->resp_range.getRemnantSize());
+      int64_t base = static_cast<int64_t>(writers.head->resp_range.getOffset());
+      int64_t delta = static_cast<int64_t>(writers.head->resp_range.getRemnantSize());
 
       if (base+delta < r._min || base > r._max) {
         item._writers.push(vc); // of no use to us, just put it back.
@@ -383,8 +438,10 @@ CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec co
         item._writers.push(vc); // we're done with it, put it back.
         cycle_vc = NULL; // we did something so clear cycle indicator
       } else if (vc == cycle_vc) { // we're looping.
-        item._writers.push(vc); // put this one back.
-        while (NULL != (vc = writers.pop())) item._writers.push(vc); // and the rest.
+        // put everyone back and drop out of the loop.
+        item._writers.push(vc);
+        while (NULL != (vc = writers.pop())) item._writers.push(vc);
+        break;
       } else {
         writers.enqueue(vc); // put it back to later checking.
         if (NULL == cycle_vc) cycle_vc = vc; // but keep an eye out for it coming around again.
@@ -437,21 +494,30 @@ CacheRange::start()
 }
 
 bool
-CacheRange::apply(uint64_t len)
+CacheRange::resolve(int64_t len)
 {
-  bool zret = _r.apply(len);
-  if (zret) {
-    _len = len;
-    if (_r.hasRanges()) {
-      _offset = _r[_idx = 0]._min;
-      if (_r.isMulti()) _pending_range_shift_p = true;
+  bool zret = false;
+  if (len < 0) {
+    if (!_r.hasOpenRange()) {
+      zret = true;
+      _resolved_p = true;
+    }
+  } else {
+    zret = _r.apply(len);
+    if (zret) {
+      _len = len;
+      _resolved_p = true;
+      if (_r.hasRanges()) {
+        _offset = _r[_idx = 0]._min;
+        if (_r.isMulti()) _pending_range_shift_p = true;
+      }
     }
   }
   return zret;
 }
 
 uint64_t
-CacheRange::consume(uint64_t size)
+CacheRange::consume(int64_t size)
 {
   switch (_r._state) {
   case HTTPRangeSpec::EMPTY: _offset += size; break;

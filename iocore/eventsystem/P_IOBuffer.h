@@ -424,7 +424,7 @@ IOBufferBlock::clear()
 }
 
 TS_INLINE IOBufferBlock *
-IOBufferBlock::clone()
+IOBufferBlock::clone() const
 {
 #ifdef TRACK_BUFFER_USER
   IOBufferBlock *b = new_IOBufferBlock_internal(_location);

@@ -516,27 +516,39 @@ struct HTTPRangeSpec {
 
       If @a _min > 0 and @a _max == 0 the range is backwards and counts from the
       end of the object. That is (100,0) means the last 100 bytes of content.
+
+      A prefix range is represented by a @a _min >= 0 and @c _max == INT64_MAX.
+
+      A prefix or suffix range is an @a open range as it is not fully specified and depends on the
+      actual content length.
   */
   struct Range {
-    uint64_t _min;
-    uint64_t _max;
+    typedef Range self; ///< Self reference type.
+    
+    int64_t _min; ///< Minimum offset of the range.
+    int64_t _max; ///< Maximum offset of the range.
 
     /// Default constructor - invalid range.
-    Range() : _min(UINT64_MAX), _max(1) {}
+    Range() : _min(INT64_MAX), _max(1) {}
     /// Construct as the range ( @a low .. @a high )
-    Range(uint64_t low, uint64_t high) : _min(low), _max(high) {}
+    Range(int64_t low, int64_t high) : _min(low), _max(high) {}
 
     /// Test if this range is a suffix range.
     bool isSuffix() const;
+    /// Test if this range is a prefix range.
+    bool isPrefix() const;
     /// Test if this range is a valid range.
     bool isValid() const;
     /// Get the size (in bytes) of the range.
-    uint64_t size() const;
+    int64_t size() const;
     /** Convert range to absolute values for a content length of @a len.
 
-        @return @c true if the range was valid for @a len, @c false otherwise.
+        @return @c true if the range was valid for @a len and all resulting range are absolute.
     */
-    bool apply(uint64_t len);
+    bool apply(int64_t len);
+
+    /// Make the range a suffix range.
+    self& setSuffix(int64_t len);
 
     /// Force the range to an empty state.
     Range &invalidate();
@@ -552,7 +564,7 @@ struct HTTPRangeSpec {
   enum State {
     EMPTY,         ///< No range.
     INVALID,       ///< Range parsing failed.
-    UNSATISFIABLE, ///< Content length application failed.
+    UNSATISFIABLE, ///< Content length resolution failed.
     SINGLE,        ///< Single range.
     MULTI,         ///< Multiple ranges.
   } _state;
@@ -610,7 +622,7 @@ struct HTTPRangeSpec {
                       ,
                       int64_t interstitial ///< Require gaps to be at least this large.
                       ,
-                      uint64_t limit ///< All requested bytes will be less than this if > 0
+                      int64_t limit ///< All requested bytes will be less than this if > 0
                       ) const;
 
   /// Print the @a ranges.
@@ -647,7 +659,7 @@ struct HTTPRangeSpec {
       Note a range spec with no ranges is always satisfiable and that suffix ranges are also
       always satisfiable.
   */
-  bool apply(uint64_t length);
+  bool apply(int64_t length);
 
   /** Number of distinct ranges.
       @return Number of ranges.
@@ -674,6 +686,9 @@ struct HTTPRangeSpec {
 
   /// Test if this is an unsatisfied range.
   bool isUnsatisfied() const;
+
+  /// Test if there is an open range (not absolute offsets)
+  bool hasOpenRange() const;
 
   /// Access the range at index @a idx.
   Range &operator[](int n);
@@ -2077,7 +2092,7 @@ HTTPRangeSpec::isValid() const
 inline HTTPRangeSpec::Range &
 HTTPRangeSpec::Range::invalidate()
 {
-  _min = UINT64_MAX;
+  _min = INT64_MAX;
   _max = 1;
   return *this;
 }
@@ -2088,13 +2103,27 @@ HTTPRangeSpec::Range::isSuffix() const
   return 0 == _max && _min > 0;
 }
 
+inline HTTPRangeSpec::Range &
+HTTPRangeSpec::Range::setSuffix(int64_t size)
+{
+  _max = 0;
+  _min = size;
+  return *this;
+}
+
+inline bool
+HTTPRangeSpec::Range::isPrefix() const
+{
+  return _min >= 0 && _max == INT64_MAX;
+}
+
 inline bool
 HTTPRangeSpec::Range::isValid() const
 {
   return _min <= _max || this->isSuffix();
 }
 
-inline uint64_t
+inline int64_t
 HTTPRangeSpec::Range::size() const
 {
   return 1 + (_max - _min);
@@ -2114,7 +2143,7 @@ HTTPRangeSpec::size() const
 }
 
 inline bool
-HTTPRangeSpec::Range::apply(uint64_t len)
+HTTPRangeSpec::Range::apply(int64_t len)
 {
   ink_assert(len > 0);
   bool zret = true; // is this range satisfiable for @a len?

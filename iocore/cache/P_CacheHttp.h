@@ -47,15 +47,30 @@ struct CacheHTTPInfo {
 
 #endif // HTTP_CACHE
 
+/** Used to hold content for use by the cache mechanisms.
+    Holds content that was received from an origin server but could not be written
+    to cache because it did not satisfy fragment boundary conditions.
+*/
+struct CacheBuffer {
+  int64_t _position; ///< Location in content.
+  IOBufferChain _data; ///< The content.
+  // The declarations are a bit wonky, it's done this way because this is the first
+  // thing I tried that worked.
+  LINK(CacheBuffer, link); ///< Linkage for list of content buffers.
+  typedef Queue<CacheBuffer> List; ///< List type for instances.
+};
+    
+
 LINK_FORWARD_DECLARATION(CacheVC, OpenDir_Link) // forward declaration
 LINK_FORWARD_DECLARATION(CacheVC, Active_Link)  // forward declaration
 
 struct CacheHTTPInfoVector {
   typedef CacheHTTPInfoVector self; ///< Self reference type.
 
+  /// Descriptor for an alternate for this object.
   struct Item {
-    /// Descriptor for an alternate for this object.
-    CacheHTTPInfo _alternate;
+    
+    CacheHTTPInfo _alternate; ///< The basic alternate object.
     /// CacheVCs which are writing data to this alternate.
     DLL<CacheVC, Link_CacheVC_OpenDir_Link> _writers;
     ///@{ Active I/O
@@ -72,9 +87,13 @@ struct CacheHTTPInfoVector {
         better choice.
     */
     /// CacheVCs with pending write I/O.
+    /// @note "active" means the data has been sent to the aggregation write logic and the VC is
+    /// waiting for that I/O to complete.
     DLL<CacheVC, Link_CacheVC_Active_Link> _active;
     /// CacheVCs waiting on fragments.
     DLL<CacheVC, Link_CacheVC_Active_Link> _waiting;
+    ///@}
+    
     // To minimize list walking, we track the convex hull of fragments for which readers are waiting.
     // We update the values whenever we must actually walk the list.
     // Otherwise we maintain the convex hull invariant so if a written fragment is outside the range,
@@ -90,7 +109,19 @@ struct CacheHTTPInfoVector {
         unsigned int dirty : 1;
       } f;
     };
-    ///@}
+    /// List of content buffers.
+    /// These are content that could not be written to cache but were recieved from the origin and
+    /// therefore are expected to be needed by a reader for this alternate.
+    /// @note This should be cleaned out when the last VC associated with this alternate finishes.
+    CacheBuffer::List _content_buffers;
+
+    /** Put content in to the content buffer list.
+        A new chain of buffers blocks is created to detach the content from the existing
+        block chain to prevent the content buffer from anchoring blocks beyond the specified content.
+        @a len is the number of bytes and @a position is the position in the content of the data.
+    */
+    void addCacheBuffer(IOBufferBlock* block, int64_t len, int64_t position);
+    
     /// Check if there are any writers.
     /// @internal Need to augment this at some point to check for writers to a specific offset.
     bool has_writers() const;
@@ -134,7 +165,7 @@ struct CacheHTTPInfoVector {
   self &write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.
   /// If the write is not @a success then the fragment is not marked as cached.
-  self &write_complete(CacheKey const &alt_key, CacheVC *vc, bool success = true);
+  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const& cb, bool success = true);
   /// Indicate if a VC is currently writing to the fragment with this @a offset.
   bool is_write_active(CacheKey const &alt_key, int64_t offset);
   /// Mark a CacheVC as waiting for the fragment containing the byte at @a offset.
@@ -144,6 +175,9 @@ struct CacheHTTPInfoVector {
   CacheKey const &key_for(CacheKey const &alt_key, int64_t offset);
   /// Close out anything related to this writer
   self &close_writer(CacheKey const &alt_key, CacheVC *vc);
+  /// Add a content lookaside buffer for an incomplete fragment.
+  self& addCacheBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position);
+  
   /** Compute the convex hull of the uncached parts of the @a request taking current writers in to account.
 
       @return @c true if there is uncached data that must be retrieved.
@@ -173,13 +207,16 @@ public:
   typedef CacheRange self; ///< Self reference type.
 
   /// Default constructor
-  CacheRange() : _offset(0), _idx(-1), _ct_field(NULL), _pending_range_shift_p(false) {}
+  CacheRange() : _offset(0), _idx(-1), _ct_field(NULL), _resolved_p(false), _pending_range_shift_p(false) {}
 
   /// Test if the range spec has actual ranges in it
   bool hasRanges() const;
 
   /// Test for multiple ranges.
   bool isMulti() const;
+
+  /// Test if resolved (converted to fixed offsets only)
+  bool isResolved() const;
 
   /// Get the current object offset
   uint64_t getOffset() const;
@@ -197,7 +234,7 @@ public:
 
       @return The resulting offset in the object.
   */
-  uint64_t consume(uint64_t size);
+  uint64_t consume(int64_t size);
 
   /** Initialize from a request header.
    */
@@ -210,9 +247,9 @@ public:
 
   /** Apply a content @a len to the ranges.
 
-      @return @c true if successfully applied, @c false otherwise.
+      @return @c true if successfully applied an all ranges are now absolute offsets, @c false otherwise.
   */
-  bool apply(uint64_t len);
+  bool resolve(int64_t len);
 
   /** Get the range boundary string.
       @a len if not @c NULL receives the length of the string.
@@ -251,13 +288,15 @@ public:
   void clear();
 
 protected:
-  uint64_t _len;        ///< Total object length.
-  uint64_t _offset;     ///< Offset in content.
+  int64_t _len;        ///< Total object length.
+  int64_t _offset;     ///< Offset in content.
   int _idx;             ///< Current range index. (< 0 means not in a range)
   HTTPRangeSpec _r;     ///< The actual ranges.
   MIMEField *_ct_field; ///< Content-Type field.
+  /// String used for boundaries between ranges.
   char _boundary[HTTP_RANGE_BOUNDARY_LEN];
-  bool _pending_range_shift_p;
+  bool _resolved_p;            ///< If the range has been converted to all absolute offsets.
+  bool _pending_range_shift_p; ///< The current range has been consumed and the next range will start.
 };
 
 TS_INLINE bool
