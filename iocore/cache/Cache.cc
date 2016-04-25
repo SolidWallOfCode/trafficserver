@@ -301,6 +301,7 @@ CacheVC::CacheVC() : alternate_index(CACHE_ALT_INDEX_DEFAULT)
 {
   size_to_init = sizeof(CacheVC) - (size_t) & ((CacheVC *)0)->vio;
   memset((void *)&vio, 0, size_to_init);
+  wait_position = -1;
 }
 
 #ifdef HTTP_CACHE

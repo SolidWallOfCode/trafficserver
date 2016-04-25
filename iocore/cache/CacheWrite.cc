@@ -1197,11 +1197,9 @@ CacheVC::openWriteCloseHead(int event, Event *e)
 {
   cancel_trigger();
   f.use_first_key = 1;
-  if (io.ok())
-    ink_assert(fragment || (length == (int64_t)total_len) ||
-               (resp_range.hasRanges() && alternate.object_size_get() > alternate.get_frag_fixed_size()));
-  else
+  if (!io.ok())
     return openWriteCloseDir(event, e);
+  
   if (f.data_done) {
     write_len = 0;
   } else {

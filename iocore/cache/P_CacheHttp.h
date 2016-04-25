@@ -58,6 +58,8 @@ struct CacheBuffer {
   // thing I tried that worked.
   LINK(CacheBuffer, link); ///< Linkage for list of content buffers.
   typedef Queue<CacheBuffer> List; ///< List type for instances.
+
+  CacheBuffer() : _position(-1) {}
 };
     
 

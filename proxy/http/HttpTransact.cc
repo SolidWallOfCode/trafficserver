@@ -2526,6 +2526,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   bool server_up = true;
   CacheHTTPInfo *obj;
   HTTPRangeSpec range;
+  int64_t obj_size = -1;
 
   if (s->api_update_cached_object == HttpTransact::UPDATE_CACHED_OBJECT_CONTINUE) {
     obj = &s->cache_info.object_store;
@@ -2701,6 +2702,13 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
     }
   }
 
+  // Valid hit in cache. Update the request range if possible.
+  HTTPRangeSpec& req_range = s->hdr_info.request_range;
+  obj_size = s->cache_info.object_read->object_size_get();
+  if (req_range.hasRanges() && obj_size >= 0)
+    req_range.apply(obj_size);
+    
+
   // Check if we need to get some data from the origin.
   if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range, MIN_INITIAL_UNCACHED)) {
     Debug("amc", "Request touches uncached fragments");
@@ -2726,7 +2734,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   } else {
     // Everything needed is present, update the existing read VC and proceed.
     s->state_machine->get_cache_sm().cache_read_vc->set_content_range(s->hdr_info.request_range);
-    s->hdr_info.response_content_size = s->cache_info.object_read->object_size_get();
+    s->hdr_info.response_content_size = obj_size;
   }
 
   // cache hit, document is fresh, does not authorization,

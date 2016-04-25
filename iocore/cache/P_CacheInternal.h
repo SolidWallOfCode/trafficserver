@@ -698,6 +698,8 @@ free_CacheVC(CacheVC *cont)
   if (cont->scan_vol_map)
     ats_free(cont->scan_vol_map);
   cont->resp_range.clear();
+  cont->wait_buffer.clear();
+  cont->wait_position = -1;
   memset((char *) &cont->vio, 0, cont->size_to_init);
 #ifdef CACHE_STAT_PAGES
   ink_assert(!cont->stat_link.next && !cont->stat_link.prev);

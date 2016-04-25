@@ -537,6 +537,7 @@ CacheVC::shipContent()
     if (wait_position < r_pos) offset = r_pos - wait_position;
     bytes = writer->write(wait_buffer.head(), bytes, offset);
     resp_range.consume(bytes);
+    vio.ndone += bytes;
     wait_buffer.clear();
     wait_position = -1;
     Debug("amc", "shipped %" PRId64 " bytes at range offset %" PRIu64, bytes, r_pos);

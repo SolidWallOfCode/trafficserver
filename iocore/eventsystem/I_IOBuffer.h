@@ -544,7 +544,7 @@ class IOBufferChain
   
 public:
   /// Default constructor - construct empty chain.
-  IOBufferChain() : _blocks(NULL), _len(0) {}
+  IOBufferChain() : _blocks(NULL), _tail(NULL), _len(0) {}
 
   /// Shallow copy.
   self& operator = (self const& that);
