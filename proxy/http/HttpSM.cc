@@ -2686,6 +2686,10 @@ HttpSM::state_cache_open_partial_read(int event, void *data)
     ink_assert("[amc] do something!");
     break;
 
+  case HTTP_TUNNEL_EVENT_DONE:
+    // The write VC can finish while the partial read open is still pending.
+    break;
+    
 
   default:
     // When the SM is in this state we've already started a tunnel running so we have to handle

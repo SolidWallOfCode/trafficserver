@@ -112,6 +112,7 @@ Cache::open_read(Continuation* cont, CacheVConnection* vc, HTTPHdr* client_reque
     c->vio.op = VIO::READ;
     c->base_stat = cache_read_active_stat;
     c->od = write_vc->od;
+    ++(c->od->num_active);
     c->frag_type = write_vc->frag_type;
     CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
 //    write_vc->alternate.request_get(&c->request);
@@ -274,7 +275,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
     f.read_from_writer_called = 1;
   }
   cancel_trigger();
-  DDebug("cache_read_agg", "%p: key: %X In openReadFromWriter", this, first_key.slice32(1));
+  DDebug("cache_open_read", "%p: key: %X In openReadFromWriter", this, first_key.slice32(1));
 
   if (_action.cancelled) {
     return this->closeReadAndFree(0, NULL);
@@ -298,6 +299,10 @@ CacheVC::openReadFromWriter(int event, Event *e)
   if (od->open_writer) {
     // Alternates are in flux, wait for origin server response to update them.
     if (!od->open_waiting.in(this)) {
+      // If the writer that's updating the alt table is the paired write VC for this reader
+      // then we need to go with the alt selected by that specific writer rather than do
+      // independent alt selection.
+      if (od->open_writer == write_vc) SET_HANDLER(&CacheVC::waitForAltUpdate);
       wake_up_thread = mutex->thread_holding;
       od->open_waiting.push(this);
     }
@@ -337,6 +342,49 @@ CacheVC::openReadFromWriter(int event, Event *e)
   ink_assert(false);
   return EVENT_DONE; // should not get here.
 }
+
+int
+CacheVC::waitForAltUpdate(int event, Event *e)
+{
+  DDebug("cache_open_read", "[waitForAltUpdate] %p", this);
+  void* tag = e->cookie; // Was the address of an alt.
+  int i = -1;
+
+  if (_action.cancelled) {
+    return this->closeReadAndFree(0, NULL);
+  }
+
+  if (CACHE_EVENT_WRITER_UPDATED_ALT_TABLE == event) {
+    CACHE_TRY_LOCK(lock_od, od->mutex, mutex->thread_holding);
+    if (!lock_od.is_locked())
+      VC_SCHED_LOCK_RETRY();
+
+    // @a e carries a cookie which is computed from the earliest key of the alt selected by the writerVC.
+    for ( i = od->vector.count() - 1 ; i >= 0 ; --i ) {
+      CacheHTTPInfoVector::Item& item = od->vector.data[i];
+      if (reinterpret_cast<void*>(item._alternate.m_alt->m_earliest.m_key.fold()) == tag) {
+        alternate.copy_shallow(&item._alternate);
+        earliest_key = alternate.m_alt->m_earliest.m_key;
+        doc_len = alternate.object_size_get();
+        break;
+      }
+    }
+  } else {
+    Debug("amc", "[waitForAltUpdate] - unexpected event %d", event);
+    // fall through and fail.
+  }
+  
+  if (i < 0) { // alt not found, which is a serious error in this case (paired with writeVC).
+    SET_HANDLER(&CacheVC::openReadFromWriterFailure);
+    return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(-ECACHE_ALT_MISS));
+  }
+
+  // The writer has already dealt with the earliest fragment, no need to read it again from disk.
+  // Go straight to content service.
+  SET_HANDLER(&CacheVC::openReadMain);
+  return callcont(CACHE_EVENT_OPEN_READ);
+}
+
 
 int
 CacheVC::openReadFromWriterMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
@@ -557,12 +605,14 @@ CacheVC::shipContent()
 int
 CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
+  int64_t target_position = resp_range.getOffset();
+  int64_t target_size = resp_range.getRemnantSize();
+  
   cancel_trigger();
 
   if (wait_position >= 0) { // Data has arrived, ship it.
     return this->shipContent();
-  } else if (resp_range.getRemnantSize()) {
-    int64_t target_position = resp_range.getOffset();
+  } else if (target_size) {
     fragment = alternate.get_frag_index_of(target_position);
     if (alternate.is_frag_cached(fragment)) {
       key = alternate.get_frag_key(fragment);
@@ -571,6 +621,9 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       // If it's not in cache and there is no OD then there are no writers, fail.
       Debug("amc", "[CacheVC::openReadMain] Uncached fragment %d at offset %" PRId64 " and no ODE", fragment, target_position);
       return calluser(VC_EVENT_ERROR);
+    } else if (od->vector.getSideBufferContent(earliest_key, wait_buffer, target_position, target_size)) {
+      wait_position = target_position;
+      return this->shipContent();
     } else if (!od->wait_for(earliest_key, this, target_position)) {
       DDebug("cache_read_agg", "%p: key: %X ReadMain writer aborted: %d",
              this, first_key.slice32(1), (int)vio.ndone);
@@ -624,57 +677,6 @@ CacheVC::fetchFromCache(int, Event*)
 //Leos:
   return calluser(VC_EVENT_EOS);
 }
-
-# if 0
-  Doc *doc = (Doc *) buf->data();
-  int64_t bytes = vio.ntodo();
-  IOBufferBlock *b = NULL;
-  uint64_t target_offset = resp_range.getOffset();
-  uint64_t lower_bound = frag_upper_bound - doc->data_len();
-
-  if (bytes <= 0)
-    return EVENT_CONT;
-
-  // Start shipping
-  while (bytes > 0 && lower_bound <= target_offset && target_offset < frag_upper_bound) {
-    if (vio.buffer.writer()->max_read_avail() > vio.buffer.writer()->water_mark && vio.ndone) // wait for reader
-      return EVENT_CONT;
-
-    if (resp_range.hasPendingRangeShift()) { // in new range, shift to start location.
-      int b_len;
-      char const* b_str = resp_range.getBoundaryStr(&b_len);
-      size_t r_idx = resp_range.getIdx();
-
-      doc_pos = doc->prefix_len() + (target_offset - lower_bound);
-      
-      vio.ndone += HTTPRangeSpec::writePartBoundary(vio.buffer.writer(), b_str, b_len
-                                                    , doc_len, resp_range[r_idx]._min, resp_range[r_idx]._max
-                                                    , resp_range.getContentTypeField(), r_idx >= (resp_range.count() - 1)
-        );
-      resp_range.consumeRangeShift();
-      Debug("amc", "Range boundary for range %" PRIu64, r_idx);
-    }
-
-    bytes = std::min(doc->len - doc_pos, static_cast<int64_t>(resp_range.getRemnantSize()));
-    bytes = std::min(bytes, vio.ntodo());
-    if (bytes > 0) {
-      b = new_IOBufferBlock(buf, bytes, doc_pos);
-      b->_buf_end = b->_end;
-      vio.buffer.writer()->append_block(b);
-      vio.ndone += bytes;
-      doc_pos += bytes;
-      resp_range.consume(bytes);
-      Debug("amc", "shipped %" PRId64 " bytes at target offset %" PRIu64, bytes, target_offset);
-      target_offset = resp_range.getOffset();
-    }
-
-    if (vio.ntodo() <= 0)
-      return calluser(VC_EVENT_READ_COMPLETE);
-    else if (calluser(VC_EVENT_READ_READY) == EVENT_DONE)
-      return EVENT_DONE;
-  }
-
-# endif
 
 int
 CacheVC::openReadWaitEarliest(int evid, Event*)

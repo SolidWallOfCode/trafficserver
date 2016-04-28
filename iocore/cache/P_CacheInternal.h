@@ -331,6 +331,7 @@ struct CacheVC: public CacheVConnection
   //  int openReadChooseWriter(int event, Event *e);
   int fetchFromCache(int event, Event *e);
   int openReadWaitForTrailing(int event, Event *e);
+  int waitForAltUpdate(int event, Event* e);
 
   int openWriteCloseDir(int event, Event *e);
   int openWriteCloseHeadDone(int event, Event *e);

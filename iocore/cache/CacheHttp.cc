@@ -30,36 +30,53 @@
   -------------------------------------------------------------------------*/
 
 void
-CacheHTTPInfoVector::Item::addCacheBuffer(IOBufferBlock* block, int64_t length, int64_t position)
+CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position, int64_t length)
 {
-  IOBufferChain data;
-
   // Blend in to overlapping existing buffer or insert in order.
-  CacheBuffer* cb = _content_buffers.head;
+  CacheBuffer *cb = _content_buffers.head;
   while (NULL != cb) {
     int64_t last;
     if (cb->_position <= position && position <= (last = cb->_position + cb->_data.length())) {
       int64_t delta = last - position; // length of overlapping trailing section of current data
       cb->_data.write(block, length - delta, delta);
+      return;
     } else if (position <= cb->_position && cb->_position <= (last = position + length + 1)) {
       int64_t delta = cb->_position - position; // length of non-overlapping initial section of incoming data
-      IOBufferChain tmp_buf = cb->_data; // save this
+      IOBufferChain tmp_buf = cb->_data;        // save this
       cb->_data.clear();
       cb->_data.write(block, delta);
       cb->_data += tmp_buf;
-    } if (position < cb->_position) {
-      CacheBuffer* n = new CacheBuffer;
-      n->_data.write(block, length);
-      n->_position = position;
-      // no overlap and the new content is so it can be inserted before @a cb.
-      _content_buffers.insert(n, _content_buffers.prev(cb)); // insert after previous -> insert before.
+      return;
+    }
+    if (position < cb->_position) {
+      // no overlap and the new content is earlier so it can be inserted before @a cb.
       break;
     }
     cb = cb->link.next;
   }
-  data.write(block, length); // first make a detached chain.
-  
-  
+
+  CacheBuffer *n = new CacheBuffer;
+  n->_data.write(block, length);
+  n->_position = position;
+  if (cb)
+    _content_buffers.insert(n, _content_buffers.prev(cb)); // insert after previous -> insert before.
+  else
+    _content_buffers.enqueue(n);
+}
+
+bool
+CacheHTTPInfoVector::Item::getSideBufferContent(IOBufferChain &data, int64_t position, int64_t length)
+{
+  CacheBuffer *cb = _content_buffers.head;
+
+  while (NULL != cb) {
+    if (cb->_position <= position && cb->_position + cb->_data.length() >= position + length) {
+      data.write(cb->_data.head(), length, position - cb->_position);
+      return true;
+    }
+    cb = _content_buffers.next(cb);
+  }
+  return false;
 }
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
@@ -187,8 +204,7 @@ CacheHTTPInfoVector::print(char *buffer, size_t buf_size, bool temps)
       }
 
       if (temps || !(data[i]._alternate.object_key_get() == zero_key)) {
-        snprintf(p, buf_size, "[%d %s]", data[i]._alternate.id_get(),
-                     CacheKey(data[i]._alternate.object_key_get()).toHexStr(buf));
+        snprintf(p, buf_size, "[%d %s]", data[i]._alternate.id_get(), CacheKey(data[i]._alternate.object_key_get()).toHexStr(buf));
         tmp = strlen(p);
         p += tmp;
         buf_size -= tmp;
@@ -238,7 +254,7 @@ CacheHTTPInfoVector::marshal(char *buf, int length)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 uint32_t
-CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj * block_ptr)
+CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block_ptr)
 {
   ink_assert(!(((intptr_t)buf) & 3)); // buf must be aligned
 
@@ -248,12 +264,11 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj * bloc
 
   vector_buf = block_ptr;
 
-  while (length - (buf - start) > (int) sizeof(HTTPCacheAlt)) {
-
-    int tmp = info.get_handle((char *) buf, length - (buf - start));
+  while (length - (buf - start) > (int)sizeof(HTTPCacheAlt)) {
+    int tmp = info.get_handle((char *)buf, length - (buf - start));
     if (tmp < 0) {
       ink_assert(!"CacheHTTPInfoVector::unmarshal get_handle() failed");
-      return (uint32_t) -1;
+      return (uint32_t)-1;
     }
     buf += tmp;
 
@@ -268,10 +283,10 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj * bloc
   -------------------------------------------------------------------------*/
 
 int
-CacheHTTPInfoVector::index_of(CacheKey const& alt_key)
+CacheHTTPInfoVector::index_of(CacheKey const &alt_key)
 {
   int zret;
-  for ( zret = 0 ; zret < xcount && alt_key != data[zret]._alternate.object_key_get() ; ++zret )
+  for (zret = 0; zret < xcount && alt_key != data[zret]._alternate.object_key_get(); ++zret)
     ;
   return zret < xcount ? zret : -1;
 }
@@ -279,22 +294,22 @@ CacheHTTPInfoVector::index_of(CacheKey const& alt_key)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheKey const&
-CacheHTTPInfoVector::key_for(CacheKey const& alt_key, int64_t offset)
+CacheKey const &
+CacheHTTPInfoVector::key_for(CacheKey const &alt_key, int64_t offset)
 {
   int idx = this->index_of(alt_key);
-  Item& item = data[idx];
+  Item &item = data[idx];
   return item._alternate.get_frag_key_of(offset);
 }
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheHTTPInfoVector&
-CacheHTTPInfoVector::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+CacheHTTPInfoVector &
+CacheHTTPInfoVector::write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
   int idx = this->index_of(alt_key);
-  Item& item = data[idx];
+  Item &item = data[idx];
 
   Debug("amc", "[CacheHTTPInfoVector::write_active] VC %p write %" PRId64, vc, offset);
 
@@ -305,18 +320,19 @@ CacheHTTPInfoVector::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheHTTPInfoVector&
-CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheBuffer const& cb, bool success)
+CacheHTTPInfoVector &
+CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const &cb, bool success)
 {
   int idx = this->index_of(alt_key);
-  Item& item = data[idx];
-  CacheVC* reader;
+  Item &item = data[idx];
+  CacheVC *reader;
   DLL<CacheVC, Link_CacheVC_Active_Link> waiters;
 
   Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
 
   item._active.remove(vc);
-  if (success) item._alternate.mark_frag_write(vc->fragment);
+  if (success)
+    item._alternate.mark_frag_write(vc->fragment);
 
   // Kick all the waiters, success or fail.
   std::swap(waiters, item._waiting); // moves all waiting VCs to local list.
@@ -325,7 +341,7 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheB
       Debug("amc", "[write_complete] wake up %p", reader);
       reader->wait_buffer = cb._data;
       reader->wait_position = cb._position;
-      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x56);
+      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x56);
     } else {
       item._waiting.push(reader); // not waiting for this, put it back.
     }
@@ -337,30 +353,39 @@ CacheHTTPInfoVector::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheB
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheHTTPInfoVector&
-CacheHTTPInfoVector::addCacheBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position)
+CacheHTTPInfoVector &
+CacheHTTPInfoVector::addSideBuffer(CacheKey const &alt_key, IOBufferBlock *block, int64_t len, int64_t position)
 {
   int idx = this->index_of(alt_key);
-  Item& item = data[idx];
-  item.addCacheBuffer(block, len, position);
+  Item &item = data[idx];
+  item.addSideBuffer(block, position, len);
   return *this;
 }
 
 bool
-CacheHTTPInfoVector::has_writer(CacheKey const& alt_key)
+CacheHTTPInfoVector::getSideBufferContent(CacheKey const &alt_key, IOBufferChain &chain, int64_t position, int64_t length)
+{
+  int idx = this->index_of(alt_key);
+  Item &item = data[idx];
+  return item.getSideBufferContent(chain, position, length);
+}
+
+bool
+CacheHTTPInfoVector::has_writer(CacheKey const &alt_key)
 {
   int alt_idx = this->index_of(alt_key);
   return alt_idx >= 0 && data[alt_idx]._writers.head != NULL;
 }
 
 bool
-CacheHTTPInfoVector::is_write_active(CacheKey const& alt_key, int64_t offset)
+CacheHTTPInfoVector::is_write_active(CacheKey const &alt_key, int64_t offset)
 {
   int alt_idx = this->index_of(alt_key);
-  Item& item = data[alt_idx];
+  Item &item = data[alt_idx];
   int frag_idx = item._alternate.get_frag_index_of(offset);
-  for ( CacheVC* vc = item._active.head ; vc ; vc = item._active.next(vc) ) {
-    if (vc->fragment == frag_idx) return true;
+  for (CacheVC *vc = item._active.head; vc; vc = item._active.next(vc)) {
+    if (vc->fragment == frag_idx)
+      return true;
   }
   return false;
 }
@@ -369,15 +394,15 @@ CacheHTTPInfoVector::is_write_active(CacheKey const& alt_key, int64_t offset)
   -------------------------------------------------------------------------*/
 
 bool
-CacheHTTPInfoVector::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+CacheHTTPInfoVector::wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
   bool zret = true;
   int alt_idx = this->index_of(alt_key);
-  Item& item = data[alt_idx];
+  Item &item = data[alt_idx];
   int frag_idx = item._alternate.get_frag_index_of(offset);
   vc->fragment = frag_idx; // really? Shouldn't this already be set?
   if (item.has_writers()) {
-    if (! item._waiting.in(vc))
+    if (!item._waiting.in(vc))
       item._waiting.push(vc);
   } else {
     zret = false;
@@ -388,18 +413,18 @@ CacheHTTPInfoVector::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offs
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-CacheHTTPInfoVector&
-CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
+CacheHTTPInfoVector &
+CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
 {
-  CacheVC* reader;
+  CacheVC *reader;
   int alt_idx = this->index_of(alt_key);
-  Item& item = data[alt_idx];
+  Item &item = data[alt_idx];
   item._writers.remove(vc);
   if (item._writers.empty()) {
     // if there are no more writers, none of these will ever wake up normally so kick them all now.
     while (NULL != (reader = item._waiting.pop())) {
       Debug("amc", "[close_writer] no writers left wake up %p", reader);
-      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void*>(0x112);
+      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x112);
     }
   }
   return *this;
@@ -409,13 +434,13 @@ CacheHTTPInfoVector::close_writer(CacheKey const& alt_key, CacheVC* vc)
   -------------------------------------------------------------------------*/
 
 HTTPRangeSpec::Range
-CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec const& req, int64_t initial)
+CacheHTTPInfoVector::get_uncached_hull(CacheKey const &alt_key, HTTPRangeSpec const &req, int64_t initial)
 {
   int alt_idx = this->index_of(alt_key);
-  Item& item = data[alt_idx];
+  Item &item = data[alt_idx];
   Queue<CacheVC, Link_CacheVC_OpenDir_Link> writers;
-  CacheVC* vc;
-  CacheVC* cycle_vc = NULL;
+  CacheVC *vc;
+  CacheVC *cycle_vc = NULL;
   // Yeah, this need to be tunable.
   int64_t DELTA = item._alternate.get_frag_fixed_size() * 16;
   HTTPRangeSpec::Range r(item._alternate.get_uncached_hull(req, initial));
@@ -431,20 +456,22 @@ CacheHTTPInfoVector::get_uncached_hull(CacheKey const& alt_key, HTTPRangeSpec co
       int64_t base = static_cast<int64_t>(writers.head->resp_range.getOffset());
       int64_t delta = static_cast<int64_t>(writers.head->resp_range.getRemnantSize());
 
-      if (base+delta < r._min || base > r._max) {
+      if (base + delta < r._min || base > r._max) {
         item._writers.push(vc); // of no use to us, just put it back.
       } else if (base < r._min + DELTA) {
-        r._min = base + delta; // we can wait, so depend on this writer and clip.
-        item._writers.push(vc); // we're done with it, put it back.
-        cycle_vc = NULL; // we did something so clear cycle indicator
+        r._min = base + delta;     // we can wait, so depend on this writer and clip.
+        item._writers.push(vc);    // we're done with it, put it back.
+        cycle_vc = NULL;           // we did something so clear cycle indicator
       } else if (vc == cycle_vc) { // we're looping.
         // put everyone back and drop out of the loop.
         item._writers.push(vc);
-        while (NULL != (vc = writers.pop())) item._writers.push(vc);
+        while (NULL != (vc = writers.pop()))
+          item._writers.push(vc);
         break;
       } else {
         writers.enqueue(vc); // put it back to later checking.
-        if (NULL == cycle_vc) cycle_vc = vc; // but keep an eye out for it coming around again.
+        if (NULL == cycle_vc)
+          cycle_vc = vc; // but keep an eye out for it coming around again.
       }
     }
   }
@@ -465,13 +492,13 @@ CacheRange::clear()
 }
 
 bool
-CacheRange::init(HTTPHdr* req)
+CacheRange::init(HTTPHdr *req)
 {
   bool zret = true;
-  MIMEField* rf = req->field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
+  MIMEField *rf = req->field_find(MIME_FIELD_RANGE, MIME_LEN_RANGE);
   if (rf) {
     int len;
-    char const* val = rf->value_get(&len);
+    char const *val = rf->value_get(&len);
     zret = _r.parseRangeFieldValue(val, len);
   }
   return zret;
@@ -509,7 +536,8 @@ CacheRange::resolve(int64_t len)
       _resolved_p = true;
       if (_r.hasRanges()) {
         _offset = _r[_idx = 0]._min;
-        if (_r.isMulti()) _pending_range_shift_p = true;
+        if (_r.isMulti())
+          _pending_range_shift_p = true;
       }
     }
   }
@@ -520,8 +548,12 @@ uint64_t
 CacheRange::consume(int64_t size)
 {
   switch (_r._state) {
-  case HTTPRangeSpec::EMPTY: _offset += size; break;
-  case HTTPRangeSpec::SINGLE: _offset += std::min(size, (_r._single._max - _offset) + 1 ); break;
+  case HTTPRangeSpec::EMPTY:
+    _offset += size;
+    break;
+  case HTTPRangeSpec::SINGLE:
+    _offset += std::min(size, (_r._single._max - _offset) + 1);
+    break;
   case HTTPRangeSpec::MULTI:
     ink_assert(_idx < static_cast<int>(_r.count()));
     // Must not consume more than 1 range or the boundary strings won't get sent.
@@ -533,21 +565,22 @@ CacheRange::consume(int64_t size)
       _pending_range_shift_p = true;
     }
     break;
-  default: break;
+  default:
+    break;
   }
 
   return _offset;
 }
 
-CacheRange&
-CacheRange::generateBoundaryStr(CacheKey const& key)
+CacheRange &
+CacheRange::generateBoundaryStr(CacheKey const &key)
 {
   uint64_t rnd = this_ethread()->generator.random();
   snprintf(_boundary, sizeof(_boundary), "%016" PRIx64 "%016" PRIx64 "..%016" PRIx64, key.slice64(0), key.slice64(1), rnd);
   // GAH! snprintf null terminates so we can't actually print the last nybble that way and all of
   // the internal hex converters do the same thing. This is crazy code I need to fix at some point.
   // It is critical to print every nybble or the content lengths won't add up.
-  _boundary[HTTP_RANGE_BOUNDARY_LEN-1] = "0123456789abcdef"[rnd & 0xf];
+  _boundary[HTTP_RANGE_BOUNDARY_LEN - 1] = "0123456789abcdef"[rnd & 0xf];
   return *this;
 }
 
@@ -560,7 +593,7 @@ CacheRange::calcContentLength() const
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-#else //HTTP_CACHE
+#else // HTTP_CACHE
 
 CacheHTTPInfoVector::CacheHTTPInfoVector() : data(&default_vec_info, 4), xcount(0)
 {

@@ -73,7 +73,7 @@ struct CacheHTTPInfoVector {
   struct Item {
     
     CacheHTTPInfo _alternate; ///< The basic alternate object.
-    /// CacheVCs which are writing data to this alternate.
+    /// CacheVCs which are interacting with this alternate.
     DLL<CacheVC, Link_CacheVC_OpenDir_Link> _writers;
     ///@{ Active I/O
     /** These two lists tracks active / outstanding I/O operations on The @a _active list is for writers
@@ -122,7 +122,11 @@ struct CacheHTTPInfoVector {
         block chain to prevent the content buffer from anchoring blocks beyond the specified content.
         @a len is the number of bytes and @a position is the position in the content of the data.
     */
-    void addCacheBuffer(IOBufferBlock* block, int64_t len, int64_t position);
+    void addSideBuffer(IOBufferBlock* block, int64_t position, int64_t length);
+
+    /** Get content from the buffer list
+     */
+    bool getSideBufferContent(IOBufferChain& data, int64_t position, int64_t length);
     
     /// Check if there are any writers.
     /// @internal Need to augment this at some point to check for writers to a specific offset.
@@ -178,7 +182,11 @@ struct CacheHTTPInfoVector {
   /// Close out anything related to this writer
   self &close_writer(CacheKey const &alt_key, CacheVC *vc);
   /// Add a content lookaside buffer for an incomplete fragment.
-  self& addCacheBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position);
+  self& addSideBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position);
+  /// Get content from a cache buffer
+  /// Content is returned iff all of the data at @a position was available in the content buffer lookaside cache.
+  /// @return @c true if the request was satisfied and content retreived, @c false otherwise.
+  bool getSideBufferContent(CacheKey const& alt_key, IOBufferChain& cb, int64_t position, int64_t length);
   
   /** Compute the convex hull of the uncached parts of the @a request taking current writers in to account.
 

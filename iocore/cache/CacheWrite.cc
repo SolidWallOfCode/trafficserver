@@ -1301,6 +1301,7 @@ CacheVC::openWriteClose(int event, Event *e)
     }
     if (length && (fragment || length > MAX_FRAG_SIZE || alternate.object_size_get() > alternate.get_frag_fixed_size())) {
       SET_HANDLER(&CacheVC::openWriteCloseDataDone);
+      // This should no longer happen - openWriteMain shouldn't yield until all data is written.
       this->updateWriteStateFromRange();
       write_len = length;
       if (write_len > MAX_FRAG_SIZE)
@@ -1418,7 +1419,7 @@ CacheVC::openWriteInit(int eid, Event *event)
       // This wakes up the readers after the alternate vector has been updated.
       while (NULL != (reader = od->open_waiting.pop())) {
         Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
-        reader->wake_up_thread->schedule_imm(reader);
+        reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, reinterpret_cast<void*>(earliest_key.fold()));
       }
     }
   }
@@ -1518,7 +1519,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         // clip to not go past next fragment boundary.
         write_len = std::min(write_len, static_cast<uint32_t>((frag_offset + ffs) - write_pos));
 
-        write_vector->addCacheBuffer(earliest_key, blocks, write_len, write_pos);
+        write_vector->addSideBuffer(earliest_key, blocks, write_len, write_pos);
         resp_range.consume(write_len);
         blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
         Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len,

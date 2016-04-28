@@ -9035,7 +9035,7 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
   HTTPRangeSpec &rs = s->hdr_info.request_range;
   int64_t cl = HTTP_UNDEFINED_CL;
   if (s->cache_info.object_read) cl = s->cache_info.object_read->object_size_get();
-  if (cl == HTTP_UNDEFINED_CL && s->hdr_info.response_range.isValid()) cl = s->hdr_info.response_range._max-1;
+  if (cl == HTTP_UNDEFINED_CL && s->hdr_info.response_range.isValid()) cl = s->hdr_info.response_content_size;
 
   Debug("http_trans", "Partial content handling, re-calculating content-length");
 

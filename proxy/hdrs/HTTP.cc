@@ -2390,42 +2390,44 @@ HTTPRangeSpec::hasOpenRange() const
 bool
 HTTPRangeSpec::apply(int64_t len)
 {
-  if (!this->hasRanges()) {
-    // nothing - makes other cases simpler.
-  } else if (0 == len) {
-    /* Must special case zero length content
-       - suffix ranges are OK but other ranges are not.
-       - Best option is to return a 200 (not 206 or 416) for all suffix range spec on zero length content.
+  if (len > 0) {
+    if (!this->hasRanges()) {
+      // nothing - makes other cases simpler.
+    } else if (0 == len) {
+      /* Must special case zero length content
+         - suffix ranges are OK but other ranges are not.
+         - Best option is to return a 200 (not 206 or 416) for all suffix range spec on zero length content.
          (this is what Apache HTTPD does)
-       - So, mark result as either @c UNSATISFIABLE or @c EMPTY, clear all ranges.
-    */
-    _state = EMPTY;
-    if (!_single.isSuffix()) _state = UNSATISFIABLE;
-    for ( RangeBox::iterator spot = _ranges.begin(), limit = _ranges.end() ; spot != limit && EMPTY == _state ; ++spot ) {
-      if (!spot->isSuffix()) _state = UNSATISFIABLE;
-    }
-    _ranges.clear();
-  } else if (this->isSingle()) {
-    if (!_single.apply(len)) _state = UNSATISFIABLE;
-  } else { // gotta be MULTI
-    int src = 0, dst = 0;
-    int n = _ranges.size();
-    while (src < n) {
-      Range& r = _ranges[src];
-      if (r.apply(len)) {
-        if (src != dst) _ranges[dst] = r;
-        ++dst;
+         - So, mark result as either @c UNSATISFIABLE or @c EMPTY, clear all ranges.
+      */
+      _state = EMPTY;
+      if (!_single.isSuffix()) _state = UNSATISFIABLE;
+      for ( RangeBox::iterator spot = _ranges.begin(), limit = _ranges.end() ; spot != limit && EMPTY == _state ; ++spot ) {
+        if (!spot->isSuffix()) _state = UNSATISFIABLE;
       }
-      ++src;
-    }
-    // at this point, @a dst is the # of valid ranges.
-    if (dst > 0) {
-      _single = _ranges[0];
-      if (dst == 1) _state = SINGLE;
-      _ranges.resize(dst);
-    } else {
-      _state = UNSATISFIABLE;
       _ranges.clear();
+    } else if (this->isSingle()) {
+      if (!_single.apply(len)) _state = UNSATISFIABLE;
+    } else { // gotta be MULTI
+      int src = 0, dst = 0;
+      int n = _ranges.size();
+      while (src < n) {
+        Range& r = _ranges[src];
+        if (r.apply(len)) {
+          if (src != dst) _ranges[dst] = r;
+          ++dst;
+        }
+        ++src;
+      }
+      // at this point, @a dst is the # of valid ranges.
+      if (dst > 0) {
+        _single = _ranges[0];
+        if (dst == 1) _state = SINGLE;
+        _ranges.resize(dst);
+      } else {
+        _state = UNSATISFIABLE;
+        _ranges.clear();
+      }
     }
   }
   return this->isValid();
@@ -2582,25 +2584,29 @@ HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
 
   for ( int i = 0 ; i < count ; ++i ) {
     int n = 0;
+    int remain = len - zret;
+    char* spot = buff + zret;
 
     if (first) {
       memcpy(buff, HTTP_VALUE_BYTES, HTTP_LEN_BYTES);
       buff[HTTP_LEN_BYTES] = '=';
       n += HTTP_LEN_BYTES + 1;
       first = false;
-    } else if (len < zret + 4) {
+    } else if (remain < 4) {
       break;
     } else {
-      buff[zret] = ',';
+      *spot = ',';
       ++n;
     }
-
+    remain -= n;
+    spot += n;
+    
     if (rv[i].isSuffix())
-      n += snprintf(buff + zret, len - zret, "-%" PRId64, rv[i]._min);
+      n += snprintf(spot, remain, "-%" PRId64, rv[i]._min);
     else if (rv[i].isPrefix())
-      n += snprintf(buff + zret, len - zret, "%" PRId64 "-", rv[i]._min);
+      n += snprintf(spot, remain, "%" PRId64 "-", rv[i]._min);
     else
-      n += snprintf(buff + zret, len - zret, "%" PRId64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
+      n += snprintf(spot, remain, "%" PRId64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
     
     if (n + zret >= len) {
       buff[zret] = 0; // clip partial output.
@@ -2638,7 +2644,7 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
   for ( const_iterator spot = this->begin(), limit = this->end() ; spot != limit ; ++spot ) {
     Range r(*spot);
     if (r.isSuffix()) {
-      trailer == std::max(trailer, r._min);
+      trailer = std::max(trailer, r._min);
     } else {
       if (quantum > 1) {
         r._min = (r._min / quantum) * quantum;
