@@ -151,6 +151,9 @@ struct CacheHTTPInfoVector {
   void detach(int idx, CacheHTTPInfo *r);
   void remove(int idx, bool destroy);
   void clear(bool destroy = true);
+  /// Remove alternates that are not valid.
+  /// These are alternates that have no data, in effect ones where the earliest doc is not cached.
+  void clean();
   void
   reset()
   {

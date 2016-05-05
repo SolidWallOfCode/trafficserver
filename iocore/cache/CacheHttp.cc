@@ -176,6 +176,23 @@ CacheHTTPInfoVector::clear(bool destroy)
   -------------------------------------------------------------------------*/
 
 void
+CacheHTTPInfoVector::clean()
+{
+  int idx, dst, n = xcount;
+
+  for (dst = idx = 0; idx < n ; ++idx ) {
+    if (data[idx]._alternate.m_alt->m_earliest.m_flag.cached_p) {
+      if (dst != idx) data[dst] = data[idx];
+      ++dst;
+    }
+  }
+  xcount = dst;
+}
+
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
+void
 CacheHTTPInfoVector::print(char *buffer, size_t buf_size, bool temps)
 {
   char buf[33], *p;

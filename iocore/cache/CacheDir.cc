@@ -129,6 +129,11 @@ OpenDir::close_entry(CacheVC* vc)
     unsigned int h = vc->od->first_key.slice32(0);
     int b = h % OPEN_DIR_BUCKETS;
     bucket[b].remove(vc->od);
+    // Clean up empty alternates, which can be left behind if the origin is being difficult.
+    // If this results in no alternates, clean up the entire object.
+    vc->od->vector.clean();
+    if (vc->od->vector.xcount <= 0)
+      dir_delete(&vc->first_key, vc->vol, &vc->od->first_dir);
     vc->od->vector.clear();
     vc->od->mutex = 0;
     THREAD_FREE(vc->od, openDirEntryAllocator, vc->vol->mutex->thread_holding);
