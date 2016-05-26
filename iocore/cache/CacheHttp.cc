@@ -178,9 +178,10 @@ CacheHTTPInfoVector::clean()
 {
   int idx, dst, n = xcount;
 
-  for (dst = idx = 0; idx < n ; ++idx ) {
+  for (dst = idx = 0; idx < n; ++idx) {
     if (data[idx]._alternate.m_alt->m_earliest.m_flag.cached_p) {
-      if (dst != idx) data[dst] = data[idx];
+      if (dst != idx)
+        data[dst] = data[idx];
       ++dst;
     }
   }

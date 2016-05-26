@@ -51,16 +51,15 @@ struct CacheHTTPInfo {
     to cache because it did not satisfy fragment boundary conditions.
 */
 struct CacheBuffer {
-  int64_t _position; ///< Location in content.
+  int64_t _position;   ///< Location in content.
   IOBufferChain _data; ///< The content.
   // The declarations are a bit wonky, it's done this way because this is the first
   // thing I tried that worked.
-  LINK(CacheBuffer, link); ///< Linkage for list of content buffers.
+  LINK(CacheBuffer, link);         ///< Linkage for list of content buffers.
   typedef Queue<CacheBuffer> List; ///< List type for instances.
 
   CacheBuffer() : _position(-1) {}
 };
-    
 
 LINK_FORWARD_DECLARATION(CacheVC, OpenDir_Link) // forward declaration
 LINK_FORWARD_DECLARATION(CacheVC, Active_Link)  // forward declaration
@@ -70,7 +69,6 @@ struct CacheHTTPInfoVector {
 
   /// Descriptor for an alternate for this object.
   struct Item {
-    
     CacheHTTPInfo _alternate; ///< The basic alternate object.
     /// CacheVCs which are interacting with this alternate.
     DLL<CacheVC, Link_CacheVC_OpenDir_Link> _writers;
@@ -94,7 +92,7 @@ struct CacheHTTPInfoVector {
     /// CacheVCs waiting on fragments.
     DLL<CacheVC, Link_CacheVC_Active_Link> _waiting;
     ///@}
-    
+
     // To minimize list walking, we track the convex hull of fragments for which readers are waiting.
     // We update the values whenever we must actually walk the list.
     // Otherwise we maintain the convex hull invariant so if a written fragment is outside the range,
@@ -121,12 +119,12 @@ struct CacheHTTPInfoVector {
         block chain to prevent the content buffer from anchoring blocks beyond the specified content.
         @a len is the number of bytes and @a position is the position in the content of the data.
     */
-    void addSideBuffer(IOBufferBlock* block, int64_t position, int64_t length);
+    void addSideBuffer(IOBufferBlock *block, int64_t position, int64_t length);
 
     /** Get content from the buffer list
      */
-    bool getSideBufferContent(IOBufferChain& data, int64_t position, int64_t length);
-    
+    bool getSideBufferContent(IOBufferChain &data, int64_t position, int64_t length);
+
     /// Check if there are any writers.
     /// @internal Need to augment this at some point to check for writers to a specific offset.
     bool has_writers() const;
@@ -173,7 +171,7 @@ struct CacheHTTPInfoVector {
   self &write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.
   /// If the write is not @a success then the fragment is not marked as cached.
-  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const& cb, bool success = true);
+  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const &cb, bool success = true);
   /// Indicate if a VC is currently writing to the fragment with this @a offset.
   bool is_write_active(CacheKey const &alt_key, int64_t offset);
   /// Mark a CacheVC as waiting for the fragment containing the byte at @a offset.
@@ -184,12 +182,12 @@ struct CacheHTTPInfoVector {
   /// Close out anything related to this writer
   self &close_writer(CacheKey const &alt_key, CacheVC *vc);
   /// Add a content lookaside buffer for an incomplete fragment.
-  self& addSideBuffer(CacheKey const& alt_key,IOBufferBlock* block, int64_t len, int64_t position);
+  self &addSideBuffer(CacheKey const &alt_key, IOBufferBlock *block, int64_t len, int64_t position);
   /// Get content from a cache buffer
   /// Content is returned iff all of the data at @a position was available in the content buffer lookaside cache.
   /// @return @c true if the request was satisfied and content retreived, @c false otherwise.
-  bool getSideBufferContent(CacheKey const& alt_key, IOBufferChain& cb, int64_t position, int64_t length);
-  
+  bool getSideBufferContent(CacheKey const &alt_key, IOBufferChain &cb, int64_t position, int64_t length);
+
   /** Compute the convex hull of the uncached parts of the @a request taking current writers in to account.
 
       @return @c true if there is uncached data that must be retrieved.
@@ -220,7 +218,6 @@ public:
 
   /// Default constructor
   CacheRange() : _offset(0), _idx(-1), _ct_field(NULL), _resolved_p(false), _pending_range_shift_p(false) {}
-
   /// Test if the range spec has actual ranges in it
   bool hasRanges() const;
 
@@ -300,8 +297,8 @@ public:
   void clear();
 
 protected:
-  int64_t _len;        ///< Total object length.
-  int64_t _offset;     ///< Offset in content.
+  int64_t _len;         ///< Total object length.
+  int64_t _offset;      ///< Offset in content.
   int _idx;             ///< Current range index. (< 0 means not in a range)
   HTTPRangeSpec _r;     ///< The actual ranges.
   MIMEField *_ct_field; ///< Content-Type field.

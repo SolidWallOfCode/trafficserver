@@ -72,10 +72,9 @@ public:
   /** Open a cache read VC for the same object as the writer.
       @return @c true if there was no reader and one was successfully created from the writer.
   */
-  Action* open_partial_read(HTTPHdr* client_request_hdr);
+  Action *open_partial_read(HTTPHdr *client_request_hdr);
 
-  Action *open_write(URL * url,
-                     HTTPHdr * request, CacheHTTPInfo * old_info, time_t pin_in_cache, bool retry, bool allow_multiple);
+  Action *open_write(URL *url, HTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache, bool retry, bool allow_multiple);
 
   CacheVConnection *cache_read_vc;
   CacheVConnection *cache_write_vc;
@@ -195,7 +194,7 @@ private:
 
   int state_cache_open_read(int event, void *data);
   int state_cache_open_write(int event, void *data);
-  int state_cache_open_partial_read(int evid, void* data);
+  int state_cache_open_partial_read(int evid, void *data);
 
   HttpCacheAction captive_action;
   bool open_read_cb;

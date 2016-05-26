@@ -541,18 +541,21 @@ extern inkcoreapi ClassAllocator<IOBufferBlock> ioBlockAllocator;
 class IOBufferChain
 {
   typedef IOBufferChain self;
-  
+
 public:
   /// Default constructor - construct empty chain.
   IOBufferChain() : _blocks(NULL), _tail(NULL), _len(0) {}
-
   /// Shallow copy.
-  self& operator = (self const& that);
+  self &operator=(self const &that);
 
   /// Shallow append.
-  self& operator += (self const& that);
+  self &operator+=(self const &that);
 
-  int64_t length() const { return _len; }
+  int64_t
+  length() const
+  {
+    return _len;
+  }
 
   /// Copy a chain of @a blocks in to this object up to @a length bytes.
   /// If @a offset is greater than 0 that many bytes are skipped. Those bytes do not count
@@ -561,11 +564,11 @@ public:
   /// breaks the original chain so that changes there (such as appending blocks)
   /// is not reflected in this chain.
   /// @return The number of bytes written to the chain.
-  int64_t write(IOBufferBlock* blocks, int64_t length, int64_t offset = 0);
+  int64_t write(IOBufferBlock *blocks, int64_t length, int64_t offset = 0);
 
   /// Add the content of a buffer block.
   /// The buffer block is unchanged.
-  int64_t write(IOBufferData* data, int64_t length = 0, int64_t offset = 0);
+  int64_t write(IOBufferData *data, int64_t length = 0, int64_t offset = 0);
 
   /// Remove @a size bytes of content from the front of the chain.
   /// @return The actual number of bytes removed.
@@ -575,17 +578,17 @@ public:
   void clear();
 
   /// Get the first block.
-  IOBufferBlock* head();
-  IOBufferBlock const* head() const;
+  IOBufferBlock *head();
+  IOBufferBlock const *head() const;
 
 protected:
   /// Append @a block.
-  void append(IOBufferBlock* block);
-  
+  void append(IOBufferBlock *block);
+
   /// Head of buffer block chain.
   Ptr<IOBufferBlock> _blocks;
   /// Tail of the block chain.
-  IOBufferBlock* _tail;
+  IOBufferBlock *_tail;
   /// The amount of data of interest.
   /// Not necessarily the amount of data in the chain of blocks.
   int64_t _len;
@@ -984,7 +987,7 @@ public:
 
       @internal I do not like counting @a offset against @a bytes but that's how @c write works...
   */
-  int64_t write(IOBufferChain const* chain, int64_t len = INT64_MAX,  int64_t offset = 0);
+  int64_t write(IOBufferChain const *chain, int64_t len = INT64_MAX, int64_t offset = 0);
 
   int64_t remove_append(IOBufferReader *);
 
@@ -1150,7 +1153,7 @@ public:
   void alloc(int64_t i = default_large_iobuffer_size);
   void alloc_xmalloc(int64_t buf_size);
   void append_block_internal(IOBufferBlock *b);
-  int64_t write(IOBufferBlock const* b, int64_t len, int64_t offset);
+  int64_t write(IOBufferBlock const *b, int64_t len, int64_t offset);
   int64_t puts(char *buf, int64_t len);
 
   // internal interface
@@ -1474,8 +1477,8 @@ extern IOBufferBlock *iobufferblock_clone(IOBufferBlock *b, int64_t offset, int6
 */
 extern IOBufferBlock *iobufferblock_skip(IOBufferBlock *b, int64_t *poffset, int64_t *plen, int64_t write);
 
-inline IOBufferChain&
-IOBufferChain::operator = (self const& that)
+inline IOBufferChain &
+IOBufferChain::operator=(self const &that)
 {
   _blocks = that._blocks;
   _tail = that._tail;
@@ -1483,10 +1486,11 @@ IOBufferChain::operator = (self const& that)
   return *this;
 }
 
-inline IOBufferChain&
-IOBufferChain::operator += (self const& that)
+inline IOBufferChain &
+IOBufferChain::operator+=(self const &that)
 {
-  if (NULL == _blocks) *this = that;
+  if (NULL == _blocks)
+    *this = that;
   else {
     _tail->next = that._blocks;
     _tail = that._tail;
@@ -1495,13 +1499,13 @@ IOBufferChain::operator += (self const& that)
   return *this;
 }
 
-inline IOBufferBlock const*
+inline IOBufferBlock const *
 IOBufferChain::head() const
 {
   return _blocks;
 }
 
-inline IOBufferBlock*
+inline IOBufferBlock *
 IOBufferChain::head()
 {
   return _blocks;

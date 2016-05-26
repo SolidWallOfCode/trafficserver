@@ -2774,11 +2774,10 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   }
 
   // Valid hit in cache. Update the request range if possible.
-  HTTPRangeSpec& req_range = s->hdr_info.request_range;
+  HTTPRangeSpec &req_range = s->hdr_info.request_range;
   obj_size = s->cache_info.object_read->object_size_get();
   if (req_range.hasRanges() && obj_size >= 0)
     req_range.apply(obj_size);
-    
 
   // Check if we need to get some data from the origin.
   if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range, MIN_INITIAL_UNCACHED)) {
@@ -4560,7 +4559,6 @@ HttpTransact::handle_cache_operation_on_forward_server_response(State *s)
     break;
   }
 
-
 #if 0
   /* If we plan to do a write and the request was partial, then we need to open a
      cache read to service the request and not just pass through.
@@ -5491,7 +5489,6 @@ HttpTransact::check_request_validity(State *s, HTTPHdr *incoming_hdr)
       return INVALID_RANGE_FIELD;
   }
 
-
   return NO_REQUEST_HEADER_ERROR;
 }
 
@@ -5964,7 +5961,6 @@ HttpTransact::initialize_state_variables_from_response(State *s, HTTPHdr *incomi
     s->hdr_info.response_content_size =
       HTTPRangeSpec::parseContentRangeFieldValue(cr, len, s->hdr_info.response_range, s->hdr_info.response_range_boundary);
   }
-
 
   s->current.server->transfer_encoding = NO_TRANSFER_ENCODING;
 }
@@ -8046,7 +8042,8 @@ HttpTransact::build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing
   if (base_response == NULL) {
     HttpTransactHeaders::build_base_response(outgoing_response, status_code, reason_phrase, strlen(reason_phrase), s->current.now);
   } else {
-    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get()) || (HTTP_STATUS_OK == status_code && HTTP_STATUS_PARTIAL_CONTENT == base_response->status_get())) {
+    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get()) ||
+        (HTTP_STATUS_OK == status_code && HTTP_STATUS_PARTIAL_CONTENT == base_response->status_get())) {
       HttpTransactHeaders::copy_header_fields(base_response, outgoing_response, s->txn_conf->fwd_proxy_auth_to_parent);
 
       if (s->txn_conf->insert_age_in_response)
@@ -9188,8 +9185,10 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
   //  HTTPRangeSpec& rs = cache_read_vc->get_http_range_spec();
   HTTPRangeSpec &rs = s->hdr_info.request_range;
   int64_t cl = HTTP_UNDEFINED_CL;
-  if (s->cache_info.object_read) cl = s->cache_info.object_read->object_size_get();
-  if (cl == HTTP_UNDEFINED_CL && s->hdr_info.response_range.isValid()) cl = s->hdr_info.response_content_size;
+  if (s->cache_info.object_read)
+    cl = s->cache_info.object_read->object_size_get();
+  if (cl == HTTP_UNDEFINED_CL && s->hdr_info.response_range.isValid())
+    cl = s->hdr_info.response_content_size;
 
   Debug("http_trans", "Partial content handling, re-calculating content-length");
 
@@ -9200,7 +9199,8 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
     header->reason_set(reason_phrase, strlen(reason_phrase));
     // Need to clip the request range by the actual maximum content available.
     // We should check this at some point to handle completley invalid requests.
-    if (cl != HTTP_UNDEFINED_CL) rs.apply(cl);
+    if (cl != HTTP_UNDEFINED_CL)
+      rs.apply(cl);
   }
 
   // set the right Content-Type for multiple entry Range
@@ -9227,25 +9227,27 @@ HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr 
     char buff[HTTP_LEN_BYTES + (18 + 1) * 3];
     header->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
     field = header->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
-    # if 1
+#if 1
     n = snprintf(buff, sizeof(buff), "%s %" PRIu64 "-%" PRIu64 "/%" PRId64, HTTP_VALUE_BYTES, rs[0]._min, rs[0]._max,
                  s->state_machine->t_state.hdr_info.response_content_size);
-    # else
+#else
     n = snprintf(buff, sizeof(buff), "%s %" PRIu64 "-%" PRIu64 "/", HTTP_VALUE_BYTES, rs[0]._min, rs[0]._max);
-    
+
     if (cl >= 0)
-      n += snprintf(buff+n, sizeof(buff)-n, "%" PRId64, cl);
+      n += snprintf(buff + n, sizeof(buff) - n, "%" PRId64, cl);
     else
-      n += snprintf(buff+n, sizeof(buff)-n, "*");
-    # endif
+      n += snprintf(buff + n, sizeof(buff) - n, "*");
+#endif
     field->value_set(header->m_heap, header->m_mime, buff, n);
     header->field_attach(field);
     header->set_content_length(rs.size());
   } else {
     // origin response had ranges but the user agent response shouldn't.
     header->field_delete(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
-    if (cl >= 0) header->set_content_length(cl);
-    else header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
+    if (cl >= 0)
+      header->set_content_length(cl);
+    else
+      header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
   }
   //  header->set_content_length(cache_read_vc->get_effective_content_size());
 }

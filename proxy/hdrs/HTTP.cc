@@ -1778,17 +1778,20 @@ ClassAllocator<HTTPCacheAlt> httpCacheAltAllocator("httpCacheAltAllocator");
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
-HTTPCacheAlt::HTTPCacheAlt():
-  m_magic(CACHE_ALT_MAGIC_ALIVE)
-  , m_unmarshal_len(-1)
-  , m_id(-1), m_rid(-1)
-  , m_frag_count(0)
-  , m_request_hdr(), m_response_hdr()
-  , m_request_sent_time(0), m_response_received_time(0)
-  , m_fragments(0)
-  , m_ext_buffer(NULL)
+HTTPCacheAlt::HTTPCacheAlt()
+  : m_magic(CACHE_ALT_MAGIC_ALIVE),
+    m_unmarshal_len(-1),
+    m_id(-1),
+    m_rid(-1),
+    m_frag_count(0),
+    m_request_hdr(),
+    m_response_hdr(),
+    m_request_sent_time(0),
+    m_response_received_time(0),
+    m_fragments(0),
+    m_ext_buffer(NULL)
 {
-  m_flags = 0; // set all flags to false.
+  m_flags = 0;               // set all flags to false.
   m_flag.writeable_p = true; // except this one.
 }
 
@@ -1802,7 +1805,8 @@ HTTPCacheAlt::destroy()
   m_request_hdr.destroy();
   m_response_hdr.destroy();
   m_frag_count = 0;
-  if (m_flag.table_allocated_p) ats_free(m_fragments);
+  if (m_flag.table_allocated_p)
+    ats_free(m_fragments);
   m_fragments = 0;
   httpCacheAltAllocator.free(this);
 }
@@ -1810,7 +1814,6 @@ HTTPCacheAlt::destroy()
 void
 HTTPCacheAlt::copy(HTTPCacheAlt *that)
 {
-
   m_magic = that->m_magic;
   m_unmarshal_len = that->m_unmarshal_len;
   m_id = that->m_id;
@@ -1839,7 +1842,7 @@ HTTPCacheAlt::copy(HTTPCacheAlt *that)
 
   if (that->m_fragments) {
     size_t size = FragmentDescriptorTable::calc_size(that->m_fragments->m_n);
-    m_fragments = static_cast<FragmentDescriptorTable*>(ats_malloc(size));
+    m_fragments = static_cast<FragmentDescriptorTable *>(ats_malloc(size));
     memcpy(m_fragments, that->m_fragments, size);
     m_flag.table_allocated_p = true;
   } else {
@@ -1859,7 +1862,6 @@ HTTPInfo::create()
 void
 HTTPInfo::copy(HTTPInfo *hi)
 {
-
   if (m_alt && m_alt->m_flag.writeable_p) {
     destroy();
   }
@@ -1915,7 +1917,7 @@ HTTPInfo::marshal(char *buf, int len)
   used += HTTP_ALT_MARSHAL_SIZE;
 
   if (frag_len > 0) {
-    marshal_alt->m_fragments = static_cast<FragmentDescriptorTable*>(reinterpret_cast<void*>(used));
+    marshal_alt->m_fragments = static_cast<FragmentDescriptorTable *>(reinterpret_cast<void *>(used));
     memcpy(buf, m_alt->m_fragments, frag_len);
     buf += frag_len;
     used += frag_len;
@@ -1974,7 +1976,7 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
   len -= HTTP_ALT_MARSHAL_SIZE;
 
   if (alt->m_fragments) {
-    alt->m_fragments = reinterpret_cast<FragmentDescriptorTable*>(buf + reinterpret_cast<intptr_t>(alt->m_fragments));
+    alt->m_fragments = reinterpret_cast<FragmentDescriptorTable *>(buf + reinterpret_cast<intptr_t>(alt->m_fragments));
     len -= FragmentDescriptorTable::calc_size(alt->m_fragments->m_n);
   }
   alt->m_flag.table_allocated_p = false;
@@ -2140,15 +2142,17 @@ HTTPInfo::get_frag_offset(unsigned int idx)
   return zret;
 }
 
-HTTPInfo::FragmentDescriptor*
-HTTPInfo::force_frag_at(unsigned int idx) {
-  FragmentDescriptor* frag;
-  FragmentDescriptorTable* old_table = 0;
+HTTPInfo::FragmentDescriptor *
+HTTPInfo::force_frag_at(unsigned int idx)
+{
+  FragmentDescriptor *frag;
+  FragmentDescriptorTable *old_table = 0;
 
   ink_assert(m_alt);
   ink_assert(idx >= 0);
 
-  if (0 == idx) return &m_alt->m_earliest;
+  if (0 == idx)
+    return &m_alt->m_earliest;
 
   if (0 == m_alt->m_fragments || idx > m_alt->m_fragments->m_n) { // no room at the inn
     int64_t obj_size = this->object_size_get();
@@ -2160,12 +2164,12 @@ HTTPInfo::force_frag_at(unsigned int idx) {
     int64_t offset = 0;
     CryptoHash key;
 
-
     ink_assert(ff_size);
 
     if (0 == m_alt->m_fragments && obj_size > 0) {
       n = (obj_size + ff_size - 1) / ff_size;
-      if (idx > n) n = idx;
+      if (idx > n)
+        n = idx;
       if (m_alt->m_earliest.m_flag.cached_p) {
         // Computed as if all the data is in the fragment table. If the earliest is not empty the
         // one fragment worth of data will be there. This is the common case so worth optimizing.
@@ -2173,13 +2177,13 @@ HTTPInfo::force_frag_at(unsigned int idx) {
         offset += ff_size;
       }
     } else {
-      n = idx + MAX(4, idx>>1); // grow by 50% and at least 4
+      n = idx + MAX(4, idx >> 1); // grow by 50% and at least 4
       old_table = m_alt->m_fragments;
     }
 
     size = FragmentDescriptorTable::calc_size(n);
-    
-    m_alt->m_fragments = static_cast<FragmentDescriptorTable*>(ats_malloc(size));
+
+    m_alt->m_fragments = static_cast<FragmentDescriptorTable *>(ats_malloc(size));
     ink_zero(*(m_alt->m_fragments)); // just need to zero the base struct.
     if (old_table) {
       old_count = old_table->m_n;
@@ -2198,7 +2202,7 @@ HTTPInfo::force_frag_at(unsigned int idx) {
     m_alt->m_flag.table_allocated_p = true;
     // fill out the new parts with offsets & keys.
     ++old_count; // left as the index of the last frag in the previous set.
-    for ( frag = &((*m_alt->m_fragments)[old_count]) ; old_count <= n ; ++old_count, ++frag ) {
+    for (frag = &((*m_alt->m_fragments)[old_count]); old_count <= n; ++old_count, ++frag) {
       key.next();
       frag->m_key = key;
       frag->m_offset = offset;
@@ -2211,11 +2215,13 @@ HTTPInfo::force_frag_at(unsigned int idx) {
 }
 
 void
-HTTPInfo::mark_frag_write(unsigned int idx) {
+HTTPInfo::mark_frag_write(unsigned int idx)
+{
   ink_assert(m_alt);
   ink_assert(idx >= 0);
 
-  if (idx >= m_alt->m_frag_count) m_alt->m_frag_count = idx + 1;
+  if (idx >= m_alt->m_frag_count)
+    m_alt->m_frag_count = idx + 1;
 
   if (0 == idx) {
     m_alt->m_earliest.m_flag.cached_p = true;
@@ -2230,7 +2236,7 @@ HTTPInfo::mark_frag_write(unsigned int idx) {
       ++j;
     m_alt->m_fragments->m_cached_idx = j - 1;
     if (!m_alt->m_flag.content_length_p &&
-        (this->get_frag_fixed_size() + this->get_frag_offset(j-1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
+        (this->get_frag_fixed_size() + this->get_frag_offset(j - 1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
       m_alt->m_flag.complete_p = true;
   }
 }
@@ -2240,13 +2246,13 @@ HTTPInfo::get_frag_index_of(int64_t offset)
 {
   int zret = 0;
   uint32_t ff_size = this->get_frag_fixed_size();
-  FragmentDescriptorTable* table = this->get_frag_table();
+  FragmentDescriptorTable *table = this->get_frag_table();
   if (!table) {
     // Never the case that we have an empty earliest fragment *and* no frag table.
     zret = offset / ff_size;
   } else {
-    FragmentDescriptorTable& frags = *table; // easier to work with.
-    int n = frags.m_n; // also the max valid frag table index and always >= 1.
+    FragmentDescriptorTable &frags = *table; // easier to work with.
+    int n = frags.m_n;                       // also the max valid frag table index and always >= 1.
     // I should probably make @a m_offset int64_t to avoid casting issues like this...
     uint64_t uoffset = static_cast<uint64_t>(offset);
 
@@ -2265,7 +2271,7 @@ HTTPInfo::get_frag_index_of(int64_t offset)
       while (0 < zret && zret < n) {
         if (uoffset < frags[zret].m_offset) {
           --zret;
-        } else if (uoffset >= frags[zret+1].m_offset) {
+        } else if (uoffset >= frags[zret + 1].m_offset) {
           ++zret;
         } else {
           break;
@@ -2281,25 +2287,28 @@ HTTPInfo::get_frag_index_of(int64_t offset)
  *                                                                     *
  ***********************************************************************/
 
-namespace {
-  // Need to promote this out of here at some point.
-  // This handles parsing an integer from a string with various limits and in 64 bits.
-  struct integer {
-    static size_t const MAX_DIGITS = 15;
-    static bool parse(ts::ConstBuffer const& b, uint64_t& result) {
-      bool zret = false;
-      if (0 < b.size() && b.size() <= MAX_DIGITS) {
-        size_t n;
-        result = ats_strto64(b.data(), b.size(), &n);
-        zret = n == b.size();
-      }
-      return zret;
+namespace
+{
+// Need to promote this out of here at some point.
+// This handles parsing an integer from a string with various limits and in 64 bits.
+struct integer {
+  static size_t const MAX_DIGITS = 15;
+  static bool
+  parse(ts::ConstBuffer const &b, uint64_t &result)
+  {
+    bool zret = false;
+    if (0 < b.size() && b.size() <= MAX_DIGITS) {
+      size_t n;
+      result = ats_strto64(b.data(), b.size(), &n);
+      zret = n == b.size();
     }
-  };
+    return zret;
+  }
+};
 }
 
 bool
-HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
+HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
 {
   // Maximum # of digits permitted for an offset. Avoid issues with overflow.
   static size_t const MAX_DIGITS = 15;
@@ -2309,10 +2318,9 @@ HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
   _state = INVALID;
   src.skip(&ParseRules::is_ws);
 
-  if (src.size() > sizeof(HTTP_LEN_BYTES)+1 &&
-      0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) && '=' == src[HTTP_LEN_BYTES]
-  ) {
-    src += HTTP_LEN_BYTES+1;
+  if (src.size() > sizeof(HTTP_LEN_BYTES) + 1 && 0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
+      '=' == src[HTTP_LEN_BYTES]) {
+    src += HTTP_LEN_BYTES + 1;
     while (src) {
       ts::ConstBuffer max = src.splitOn(',');
 
@@ -2329,7 +2337,8 @@ HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
       if (min) {
         if (ParseRules::is_digit(*min) && min.size() <= MAX_DIGITS) {
           uint64_t low = ats_strto64(min.data(), min.size(), &n);
-          if (n < min.size()) break; // extra cruft in range, not even ws allowed
+          if (n < min.size())
+            break; // extra cruft in range, not even ws allowed
           if (max) {
             if (ParseRules::is_digit(*max) && max.size() <= MAX_DIGITS) {
               uint64_t high = ats_strto64(max.data(), max.size(), &n);
@@ -2361,13 +2370,14 @@ HTTPRangeSpec::parseRangeFieldValue(char const* v, int len)
         }
       }
     }
-    if (src) _state = INVALID; // didn't parse everything, must have been an error.
+    if (src)
+      _state = INVALID; // didn't parse everything, must have been an error.
   }
   return _state != INVALID;
 }
 
-HTTPRangeSpec&
-HTTPRangeSpec::add(Range const& r)
+HTTPRangeSpec &
+HTTPRangeSpec::add(Range const &r)
 {
   if (MULTI == _state) {
     _ranges.push_back(r);
@@ -2385,10 +2395,13 @@ HTTPRangeSpec::add(Range const& r)
 bool
 HTTPRangeSpec::hasOpenRange() const
 {
-  if (!this->hasRanges()) return false;
-  else if (_single.isSuffix() || _single.isPrefix()) return false;
-  for ( RangeBox::const_iterator spot = _ranges.begin(), limit = _ranges.end() ; spot != limit && EMPTY == _state ; ++spot ) {
-    if (spot->isSuffix() || spot->isPrefix()) return false;
+  if (!this->hasRanges())
+    return false;
+  else if (_single.isSuffix() || _single.isPrefix())
+    return false;
+  for (RangeBox::const_iterator spot = _ranges.begin(), limit = _ranges.end(); spot != limit && EMPTY == _state; ++spot) {
+    if (spot->isSuffix() || spot->isPrefix())
+      return false;
   }
   return true;
 }
@@ -2407,20 +2420,24 @@ HTTPRangeSpec::apply(int64_t len)
          - So, mark result as either @c UNSATISFIABLE or @c EMPTY, clear all ranges.
       */
       _state = EMPTY;
-      if (!_single.isSuffix()) _state = UNSATISFIABLE;
-      for ( RangeBox::iterator spot = _ranges.begin(), limit = _ranges.end() ; spot != limit && EMPTY == _state ; ++spot ) {
-        if (!spot->isSuffix()) _state = UNSATISFIABLE;
+      if (!_single.isSuffix())
+        _state = UNSATISFIABLE;
+      for (RangeBox::iterator spot = _ranges.begin(), limit = _ranges.end(); spot != limit && EMPTY == _state; ++spot) {
+        if (!spot->isSuffix())
+          _state = UNSATISFIABLE;
       }
       _ranges.clear();
     } else if (this->isSingle()) {
-      if (!_single.apply(len)) _state = UNSATISFIABLE;
+      if (!_single.apply(len))
+        _state = UNSATISFIABLE;
     } else { // gotta be MULTI
       int src = 0, dst = 0;
       int n = _ranges.size();
       while (src < n) {
-        Range& r = _ranges[src];
+        Range &r = _ranges[src];
         if (r.apply(len)) {
-          if (src != dst) _ranges[dst] = r;
+          if (src != dst)
+            _ranges[dst] = r;
           ++dst;
         }
         ++src;
@@ -2428,7 +2445,8 @@ HTTPRangeSpec::apply(int64_t len)
       // at this point, @a dst is the # of valid ranges.
       if (dst > 0) {
         _single = _ranges[0];
-        if (dst == 1) _state = SINGLE;
+        if (dst == 1)
+          _state = SINGLE;
         _ranges.resize(dst);
       } else {
         _state = UNSATISFIABLE;
@@ -2443,7 +2461,7 @@ static ts::ConstBuffer const MULTIPART_BYTERANGE("multipart/byteranges", 20);
 static ts::ConstBuffer const MULTIPART_BOUNDARY("boundary", 9);
 
 int64_t
-HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len, Range& r, ts::ConstBuffer& boundary)
+HTTPRangeSpec::parseContentRangeFieldValue(char const *v, int len, Range &r, ts::ConstBuffer &boundary)
 {
   // [amc] TBD - handle the multipart/byteranges syntax.
   ts::ConstBuffer src(v, len);
@@ -2453,15 +2471,15 @@ HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len, Range& r, ts:
   src.skip(&ParseRules::is_ws);
 
   if (src.skipNoCase(MULTIPART_BYTERANGE)) {
-    while (src && (';' == *src || ParseRules::is_ws(*src))) ++src;
+    while (src && (';' == *src || ParseRules::is_ws(*src)))
+      ++src;
     if (src.skipNoCase(MULTIPART_BOUNDARY)) {
       src.trim(&ParseRules::is_ws);
       boundary = src;
     }
-  } else if (src.size() > sizeof(HTTP_LEN_BYTES)+1 &&
-      0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
-      ParseRules::is_ws(src[HTTP_LEN_BYTES]) // must have white space
-    ) {
+  } else if (src.size() > sizeof(HTTP_LEN_BYTES) + 1 && 0 == strncasecmp(src.data(), HTTP_VALUE_BYTES, HTTP_LEN_BYTES) &&
+             ParseRules::is_ws(src[HTTP_LEN_BYTES]) // must have white space
+             ) {
     uint64_t cl, low, high;
     bool unsatisfied_p = false, indeterminate_p = false;
     ts::ConstBuffer min, max;
@@ -2471,35 +2489,37 @@ HTTPRangeSpec::parseContentRangeFieldValue(char const* v, int len, Range& r, ts:
 
     max = src.splitOn('/'); // src has total length value
 
-    if (max.size() == 1 && *max == '*') unsatisfied_p = true;
-    else min = max.splitOn('-');
+    if (max.size() == 1 && *max == '*')
+      unsatisfied_p = true;
+    else
+      min = max.splitOn('-');
 
     src.trim(&ParseRules::is_ws);
-    if (src && src.size() == 1 && *src == '*') indeterminate_p = true;
+    if (src && src.size() == 1 && *src == '*')
+      indeterminate_p = true;
 
     // note - spec forbids internal spaces so it's "X-Y/Z" w/o whitespace.
     // spec also says we can have "*/Z" or "X-Y/*" but never "*/*".
 
-    if ( !(indeterminate_p && unsatisfied_p) &&
-         (indeterminate_p || integer::parse(src, cl)) &&
-         (unsatisfied_p || (integer::parse(min, low) && integer::parse(max, high))
-    )) {
-      if (!unsatisfied_p) r._min = low, r._max = high;
-      if (!indeterminate_p) zret = static_cast<int64_t>(cl);
+    if (!(indeterminate_p && unsatisfied_p) && (indeterminate_p || integer::parse(src, cl)) &&
+        (unsatisfied_p || (integer::parse(min, low) && integer::parse(max, high)))) {
+      if (!unsatisfied_p)
+        r._min = low, r._max = high;
+      if (!indeterminate_p)
+        zret = static_cast<int64_t>(cl);
     }
   }
   return zret;
 }
 
-namespace {
-
-  int
-  Calc_Digital_Length(uint64_t x)
-  {
-    char buff[32]; // big enough for 64 bit #
-    return snprintf(buff, sizeof(buff), "%" PRIu64, x);
-  }
-
+namespace
+{
+int
+Calc_Digital_Length(uint64_t x)
+{
+  char buff[32]; // big enough for 64 bit #
+  return snprintf(buff, sizeof(buff), "%" PRIu64, x);
+}
 }
 
 uint64_t
@@ -2507,8 +2527,10 @@ HTTPRangeSpec::calcPartBoundarySize(uint64_t object_size, uint64_t ct_val_len)
 {
   size_t l_size = Calc_Digital_Length(object_size);
   // CR LF "--" boundary-string CR LF "Content-Range" ": " "bytes " X "-" Y "/" Z CR LF Content-Type CR LF
-  uint64_t zret = 4 + HTTP_RANGE_BOUNDARY_LEN + 2 + MIME_LEN_CONTENT_RANGE + 2 + HTTP_LEN_BYTES + 1 + l_size + 1 +l_size + 1 + l_size + 2;
-  if (ct_val_len) zret += MIME_LEN_CONTENT_TYPE + 2 + ct_val_len + 2;
+  uint64_t zret =
+    4 + HTTP_RANGE_BOUNDARY_LEN + 2 + MIME_LEN_CONTENT_RANGE + 2 + HTTP_LEN_BYTES + 1 + l_size + 1 + l_size + 1 + l_size + 2;
+  if (ct_val_len)
+    zret += MIME_LEN_CONTENT_TYPE + 2 + ct_val_len + 2;
   return zret;
 }
 
@@ -2519,21 +2541,22 @@ HTTPRangeSpec::calcContentLength(uint64_t object_size, uint64_t ct_val_len) cons
   size_t nr = this->count();
 
   if (nr >= 1) {
-    size = this->size(); // the real content size.
-    if (nr > 1) // part boundaries
+    size = this->size();                                                    // the real content size.
+    if (nr > 1)                                                             // part boundaries
       size += nr * self::calcPartBoundarySize(object_size, ct_val_len) + 2; // need trailing '--'
   }
   return size;
 }
 
 uint64_t
-HTTPRangeSpec::writePartBoundary(MIOBuffer* out, char const* boundary_str, size_t boundary_len, uint64_t total_size, uint64_t low, uint64_t high, MIMEField* ctf, bool final)
+HTTPRangeSpec::writePartBoundary(MIOBuffer *out, char const *boundary_str, size_t boundary_len, uint64_t total_size, uint64_t low,
+                                 uint64_t high, MIMEField *ctf, bool final)
 {
-  size_t x; // tmp for printf results.
-  size_t loc_size = Calc_Digital_Length(total_size)*3 + 3; // precomputed size of all the location / size text.
+  size_t x;                                                  // tmp for printf results.
+  size_t loc_size = Calc_Digital_Length(total_size) * 3 + 3; // precomputed size of all the location / size text.
   size_t n = self::calcPartBoundarySize(total_size, ctf ? ctf->m_len_value : 0) + (final ? 2 : 0);
   Ptr<IOBufferData> d(new_IOBufferData(iobuffer_size_to_index(n, MAX_BUFFER_SIZE_INDEX), MEMALIGNED));
-  char* spot = d->data();
+  char *spot = d->data();
 
   x = snprintf(spot, n, "\r\n--%.*s", static_cast<int>(boundary_len), boundary_str);
   spot += x;
@@ -2551,13 +2574,14 @@ HTTPRangeSpec::writePartBoundary(MIOBuffer* out, char const* boundary_str, size_
 
   x = snprintf(spot, n, " %" PRIu64 "-%" PRIu64 "/%" PRIu64, low, high, total_size);
   // Need to space fill to match pre-computed size
-  if (x < loc_size) memset(spot+x, ' ', loc_size - x);
+  if (x < loc_size)
+    memset(spot + x, ' ', loc_size - x);
   spot += loc_size;
   n -= loc_size;
 
   if (ctf) {
     int ctf_len;
-    char const* ctf_val = ctf->value_get(&ctf_len);
+    char const *ctf_val = ctf->value_get(&ctf_len);
     if (ctf_val) {
       x = snprintf(spot, n, "\r\n%.*s: %.*s", MIME_LEN_CONTENT_TYPE, MIME_FIELD_CONTENT_TYPE, ctf_len, ctf_val);
       spot += x;
@@ -2571,8 +2595,8 @@ HTTPRangeSpec::writePartBoundary(MIOBuffer* out, char const* boundary_str, size_
   n -= 2;
 
   ink_assert(n == 0);
-  
-  IOBufferBlock* b = new_IOBufferBlock(d, spot - d->data());
+
+  IOBufferBlock *b = new_IOBufferBlock(d, spot - d->data());
   b->_buf_end = b->_end;
   out->append_block(b);
 
@@ -2580,18 +2604,19 @@ HTTPRangeSpec::writePartBoundary(MIOBuffer* out, char const* boundary_str, size_
 }
 
 int
-HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
+HTTPRangeSpec::print_array(char *buff, size_t len, Range const *rv, int count)
 {
   size_t zret = 0;
   bool first = true;
 
   // Can't possibly write a range in less than this size buffer.
-  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
+  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4)
+    return 0;
 
-  for ( int i = 0 ; i < count ; ++i ) {
+  for (int i = 0; i < count; ++i) {
     int n = 0;
     int remain = len - zret;
-    char* spot = buff + zret;
+    char *spot = buff + zret;
 
     if (first) {
       memcpy(buff, HTTP_VALUE_BYTES, HTTP_LEN_BYTES);
@@ -2606,63 +2631,67 @@ HTTPRangeSpec::print_array(char* buff, size_t len, Range const* rv, int count)
     }
     remain -= n;
     spot += n;
-    
+
     if (rv[i].isSuffix())
       n += snprintf(spot, remain, "-%" PRId64, rv[i]._min);
     else if (rv[i].isPrefix())
       n += snprintf(spot, remain, "%" PRId64 "-", rv[i]._min);
     else
-      n += snprintf(spot, remain, "%" PRId64 "-%" PRIu64 , rv[i]._min , rv[i]._max);
-    
+      n += snprintf(spot, remain, "%" PRId64 "-%" PRIu64, rv[i]._min, rv[i]._max);
+
     if (n + zret >= len) {
       buff[zret] = 0; // clip partial output.
       break;
     }
-    
+
     zret += n;
   }
   return zret;
 }
 
 int
-HTTPRangeSpec::print(char* buff, size_t len) const
+HTTPRangeSpec::print(char *buff, size_t len) const
 {
   return this->hasRanges() ? this->print_array(buff, len, &(*(this->begin())), this->count()) : 0;
 }
 
 int
-HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t interstitial, int64_t rlimit) const
+HTTPRangeSpec::print_quantized(char *buff, size_t len, int64_t quantum, int64_t interstitial, int64_t rlimit) const
 {
   static const int MAX_R = 20; // this needs to be promoted
   // We will want to have a max # of ranges limit, probably a build time constant, in the not so distant
   // future anyway, so might as well start here.
-  int qrn = 0; // count of quantized ranges
+  int qrn = 0;          // count of quantized ranges
   int64_t trailer = -1; // Union of trailing ranges.
-  Range qr[MAX_R+1]; // quantized ranges - leave one for the trailing range, if any.
+  Range qr[MAX_R + 1];  // quantized ranges - leave one for the trailing range, if any.
 
   // Can't possibly write a range in less than this size buffer.
-  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4) return 0;
+  if (len < static_cast<size_t>(HTTP_LEN_BYTES) + 4)
+    return 0;
 
   // Avoid annoying "+1" in the adjacency checks.
-  if (interstitial < 1) interstitial = 1;
-  else ++interstitial;
+  if (interstitial < 1)
+    interstitial = 1;
+  else
+    ++interstitial;
 
-  for ( const_iterator spot = this->begin(), limit = this->end() ; spot != limit ; ++spot ) {
+  for (const_iterator spot = this->begin(), limit = this->end(); spot != limit; ++spot) {
     Range r(*spot);
     if (r.isSuffix()) {
       trailer = std::max(trailer, r._min);
     } else {
       if (quantum > 1) {
         r._min = (r._min / quantum) * quantum;
-        r._max = ((r._max + quantum - 1)/quantum) * quantum - 1;
+        r._max = ((r._max + quantum - 1) / quantum) * quantum - 1;
       }
       int i; // need to persist past @c for loop.
-      if (rlimit >= 0) r._max = std::min(r._max, rlimit - 1);
-      // blend in to the current ranges. 
-      for ( i = 0 ; i < qrn ; ++i ) {
-        Range& cr = qr[i];
+      if (rlimit >= 0)
+        r._max = std::min(r._max, rlimit - 1);
+      // blend in to the current ranges.
+      for (i = 0; i < qrn; ++i) {
+        Range &cr = qr[i];
         if ((r._max + interstitial) < cr._min) {
-          memmove(qr, qr+1, sizeof(*qr) * qrn);
+          memmove(qr, qr + 1, sizeof(*qr) * qrn);
           ++qrn;
           qr[0] = r;
           i = -1;
@@ -2671,7 +2700,7 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
           int j = i + 1;
           cr._min = std::min(cr._min, r._min);
           cr._max = std::max(cr._max, r._max);
-          while ( j < qrn) {
+          while (j < qrn) {
             if (qr[j]._min < cr._max + interstitial)
               cr._max = std::max(cr._max, qr[j]._max);
             ++j;
@@ -2680,7 +2709,7 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
             memmove(qr + i + 1, qr + j, sizeof(*qr) * qrn - j);
           qrn -= j - i;
           i = -1;
-          break;   
+          break;
         }
       }
       if (i >= qrn)
@@ -2698,7 +2727,7 @@ HTTPRangeSpec::print_quantized(char* buff, size_t len, int64_t quantum, int64_t 
 HTTPRangeSpec::Range
 HTTPInfo::get_range_for_frags(int low, int high)
 {
-  return HTTPRangeSpec::Range(this->get_frag_offset(low),this->get_frag_offset(high+1)-1);
+  return HTTPRangeSpec::Range(this->get_frag_offset(low), this->get_frag_offset(high + 1) - 1);
 }
 
 /* Note - we're not handling unspecified content length and trailing segments at all here.
@@ -2706,14 +2735,14 @@ HTTPInfo::get_range_for_frags(int low, int high)
 */
 
 HTTPRangeSpec::Range
-HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req, int64_t initial)
+HTTPInfo::get_uncached_hull(HTTPRangeSpec const &req, int64_t initial)
 {
   HTTPRangeSpec::Range r;
 
   if (m_alt && !m_alt->m_flag.complete_p) {
     HTTPRangeSpec::Range s = req.getConvexHull();
     if (m_alt->m_fragments) {
-      FragmentDescriptorTable& fdt = *(m_alt->m_fragments);
+      FragmentDescriptorTable &fdt = *(m_alt->m_fragments);
       int32_t lidx;
       int32_t ridx;
       if (s.isValid()) {
@@ -2725,15 +2754,20 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req, int64_t initial)
         ridx = this->get_frag_index_of(this->object_size_get());
       }
 
-      if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p) lidx = 0;
+      if (lidx < 2 && !m_alt->m_earliest.m_flag.cached_p)
+        lidx = 0;
       else {
-        if (0 == lidx) ++lidx; // because if we get here with lidx == 0, earliest is cached and we should skip ahead.
-        while (lidx <= ridx && fdt[lidx].m_flag.cached_p) ++lidx;
+        if (0 == lidx)
+          ++lidx; // because if we get here with lidx == 0, earliest is cached and we should skip ahead.
+        while (lidx <= ridx && fdt[lidx].m_flag.cached_p)
+          ++lidx;
       }
 
-      while (lidx <= ridx && fdt[ridx].m_flag.cached_p) --ridx;
+      while (lidx <= ridx && fdt[ridx].m_flag.cached_p)
+        --ridx;
 
-      if (lidx <= ridx) r = this->get_range_for_frags(lidx, ridx);
+      if (lidx <= ridx)
+        r = this->get_range_for_frags(lidx, ridx);
     } else { // no fragments past earliest cached yet
       r._min = m_alt->m_earliest.m_flag.cached_p ? this->get_frag_fixed_size() : 0;
       if (s.isValid()) {
@@ -2745,12 +2779,13 @@ HTTPInfo::get_uncached_hull(HTTPRangeSpec const& req, int64_t initial)
     }
     if (r.isValid() && m_alt->m_flag.content_length_p && static_cast<int64_t>(r._max) >= this->object_size_get())
       r._max = this->object_size_get() - 1;
-    if (static_cast<int64_t>(r._min) < initial && !m_alt->m_earliest.m_flag.cached_p) r._min = 0;
+    if (static_cast<int64_t>(r._min) < initial && !m_alt->m_earliest.m_flag.cached_p)
+      r._min = 0;
   }
   return r;
 }
 
-# if 0
+#if 0
 bool
 HTTPInfo::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
 {
@@ -2775,4 +2810,4 @@ HTTPInfo::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result)
   }
   return zret;
 }
-# endif
+#endif

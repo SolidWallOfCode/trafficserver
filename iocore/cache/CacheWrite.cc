@@ -1186,7 +1186,7 @@ CacheVC::openWriteCloseHead(int event, Event *e)
   f.use_first_key = 1;
   if (!io.ok())
     return openWriteCloseDir(event, e);
-  
+
   if (f.data_done) {
     write_len = 0;
   } else {
@@ -1354,7 +1354,6 @@ CacheProcessor::get_fixed_fragment_size() const
   return cache_config_target_fragment_size - sizeofDoc;
 }
 
-
 Action *
 CacheVC::do_write_init()
 {
@@ -1406,7 +1405,8 @@ CacheVC::openWriteInit(int eid, Event *event)
       // This wakes up the readers after the alternate vector has been updated.
       while (NULL != (reader = od->open_waiting.pop())) {
         Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
-        reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, reinterpret_cast<void*>(earliest_key.fold()));
+        reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE,
+                                             reinterpret_cast<void *>(earliest_key.fold()));
       }
     }
   }
@@ -1509,8 +1509,8 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         write_vector->addSideBuffer(earliest_key, blocks, write_len, write_pos);
         resp_range.consume(write_len);
         blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
-        Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len,
-              frag_offset, write_pos);
+        Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len, frag_offset,
+              write_pos);
         continue;
       } else if (fragment != 0 && !alternate.m_alt->m_earliest.m_flag.cached_p) {
         // No earliest fragment, wait for one to be created.

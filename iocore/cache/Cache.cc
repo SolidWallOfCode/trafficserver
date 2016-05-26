@@ -311,7 +311,7 @@ CacheVC::CacheVC() : alternate_index(CACHE_ALT_INDEX_DEFAULT)
 }
 
 #ifdef HTTP_CACHE
-HTTPInfo::FragmentDescriptorTable*
+HTTPInfo::FragmentDescriptorTable *
 CacheVC::get_frag_table()
 {
   ink_assert(alternate.valid());
@@ -493,8 +493,8 @@ int64_t
 CacheVC::set_inbound_range(int64_t min, int64_t max)
 {
   resp_range.clear();
-  resp_range.getRangeSpec().add(min,max);
-  Debug("amc", "%p inbound range set to %" PRId64 "-%" PRId64 , this, min, max);
+  resp_range.getRangeSpec().add(min, max);
+  Debug("amc", "%p inbound range set to %" PRId64 "-%" PRId64, this, min, max);
   return 1 + (max - min);
 }
 
@@ -505,7 +505,8 @@ CacheVC::set_full_content_length(int64_t cl)
   resp_range.resolve(cl);
 }
 
-bool CacheVC::set_pin_in_cache(time_t time_pin)
+bool
+CacheVC::set_pin_in_cache(time_t time_pin)
 {
   if (total_len) {
     ink_assert(!"should Pin the document before writing");
@@ -520,18 +521,17 @@ bool CacheVC::set_pin_in_cache(time_t time_pin)
 }
 
 void
-CacheVC::set_content_range(HTTPRangeSpec const& r)
+CacheVC::set_content_range(HTTPRangeSpec const &r)
 {
   resp_range.getRangeSpec() = r;
   resp_range.start();
 }
 
 bool
-CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result, int64_t initial)
+CacheVC::get_uncached(HTTPRangeSpec const &req, HTTPRangeSpec &result, int64_t initial)
 {
-  HTTPRangeSpec::Range r = od ? write_vector->get_uncached_hull(earliest_key, req, initial)
-    : alternate.get_uncached_hull(req, initial)
-    ;
+  HTTPRangeSpec::Range r =
+    od ? write_vector->get_uncached_hull(earliest_key, req, initial) : alternate.get_uncached_hull(req, initial);
   if (r.isValid()) {
     result.add(r);
     return true;
@@ -539,7 +539,8 @@ CacheVC::get_uncached(HTTPRangeSpec const& req, HTTPRangeSpec& result, int64_t i
   return false;
 }
 
-bool CacheVC::set_disk_io_priority(int priority)
+bool
+CacheVC::set_disk_io_priority(int priority)
 {
   ink_assert(priority >= AIO_LOWEST_PRIORITY);
   io.aiocb.aio_reqprio = priority;
@@ -2234,7 +2235,7 @@ CacheVC::is_pread_capable()
   return !f.read_from_writer_called;
 }
 
-# if 0
+#if 0
 void
 CacheVC::get_missing_ranges(HTTPRangeSpec& missing)
 {
@@ -2292,14 +2293,14 @@ upgrade_doc_version(Ptr<IOBufferData> &buf)
       Debug("cache_bc", "Doc %p without header, no upgrade needed.", doc);
     } else if (CACHE_FRAG_TYPE_HTTP_V23 == doc->doc_type) {
       typedef cache_bc::HTTPCacheFragmentTable::FragOffset FragOffset;
-      cache_bc::HTTPCacheAlt_v21* alt = reinterpret_cast<cache_bc::HTTPCacheAlt_v21*>(doc->hdr());
+      cache_bc::HTTPCacheAlt_v21 *alt = reinterpret_cast<cache_bc::HTTPCacheAlt_v21 *>(doc->hdr());
       if (alt && alt->is_unmarshalled_format()) {
         Ptr<IOBufferData> d_buf(ioDataAllocator.alloc());
-        Doc* d_doc;
-        char* src;
-        char* dst;
-        char* hdr_limit = doc->data();
-        FragOffset* frags = reinterpret_cast<FragOffset*>(static_cast<char*>(buf->data()) + cache_bc::sizeofDoc_v23);
+        Doc *d_doc;
+        char *src;
+        char *dst;
+        char *hdr_limit = doc->data();
+        FragOffset *frags = reinterpret_cast<FragOffset *>(static_cast<char *>(buf->data()) + cache_bc::sizeofDoc_v23);
         int frag_count = doc->_flen / sizeof(FragOffset);
         size_t n = 0;
         size_t content_size = doc->data_len();
@@ -2536,8 +2537,8 @@ CacheVC::handleRead(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   SET_HANDLER(&CacheVC::handleReadDone);
   {
     char xt[33];
-    Debug("amc", "cache read : key = %s %" PRId64 " bytes at stripe offset =% " PRId64
-          , key.toHexStr(xt), io.aiocb.aio_nbytes, io.aiocb.aio_offset);
+    Debug("amc", "cache read : key = %s %" PRId64 " bytes at stripe offset =% " PRId64, key.toHexStr(xt), io.aiocb.aio_nbytes,
+          io.aiocb.aio_offset);
   }
   ink_assert(ink_aio_read(&io) >= 0);
   CACHE_DEBUG_INCREMENT_DYN_STAT(cache_pread_count_stat);

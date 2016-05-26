@@ -511,7 +511,7 @@ struct HTTPRangeSpec {
   */
   struct Range {
     typedef Range self; ///< Self reference type.
-    
+
     int64_t _min; ///< Minimum offset of the range.
     int64_t _max; ///< Maximum offset of the range.
 
@@ -519,7 +519,6 @@ struct HTTPRangeSpec {
     Range() : _min(INT64_MAX), _max(1) {}
     /// Construct as the range ( @a low .. @a high )
     Range(int64_t low, int64_t high) : _min(low), _max(high) {}
-
     /// Test if this range is a suffix range.
     bool isSuffix() const;
     /// Test if this range is a prefix range.
@@ -535,7 +534,7 @@ struct HTTPRangeSpec {
     bool apply(int64_t len);
 
     /// Make the range a suffix range.
-    self& setSuffix(int64_t len);
+    self &setSuffix(int64_t len);
 
     /// Force the range to an empty state.
     Range &invalidate();
@@ -1488,12 +1487,11 @@ HTTPHdr::reason_set(const char *value, int length)
 inline void
 HTTPHdr::reason_set(HTTPStatus status)
 {
-  char const* phrase = http_hdr_reason_lookup(status);
+  char const *phrase = http_hdr_reason_lookup(status);
   this->reason_set(phrase, strlen(phrase));
 }
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
-
 
 inline MIMEParseResult
 HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof)
@@ -1602,9 +1600,9 @@ struct HTTPCacheAlt {
   */
   struct FragmentDescriptorTable {
     /** The number of entries in the table.
-	Because this is a 1 based array, this is also the largest valid index.
-	@note It is 1 less than the total number of fragment descriptors because earliest is stored
-	directly and not in this table.
+        Because this is a 1 based array, this is also the largest valid index.
+        @note It is 1 less than the total number of fragment descriptors because earliest is stored
+        directly and not in this table.
         @note This is never zero because in that case the table isn't created at all.
      */
     uint32_t m_n;
@@ -1621,10 +1619,10 @@ struct HTTPCacheAlt {
     uint32_t m_cached_idx;
 
     /** Array operator for fragments in the table (1-based).
-	This is a bit tricky. The earliest fragment is special and so is @b not stored in this table.
-	To make that easier to deal with this array is one based so the containing object can simply
-	pass the index on if it's not 0 (earliest). From an external point of view the array of fragments
-	is zero based.
+        This is a bit tricky. The earliest fragment is special and so is @b not stored in this table.
+        To make that easier to deal with this array is one based so the containing object can simply
+        pass the index on if it's not 0 (earliest). From an external point of view the array of fragments
+        is zero based.
      */
     FragmentDescriptor &operator[](int idx);
     /// Calculate the allocation size needed for a maximum array index of @a n.
@@ -1872,7 +1870,8 @@ public:
       @return An invalid range if all of the request is available in cache.
   */
   HTTPRangeSpec::Range get_uncached_hull(HTTPRangeSpec const &req ///< [in] UA request with content length applied
-					 , int64_t initial ///< Minimize size for uncached initial data
+                                         ,
+                                         int64_t initial ///< Minimize size for uncached initial data
                                          );
 
   /// Get the fragment table.
@@ -1977,7 +1976,7 @@ HTTPInfo::object_size_set(int64_t size)
     int64_t mco = 0; // maximum cached offset + 1
     if (m_alt->m_fragments) {
       if (m_alt->m_fragments->m_cached_idx >= 0)
-	mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
+        mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
     } else if (m_alt->m_earliest.m_flag.cached_p) {
       mco = this->get_frag_fixed_size();
     }

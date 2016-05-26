@@ -259,7 +259,7 @@ struct OpenDirEntry {
   self &write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Mark an active write by @a vc as complete and indicate whether it had @a success.
   /// If the write is not @a success then the fragment is not marked as cached.
-  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const& data, bool success = true);
+  self &write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const &data, bool success = true);
   /// Indicate if a VC is currently writing to the fragment with this @a offset.
   bool is_write_active(CacheKey const &alt_key, int64_t offset);
   /// Get the fragment key for a specific @a offset.
@@ -283,7 +283,7 @@ struct OpenDir : public Continuation {
 
       @a force_p is set to @c true to force the entry if it's not already there.
   */
-  OpenDirEntry* open_entry(Vol* vol, CryptoHash const& key, bool force_p = false);
+  OpenDirEntry *open_entry(Vol *vol, CryptoHash const &key, bool force_p = false);
   void close_entry(CacheVC *c);
   //  OpenDirEntry *open_read(CryptoHash *key);
   int signal_readers(int event, Event *e);

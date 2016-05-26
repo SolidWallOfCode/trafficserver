@@ -542,7 +542,7 @@ public:
   enum RangeSetup_t {
     RANGE_NONE = 0,
     RANGE_NOT_SATISFIABLE,
-    RANGE_PARTIAL_WRITE, ///< Cache a range request.
+    RANGE_PARTIAL_WRITE,  ///< Cache a range request.
     RANGE_PARTIAL_UPDATE, ///< Update an existing object with a range request.
   };
 

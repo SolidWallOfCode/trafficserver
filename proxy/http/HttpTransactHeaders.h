@@ -90,7 +90,7 @@ public:
       to be the content length, if known, to clip the request range rather than fullying quantizing it out to
       the end of the final fragment.
   */
-  static void insert_proxy_request_range_header(HTTPHdr* header, HTTPRangeSpec const* ranges, uint64_t limit);
+  static void insert_proxy_request_range_header(HTTPHdr *header, HTTPRangeSpec const *ranges, uint64_t limit);
   static int nstrcpy(char *d, const char *as);
 };
 

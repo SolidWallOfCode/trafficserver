@@ -857,6 +857,6 @@ ink_atoui(const char *str)
 
     @internal All of these conversions and none work as I need. Sigh.
 */
-uint64_t ats_strto64(char const* s, size_t len, size_t* used);
+uint64_t ats_strto64(char const *s, size_t len, size_t *used);
 
 #endif /* #if !defined (_ParseRules_h_) */

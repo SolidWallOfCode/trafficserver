@@ -745,10 +745,12 @@ template <class C, class L> inline AtomicSLL<C, L>::AtomicSLL()
 
 namespace std
 {
-  template <class C, class L > void swap(DLL<C,L>& lhs, DLL<C,L>& rhs)
-  {
-    swap(lhs.head, rhs.head);
-  }
+template <class C, class L>
+void
+swap(DLL<C, L> &lhs, DLL<C, L> &rhs)
+{
+  swap(lhs.head, rhs.head);
+}
 }
 
 #endif /*_List_h_*/

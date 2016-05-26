@@ -61,8 +61,8 @@ OpenDir::OpenDir()
   SET_HANDLER(&OpenDir::signal_readers);
 }
 
-OpenDirEntry*
-OpenDir::open_entry(Vol* vol, CryptoHash const& key, bool force_p)
+OpenDirEntry *
+OpenDir::open_entry(Vol *vol, CryptoHash const &key, bool force_p)
 {
   ink_assert(vol->mutex->thread_holding == this_ethread());
   unsigned int h = key.slice32(0);
@@ -71,16 +71,15 @@ OpenDir::open_entry(Vol* vol, CryptoHash const& key, bool force_p)
     if (!(d->first_key == key))
       continue;
     ++(d->num_active);
-//    cont->od = d;
-//    cont->write_vector = &d->vector;
+    //    cont->od = d;
+    //    cont->write_vector = &d->vector;
     return d;
   }
 
   if (!force_p)
     return NULL;
 
-  OpenDirEntry *od = THREAD_ALLOC(openDirEntryAllocator,
-                                  vol->mutex->thread_holding);
+  OpenDirEntry *od = THREAD_ALLOC(openDirEntryAllocator, vol->mutex->thread_holding);
   od->mutex = new_ProxyMutex();
   od->first_key = key;
   od->num_active = 1;
@@ -90,8 +89,8 @@ OpenDir::open_entry(Vol* vol, CryptoHash const& key, bool force_p)
   od->reading_vec = 0;
   od->writing_vec = 0;
   dir_clear(&od->first_dir);
-//  cont->od = od;
-//  cont->write_vector = &od->vector;
+  //  cont->od = od;
+  //  cont->write_vector = &od->vector;
   bucket[b].push(od);
   return od;
 }
@@ -122,7 +121,7 @@ OpenDir::signal_readers(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 }
 
 void
-OpenDir::close_entry(CacheVC* vc)
+OpenDir::close_entry(CacheVC *vc)
 {
   ink_assert(vc->vol->mutex->thread_holding == this_ethread());
   if (vc->od && --(vc->od->num_active) < 1) {
@@ -141,7 +140,7 @@ OpenDir::close_entry(CacheVC* vc)
   vc->od = NULL;
 }
 
-# if 0
+#if 0
 OpenDirEntry *
 OpenDir::open_read(const CryptoHash *key)
 {
@@ -163,30 +162,30 @@ OpenDirEntry::wait(CacheVC *cont, int msec)
   readers.push(cont);
   return EVENT_CONT;
 }
-# endif
+#endif
 
 int
-OpenDirEntry::index_of(CacheKey const& alt_key)
+OpenDirEntry::index_of(CacheKey const &alt_key)
 {
   return vector.index_of(alt_key);
 }
 
 bool
-OpenDirEntry::has_writer(CacheKey const& alt_key)
+OpenDirEntry::has_writer(CacheKey const &alt_key)
 {
   return vector.has_writer(alt_key);
 }
 
-OpenDirEntry&
-OpenDirEntry::write_active(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+OpenDirEntry &
+OpenDirEntry::write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
   Debug("amc", "VC %p write active @ %" PRId64, vc, offset);
   vector.write_active(alt_key, vc, offset);
   return *this;
 }
 
-OpenDirEntry&
-OpenDirEntry::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheBuffer const& data, bool success)
+OpenDirEntry &
+OpenDirEntry::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const &data, bool success)
 {
   Debug("amc", "[OpenDir::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
   vector.write_complete(alt_key, vc, data, success);
@@ -194,26 +193,26 @@ OpenDirEntry::write_complete(CacheKey const& alt_key, CacheVC* vc, CacheBuffer c
 }
 
 bool
-OpenDirEntry::is_write_active(CacheKey const& alt_key, int64_t offset)
+OpenDirEntry::is_write_active(CacheKey const &alt_key, int64_t offset)
 {
   return vector.is_write_active(alt_key, offset);
 }
 
-CacheKey const&
-OpenDirEntry::key_for(CacheKey const& alt_key, int64_t offset)
+CacheKey const &
+OpenDirEntry::key_for(CacheKey const &alt_key, int64_t offset)
 {
   return vector.key_for(alt_key, offset);
 }
 
 bool
-OpenDirEntry::wait_for(CacheKey const& alt_key, CacheVC* vc, int64_t offset)
+OpenDirEntry::wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
   Debug("amc", "vc %p waiting for %" PRId64, vc, offset);
   return vector.wait_for(alt_key, vc, offset);
 }
 
-OpenDirEntry&
-OpenDirEntry::close_writer(CacheKey const& alt_key, CacheVC* vc)
+OpenDirEntry &
+OpenDirEntry::close_writer(CacheKey const &alt_key, CacheVC *vc)
 {
   vector.close_writer(alt_key, vc);
   return *this;

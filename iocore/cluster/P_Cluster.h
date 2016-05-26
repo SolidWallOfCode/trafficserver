@@ -46,7 +46,7 @@
 #include "P_ClusterLoadMonitor.h"
 #include "P_TimeTrace.h"
 
-#define ECLUSTER_NO_VC (CLUSTER_ERRNO+0)
+#define ECLUSTER_NO_VC (CLUSTER_ERRNO + 0)
 #define ECLUSTER_NO_MACHINE (CLUSTER_ERRNO + 1)
 #define ECLUSTER_OP_TIMEOUT (CLUSTER_ERRNO + 2)
 #define ECLUSTER_ORB_DATA_READ (CLUSTER_ERRNO + 3)

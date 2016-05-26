@@ -90,7 +90,7 @@ enum CacheEventType {
   CACHE_EVENT_SCAN_DONE = CACHE_EVENT_EVENTS_START + 25,
 
   CACHE_EVENT_WRITER_UPDATED_ALT_TABLE = CACHE_EVENT_EVENTS_START + 26,
-  
+
   //////////////////////////
   // Internal error codes //
   //////////////////////////
