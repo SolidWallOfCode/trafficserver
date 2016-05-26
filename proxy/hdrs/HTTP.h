@@ -25,6 +25,7 @@
 #define __HTTP_H__
 
 #include <assert.h>
+#include <vector>
 #include "ts/Arena.h"
 #include "ts/INK_MD5.h"
 #include "MIME.h"
