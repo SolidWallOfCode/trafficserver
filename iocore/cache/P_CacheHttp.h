@@ -25,7 +25,7 @@
 #define __CACHE_HTTP_H__
 
 #include "P_CacheArray.h"
-#ifdef HTTP_CACHE
+
 #include "HTTP.h"
 #include "URL.h"
 
@@ -39,12 +39,6 @@ enum {
   OWNER_CACHE = 1,
   OWNER_HTTP = 2,
 };
-
-#else
-struct CacheHTTPInfo {
-};
-
-#endif // HTTP_CACHE
 
 /** Used to hold content for use by the cache mechanisms.
     Holds content that was received from an origin server but could not be written

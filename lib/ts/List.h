@@ -749,7 +749,7 @@ template <class C, class L>
 void
 swap(DLL<C, L> &lhs, DLL<C, L> &rhs)
 {
-  swap(lhs.head, rhs.head);
+  std::swap(lhs.head, rhs.head);
 }
 }
 

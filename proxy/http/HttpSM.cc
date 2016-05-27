@@ -728,6 +728,7 @@ HttpSM::state_read_client_request_header(int event, void *data)
       }
       return 0;
     }
+  }
 
     // Check to see if we are done parsing the header
     if (state != PARSE_CONT || ua_entry->eos || (state == PARSE_CONT && event == VC_EVENT_READ_COMPLETE)) {

@@ -82,6 +82,10 @@
 
 #define TRANSACT_RETURN(n, r) TRANSACT_SETUP_RETURN(n, r) return;
 
+#define TRANSACT_RETURN_VAL(n, r, v) \
+  TRANSACT_SETUP_RETURN(n, r)        \
+  return v;
+
 #define SET_UNPREPARE_CACHE_ACTION(C)                               \
   {                                                                 \
     if (C.action == HttpTransact::CACHE_PREPARE_TO_DELETE) {        \

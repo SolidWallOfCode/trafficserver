@@ -2783,7 +2783,7 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range, MIN_INITIAL_UNCACHED)) {
     Debug("amc", "Request touches uncached fragments");
     find_server_and_update_current_info(s);
-    if (!ats_is_ip(&s->current.server->addr)) {
+    if (!ats_is_ip(&s->current.server->dst_addr)) {
       if (s->current.request_to == PARENT_PROXY) {
         TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, PPDNSLookup);
       } else if (s->current.request_to == ORIGIN_SERVER) {

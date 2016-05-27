@@ -1162,6 +1162,12 @@ CacheProcessor::lookup(Continuation *cont, const CacheKey *key, bool cluster_cac
 }
 
 inkcoreapi Action *
+CacheProcessor::open_read(Continuation *cont, CacheVConnection* writer, HTTPHdr* client_request_hdr)
+{
+  return caches[CACHE_FRAG_TYPE_HTTP]->open_read(cont, writer, client_request_hdr);
+}
+
+inkcoreapi Action *
 CacheProcessor::open_read(Continuation *cont, const CacheKey *key, bool cluster_cache_local ATS_UNUSED, CacheFragType frag_type,
                           const char *hostname, int hostlen)
 {
@@ -1230,7 +1236,7 @@ CacheProcessor::lookup(Continuation *cont, const HttpCacheKey *key, bool cluster
 
 #ifdef CLUSTER_CACHE
 Action *
-CacheProcessor::link(Continuation *cont, CacheKey *from, CacheKey *to, bool cluster_cache_local, CacheFragType type, char *hostname,
+CacheProcessor::link(Continuation *cont, CacheKey *from, CacheKey *to, bool cluster_cache_local, CacheFragType type, char  *hostname,
                      int host_len)
 {
   if (cache_clustering_enabled > 0 && !cluster_cache_local) {
@@ -3343,7 +3349,7 @@ CacheProcessor::open_read(Continuation *cont, const HttpCacheKey *key, bool clus
 
 //----------------------------------------------------------------------------
 Action *
-CacheProcessor::open_write(Continuation *cont, int expected_size, const HttpCacheKey *key, bool cluster_cache_local,
+CacheProcessor::open_write(Continuation *cont, int expected_size, HttpCacheKey const *key, bool cluster_cache_local,
                            CacheHTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache, CacheFragType type)
 {
 #ifdef CLUSTER_CACHE

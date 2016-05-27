@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "HTTP.h"
+#include "I_IOBuffer.h"
 #include "HdrToken.h"
 #include "ts/Diags.h"
 

@@ -1033,27 +1033,27 @@ struct Cache {
   int close();
 
   Action *lookup(Continuation *cont, CacheKey const *key, CacheFragType type, char const *hostname, int host_len);
-  inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, CacheFragType type, char *hostname, int len);
+  inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, CacheFragType type, char const*hostname, int len);
   inkcoreapi Action *open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr);
   inkcoreapi Action *open_write(Continuation *cont, CacheKey const *key, CacheFragType frag_type, int options = 0,
-                                time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
+                                time_t pin_in_cache = (time_t)0, char const *hostname = 0, int host_len = 0);
   inkcoreapi Action *remove(Continuation *cont, CacheKey const *key, CacheFragType type = CACHE_FRAG_TYPE_HTTP,
-                            bool user_agents = true, bool link = false, char *hostname = 0, int host_len = 0);
-  Action *scan(Continuation *cont, char *hostname = 0, int host_len = 0, int KB_per_second = 2500);
+                            char const *hostname = 0, int host_len = 0);
+  Action *scan(Continuation *cont, char const *hostname = 0, int host_len = 0, int KB_per_second = 2500);
 
   Action *lookup(Continuation *cont, URL *url, CacheFragType type);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, CacheHTTPHdr *request, CacheLookupHttpConfig *params,
-                               CacheFragType type, char *hostname, int host_len);
+                               CacheFragType type, char const *hostname, int host_len);
   Action *open_read(Continuation *cont, URL *url, CacheHTTPHdr *request, CacheLookupHttpConfig *params, CacheFragType type);
   Action *open_write(Continuation *cont, CacheKey const *key, CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t)0,
-                     CacheKey *key1 = NULL, CacheFragType type = CACHE_FRAG_TYPE_HTTP, char *hostname = 0, int host_len = 0);
-  Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t)0,
+                     CacheKey *key1 = NULL, CacheFragType type = CACHE_FRAG_TYPE_HTTP, char const *hostname = 0, int host_len = 0);
+  Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr const *request, CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t)0,
                      CacheFragType type = CACHE_FRAG_TYPE_HTTP);
 
   static void generate_key(INK_MD5 *md5, CacheURL *url);
   static void generate_key(HttpCacheKey *key, CacheURL *url, cache_generation_t generation = -1);
 
-  Action *link(Continuation *cont, const CacheKey *from, const CacheKey *to, CacheFragType type, const char *hostname,
+  Action *link(Continuation *cont, CacheKey const *from, CacheKey const *to, CacheFragType type, const char *hostname,
                int host_len);
   Action *deref(Continuation *cont, const CacheKey *key, CacheFragType type, const char *hostname, int host_len);
 
@@ -1112,67 +1112,6 @@ cache_hash(const INK_MD5 &md5)
 //       reference problems.
 #include "P_ClusterInline.h"
 #endif
-
-TS_INLINE inkcoreapi Action *
-CacheProcessor::open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local ATS_UNUSED, CacheFragType frag_type,
-                          char *hostname, int host_len)
-{
-  return caches[frag_type]->open_read(cont, key, frag_type, hostname, host_len);
-}
-
-TS_INLINE inkcoreapi Action *
-CacheProcessor::open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr)
-{
-  return caches[CACHE_FRAG_TYPE_HTTP]->open_read(cont, writer, client_request_hdr);
-}
-
-#ifdef CLUSTER_CACHE
-TS_INLINE Action *
-CacheProcessor::link(Continuation *cont, CacheKey *from, CacheKey *to, bool cluster_cache_local, CacheFragType type, char *hostname,
-                     int host_len)
-{
-  if (cache_clustering_enabled > 0 && !cluster_cache_local) {
-    // Use INK_MD5 in "from" to determine target machine
-    ClusterMachine *m = cluster_machine_at_depth(cache_hash(*from));
-    if (m) {
-      return Cluster_link(m, cont, from, to, type, hostname, host_len);
-    }
-  }
-  return caches[type]->link(cont, from, to, type, hostname, host_len);
-}
-
-TS_INLINE Action *
-CacheProcessor::deref(Continuation *cont, CacheKey *key, bool cluster_cache_local, CacheFragType type, char *hostname, int host_len)
-{
-  if (cache_clustering_enabled > 0 && !cluster_cache_local) {
-    ClusterMachine *m = cluster_machine_at_depth(cache_hash(*key));
-    if (m) {
-      return Cluster_deref(m, cont, key, type, hostname, host_len);
-    }
-  }
-  return caches[type]->deref(cont, key, type, hostname, host_len);
-}
-#endif
-
-TS_INLINE Action *
-CacheProcessor::scan(Continuation *cont, char *hostname, int host_len, int KB_per_second)
-{
-  return caches[CACHE_FRAG_TYPE_HTTP]->scan(cont, hostname, host_len, KB_per_second);
-}
-
-TS_INLINE int
-CacheProcessor::IsCacheEnabled()
-{
-  return CacheProcessor::initialized;
-}
-
-TS_INLINE bool
-CacheProcessor::IsCacheReady(CacheFragType type)
-{
-  if (IsCacheEnabled() != CACHE_INITIALIZED)
-    return 0;
-  return (bool)(cache_ready & (1 << type));
-}
 
 TS_INLINE Cache *
 local_cache()

@@ -54,7 +54,6 @@ enum { RAM_HIT_COMPRESS_NONE = 1, RAM_HIT_COMPRESS_FASTLZ, RAM_HIT_COMPRESS_LIBZ
 struct CacheVConnection;
 struct CacheVC;
 struct CacheDisk;
-#ifdef HTTP_CACHE
 class CacheLookupHttpConfig;
 class URL;
 class HTTPHdr;
@@ -64,7 +63,6 @@ class HTTPRangeSpec;
 typedef HTTPHdr CacheHTTPHdr;
 typedef URL CacheURL;
 typedef HTTPInfo CacheHTTPInfo;
-#endif
 
 struct CacheProcessor : public Processor {
   CacheProcessor()
@@ -82,10 +80,10 @@ struct CacheProcessor : public Processor {
   int dir_check(bool fix);
   int db_check(bool fix);
 
-  inkcoreapi Action *lookup(Continuation *cont, CacheKey *key, bool cluster_cache_local, bool local_only = false,
-                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
-  inkcoreapi Action *open_read(Continuation *cont, CacheKey *key, bool cluster_cache_local,
-                               CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char *hostname = 0, int host_len = 0);
+  inkcoreapi Action *lookup(Continuation *cont, CacheKey const *key, bool cluster_cache_local, bool local_only = false,
+                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const *hostname = 0, int host_len = 0);
+  inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, bool cluster_cache_local,
+                               CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const*hostname = 0, int host_len = 0);
 
   /** Open a cache reader from an already open writer.
 
@@ -94,17 +92,12 @@ struct CacheProcessor : public Processor {
   */
   inkcoreapi Action *open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr);
 
-  Action *open_read_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key, CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
-                           char *hostname = 0, int host_len = 0);
-
   inkcoreapi Action *open_write(Continuation *cont, CacheKey *key, bool cluster_cache_local,
                                 CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, int expected_size = CACHE_EXPECTED_SIZE,
                                 int options = 0, time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
-  Action *open_write_buffer(Continuation *cont, MIOBuffer *buf, CacheKey *key, CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
-                            int options = 0, time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
-  inkcoreapi Action *remove(Continuation *cont, CacheKey *key, bool cluster_cache_local,
-                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, bool rm_user_agents = true, bool rm_link = false,
-                            char *hostname = 0, int host_len = 0);
+  inkcoreapi Action *remove(Continuation *cont, CacheKey const *key, bool cluster_cache_local,
+                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
+                            char const *hostname = 0, int host_len = 0);
   Action *scan(Continuation *cont, char *hostname = 0, int host_len = 0, int KB_per_second = SCAN_KB_PER_SECOND);
 #ifdef HTTP_CACHE
   Action *lookup(Continuation *cont, const HttpCacheKey *key, bool cluster_cache_local, bool local_only = false,

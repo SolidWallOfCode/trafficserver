@@ -1234,7 +1234,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     CacheBuffer c;
     c._data.write(blocks, write_len);
     c._position = write_pos;
-    MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
+    SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
     write_vector->write_complete(earliest_key, this, c, true);
   }
 
@@ -1333,7 +1333,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   cb._position = write_pos;
 
   {
-    MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
+    SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
     write_vector->write_complete(earliest_key, this, cb, true);
   }
 
@@ -1491,7 +1491,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     { // lock scoping
       int64_t frag_offset = alternate.get_frag_offset(fragment);
       int64_t object_size = alternate.object_size_get();
-      MUTEX_LOCK(lock, od->mutex, this_ethread());
+      SCOPED_MUTEX_LOCK(lock, od->mutex, this_ethread());
 
       if (alternate.is_frag_cached(fragment)) {
         Debug("amc", "Fragment %d already cached", fragment);
@@ -1809,7 +1809,7 @@ CacheVC::updateWriteStateFromRange()
 // main entry point for writing of http documents
 Action *
 Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, time_t apin_in_cache,
-                  const CacheKey * /* key1 ATS_UNUSED */, CacheFragType type, const char *hostname, int host_len)
+                  CacheKey * /* key1 ATS_UNUSED */, CacheFragType type, const char *hostname, int host_len)
 {
   if (!CacheProcessor::IsCacheReady(type)) {
     cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *)-ECACHE_NOT_READY);
