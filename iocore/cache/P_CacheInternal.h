@@ -1033,7 +1033,7 @@ struct Cache {
   int close();
 
   Action *lookup(Continuation *cont, CacheKey const *key, CacheFragType type, char const *hostname, int host_len);
-  inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, CacheFragType type, char const*hostname, int len);
+  inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, CacheFragType type, char const *hostname, int len);
   inkcoreapi Action *open_read(Continuation *cont, CacheVConnection *writer, HTTPHdr *client_request_hdr);
   inkcoreapi Action *open_write(Continuation *cont, CacheKey const *key, CacheFragType frag_type, int options = 0,
                                 time_t pin_in_cache = (time_t)0, char const *hostname = 0, int host_len = 0);
@@ -1047,8 +1047,8 @@ struct Cache {
   Action *open_read(Continuation *cont, URL *url, CacheHTTPHdr *request, CacheLookupHttpConfig *params, CacheFragType type);
   Action *open_write(Continuation *cont, CacheKey const *key, CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t)0,
                      CacheKey *key1 = NULL, CacheFragType type = CACHE_FRAG_TYPE_HTTP, char const *hostname = 0, int host_len = 0);
-  Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr const *request, CacheHTTPInfo *old_info, time_t pin_in_cache = (time_t)0,
-                     CacheFragType type = CACHE_FRAG_TYPE_HTTP);
+  Action *open_write(Continuation *cont, URL *url, CacheHTTPHdr const *request, CacheHTTPInfo *old_info,
+                     time_t pin_in_cache = (time_t)0, CacheFragType type = CACHE_FRAG_TYPE_HTTP);
 
   static void generate_key(INK_MD5 *md5, CacheURL *url);
   static void generate_key(HttpCacheKey *key, CacheURL *url, cache_generation_t generation = -1);

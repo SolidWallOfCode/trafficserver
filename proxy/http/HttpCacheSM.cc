@@ -201,7 +201,7 @@ HttpCacheSM::state_cache_open_write(int event, void *data)
       master_sm->handleEvent(event, data);
     }
     break;
-# if 0
+#if 0
   case EVENT_INTERVAL:
     // Retry the cache open write if the number retries is less
     // than or equal to the max number of open write retries
@@ -215,8 +215,8 @@ HttpCacheSM::state_cache_open_write(int event, void *data)
       (time_t)((master_sm->t_state.cache_control.pin_in_cache_for < 0) ? 0 : master_sm->t_state.cache_control.pin_in_cache_for),
       retry_write, false);
     break;
-# endif
-    
+#endif
+
   default:
     ink_release_assert(0);
   }

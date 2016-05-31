@@ -83,7 +83,7 @@ struct CacheProcessor : public Processor {
   inkcoreapi Action *lookup(Continuation *cont, CacheKey const *key, bool cluster_cache_local, bool local_only = false,
                             CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const *hostname = 0, int host_len = 0);
   inkcoreapi Action *open_read(Continuation *cont, CacheKey const *key, bool cluster_cache_local,
-                               CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const*hostname = 0, int host_len = 0);
+                               CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const *hostname = 0, int host_len = 0);
 
   /** Open a cache reader from an already open writer.
 
@@ -96,8 +96,7 @@ struct CacheProcessor : public Processor {
                                 CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, int expected_size = CACHE_EXPECTED_SIZE,
                                 int options = 0, time_t pin_in_cache = (time_t)0, char *hostname = 0, int host_len = 0);
   inkcoreapi Action *remove(Continuation *cont, CacheKey const *key, bool cluster_cache_local,
-                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE,
-                            char const *hostname = 0, int host_len = 0);
+                            CacheFragType frag_type = CACHE_FRAG_TYPE_NONE, char const *hostname = 0, int host_len = 0);
   Action *scan(Continuation *cont, char *hostname = 0, int host_len = 0, int KB_per_second = SCAN_KB_PER_SECOND);
 #ifdef HTTP_CACHE
   Action *lookup(Continuation *cont, const HttpCacheKey *key, bool cluster_cache_local, bool local_only = false,
