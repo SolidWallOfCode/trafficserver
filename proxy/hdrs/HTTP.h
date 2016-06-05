@@ -2019,7 +2019,7 @@ inline bool
 HTTPInfo::is_frag_cached(unsigned int idx) const
 {
   return m_alt && ((0 == idx && m_alt->m_earliest.m_flag.cached_p) ||
-                   (m_alt->m_fragments && idx < m_alt->m_fragments->m_n && (*m_alt->m_fragments)[idx].m_flag.cached_p));
+                   (m_alt->m_fragments && idx <= m_alt->m_fragments->m_n && (*m_alt->m_fragments)[idx].m_flag.cached_p));
 }
 
 inline HTTPRangeSpec::HTTPRangeSpec() : _state(EMPTY)

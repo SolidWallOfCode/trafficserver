@@ -416,7 +416,8 @@ CacheHTTPInfoVector::wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offs
   int alt_idx = this->index_of(alt_key);
   Item &item = data[alt_idx];
   int frag_idx = item._alternate.get_frag_index_of(offset);
-  vc->fragment = frag_idx; // really? Shouldn't this already be set?
+  ink_assert(vc->fragment == frag_idx);
+  //  vc->fragment = frag_idx; // really? Shouldn't this already be set?
   if (item.has_writers()) {
     if (!item._waiting.in(vc))
       item._waiting.push(vc);

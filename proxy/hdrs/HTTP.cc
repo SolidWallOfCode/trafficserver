@@ -2155,7 +2155,8 @@ HTTPInfo::force_frag_at(unsigned int idx)
   if (0 == idx)
     return &m_alt->m_earliest;
 
-  if (0 == m_alt->m_fragments || idx > m_alt->m_fragments->m_n) { // no room at the inn
+  // Due to the earliest potentially holding data, @a idx must be larger than @a m_n to require additional space.
+  if (0 == m_alt->m_fragments || idx > m_alt->m_fragments->m_n) { // no inn or no room at the inn
     int64_t obj_size = this->object_size_get();
     uint32_t ff_size = this->get_frag_fixed_size();
     unsigned int n = 0; // set if we need to allocate, this is max array index needed.
@@ -2172,7 +2173,7 @@ HTTPInfo::force_frag_at(unsigned int idx)
       if (idx > n)
         n = idx;
       if (m_alt->m_earliest.m_flag.cached_p) {
-        // Computed as if all the data is in the fragment table. If the earliest is not empty the
+        // Computed as if all the data is in the fragment table. If the earliest is not empty then
         // one fragment worth of data will be there. This is the common case so worth optimizing.
         --n;
         offset += ff_size;
@@ -2211,7 +2212,6 @@ HTTPInfo::force_frag_at(unsigned int idx)
       offset += ff_size;
     }
   }
-  ink_assert(idx > m_alt->m_fragments->m_cached_idx);
   return &(*m_alt->m_fragments)[idx];
 }
 
@@ -2227,7 +2227,9 @@ HTTPInfo::mark_frag_write(unsigned int idx)
   if (0 == idx) {
     m_alt->m_earliest.m_flag.cached_p = true;
   } else {
-    this->force_frag_at(idx)->m_flag.cached_p = true;
+    FragmentDescriptor* fptr = this->force_frag_at(idx);
+    fptr->m_flag.cached_p = true;
+    Debug("amc", "mark frag %d[%p] cached", idx, fptr);
   }
 
   // bump the last cached value if possible and mark complete if appropriate.
@@ -2235,6 +2237,7 @@ HTTPInfo::mark_frag_write(unsigned int idx)
     unsigned int j = idx + 1;
     while (j < m_alt->m_frag_count && (*m_alt->m_fragments)[j].m_flag.cached_p)
       ++j;
+    Debug("amc", "Marking fragment write %d, cached_idx set to %d", idx, j-1);
     m_alt->m_fragments->m_cached_idx = j - 1;
     if (!m_alt->m_flag.content_length_p &&
         (this->get_frag_fixed_size() + this->get_frag_offset(j - 1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))
@@ -2686,7 +2689,8 @@ HTTPRangeSpec::print_quantized(char *buff, size_t len, int64_t quantum, int64_t 
         r._max = ((r._max + quantum - 1) / quantum) * quantum - 1;
       }
       int i; // need to persist past @c for loop.
-      if (rlimit >= 0)
+      // Clip max request value if needed.
+      if (rlimit > 0)
         r._max = std::min(r._max, rlimit - 1);
       // blend in to the current ranges.
       for (i = 0; i < qrn; ++i) {
@@ -2719,7 +2723,7 @@ HTTPRangeSpec::print_quantized(char *buff, size_t len, int64_t quantum, int64_t 
     }
   }
 
-  if (trailer)
+  if (trailer >= 0)
     qr[qrn++].setSuffix(trailer);
 
   return this->print_array(buff, len, qr, qrn);

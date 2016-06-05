@@ -496,28 +496,6 @@ CacheVC::openReadReadDone(int event, Event *e)
       return EVENT_CONT;
     } else if (write_vc) {
       ink_release_assert(!"[amc] Handle this");
-#if 0
-      if (writer_done()) {
-        last_collision = NULL;
-        while (dir_probe(&earliest_key, vol, &dir, &last_collision)) {
-          if (dir_offset(&dir) == dir_offset(&earliest_dir)) {
-            DDebug("cache_read_agg", "%p: key: %X ReadRead complete: %d", this, first_key.slice32(1), (int)vio.ndone);
-            doc_len = vio.ndone;
-            goto Ldone;
-          }
-        }
-        DDebug("cache_read_agg", "%p: key: %X ReadRead writer aborted: %d", this, first_key.slice32(1), (int)vio.ndone);
-        goto Lerror;
-      }
-      if (writer_lock_retry < cache_config_read_while_writer_max_retries) {
-        DDebug("cache_read_agg", "%p: key: %X ReadRead retrying: %d", this, first_key.slice32(1), (int)vio.ndone);
-        VC_SCHED_WRITER_RETRY(); // wait for writer
-      } else {
-        DDebug("cache_read_agg", "%p: key: %X ReadRead retries exhausted, bailing..: %d", this, first_key.slice32(1),
-               (int)vio.ndone);
-        goto Ldone;
-      }
-#endif
     }
     // fall through for truncated documents
   }
@@ -618,6 +596,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     fragment = alternate.get_frag_index_of(target_position);
     if (alternate.is_frag_cached(fragment)) {
       key = alternate.get_frag_key(fragment);
+      Debug("amc", "Frag %d cached, no waiting", fragment);
       return this->fetchFromCache(EVENT_IMMEDIATE, NULL);
     } else if (NULL == od) {
       // If it's not in cache and there is no OD then there are no writers, fail.
