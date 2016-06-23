@@ -6568,6 +6568,7 @@ HttpTransact::is_request_valid(State *s, HTTPHdr *incoming_request)
     DebugTxn("http_trans", "[is_request_valid] a Range field was present with an invalid range specification");
     SET_VIA_STRING(VIA_DETAIL_TUNNEL, VIA_DETAIL_TUNNEL_NO_FORWARD);
     build_error_response(s, HTTP_STATUS_BAD_REQUEST, "Invalid Range", "request#syntax_error", NULL);
+    return false;
   }
   default:
     return true;

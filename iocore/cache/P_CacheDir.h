@@ -271,6 +271,8 @@ struct OpenDirEntry {
   bool wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset);
   /// Close out anything related to this writer
   self &close_writer(CacheKey const &alt_key, CacheVC *vc);
+  /// Close out the open writer if it is @a writer
+  self &close_open_writer(CacheVC *writer);
 };
 
 struct OpenDir : public Continuation {

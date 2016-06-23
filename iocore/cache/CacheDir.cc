@@ -207,14 +207,31 @@ OpenDirEntry::key_for(CacheKey const &alt_key, int64_t offset)
 bool
 OpenDirEntry::wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
-  Debug("amc", "vc %p waiting for %" PRId64, vc, offset);
+  Debug("amc", "vc %p waiting for data at offset %" PRId64, vc, offset);
   return vector.wait_for(alt_key, vc, offset);
 }
 
 OpenDirEntry &
 OpenDirEntry::close_writer(CacheKey const &alt_key, CacheVC *vc)
 {
+  this->close_open_writer(vc);
   vector.close_writer(alt_key, vc);
+  return *this;
+}
+
+OpenDirEntry &
+OpenDirEntry::close_open_writer(CacheVC *writer)
+{
+  if (writer == open_writer) {
+    void* cookie = reinterpret_cast<void*>(writer->earliest_key.fold());
+    open_writer = NULL;
+    CacheVC *reader;
+    // This wakes up the readers after the alternate vector has been updated.
+    while (NULL != (reader = open_waiting.pop())) {
+      Debug("amc", "open writer close - wake up %p", reader);
+      reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, cookie);
+    }
+  }
   return *this;
 }
 

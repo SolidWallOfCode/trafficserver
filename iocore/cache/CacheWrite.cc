@@ -1399,16 +1399,7 @@ CacheVC::openWriteInit(int eid, Event *event)
     write_vector->data[alternate_index]._writers.push(this);
     alternate.copy_shallow(write_vector->get(alternate_index));
 
-    if (this == od->open_writer) {
-      od->open_writer = NULL;
-      CacheVC *reader;
-      // This wakes up the readers after the alternate vector has been updated.
-      while (NULL != (reader = od->open_waiting.pop())) {
-        Debug("amc", "[CacheVC::openWriteInit] wake up %p", reader);
-        reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE,
-                                             reinterpret_cast<void *>(earliest_key.fold()));
-      }
-    }
+    od->close_open_writer(this);
   }
 
   if (resp_range.hasRanges()) {
