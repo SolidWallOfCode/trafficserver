@@ -343,6 +343,7 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
   Item &item = data[idx];
   CacheVC *reader;
   DLL<CacheVC, Link_CacheVC_Active_Link> waiters;
+  static void * cookie = reinterpret_cast<void*>(0x56); // tracking value, not used.
 
   Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
 
@@ -357,7 +358,8 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
       Debug("amc", "[write_complete] wake up %p", reader);
       reader->wait_buffer = cb._data;
       reader->wait_position = cb._position;
-      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x56);
+      reader->wake_up(EVENT_IMMEDIATE, cookie);
+//      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x56);
     } else {
       item._waiting.push(reader); // not waiting for this, put it back.
     }

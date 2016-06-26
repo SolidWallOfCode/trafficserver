@@ -351,6 +351,7 @@ CacheVC::waitForAltUpdate(int event, Event *e)
   DDebug("cache_open_read", "[waitForAltUpdate] %p", this);
   void *tag = e->cookie; // Was the address of an alt.
   int i = -1;
+  cancel_trigger();
 
   if (_action.cancelled) {
     return this->closeReadAndFree(0, NULL);
@@ -606,10 +607,11 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       wait_position = target_position;
       return this->shipContent();
     } else if (!od->wait_for(earliest_key, this, target_position)) {
-      DDebug("cache_read_agg", "%p: key: %X ReadMain writer aborted: %d", this, first_key.slice32(1), (int)vio.ndone);
+      DDebug("cache_read_main", "%p: key: %X ReadMain writer aborted: %d", this, first_key.slice32(1), (int)vio.ndone);
       return calluser(VC_EVENT_ERROR);
     } else {
-      DDebug("cache_read_agg", "%p: key: %X ReadMain waiting: Key[1]=%d", this, first_key.slice32(1), (int)vio.ndone);
+      // VC should be on the wait list in the OD. Should that be verified?
+      DDebug("cache_read_main", "%p: key: %X ReadMain waiting: ndone=%d", this, first_key.slice32(1), (int)vio.ndone);
       SET_HANDLER(&CacheVC::openReadMain);
       return EVENT_CONT;
     }

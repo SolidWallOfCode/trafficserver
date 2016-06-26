@@ -3401,6 +3401,20 @@ CacheProcessor::find_by_path(char const *path, int len)
 }
 
 // ----------------------------
+Event*
+CacheVC::wake_up(int event, void* cookie)
+{
+  // This is not done under lock but due to other logic it should never be the case that there is
+  // already a trigger waiting or there is a race condition. If the CacheVC is waiting, it should be
+  // waiting and doing nothing else. Other logic should never wake up a CacheVC twice and the CacheVC
+  // should clear this and become quiescent again before going back to a waiting state.
+  // But let's do a check anyway.
+  if (NULL == trigger)  {
+    trigger = wake_up_thread->schedule_imm(this, event, cookie);
+  }
+  return trigger;
+}
+// ----------------------------
 
 namespace cache_bc
 {

@@ -229,7 +229,8 @@ OpenDirEntry::close_open_writer(CacheVC *writer)
     // This wakes up the readers after the alternate vector has been updated.
     while (NULL != (reader = open_waiting.pop())) {
       Debug("amc", "open writer close - wake up %p", reader);
-      reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, cookie);
+      reader->wake_up(CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, cookie);
+      //      reader->wake_up_thread->schedule_imm(reader, CACHE_EVENT_WRITER_UPDATED_ALT_TABLE, cookie);
     }
   }
   return *this;

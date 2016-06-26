@@ -1367,6 +1367,7 @@ CacheVC::do_write_init()
 int
 CacheVC::openWriteInit(int eid, Event *event)
 {
+  cancel_trigger();
   Debug("amc", "[openWriteInit] vc=%p", this);
   {
     CACHE_TRY_LOCK(lock, od->mutex, mutex->thread_holding);

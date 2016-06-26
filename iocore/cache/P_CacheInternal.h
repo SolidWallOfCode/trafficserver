@@ -318,6 +318,9 @@ struct CacheVC : public CacheVConnection {
   int openReadWaitForTrailing(int event, Event *e);
   int waitForAltUpdate(int event, Event *e);
 
+  /// Schedule an event on this VC on its @a wakeup_thread to resume activity.
+  Event* wake_up(int event, void* cookie);
+
   int openWriteCloseDir(int event, Event *e);
   int openWriteCloseHeadDone(int event, Event *e);
   int openWriteCloseHead(int event, Event *e);
@@ -447,6 +450,8 @@ struct CacheVC : public CacheVConnection {
   IOBufferChain wait_buffer;
   /// Content based offset of the data in @a wait_buf
   int64_t wait_position;
+  /// Scheduled wake up event so it can be canceled when needed.
+  Action* pending_wakup;
 
   OpenDirEntry *od;
   AIOCallbackInternal io;
