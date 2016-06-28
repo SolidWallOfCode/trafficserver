@@ -292,14 +292,12 @@ IOBufferChain::write(IOBufferBlock *blocks, int64_t length, int64_t offset)
     if (bytes > 0) {
       if (bytes > offset) {
         IOBufferBlock *bb = blocks->clone();
-        bytes -= offset;
-        bb->_start += offset;
-        // A NOP except for (possibly) the last block.
-        bb->_buf_end = bb->_end = bb->_start + bytes;
+        bb->consume(offset);
+        offset = 0;
         // Attach the cloned block since its data will be kept.
         this->append(bb);
         n -= bytes;
-      } else if (offset > 0) {
+      } else { // offset >= bytes
         // Drop the block but count the bytes against the offset.
         offset -= bytes;
       }
