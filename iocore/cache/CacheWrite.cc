@@ -1329,7 +1329,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
     earliest_dir = dir;
 
   CacheBuffer cb;
-  cb._data.write(blocks, write_len);
+  cb._data.write(blocks, write_len, offset);
   cb._position = write_pos;
 
   {

@@ -3410,9 +3410,14 @@ CacheVC::wake_up(int event, void* cookie)
   // should clear this and become quiescent again before going back to a waiting state.
   // But let's do a check anyway.
   if (NULL == trigger)  {
-    trigger = wake_up_thread->schedule_imm(this, event, cookie);
+    Event* e = wake_up_thread->alloc_event(this, event, cookie);
+    if (ink_atomic_cas(&trigger, static_cast<Event volatile*>(NULL), static_cast<Event volatile*>(e)))
+      wake_up_thread->schedule(e, false);
+    else
+      wake_up_thread->free_event(e);
+      
   }
-  return trigger;
+  return const_cast<Event*>(trigger);
 }
 // ----------------------------
 

@@ -487,7 +487,7 @@ struct CacheVC : public CacheVConnection {
   uint32_t write_serial; // serial of the final write for SYNC
   Vol *vol;
   Dir *last_collision;
-  Event *trigger;
+  volatile Event *trigger;
   CacheKey *read_key;
   ContinuationHandler save_handler;
   uint32_t pin_in_cache;
@@ -724,6 +724,7 @@ TS_INLINE void
 CacheVC::cancel_trigger()
 {
   if (trigger) {
+    // Must cancel before clearing because a non-NULL value can be asynchronously changed.
     trigger->cancel_action();
     trigger = NULL;
   }
