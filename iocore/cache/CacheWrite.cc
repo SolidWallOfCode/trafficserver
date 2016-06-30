@@ -1331,7 +1331,8 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   CacheBuffer cb;
   cb._data.write(blocks, write_len, offset);
   cb._position = write_pos;
-
+  ink_assert(cb._data.length() == write_len);
+  
   {
     SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
     write_vector->write_complete(earliest_key, this, cb, true);

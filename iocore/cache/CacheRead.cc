@@ -570,6 +570,10 @@ CacheVC::shipContent()
     wait_buffer.clear();
     wait_position = -1;
     Debug("amc", "shipped %" PRId64 " bytes at range offset %" PRIu64, bytes, r_pos);
+  } else {
+    // @a wait position was set but no data was available, which is broken.
+    Debug("amc", "No content at %" PRId64 " to ship!", wait_position);
+    wait_position = -1;
   }
 
   // shipped, set up to start work on next piece of content.
@@ -592,6 +596,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
   cancel_trigger();
 
   if (wait_position >= 0) { // Data has arrived, ship it.
+    ink_assert(wait_buffer.length());
     return this->shipContent();
   } else if (target_size) {
     fragment = alternate.get_frag_index_of(target_position);

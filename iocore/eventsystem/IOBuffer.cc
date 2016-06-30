@@ -288,19 +288,22 @@ IOBufferChain::write(IOBufferBlock *blocks, int64_t length, int64_t offset)
   int64_t n = length;
 
   while (blocks && n > 0) {
-    int64_t bytes = std::min(n, blocks->read_avail());
-    if (bytes > 0) {
-      if (bytes > offset) {
-        IOBufferBlock *bb = blocks->clone();
+    int64_t block_bytes = blocks->read_avail();
+    if (block_bytes <= offset) { // skip the entire block
+      offset -= block_bytes;
+    } else {
+      int64_t bytes = std::min(n, block_bytes - offset);
+      IOBufferBlock *bb = blocks->clone();
+      if (offset) {
         bb->consume(offset);
+        block_bytes -= offset; // bytes really available to use.
         offset = 0;
-        // Attach the cloned block since its data will be kept.
-        this->append(bb);
-        n -= bytes;
-      } else { // offset >= bytes
-        // Drop the block but count the bytes against the offset.
-        offset -= bytes;
       }
+      if (block_bytes > n)
+        bb->_end -= (block_bytes - n);
+      // Attach the cloned block since its data will be kept.
+      this->append(bb);
+      n -= bytes;
     }
     blocks = blocks->next;
   }

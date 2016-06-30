@@ -345,7 +345,7 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
   DLL<CacheVC, Link_CacheVC_Active_Link> waiters;
   static void * cookie = reinterpret_cast<void*>(0x56); // tracking value, not used.
 
-  Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write %s", vc, (success ? "succeeded" : "failed"));
+  Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write of %" PRId64 " bytes at %" PRId64"  %s", vc, cb._data.length(), cb._position, (success ? "succeeded" : "failed"));
 
   item._active.remove(vc);
   if (success)
