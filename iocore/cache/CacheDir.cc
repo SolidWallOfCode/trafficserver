@@ -223,7 +223,7 @@ OpenDirEntry &
 OpenDirEntry::close_open_writer(CacheVC *writer)
 {
   if (writer == open_writer) {
-    void* cookie = reinterpret_cast<void*>(writer->earliest_key.fold());
+    void *cookie = reinterpret_cast<void *>(writer->earliest_key.fold());
     open_writer = NULL;
     CacheVC *reader;
     // This wakes up the readers after the alternate vector has been updated.

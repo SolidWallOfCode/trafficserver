@@ -3401,23 +3401,22 @@ CacheProcessor::find_by_path(char const *path, int len)
 }
 
 // ----------------------------
-Event*
-CacheVC::wake_up(int event, void* cookie)
+Event *
+CacheVC::wake_up(int event, void *cookie)
 {
   // This is not done under lock but due to other logic it should never be the case that there is
   // already a trigger waiting or there is a race condition. If the CacheVC is waiting, it should be
   // waiting and doing nothing else. Other logic should never wake up a CacheVC twice and the CacheVC
   // should clear this and become quiescent again before going back to a waiting state.
   // But let's do a check anyway.
-  if (NULL == trigger)  {
-    Event* e = wake_up_thread->alloc_event(this, event, cookie);
-    if (ink_atomic_cas(&trigger, static_cast<Event volatile*>(NULL), static_cast<Event volatile*>(e)))
+  if (NULL == trigger) {
+    Event *e = wake_up_thread->alloc_event(this, event, cookie);
+    if (ink_atomic_cas(&trigger, static_cast<Event volatile *>(NULL), static_cast<Event volatile *>(e)))
       wake_up_thread->schedule(e, false);
     else
       wake_up_thread->free_event(e);
-      
   }
-  return const_cast<Event*>(trigger);
+  return const_cast<Event *>(trigger);
 }
 // ----------------------------
 

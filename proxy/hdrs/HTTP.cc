@@ -2227,7 +2227,7 @@ HTTPInfo::mark_frag_write(unsigned int idx)
   if (0 == idx) {
     m_alt->m_earliest.m_flag.cached_p = true;
   } else {
-    FragmentDescriptor* fptr = this->force_frag_at(idx);
+    FragmentDescriptor *fptr = this->force_frag_at(idx);
     fptr->m_flag.cached_p = true;
     Debug("amc", "mark frag %d[%p] cached", idx, fptr);
   }
@@ -2237,7 +2237,7 @@ HTTPInfo::mark_frag_write(unsigned int idx)
     unsigned int j = idx + 1;
     while (j < m_alt->m_frag_count && (*m_alt->m_fragments)[j].m_flag.cached_p)
       ++j;
-    Debug("amc", "Marking fragment write %d, cached_idx set to %d", idx, j-1);
+    Debug("amc", "Marking fragment write %d, cached_idx set to %d", idx, j - 1);
     m_alt->m_fragments->m_cached_idx = j - 1;
     if (!m_alt->m_flag.content_length_p &&
         (this->get_frag_fixed_size() + this->get_frag_offset(j - 1)) > static_cast<int64_t>(m_alt->m_earliest.m_offset))

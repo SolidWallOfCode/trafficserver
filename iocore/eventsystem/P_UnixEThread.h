@@ -162,10 +162,10 @@ this_ethread()
   return (EThread *)this_thread();
 }
 
-TS_INLINE Event*
-EThread::alloc_event(Continuation* contp, int callback_event, void* cookie)
+TS_INLINE Event *
+EThread::alloc_event(Continuation *contp, int callback_event, void *cookie)
 {
-  Event* e = EVENT_ALLOC(eventAllocator, this);
+  Event *e = EVENT_ALLOC(eventAllocator, this);
   e->callback_event = callback_event;
   e->cookie = cookie;
   return e->init(contp);
