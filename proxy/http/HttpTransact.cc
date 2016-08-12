@@ -8043,9 +8043,15 @@ HttpTransact::build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing
   if (base_response == NULL) {
     HttpTransactHeaders::build_base_response(outgoing_response, status_code, reason_phrase, strlen(reason_phrase), s->current.now);
   } else {
-    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response->status_get()) ||
-        (HTTP_STATUS_OK == status_code && HTTP_STATUS_PARTIAL_CONTENT == base_response->status_get())) {
+    int base_response_code = base_response->status_get();
+    if ((status_code == HTTP_STATUS_NONE) || (status_code == base_response_code) ||
+        (HTTP_STATUS_OK == status_code && HTTP_STATUS_PARTIAL_CONTENT == base_response_code)) {
       HttpTransactHeaders::copy_header_fields(base_response, outgoing_response, s->txn_conf->fwd_proxy_auth_to_parent);
+      // If the base response status code is being overridden, update the result accordingly.
+      if (status_code != HTTP_STATUS_NONE && status_code != base_response_code) {
+        outgoing_response->status_set(status_code);
+        outgoing_response->reason_set(status_code);
+      }
 
       if (s->txn_conf->insert_age_in_response)
         HttpTransactHeaders::insert_time_and_age_headers_in_response(s->request_sent_time, s->response_received_time,
