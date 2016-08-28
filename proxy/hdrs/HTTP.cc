@@ -2322,6 +2322,7 @@ struct integer {
 };
 }
 
+// Parse the content of a range field, filling in @a this range spec.
 bool
 HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
 {
@@ -2337,19 +2338,19 @@ HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
       '=' == src[HTTP_LEN_BYTES]) {
     src += HTTP_LEN_BYTES + 1;
     while (src) {
-      ts::ConstBuffer max = src.splitOn(',');
+      ts::ConstBuffer max = src.splitOn(','); // grab the next field (comma separated).
 
       if (!max) { // no comma so everything in @a src should be processed as a single range.
         max = src;
         src.reset();
       }
 
-      ts::ConstBuffer min = max.splitOn('-');
+      ts::ConstBuffer min = max.splitOn('-'); // split min, max
 
       src.skip(&ParseRules::is_ws);
-      // Spec forbids whitespace anywhere in the range element.
-
-      if (min) {
+      
+      // Spec forbids whitespace anywhere in the range element, so parse error is correct if some is found.
+      if (min) { // something before the '-'
         if (ParseRules::is_digit(*min) && min.size() <= MAX_DIGITS) {
           uint64_t low = ats_strto64(min.data(), min.size(), &n);
           if (n < min.size())
@@ -2359,12 +2360,12 @@ HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
               uint64_t high = ats_strto64(max.data(), max.size(), &n);
               if (n < max.size() && (max += n).skip(&ParseRules::is_ws))
                 break; // non-ws cruft after maximum
-              else
+              else if (low <= high)
                 this->add(low, high);
             } else {
-              break; // invalid characters for maximum
+              break; // invalid characters for maximum, or invalid range values (min > max).
             }
-          } else {
+          } else { // no maximum
             this->add(low, UINT64_MAX); // "X-" : "offset X to end of content"
           }
         } else {
