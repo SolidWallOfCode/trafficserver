@@ -2785,22 +2785,29 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
   if (s->state_machine->get_cache_sm().cache_read_vc->get_uncached(s->hdr_info.request_range, range, MIN_INITIAL_UNCACHED)) {
     Debug("amc", "Request touches uncached fragments");
     find_server_and_update_current_info(s);
-    if (!ats_is_ip(&s->current.server->dst_addr)) {
-      if (s->current.request_to == PARENT_PROXY) {
-        TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, PPDNSLookup);
-      } else if (s->current.request_to == ORIGIN_SERVER) {
-        TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, OSDNSLookup);
-      } else {
-        ink_assert(!"[amc] - where was this going?");
-        return;
+    if (!s->hdr_info.client_request.is_cache_control_set(HTTP_VALUE_ONLY_IF_CACHED)) {
+      if (!ats_is_ip(&s->current.server->dst_addr)) {
+        if (s->current.request_to == PARENT_PROXY) {
+          TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, PPDNSLookup);
+        } else if (s->current.request_to == ORIGIN_SERVER) {
+          TRANSACT_RETURN(SM_ACTION_DNS_LOOKUP, OSDNSLookup);
+        } else {
+          ink_assert(!"[amc] - where was this going?");
+          return;
+        }
       }
-    }
-    build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->client_info.http_version, &range);
-    s->cache_info.action = CACHE_PREPARE_TO_WRITE;
-    s->range_setup       = RANGE_PARTIAL_UPDATE;
-    s->next_action       = how_to_open_connection(s);
-    if (s->stale_icp_lookup && s->next_action == SM_ACTION_ORIGIN_SERVER_OPEN) {
-      s->next_action = SM_ACTION_ICP_QUERY;
+      build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->client_info.http_version, &range);
+      s->cache_info.action = CACHE_PREPARE_TO_WRITE;
+      s->range_setup       = RANGE_PARTIAL_UPDATE;
+      s->next_action       = how_to_open_connection(s);
+      if (s->stale_icp_lookup && s->next_action == SM_ACTION_ORIGIN_SERVER_OPEN) {
+        s->next_action = SM_ACTION_ICP_QUERY;
+      }
+    } else { // Only-If-Cached set means no serving of a partial hit.
+      build_error_response(s, HTTP_STATUS_GATEWAY_TIMEOUT, "Not Cached", "cache#not_in_cache", NULL);
+      s->cache_info.action = CACHE_DO_NO_ACTION;
+      s->range_setup = RANGE_NONE;
+      s->next_action = SM_ACTION_SEND_ERROR_CACHE_NOOP;
     }
     return;
   } else {
