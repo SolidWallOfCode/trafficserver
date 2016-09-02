@@ -449,6 +449,7 @@ struct CacheVC : public CacheVConnection {
   /// Data transfered directly from writer VC to this (reader) VC because this VC was waiting for the writer.
   IOBufferChain wait_buffer;
   /// Content based offset of the data in @a wait_buf
+  /// This is the position in the object content of the data.
   int64_t wait_position;
   /// Scheduled wake up event so it can be canceled when needed.
   Action *pending_wakup;
@@ -461,8 +462,9 @@ struct CacheVC : public CacheVConnection {
 #ifdef CACHE_STAT_PAGES
   LINK(CacheVC, stat_link);
 #endif
-  CacheRange resp_range; ///< Tracking information for range data for response.
-  //  CacheRange uncached_range;      ///< The ranges in the request that are not in cache.
+  /// Range data for the current range arriving from the origin.
+  /// If the response is multi-range this gets updated as the ranges arrive to track the current range.
+  CacheRange resp_range;
   // end Region B
 
   // Start Region C
@@ -504,7 +506,11 @@ struct CacheVC : public CacheVConnection {
   uint64_t total_len;    // total length written and available to write
   uint64_t doc_len;      // total_length (of the selected alternate for HTTP)
   uint64_t update_len;
-  HTTPRangeSpec::Range write_range; ///< Object based range for incoming partial content.
+  /// Range information for incoming data.
+  /// This contains all of the ranges in the object that should be written by incoming data.
+  /// @internal [amc] Is this actually useful? Once the request has gone out only the data that
+  /// comes back can be written and what was asked for no longer matters.
+  HTTPRangeSpec::Range write_range;
   /// The offset in the content of the first byte beyond the end of the current fragment.
   /// @internal This seems very weird but I couldn't figure out how to keep the more sensible
   /// lower bound correctly updated.

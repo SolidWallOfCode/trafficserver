@@ -124,6 +124,20 @@ struct CacheHTTPInfoVector {
     bool has_writers() const;
   };
 
+  /** Record for an alternate that is stale and being held aside for use.
+   */
+  struct StaleItem {
+    typedef StaleItem self; ///< Self reference type.
+
+    /// The alternate.
+    CacheHTTPInfo _alternate;
+    /// CacheVCs serving content from this alternate.
+    DLL<CacheVC, Link_CacheVC_Active_Link> _readers;
+
+    /// Need a list of instances of this type.
+    LINK(StaleItem, link);
+  };
+
   typedef CacheArray<Item> InfoVector;
 
   void *magic;
@@ -192,6 +206,14 @@ struct CacheHTTPInfoVector {
       @c Vec doesn't work because it really only works well with pointers, not objects.
   */
   InfoVector data;
+
+  /// Currently in use stale alternates.
+  /// Elements should be cleaned up when the last cache VC serving from it finishes.
+  /// @internal AFAICT no alternate is destroyed except by explicit remove during the lifetime of the ODE.
+  /// Therefore just moving the pointer here suffices, if it is removed from the alt vector at the same time.
+  /// The real point of this list is to do the cleanup that would not otherwise happen when the pointer is moved
+  /// out of the alt vector.
+  DLL<StaleItem> _stale_list;
 
   int xcount;
   Ptr<RefCountObj> vector_buf;

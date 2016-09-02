@@ -228,10 +228,10 @@ struct OpenDirEntry {
   uint16_t max_writers;       // max number of simultaneous writers allowed
   bool dont_update_directory; // if set, the first_dir is not updated.
   bool move_resident_alt;     // if set, single_doc_dir is inserted.
-  volatile bool reading_vec;  // somebody is currently reading the vector
-  volatile bool writing_vec;  // somebody is currently writing the vector
+  volatile bool reading_vec;  // An I/O operation is currently active to read the vector.
+  volatile bool writing_vec;  // An I/O operation is currently active to write the vector.
 
-  /** Set to a write @c CacheVC that has started but not yet updated the vector.
+  /** Set to a write @c CacheVC that is waiting for response headers to update the altvec.
 
       If this is set then there is a write @c CacheVC that is active but has not yet been able to
       update the vector for its alternate. Any new reader should block on open if this is set and
@@ -239,7 +239,7 @@ struct OpenDirEntry {
       This is necessary because we can't reliably do alternate selection in this state. The waiting
       read @c CacheVC instances are released as soon as the vector is updated, they do not have to
       wait until the write @c CacheVC has finished its transaction. In practice this means until the
-      server response has been received and processed.
+      server response headers have been received and processed.
   */
   volatile CacheVC *open_writer;
   /** A list of @c CacheVC instances that are waiting for the @a open_writer.

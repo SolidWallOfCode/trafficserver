@@ -106,6 +106,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       write_vector->remove(0, true);
     }
     if (vec) {
+      // [amc] I think this is where the stale alternate is dropped and the update put in its place.
       alternate_index = write_vector->insert(&alternate, alternate_index);
     }
 
@@ -1378,6 +1379,9 @@ CacheVC::openWriteInit(int eid, Event *event)
     }
 
     if (alternate.valid() && earliest_key != alternate.object_key_get()) {
+      // Do we need to check f.update here and move the current alternate to the stale store?
+
+
       // When the VC is created it sets up for a new alternate write. If we're back filling we
       // need to tweak that back to the existing alternate.
       Debug("amc", "[CacheVC::openWriteInit] updating earliest key from alternate");
@@ -1480,10 +1484,10 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 
     { // lock scoping
       SCOPED_MUTEX_LOCK(lock, od->mutex, this_ethread());
-      
+
       int64_t frag_offset = alternate.get_frag_offset(fragment);
       int64_t object_size = alternate.object_size_get();
-          
+
       if (alternate.is_frag_cached(fragment)) {
         Debug("amc", "Fragment %d already cached", fragment);
         // Drop the data, it's useless.
@@ -1501,7 +1505,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         if (static_cast<uint64_t>(frag_offset + ffs) < write_pos) {
           frag_offset += ffs;
         }
-          
+
         // clip to not go past next fragment boundary.
         write_len = std::min(write_len, static_cast<uint32_t>((frag_offset + ffs) - write_pos));
 
