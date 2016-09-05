@@ -28,15 +28,53 @@
   This file contains code supporting the Inktomi high-resolution timer.
 **************************************************************************/
 
-#if !defined(_ink_hrtime_h_)
-#define _ink_hrtime_h_
+#if !defined(_ts_hrtick_h_)
+#define _ts_hrtick_h_
 
 #include "ts/ink_config.h"
 #include "ts/ink_assert.h"
 #include <time.h>
 #include <sys/time.h>
+#include <chrono>
 #include <stdlib.h>
-typedef int64_t ink_hrtime;
+
+/** Instaneous time in high resolution.
+
+    @internal @c system_clock or @c high_resolution_clock ? AFAICT the latter is just an alias for
+    @c system_clock or @c monotonic_clock and I have had bad experiences with the flakiness of
+    @c monotonic_clock ( or @c CLOCK_MONOTONIC for @c clock_gettime ). The key advantage of going direct
+    to @c system_clock is not worrying about the epoch when converting to absolute time for system calls.
+    Testing on Fedora 23 indicates that uses @c system_clock for @c high_resolution_clock and I suspect
+    that will be the case for any OS recent enough to be supported for ATS 7.0.
+
+    @internal Also this is probably the same as @c std::chrono::system_clock::time_point but better
+    to be explicit about the time metric.
+ **/
+typedef std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds> ts_hrtick;
+/// Durations of specific units.
+/// @internal Note durations have no association with any clock.
+typedef std::chrono::nanoseconds ts_nanoseconds; ///< Duration in nanoseconds.
+typedef std::chrono::microseconds ts_microseconds; ///< During in micro seconds.
+typedef std::chrono::milliseconds ts_milliseconds; ///< Duration in milliseconds.
+typedef std::chrono::seconds ts_seconds; ///< Duration in seconds.
+typedef std::chrono::minutes ts_minutes; ///< Duration in minutes.
+typedef std::chrono::hours ts_hours; ///< Duration in hours.
+
+/// Value to use for the equivalent of '0'.
+/// @internal Default constructor iniitializes to zero.
+static const ts_hrtick TS_HRTICK_ZERO;
+
+/// Extraction of the raw integer in a clock time.
+static inline ts_hrtick::rep raw_ticks(ts_hrtick t) { return t.time_since_epoch().count(); }
+/// Extraction of the raw count in a duration.
+/// This is really a convenience since it's idential to calling @c count on the duration,
+/// but this lets @c raw ticks work on a time point or a duration.
+template < typename I, typename R >
+  static inline I raw_ticks(std::chrono::duration<I,R> d) { return d.count(); }
+
+//#include <tsconfig/NumericType.h>
+//typedef ts::NumericType<int64_t, struct ts_hrtick_tag> ts_hrtick;
+//typedef int64_t ts_hrtick;
 
 int squid_timestamp_to_buf(char *buf, unsigned int buf_size, long timestamp_sec, long timestamp_usec);
 char *int64_to_str(char *buf, unsigned int buf_size, int64_t val, unsigned int *total_chars, unsigned int req_width = 0,
@@ -44,235 +82,76 @@ char *int64_to_str(char *buf, unsigned int buf_size, int64_t val, unsigned int *
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//      Factors to multiply units by to obtain coresponding ink_hrtime values.
+//      Map from units to ts_hrtick values
 //
 //////////////////////////////////////////////////////////////////////////////
 
-#define HRTIME_FOREVER (10 * HRTIME_DECADE)
-#define HRTIME_DECADE (10 * HRTIME_YEAR)
-#define HRTIME_YEAR (365 * HRTIME_DAY + HRTIME_DAY / 4)
-#define HRTIME_WEEK (7 * HRTIME_DAY)
-#define HRTIME_DAY (24 * HRTIME_HOUR)
-#define HRTIME_HOUR (60 * HRTIME_MINUTE)
-#define HRTIME_MINUTE (60 * HRTIME_SECOND)
-#define HRTIME_SECOND (1000 * HRTIME_MSECOND)
-#define HRTIME_MSECOND (1000 * HRTIME_USECOND)
-#define HRTIME_USECOND (1000 * HRTIME_NSECOND)
-#define HRTIME_NSECOND (static_cast<ink_hrtime>(1))
-
-#define HRTIME_APPROX_SECONDS(_x) ((_x) >> 30) // off by 7.3%
-#define HRTIME_APPROX_FACTOR (((float)(1 << 30)) / (((float)HRTIME_SECOND)))
-
-//////////////////////////////////////////////////////////////////////////////
-//
-//      Map from units to ink_hrtime values
-//
-//////////////////////////////////////////////////////////////////////////////
-
-// simple macros
-
-#define HRTIME_YEARS(_x) ((_x)*HRTIME_YEAR)
-#define HRTIME_WEEKS(_x) ((_x)*HRTIME_WEEK)
-#define HRTIME_DAYS(_x) ((_x)*HRTIME_DAY)
-#define HRTIME_HOURS(_x) ((_x)*HRTIME_HOUR)
-#define HRTIME_MINUTES(_x) ((_x)*HRTIME_MINUTE)
-#define HRTIME_SECONDS(_x) ((_x)*HRTIME_SECOND)
-#define HRTIME_MSECONDS(_x) ((_x)*HRTIME_MSECOND)
-#define HRTIME_USECONDS(_x) ((_x)*HRTIME_USECOND)
-#define HRTIME_NSECONDS(_x) ((_x)*HRTIME_NSECOND)
-
-// gratuituous wrappers
-
-static inline ink_hrtime
-ink_hrtime_from_years(unsigned int years)
+inline struct timespec
+ts_hrtick_to_timespec(ts_hrtick t)
 {
-  return (HRTIME_YEARS(years));
+  struct timespec zret;
+  auto ct_s = std::chrono::time_point_cast<ts_seconds>(t);
+  
+  zret.tv_sec = ct_s.time_since_epoch().count();
+  zret.tv_nsec = (t - std::chrono::time_point_cast<ts_nanoseconds>(ct_s)).count();
+  return zret;
 }
 
-static inline ink_hrtime
-ink_hrtime_from_weeks(unsigned int weeks)
-{
-  return (HRTIME_WEEKS(weeks));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_days(unsigned int days)
-{
-  return (HRTIME_DAYS(days));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_mins(unsigned int mins)
-{
-  return (HRTIME_MINUTES(mins));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_sec(unsigned int sec)
-{
-  return (HRTIME_SECONDS(sec));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_msec(unsigned int msec)
-{
-  return (HRTIME_MSECONDS(msec));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_usec(unsigned int usec)
-{
-  return (HRTIME_USECONDS(usec));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_nsec(unsigned int nsec)
-{
-  return (HRTIME_NSECONDS(nsec));
-}
-
-static inline ink_hrtime
-ink_hrtime_from_timespec(const struct timespec *ts)
-{
-  return ink_hrtime_from_sec(ts->tv_sec) + ink_hrtime_from_nsec(ts->tv_nsec);
-}
-
-static inline ink_hrtime
-ink_hrtime_from_timeval(const struct timeval *tv)
-{
-  return ink_hrtime_from_sec(tv->tv_sec) + ink_hrtime_from_usec(tv->tv_usec);
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//
-//      Map from ink_hrtime values to other units
-//
-//////////////////////////////////////////////////////////////////////////////
-
-static inline ink_hrtime
-ink_hrtime_to_years(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_YEAR));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_weeks(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_WEEK));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_days(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_DAY));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_mins(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_MINUTE));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_sec(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_SECOND));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_msec(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_MSECOND));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_usec(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_USECOND));
-}
-
-static inline ink_hrtime
-ink_hrtime_to_nsec(ink_hrtime t)
-{
-  return ((ink_hrtime)(t / HRTIME_NSECOND));
-}
-
+# if 0
 static inline struct timespec
-ink_hrtime_to_timespec(ink_hrtime t)
+ts_hrtick_to_timespec(ts_hrtick t)
 {
   struct timespec ts;
 
-  ts.tv_sec  = ink_hrtime_to_sec(t);
+  ts.tv_sec  = ts_hrtick_to_sec(t);
   ts.tv_nsec = t % HRTIME_SECOND;
   return (ts);
 }
 
 static inline struct timeval
-ink_hrtime_to_timeval(ink_hrtime t)
+ts_hrtick_to_timeval(ts_hrtick t)
 {
   int64_t usecs;
   struct timeval tv;
 
-  usecs      = ink_hrtime_to_usec(t);
+  usecs      = ts_hrtick_to_usec(t);
   tv.tv_sec  = usecs / 1000000;
   tv.tv_usec = usecs % 1000000;
   return (tv);
 }
 
+# endif
+
+# if 0
 /*
    using Jan 1 1970 as the base year, instead of Jan 1 1601,
    which translates to (365 + 0.25)369*24*60*60 seconds   */
-#define NT_TIMEBASE_DIFFERENCE_100NSECS 116444736000000000i64
+//#define NT_TIMEBASE_DIFFERENCE_100NSECS 116444736000000000i64
 
-static inline ink_hrtime
+static inline ts_hrtick
 ink_get_hrtime_internal()
 {
 #if defined(freebsd) || HAVE_CLOCK_GETTIME
   timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  return ink_hrtime_from_timespec(&ts);
+  return ts_hrtick_from_timespec(&ts);
 #else
   timeval tv;
   gettimeofday(&tv, NULL);
-  return ink_hrtime_from_timeval(&tv);
+  return ts_hrtick_from_timeval(&tv);
 #endif
 }
 
 static inline struct timeval
 ink_gettimeofday()
 {
-  return ink_hrtime_to_timeval(ink_get_hrtime_internal());
+  return ts_hrtick_to_timeval(ink_get_hrtime_internal());
 }
+# endif
 
-static inline int
-ink_time()
+static inline std::time_t ts_get_current_time_t()
 {
-  return (int)ink_hrtime_to_sec(ink_get_hrtime_internal());
+  return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
-static inline int
-ink_hrtime_diff_msec(ink_hrtime t1, ink_hrtime t2)
-{
-  return (int)ink_hrtime_to_msec(t1 - t2);
-}
-
-static inline ink_hrtime
-ink_hrtime_diff(ink_hrtime t1, ink_hrtime t2)
-{
-  return (t1 - t2);
-}
-
-static inline ink_hrtime
-ink_hrtime_add(ink_hrtime t1, ink_hrtime t2)
-{
-  return (t1 + t2);
-}
-
-static inline void
-ink_hrtime_sleep(ink_hrtime delay)
-{
-  struct timespec ts = ink_hrtime_to_timespec(delay);
-  nanosleep(&ts, NULL);
-}
-
-#endif /* _ink_hrtime_h_ */
+#endif /* _ts_hrtick_h_ */
