@@ -120,9 +120,9 @@ close_UnixNetVConnection(UnixNetVConnection *vc, EThread *t)
   vc->next_inactivity_timeout_at   = TS_HRTICK_ZERO;
   vc->next_activity_timeout_at     = TS_HRTICK_ZERO;
 #endif
-  vc->inactivity_timeout_in = ts_nanoseconds::zero();
+  ink_zero(vc->inactivity_timeout_in);
 
-  vc->active_timeout_in = ts_nanoseconds::zero();
+  ink_zero(vc->active_timeout_in);
   if (nh) {
     nh->open_list.remove(vc);
     nh->cop_list.remove(vc);

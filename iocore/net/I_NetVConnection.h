@@ -399,7 +399,7 @@ public:
     interfaces.
 
   */
-  virtual void set_active_timeout(ts_nanoseconds timeout_in) = 0;
+  virtual void set_active_timeout(ts_seconds timeout_in) = 0;
 
   /**
     Sets time after which SM should be notified if the requested
@@ -413,7 +413,7 @@ public:
     is currently active. See section on timeout semantics above.
 
    */
-  virtual void set_inactivity_timeout(ts_nanoseconds timeout_in) = 0;
+  virtual void set_inactivity_timeout(ts_seconds timeout_in) = 0;
 
   /**
     Clears the active timeout. No active timeouts will be sent until

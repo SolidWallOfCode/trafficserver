@@ -119,13 +119,13 @@ public:
   }
 
   void
-  set_default_timeout(ts_nanoseconds x)
+  set_default_timeout(ts_seconds x)
   {
-    default_inactivity_timeout = x;
+    default_inactivity_timeout = ts_seconds(x);
   }
 
 private:
-  ts_nanoseconds default_inactivity_timeout; // only used when one is not set for some bad reason
+  ts_seconds default_inactivity_timeout; // only used when one is not set for some bad reason
 };
 
 int

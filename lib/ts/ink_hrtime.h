@@ -60,6 +60,21 @@ typedef std::chrono::seconds ts_seconds; ///< Duration in seconds.
 typedef std::chrono::minutes ts_minutes; ///< Duration in minutes.
 typedef std::chrono::hours ts_hours; ///< Duration in hours.
 
+/** Set a duration to zero.
+
+    @note This is deliberately modeled on the pre-existing @c ink_zero and has the same semantic.
+    The utility is more obvious for arguments that are long pointer paths to the actual duration.
+    @code
+        ts_milliseconds timeout;
+        ink_zero(timeout);
+    @endcode
+*/
+template < typename R, typename D>
+inline void ink_zero(std::chrono::duration<R,D>& d)
+{
+  d = d.zero();
+}
+
 /// Value to use for the equivalent of '0'.
 /// @internal Default constructor iniitializes to zero.
 static const ts_hrtick TS_HRTICK_ZERO;
