@@ -76,7 +76,7 @@ SocksEntry::init(Ptr<ProxyMutex> &m, SocksNetVC *vc, unsigned char socks_support
   nattempts = 0;
   findServer();
 
-  timeout    = this_ethread()->schedule_in(this, HRTIME_SECONDS(netProcessor.socks_conf_stuff->server_connect_timeout));
+  timeout    = this_ethread()->schedule_in(this, ts_seconds(netProcessor.socks_conf_stuff->server_connect_timeout));
   write_done = false;
 }
 
@@ -215,7 +215,7 @@ SocksEntry::startEvent(int event, void *data)
       netVConnection = 0;
     }
 
-    timeout = this_ethread()->schedule_in(this, HRTIME_SECONDS(netProcessor.socks_conf_stuff->server_connect_timeout));
+    timeout = this_ethread()->schedule_in(this, ts_seconds(netProcessor.socks_conf_stuff->server_connect_timeout));
 
     write_done = false;
 
@@ -285,7 +285,7 @@ SocksEntry::mainEvent(int event, void *data)
 
     if (!timeout) {
       /* timeout would be already set when we come here from StartEvent() */
-      timeout = this_ethread()->schedule_in(this, HRTIME_SECONDS(netProcessor.socks_conf_stuff->socks_timeout));
+      timeout = this_ethread()->schedule_in(this, ts_seconds(netProcessor.socks_conf_stuff->socks_timeout));
     }
 
     netVConnection->do_io_write(this, n_bytes, reader, 0);
@@ -319,7 +319,7 @@ SocksEntry::mainEvent(int event, void *data)
       break;
     }
 
-    timeout = this_ethread()->schedule_in(this, HRTIME_SECONDS(netProcessor.socks_conf_stuff->socks_timeout));
+    timeout = this_ethread()->schedule_in(this, ts_seconds(netProcessor.socks_conf_stuff->socks_timeout));
 
     netVConnection->do_io_read(this, n_bytes, buf);
 

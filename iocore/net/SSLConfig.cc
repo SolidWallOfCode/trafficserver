@@ -376,9 +376,9 @@ SSLCertificateConfig::reconfigure()
   // Test SSL certificate loading startup. With large numbers of certificates, reloading can take time, so delay
   // twice the healthcheck period to simulate a loading a large certificate set.
   if (is_action_tag_set("test.multicert.delay")) {
-    const int secs = 60;
-    Debug("ssl", "delaying certificate reload by %dsecs", secs);
-    ts_hrtick_sleep(HRTIME_SECONDS(secs));
+    static const int delay = 60;
+    Debug("ssl", "delaying certificate reload by %d secs", delay);
+    sleep(delay);
   }
 
   SSLParseCertificateConfiguration(params, lookup);

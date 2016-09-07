@@ -98,7 +98,7 @@ struct AIO_Reqs;
 struct AIOCallbackInternal : public AIOCallback {
   AIOCallback *first;
   AIO_Reqs *aio_req;
-  ts_hrtick sleep_time;
+  ts_nanoseconds sleep_time;
   int io_complete(int event, void *data);
   AIOCallbackInternal()
   {

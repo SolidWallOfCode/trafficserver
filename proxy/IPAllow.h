@@ -48,7 +48,7 @@ struct IpAllowUpdate;
 //    a reconfig event happens that the old table gets thrown
 //    away
 //
-static uint64_t const IP_ALLOW_TIMEOUT = HRTIME_HOUR;
+static ts_seconds const IP_ALLOW_TIMEOUT = ts_hours(1);
 
 /** An access control record.
     It has the methods permitted and the source line.
