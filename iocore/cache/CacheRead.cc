@@ -310,17 +310,19 @@ CacheVC::openReadFromWriter(int event, Event *e)
     return EVENT_CONT; // wait for the writer to wake us up.
   }
 
-  MUTEX_RELEASE(lock); // we have the OD lock now, don't need the vol lock.
+  // For now the vol lock must be held to deal with clean up of potential failures. Need to fix
+  // that at some point.
 
   if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), write_vc->earliest_key))) {
+    MUTEX_RELEASE(lock);
     // Found the alternate for our write VC. Really, though, if we have a write_vc we should never fail to get
     // the alternate - we should probably check for that.
     alternate.copy_shallow(od->vector.get(alternate_index));
+    MUTEX_RELEASE(lock_od);
     key = earliest_key = alternate.object_key_get();
     doc_len            = alternate.object_size_get();
     Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, alternate_index,
           alternate.m_alt);
-    MUTEX_RELEASE(lock_od);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
   } else {
@@ -337,6 +339,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
     } else {
       alternate_index = 0;
     }
+    MUTEX_RELEASE(lock);
     MUTEX_RELEASE(lock_od);
     SET_HANDLER(&CacheVC::openReadStartHead);
     return openReadStartHead(event, e);
