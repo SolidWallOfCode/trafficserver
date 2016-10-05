@@ -304,7 +304,7 @@ CacheHTTPInfoVector::index_of(CacheKey const &alt_key)
   int zret;
   for (zret = 0; zret < xcount && alt_key != data[zret]._alternate.object_key_get(); ++zret)
     ;
-  return zret < xcount ? zret : -1;
+  return zret < xcount ? zret : CACHE_ALT_DEFAULT_INDEX;
 }
 
 /*-------------------------------------------------------------------------
@@ -438,13 +438,16 @@ CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
 {
   CacheVC *reader;
   int alt_idx = this->index_of(alt_key);
-  Item &item  = data[alt_idx];
-  item._writers.remove(vc);
-  if (item._writers.empty()) {
-    // if there are no more writers, none of these will ever wake up normally so kick them all now.
-    while (NULL != (reader = item._waiting.pop())) {
-      Debug("amc", "[close_writer] no writers left wake up %p", reader);
-      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x112);
+  // If the writer aborts before before the transaction completes, it won't have an ALT assigned.
+  if (alt_idx != CACHE_ALT_DEFAULT_INDEX) {
+    Item &item  = data[alt_idx];
+    item._writers.remove(vc);
+    if (item._writers.empty()) {
+      // if there are no more writers, none of these will ever wake up normally so kick them all now.
+      while (NULL != (reader = item._waiting.pop())) {
+        Debug("amc", "[close_writer] no writers left wake up %p", reader);
+        reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x112);
+      }
     }
   }
   return *this;
