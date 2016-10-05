@@ -304,7 +304,7 @@ CacheHTTPInfoVector::index_of(CacheKey const &alt_key)
   int zret;
   for (zret = 0; zret < xcount && alt_key != data[zret]._alternate.object_key_get(); ++zret)
     ;
-  return zret < xcount ? zret : CACHE_ALT_DEFAULT_INDEX;
+  return zret < xcount ? zret : CACHE_ALT_INDEX_DEFAULT;
 }
 
 /*-------------------------------------------------------------------------
@@ -439,7 +439,7 @@ CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
   CacheVC *reader;
   int alt_idx = this->index_of(alt_key);
   // If the writer aborts before before the transaction completes, it won't have an ALT assigned.
-  if (alt_idx != CACHE_ALT_DEFAULT_INDEX) {
+  if (alt_idx != CACHE_ALT_INDEX_DEFAULT) {
     Item &item  = data[alt_idx];
     item._writers.remove(vc);
     if (item._writers.empty()) {
