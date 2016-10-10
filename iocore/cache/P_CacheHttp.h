@@ -122,6 +122,8 @@ struct CacheHTTPInfoVector {
     /// Check if there are any writers.
     /// @internal Need to augment this at some point to check for writers to a specific offset.
     bool has_writers() const;
+
+    ~Item();
   };
 
   /** Record for an alternate that is stale and being held aside for use.

@@ -25,6 +25,8 @@
 #include <string.h>
 #include "P_Cache.h"
 
+#include <ts/TestBox.h>
+
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
@@ -33,33 +35,45 @@ CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position,
 {
   // Blend in to overlapping existing buffer or insert in order.
   CacheBuffer *cb = _content_buffers.head;
-  while (NULL != cb) {
-    int64_t last;
-    if (cb->_position <= position && position <= (last = cb->_position + cb->_data.length())) {
-      int64_t delta = last - position; // length of overlapping trailing section of current data
-      cb->_data.write(block, length - delta, delta);
-      return;
-    } else if (position <= cb->_position && cb->_position <= (last = position + length + 1)) {
-      int64_t delta         = cb->_position - position; // length of non-overlapping initial section of incoming data
-      IOBufferChain tmp_buf = cb->_data;                // save this
-      cb->_data.clear();
-      cb->_data.write(block, delta);
-      cb->_data += tmp_buf;
-      return;
+  int64_t last = position + length;
+
+  // Always create a new cache buffer. Existing intersecting buffers will be coalesced in to this.
+  CacheBuffer *n = new CacheBuffer;
+  n->_position = position;
+
+  while (cb && length) {
+    int64_t cb_last = cb->_position + cb->_data.length();
+
+    // No intersection, before all remaining buffers, write it all and finish.
+    if (last < cb->_position) {
+      n->_data.write(block, length);
+      length = 0;
+    } else if (position <= cb_last) { // intersection - write something.
+      CacheBuffer* next = _content_buffers.next(cb); // save this for end of scope update.
+      if (cb->_position < position) { // copy over leading part of existing data buffer.
+        n->_data.write(cb->_data.head(), position - cb->_position);
+        n->_position = cb->_position;
+      }
+      // Invariant - valid incoming data starts no later than existing valid data that's not in the new buffer.
+      if (last < cb_last) { // incoming ends first. Write all of it, then non-intersecting tail of existing buffer.
+        n->_data.write(block, length);
+        n->_data.write(cb->_data.head(), cb_last - last, last - cb->_position);
+        length = 0;
+      } // else just drop existing buffer, it's covered. Incoming gets written later.
+      // Existing buffer has been copied in to the new buffer, clean it up.
+      _content_buffers.remove(cb);
+      delete cb;
+      cb = next;
+    } else { // no intersection, check the next buffer.
+      cb = _content_buffers.next(cb);
     }
-    if (position < cb->_position) {
-      // no overlap and the new content is earlier so it can be inserted before @a cb.
-      break;
-    }
-    cb = cb->link.next;
   }
 
-  CacheBuffer *n = new CacheBuffer;
-  n->_data.write(block, length);
-  n->_position = position;
-  if (cb)
+  // If the incoming data hasn't been written yet, take care of it.
+  if (length) n->_data.write(block, length);
+  if (cb) // there's an existing buffer that starts after the end of the new buffer.
     _content_buffers.insert(n, _content_buffers.prev(cb)); // insert after previous -> insert before.
-  else
+  else // No buffers start after incoming buffer.
     _content_buffers.enqueue(n);
 }
 
@@ -76,6 +90,18 @@ CacheHTTPInfoVector::Item::getSideBufferContent(IOBufferChain &data, int64_t pos
     cb = _content_buffers.next(cb);
   }
   return false;
+}
+
+CacheHTTPInfoVector::Item::~Item()
+{
+  CacheBuffer* cb = _content_buffers.head;
+  while (cb) {
+    CacheBuffer* next = _content_buffers.next(cb);
+    delete cb;
+    cb = next;
+  }
+  _alternate.destroy();
+
 }
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
@@ -97,7 +123,7 @@ CacheHTTPInfoVector::~CacheHTTPInfoVector()
   int i;
 
   for (i = 0; i < xcount; i++) {
-    data[i]._alternate.destroy();
+    data[i].~Item();
   }
   vector_buf.clear();
   magic = NULL;
@@ -611,6 +637,50 @@ uint64_t
 CacheRange::calcContentLength() const
 {
   return _r.calcContentLength(_len, _ct_field ? _ct_field->m_len_value : 0);
+}
+
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
+
+REGRESSION_TEST(CacheSideContent)(RegressionTest* t, int, int* pstatus)
+{
+  TestBox box(t, pstatus, REGRESSION_TEST_PASSED);
+  CacheHTTPInfoVector::Item item;
+  IOBufferChain data;
+  IOBufferBlock src;
+
+  src.alloc(BUFFER_SIZE_INDEX_64K);
+
+  memset(src.start(), 0xaa, 200);
+  src.fill(200);
+  item.addSideBuffer(&src, 100, 200); // [100,300)
+
+  src.reset();
+  memset(src.start(), 0xbb, 300);
+  src.fill(300);
+  item.addSideBuffer(&src, 1000, 300); // [100,300) [1000,1300)
+
+  box.check(item.getSideBufferContent(data, 150, 50), "False negative at [150,200)");
+  box.check(!item.getSideBufferContent(data, 600, 200), "False positive at [600,800)");
+  box.check(!item.getSideBufferContent(data, 100, 300), "False positive at [100,400)");
+
+  src.reset();
+  memset(src.start(), 0xcc, 700);
+  src.fill(700);
+  item.addSideBuffer(&src, 300, 700); // [300,1000) -> [100,1300)
+  box.check(item.getSideBufferContent(data, 100, 300), "False negative at [100,400)");
+  box.check(item.getSideBufferContent(data, 400, 400), "False negative at [400,800)");
+  box.check(!item.getSideBufferContent(data, 200, 1500), "False positive at [200,1700)");
+
+  src.reset();
+  memset(src.start(), 0xdd, 500);
+  src.fill(800);
+  item.addSideBuffer(&src, 2000, 400); // [100,1300) [2000, 2400)
+  item.addSideBuffer(&src, 3000, 500); // [100,1300) [2000, 2400) [3000, 3500)
+  box.check(item.getSideBufferContent(data, 2000, 300), "False negative at [2000,2300)");
+  box.check(!item.getSideBufferContent(data, 2001, 400), "False positive at [2001,2501)");
+  box.check(item.getSideBufferContent(data, 1200, 100), "False negative at [1200,1300)");
+  box.check(!item.getSideBufferContent(data, 1200, 300), "False positive at [1200,1500)");
 }
 
 /*-------------------------------------------------------------------------
