@@ -423,7 +423,7 @@ CacheVC::scanOpenWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     // put all the alternates in the open directory vector
     int alt_count = vector.count();
     for (int i = 0; i < alt_count; i++) {
-      write_vector->insert(vector.get(i));
+      od->vector.insert(vector.get(i));
     }
     od->writing_vec = 1;
     vector.clear(false);
@@ -463,7 +463,7 @@ CacheVC::scanOpenWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     // we are safe from now on as we hold the
     // writer lock on the doc
     if (f.evac_vector)
-      header_len = write_vector->marshal_length();
+      header_len = od->vector.marshal_length();
     SET_HANDLER(&CacheVC::scanUpdateDone);
     ret = do_write_call();
   }

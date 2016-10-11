@@ -531,7 +531,7 @@ bool
 CacheVC::get_uncached(HTTPRangeSpec const &req, HTTPRangeSpec &result, int64_t initial)
 {
   HTTPRangeSpec::Range r =
-    od ? write_vector->get_uncached_hull(earliest_key, req, initial) : alternate.get_uncached_hull(req, initial);
+    od ? od->vector.get_uncached_hull(earliest_key, req, initial) : alternate.get_uncached_hull(req, initial);
   if (r.isValid()) {
     result.add(r);
     return true;
@@ -2249,7 +2249,7 @@ CacheVC::get_missing_ranges(HTTPRangeSpec& missing)
   if (0 == alternate.);
   // For now we'll just compute the convex hull of the missing data.
   for ( RangeBox::const_iterator spot = req.begin(), limit = req.end() ; spot != limit ; ++spot ) {
-    
+
   }
 }
 #endif

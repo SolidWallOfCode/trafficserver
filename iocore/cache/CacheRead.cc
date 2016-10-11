@@ -335,7 +335,6 @@ CacheVC::openReadFromWriter(int event, Event *e)
       }
       Debug("amc", "[openReadFromWriter] select alt: %d %p (current %p)", alternate_index, od->vector.get(alternate_index)->m_alt,
             alternate.m_alt);
-      write_vector = &od->vector;
     } else {
       alternate_index = 0;
     }
@@ -793,11 +792,11 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
       ink_release_assert(!"[amc] Not handling multiple writers with vector evacuate");
       if (!vol->open_write(this)) {
         Doc *doc1    = (Doc *)first_buf->data();
-        uint32_t len = this->load_http_info(write_vector, doc1);
-        ink_assert(len == doc1->hlen && write_vector->count() > 0);
-        write_vector->remove(alternate_index, true);
+        uint32_t len = this->load_http_info(&(od->vector), doc1);
+        ink_assert(len == doc1->hlen && od->vector.count() > 0);
+        od->vector.remove(alternate_index, true);
         // if the vector had one alternate, delete it's directory entry
-        if (len != doc1->hlen || !write_vector->count()) {
+        if (len != doc1->hlen || !od->vector.count()) {
           // sometimes the delete fails when there is a race and another read
           // finds that the directory entry has been overwritten
           // (cannot assert on the return value)
@@ -806,7 +805,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
           buf             = NULL;
           last_collision  = NULL;
           write_len       = 0;
-          header_len      = write_vector->marshal_length();
+          header_len      = od->vector.marshal_length();
           f.evac_vector   = 1;
           f.use_first_key = 1;
           key             = first_key;
@@ -887,8 +886,8 @@ CacheVC::openReadVecWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */
       dir_overwrite(&first_key, vol, &dir, &od->first_dir);
       if (od->move_resident_alt)
         dir_insert(&od->single_doc_key, vol, &od->single_doc_dir);
-      int alt_ndx = HttpTransactCache::SelectFromAlternates(write_vector, &request, params);
-      Debug("amc", "[openReadVecWrite] select alt: %d %p (current %p)", alt_ndx, write_vector->get(alt_ndx)->m_alt,
+      int alt_ndx = HttpTransactCache::SelectFromAlternates(&(od->vector), &request, params);
+      Debug("amc", "[openReadVecWrite] select alt: %d %p (current %p)", alt_ndx, od->vector.get(alt_ndx)->m_alt,
             alternate.m_alt);
       vol->close_write(this);
       if (alt_ndx >= 0) {

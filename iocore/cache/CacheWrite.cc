@@ -75,9 +75,9 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     int vec = alternate.valid();
     if (f.update) {
       // all Update cases. Need to get the alternate index.
-      alternate_index = get_alternate_index(write_vector, update_key, alternate_index);
+      alternate_index = get_alternate_index(&od->vector, update_key, alternate_index);
       Debug("cache_update", "updating alternate index %d frags %d", alternate_index,
-            alternate_index >= 0 ? write_vector->get(alternate_index)->get_frag_count() : -1);
+            alternate_index >= 0 ? od->vector.get(alternate_index)->get_frag_count() : -1);
       // if its an alternate delete
       if (!vec) {
         ink_assert(!total_len);
@@ -85,14 +85,14 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
           MUTEX_TRY_LOCK(stripe_lock, vol->mutex, mutex->thread_holding);
           if (!stripe_lock.is_locked())
             VC_SCHED_LOCK_RETRY();
-          write_vector->remove(alternate_index, true);
+          od->vector.remove(alternate_index, true);
           alternate_index = CACHE_ALT_REMOVED;
-          if (!write_vector->count())
+          if (!od->vector.count())
             dir_delete(&first_key, vol, &od->first_dir);
         }
         // the alternate is not there any more. somebody might have
         // deleted it. Just close this writer
-        if (alternate_index != CACHE_ALT_REMOVED || !write_vector->count()) {
+        if (alternate_index != CACHE_ALT_REMOVED || !od->vector.count()) {
           SET_HANDLER(&CacheVC::openWriteCloseDir);
           return openWriteCloseDir(EVENT_IMMEDIATE, 0);
         }
@@ -100,14 +100,14 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       if (update_key == od->single_doc_key && (total_len || !vec))
         od->move_resident_alt = 0;
     }
-    if (cache_config_http_max_alts > 1 && write_vector->count() >= cache_config_http_max_alts && alternate_index < 0) {
-      if (od->move_resident_alt && get_alternate_index(write_vector, od->single_doc_key) == 0)
+    if (cache_config_http_max_alts > 1 && od->vector.count() >= cache_config_http_max_alts && alternate_index < 0) {
+      if (od->move_resident_alt && get_alternate_index(&od->vector, od->single_doc_key) == 0)
         od->move_resident_alt = 0;
-      write_vector->remove(0, true);
+      od->vector.remove(0, true);
     }
     if (vec) {
       // [amc] I think this is where the stale alternate is dropped and the update put in its place.
-      alternate_index = write_vector->insert(&alternate, alternate_index);
+      alternate_index = od->vector.insert(&alternate, alternate_index);
     }
 
     if (od->move_resident_alt && first_buf._ptr() /* && !od->has_multiple_writers() */) {
@@ -133,7 +133,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
               first_key.slice32(0));
       }
     }
-    header_len      = write_vector->marshal_length();
+    header_len      = od->vector.marshal_length();
     od->writing_vec = 1;
     f.use_first_key = 1;
     SET_HANDLER(&CacheVC::openWriteCloseHeadDone);
@@ -782,7 +782,7 @@ agg_copy(char *p, CacheVC *vc)
       ink_assert(vc->f.use_first_key);
 #ifdef HTTP_CACHE
       if (vc->frag_type == CACHE_FRAG_TYPE_HTTP) {
-        ink_assert(vc->write_vector->count() > 0);
+        ink_assert(vc->od->vector.count() > 0);
         if (vc->resp_range.hasRanges()) {
           int64_t size = vc->alternate.object_size_get();
           if (size >= 0)
@@ -791,18 +791,18 @@ agg_copy(char *p, CacheVC *vc)
           // As the header is finalized the fragment vector should be trimmed if the object is complete.
           if (!vc->f.update && !vc->f.evac_vector) {
             ink_assert(!(vc->first_key == zero_key));
-            CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
+            CacheHTTPInfo *http_info = vc->od->vector.get(vc->alternate_index);
             http_info->object_size_set(vc->total_len);
           }
           // update + data_written =>  Update case (b)
           // need to change the old alternate's object length
           if (vc->f.update && vc->total_len) {
-            CacheHTTPInfo *http_info = vc->write_vector->get(vc->alternate_index);
+            CacheHTTPInfo *http_info = vc->od->vector.get(vc->alternate_index);
             http_info->object_size_set(vc->total_len);
           }
         }
         ink_assert(!(((uintptr_t)&doc->hdr()[0]) & HDR_PTR_ALIGNMENT_MASK));
-        ink_assert(vc->header_len == vc->write_vector->marshal(doc->hdr(), vc->header_len));
+        ink_assert(vc->header_len == vc->od->vector.marshal(doc->hdr(), vc->header_len));
       } else
 #endif
         memcpy(doc->hdr(), vc->header_to_write, vc->header_len);
@@ -1236,7 +1236,7 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
     c._data.write(blocks, write_len);
     c._position = write_pos;
     SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
-    write_vector->write_complete(earliest_key, this, c, true);
+    od->vector.write_complete(earliest_key, this, c, true);
   }
 
   write_pos += write_len;
@@ -1336,7 +1336,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
 
   {
     SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
-    write_vector->write_complete(earliest_key, this, cb, true);
+    od->vector.write_complete(earliest_key, this, cb, true);
   }
 
   DDebug("cache_insert", "WriteDone: %X, %X, %d", key.slice32(0), first_key.slice32(0), write_len);
@@ -1388,11 +1388,11 @@ CacheVC::openWriteInit(int eid, Event *event)
       alternate.object_key_get(&earliest_key);
     }
     // Get synchronized with the OD vector.
-    if (-1 == (alternate_index = get_alternate_index(write_vector, earliest_key))) {
+    if (-1 == (alternate_index = get_alternate_index(&(od->vector), earliest_key))) {
       Debug("amc", "[openWriteInit] alt not found, inserted");
-      alternate_index = write_vector->insert(&alternate); // not there, add it
+      alternate_index = od->vector.insert(&alternate); // not there, add it
     } else {
-      HTTPInfo *base = write_vector->get(alternate_index);
+      HTTPInfo *base = od->vector.get(alternate_index);
       if (!base->is_writeable()) {
         // The alternate instance is mapped directly on a read buffer, which we can't modify.
         // It must be replaced with a live, mutable one.
@@ -1402,8 +1402,8 @@ CacheVC::openWriteInit(int eid, Event *event)
       }
     }
     // mark us as an writer.
-    write_vector->data[alternate_index]._writers.push(this);
-    alternate.copy_shallow(write_vector->get(alternate_index));
+    od->vector.data[alternate_index]._writers.push(this);
+    alternate.copy_shallow(od->vector.get(alternate_index));
 
     od->close_open_writer(this);
   }
@@ -1509,7 +1509,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         // clip to not go past next fragment boundary.
         write_len = std::min(write_len, static_cast<uint32_t>((frag_offset + ffs) - write_pos));
 
-        write_vector->addSideBuffer(earliest_key, blocks, write_len, write_pos);
+        od->vector.addSideBuffer(earliest_key, blocks, write_len, write_pos);
         resp_range.consume(write_len);
         blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
         Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len, frag_offset,
@@ -1637,11 +1637,11 @@ CacheVC::openWriteStartDone(int event, Event *e)
       if (!(doc->first_key == first_key))
         goto Lcollision;
 
-      if (doc->magic != DOC_MAGIC || !doc->hlen || this->load_http_info(write_vector, doc, buf) != doc->hlen) {
+      if (doc->magic != DOC_MAGIC || !doc->hlen || this->load_http_info(&od->vector, doc, buf) != doc->hlen) {
         err = ECACHE_BAD_META_DATA;
         goto Lfailure;
       }
-      ink_assert(write_vector->count() > 0);
+      ink_assert(od->vector.count() > 0);
       od->first_dir = dir;
       first_dir     = dir;
       if (doc->single_fragment()) {

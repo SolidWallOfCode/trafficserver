@@ -478,7 +478,6 @@ struct CacheVC : public CacheVConnection {
   EThread *initial_thread; // initial thread open_XX was called on
   CacheFragType frag_type;
   CacheHTTPInfo *info;
-  CacheHTTPInfoVector *write_vector;
 #ifdef HTTP_CACHE
   CacheLookupHttpConfig *params;
 #endif
@@ -845,7 +844,6 @@ Vol::open_write(CacheVC *cont)
   }
   ink_assert(NULL == cont->od);
   if (NULL != (cont->od = open_dir.open_entry(this, cont->first_key, true))) {
-    cont->write_vector = &cont->od->vector;
 #ifdef CACHE_STAT_PAGES
     ink_assert(cont->mutex->thread_holding == this_ethread());
     ink_assert(!cont->stat_link.next && !cont->stat_link.prev);
