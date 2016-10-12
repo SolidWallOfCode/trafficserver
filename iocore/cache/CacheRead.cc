@@ -567,9 +567,9 @@ CacheVC::shipContent()
     // Direct append to avoid allocating and copying to new buffer data blocks.
     if (wait_position < r_pos)
       offset = r_pos - wait_position;
-    if (offset >= bytes) {
+    if (offset >= length) {
       // Not making progress, something has gone wrong.
-      Debug("amc", "No content shipped because data length %" PRId64 " was less than range offset %" PRId64 " [data @ %" PRId64 ", output @ %" PRId64 "].", length, offset, wait_position, r_pos);
+      Debug("amc", "No content shipped (% " PRId64 " bytes) because data length %" PRId64 " was less than range offset %" PRId64 " [data @ %" PRId64 ", output @ %" PRId64 "].", bytes, length, offset, wait_position, r_pos);
       ink_release_assert(false); // core out for now, remove this for real production.
     } else {
       bytes    = writer->write(wait_buffer.head(), bytes, offset);
