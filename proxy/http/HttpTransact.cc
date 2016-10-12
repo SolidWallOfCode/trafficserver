@@ -2806,8 +2806,8 @@ HttpTransact::HandleCacheOpenReadHit(State *s)
     } else { // Only-If-Cached set means no serving of a partial hit.
       build_error_response(s, HTTP_STATUS_GATEWAY_TIMEOUT, "Not Cached", "cache#not_in_cache", NULL);
       s->cache_info.action = CACHE_DO_NO_ACTION;
-      s->range_setup = RANGE_NONE;
-      s->next_action = SM_ACTION_SEND_ERROR_CACHE_NOOP;
+      s->range_setup       = RANGE_NONE;
+      s->next_action       = SM_ACTION_SEND_ERROR_CACHE_NOOP;
     }
     return;
   } else {

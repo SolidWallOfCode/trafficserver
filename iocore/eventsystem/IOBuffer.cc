@@ -151,7 +151,7 @@ MIOBuffer::write(IOBufferChain const *chain, int64_t len, int64_t offset)
 int64_t
 MIOBuffer::write(IOBufferBlock const *b, int64_t alen, int64_t offset)
 {
-  int64_t len      = alen;
+  int64_t len = alen;
 
   while (b && len > 0) {
     int64_t max_bytes = b->read_avail();

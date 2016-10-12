@@ -1381,7 +1381,6 @@ CacheVC::openWriteInit(int eid, Event *event)
     if (alternate.valid() && earliest_key != alternate.object_key_get()) {
       // Do we need to check f.update here and move the current alternate to the stale store?
 
-
       // When the VC is created it sets up for a new alternate write. If we're back filling we
       // need to tweak that back to the existing alternate.
       Debug("amc", "[CacheVC::openWriteInit] updating earliest key from alternate");

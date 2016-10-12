@@ -2147,7 +2147,7 @@ int64_t
 HTTPInfo::clip_to_frag_boundary(int64_t position, int64_t length)
 {
   int64_t ff_size = m_alt->m_fixed_fragment_size;
-  int64_t idx = position / ff_size;
+  int64_t idx     = position / ff_size;
   return std::min(length, (idx + 1) * ff_size - position);
 }
 
@@ -2348,7 +2348,7 @@ HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
       ts::ConstBuffer min = max.splitOn('-'); // split min, max
 
       src.skip(&ParseRules::is_ws);
-      
+
       // Spec forbids whitespace anywhere in the range element, so parse error is correct if some is found.
       if (min) { // something before the '-'
         if (ParseRules::is_digit(*min) && min.size() <= MAX_DIGITS) {
@@ -2365,7 +2365,7 @@ HTTPRangeSpec::parseRangeFieldValue(char const *v, int len)
             } else {
               break; // invalid characters for maximum, or invalid range values (min > max).
             }
-          } else { // no maximum
+          } else {                      // no maximum
             this->add(low, UINT64_MAX); // "X-" : "offset X to end of content"
           }
         } else {

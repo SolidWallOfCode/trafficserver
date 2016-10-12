@@ -35,11 +35,11 @@ CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position,
 {
   // Blend in to overlapping existing buffer or insert in order.
   CacheBuffer *cb = _content_buffers.head;
-  int64_t last = position + length;
+  int64_t last    = position + length;
 
   // Always create a new cache buffer. Existing intersecting buffers will be coalesced in to this.
   CacheBuffer *n = new CacheBuffer;
-  n->_position = position;
+  n->_position   = position;
 
   while (cb && length) {
     int64_t cb_last = cb->_position + cb->_data.length();
@@ -48,9 +48,9 @@ CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position,
     if (last < cb->_position) {
       n->_data.write(block, length);
       length = 0;
-    } else if (position <= cb_last) { // intersection - write something.
-      CacheBuffer* next = _content_buffers.next(cb); // save this for end of scope update.
-      if (cb->_position < position) { // copy over leading part of existing data buffer.
+    } else if (position <= cb_last) {                // intersection - write something.
+      CacheBuffer *next = _content_buffers.next(cb); // save this for end of scope update.
+      if (cb->_position < position) {                // copy over leading part of existing data buffer.
         n->_data.write(cb->_data.head(), position - cb->_position);
         n->_position = cb->_position;
       }
@@ -70,10 +70,11 @@ CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position,
   }
 
   // If the incoming data hasn't been written yet, take care of it.
-  if (length) n->_data.write(block, length);
+  if (length)
+    n->_data.write(block, length);
   if (cb) // there's an existing buffer that starts after the end of the new buffer.
     _content_buffers.insert(n, _content_buffers.prev(cb)); // insert after previous -> insert before.
-  else // No buffers start after incoming buffer.
+  else                                                     // No buffers start after incoming buffer.
     _content_buffers.enqueue(n);
 }
 
@@ -94,14 +95,13 @@ CacheHTTPInfoVector::Item::getSideBufferContent(IOBufferChain &data, int64_t pos
 
 CacheHTTPInfoVector::Item::~Item()
 {
-  CacheBuffer* cb = _content_buffers.head;
+  CacheBuffer *cb = _content_buffers.head;
   while (cb) {
-    CacheBuffer* next = _content_buffers.next(cb);
+    CacheBuffer *next = _content_buffers.next(cb);
     delete cb;
     cb = next;
   }
   _alternate.destroy();
-
 }
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
@@ -466,7 +466,7 @@ CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
   int alt_idx = this->index_of(alt_key);
   // If the writer aborts before before the transaction completes, it won't have an ALT assigned.
   if (alt_idx != CACHE_ALT_INDEX_DEFAULT) {
-    Item &item  = data[alt_idx];
+    Item &item = data[alt_idx];
     item._writers.remove(vc);
     if (item._writers.empty()) {
       // if there are no more writers, none of these will ever wake up normally so kick them all now.
@@ -642,7 +642,7 @@ CacheRange::calcContentLength() const
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-REGRESSION_TEST(CacheSideContent)(RegressionTest* t, int, int* pstatus)
+REGRESSION_TEST(CacheSideContent)(RegressionTest *t, int, int *pstatus)
 {
   TestBox box(t, pstatus, REGRESSION_TEST_PASSED);
   CacheHTTPInfoVector::Item item;

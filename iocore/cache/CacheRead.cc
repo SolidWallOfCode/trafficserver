@@ -569,10 +569,12 @@ CacheVC::shipContent()
       offset = r_pos - wait_position;
     if (offset >= length) {
       // Not making progress, something has gone wrong.
-      Debug("amc", "No content shipped (% " PRId64 " bytes) because data length %" PRId64 " was less than range offset %" PRId64 " [data @ %" PRId64 ", output @ %" PRId64 "].", bytes, length, offset, wait_position, r_pos);
+      Debug("amc", "No content shipped (% " PRId64 " bytes) because data length %" PRId64 " was less than range offset %" PRId64
+                   " [data @ %" PRId64 ", output @ %" PRId64 "].",
+            bytes, length, offset, wait_position, r_pos);
       ink_release_assert(false); // core out for now, remove this for real production.
     } else {
-      bytes    = writer->write(wait_buffer.head(), bytes, offset);
+      bytes = writer->write(wait_buffer.head(), bytes, offset);
       resp_range.consume(bytes);
       vio.ndone += bytes;
     }
@@ -609,7 +611,7 @@ CacheVC::openReadMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     return this->shipContent();
   } else if (target_size) {
     int64_t fragment_length = alternate.clip_to_frag_boundary(target_position, target_size);
-    fragment = alternate.get_frag_index_of(target_position);
+    fragment                = alternate.get_frag_index_of(target_position);
     if (alternate.is_frag_cached(fragment)) {
       key = alternate.get_frag_key(fragment);
       Debug("amc", "Frag %d cached, no waiting", fragment);
@@ -893,8 +895,7 @@ CacheVC::openReadVecWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */
       if (od->move_resident_alt)
         dir_insert(&od->single_doc_key, vol, &od->single_doc_dir);
       int alt_ndx = HttpTransactCache::SelectFromAlternates(&(od->vector), &request, params);
-      Debug("amc", "[openReadVecWrite] select alt: %d %p (current %p)", alt_ndx, od->vector.get(alt_ndx)->m_alt,
-            alternate.m_alt);
+      Debug("amc", "[openReadVecWrite] select alt: %d %p (current %p)", alt_ndx, od->vector.get(alt_ndx)->m_alt, alternate.m_alt);
       vol->close_write(this);
       if (alt_ndx >= 0) {
         vector.clear();
