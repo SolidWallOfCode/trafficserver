@@ -242,7 +242,7 @@ ats_ip_parse(ts::BufferView src, ts::BufferView *addr, ts::BufferView *port, ts:
       while (src && ParseRules::is_digit(*src))
         ++src;
 
-      if (tmp.data() == src.data()) {            // no digits at all
+      if (tmp.data() == src.data()) {                // no digits at all
         src.setView(tmp.data() - 1, tmp.size() + 1); // back up to include colon
       } else {
         *port = tmp.splitSuffix(src.data());

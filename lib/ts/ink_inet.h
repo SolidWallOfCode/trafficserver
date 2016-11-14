@@ -1070,7 +1070,7 @@ ats_ip_nptop(IpEndpoint const *addr, ///< Address.
     @return 0 on success, non-zero on failure.
 */
 int ats_ip_pton(const ts::BufferView &text, ///< [in] text.
-                sockaddr *addr               ///< [out] address
+                sockaddr *addr              ///< [out] address
                 );
 
 /** Convert @a text to an IP address and write it to @a addr.
@@ -1094,7 +1094,7 @@ ats_ip_pton(const char *text,  ///< [in] text.
 
 inline int
 ats_ip_pton(const ts::BufferView &text, ///< [in] text.
-            IpEndpoint *addr             ///< [out] address
+            IpEndpoint *addr            ///< [out] address
             )
 {
   return ats_ip_pton(text, &addr->sa);

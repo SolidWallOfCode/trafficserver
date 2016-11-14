@@ -36,8 +36,8 @@
 #include <memory.h>
 
 /// Apache Traffic Server commons.
-namespace ts {
-
+namespace ts
+{
 /** A view of contiguous piece of memory.
 
     A @c BufferView does not own the memory to which it refers, it is simply a view of part of some
@@ -53,12 +53,13 @@ namespace ts {
     pass two parameters for one real argument) and to aid in parsing input without copying.
 
  */
-class BufferView {
+class BufferView
+{
   typedef BufferView self; ///< Self reference type.
 
 protected:
   const char *_ptr = nullptr; ///< Pointer to base of memory chunk.
-  size_t _size = 0;           ///< Size of memory chunk.
+  size_t _size     = 0;       ///< Size of memory chunk.
 public:
   /// Default constructor (empty buffer).
   constexpr BufferView();
@@ -119,7 +120,7 @@ public:
   size_t size() const;
   /// Memory pointer.
   /// @note This is equivalent to @c begin currently but it's probably good to have separation.
-  const char* data() const;
+  const char *data() const;
   //@}
 
   /// Set the view.
@@ -249,77 +250,128 @@ public:
 // ----------------------------------------------------------
 // Inline implementations.
 
-inline constexpr BufferView::BufferView() {}
-inline constexpr BufferView::BufferView(char const *ptr, size_t n)
-    : _ptr(ptr), _size(n) {}
-inline constexpr BufferView::BufferView(char const *start, char const *end)
-    : _ptr(start), _size(end - start) {}
+inline constexpr BufferView::BufferView()
+{
+}
+inline constexpr BufferView::BufferView(char const *ptr, size_t n) : _ptr(ptr), _size(n)
+{
+}
+inline constexpr BufferView::BufferView(char const *start, char const *end) : _ptr(start), _size(end - start)
+{
+}
 
-inline BufferView &BufferView::setView(const char *ptr, size_t n) {
-  _ptr = ptr;
+inline BufferView &
+BufferView::setView(const char *ptr, size_t n)
+{
+  _ptr  = ptr;
   _size = n;
   return *this;
 }
 
-inline BufferView &BufferView::setView(const char *ptr, const char *limit) {
-  _ptr = ptr;
+inline BufferView &
+BufferView::setView(const char *ptr, const char *limit)
+{
+  _ptr  = ptr;
   _size = limit - ptr;
   return *this;
 }
 
-inline BufferView &BufferView::clear() {
-  _ptr = 0;
+inline BufferView &
+BufferView::clear()
+{
+  _ptr  = 0;
   _size = 0;
   return *this;
 }
 
-inline bool BufferView::operator==(self const &that) const {
+inline bool
+BufferView::operator==(self const &that) const
+{
   return _size == that._size && _ptr == that._ptr;
 }
 
-inline bool BufferView::operator!=(self const &that) const {
+inline bool
+BufferView::operator!=(self const &that) const
+{
   return !(*this == that);
 }
 
-inline bool BufferView::operator!() const { return !(_ptr && _size); }
+inline bool BufferView::operator!() const
+{
+  return !(_ptr && _size);
+}
 
-inline BufferView::operator bool() const { return _ptr && _size; }
+inline BufferView::operator bool() const
+{
+  return _ptr && _size;
+}
 
-inline char BufferView::operator*() const { return *_ptr; }
+inline char BufferView::operator*() const
+{
+  return *_ptr;
+}
 
-inline BufferView &BufferView::operator++() {
+inline BufferView &BufferView::operator++()
+{
   ++_ptr;
   --_size;
   return *this;
 }
 
-inline const char *BufferView::begin() const { return _ptr; }
-inline const char *BufferView::data() const { return _ptr; }
+inline const char *
+BufferView::begin() const
+{
+  return _ptr;
+}
+inline const char *
+BufferView::data() const
+{
+  return _ptr;
+}
 
-inline const char *BufferView::end() const { return _ptr + _size; }
+inline const char *
+BufferView::end() const
+{
+  return _ptr + _size;
+}
 
-inline size_t BufferView::size() const { return _size; }
+inline size_t
+BufferView::size() const
+{
+  return _size;
+}
 
-inline BufferView &BufferView::operator=(BufferView const &that) {
-  _ptr = that._ptr;
+inline BufferView &
+BufferView::operator=(BufferView const &that)
+{
+  _ptr  = that._ptr;
   _size = that._size;
   return *this;
 }
 
-inline char BufferView::operator[](int n) const { return _ptr[n]; }
+inline char BufferView::operator[](int n) const
+{
+  return _ptr[n];
+}
 
-inline bool BufferView::contains(char const *p) const {
+inline bool
+BufferView::contains(char const *p) const
+{
   return _ptr <= p && p < _ptr + _size;
 }
 
-inline BufferView BufferView::prefix(char const *p) const {
+inline BufferView
+BufferView::prefix(char const *p) const
+{
   self zret;
   if (this->contains(p))
     zret.setView(_ptr, p);
   return zret;
 }
 
-inline BufferView BufferView::splitPrefix(char const *p) {
+inline BufferView
+BufferView::splitPrefix(char const *p)
+{
   self zret; // default to empty return.
   if (this->contains(p)) {
     zret.setView(_ptr, p);
@@ -328,7 +380,9 @@ inline BufferView BufferView::splitPrefix(char const *p) {
   return zret;
 }
 
-inline BufferView BufferView::extractPrefix(char const *p) {
+inline BufferView
+BufferView::extractPrefix(char const *p)
+{
   self zret{this->splitPrefix(p)};
 
   // For extraction if zret is empty, use up all of @a this
@@ -340,14 +394,18 @@ inline BufferView BufferView::extractPrefix(char const *p) {
   return zret;
 }
 
-inline BufferView BufferView::suffix(char const *p) const {
+inline BufferView
+BufferView::suffix(char const *p) const
+{
   self zret;
   if (this->contains(p))
     zret.setView(p + 1, _ptr + _size);
   return zret;
 }
 
-inline BufferView BufferView::splitSuffix(const char *p) {
+inline BufferView
+BufferView::splitSuffix(const char *p)
+{
   self zret;
   if (this->contains(p)) {
     zret.setView(p + 1, this->end());
@@ -356,11 +414,15 @@ inline BufferView BufferView::splitSuffix(const char *p) {
   return zret;
 }
 
-inline char const *BufferView::find(char c) const {
+inline char const *
+BufferView::find(char c) const
+{
   return static_cast<char const *>(memchr(_ptr, c, _size));
 }
 
-inline char const *BufferView::find(self delimiters) const {
+inline char const *
+BufferView::find(self delimiters) const
+{
   std::bitset<256> valid;
 
   // Load the bits in the array. This should be faster because this iterates
@@ -376,60 +438,69 @@ inline char const *BufferView::find(self delimiters) const {
   return nullptr;
 }
 
-inline const char *BufferView::find(std::function<bool(char)> const &pred) {
+inline const char *
+BufferView::find(std::function<bool(char)> const &pred)
+{
   for (const char *p = this->begin(), *limit = this->end(); p < limit; ++p)
     if (pred(*p))
       return p;
   return nullptr;
 }
 
-namespace detail {
+namespace detail
+{
+  // These are templated in order to not require including std::ostream but only
+  // std::iosfwd.
+  // Templates let the use of specific stream mechanisms be delayed until use at
+  // which point
+  // the caller will have included the required headers if needed but callers who
+  // don't won't need to.
 
-// These are templated in order to not require including std::ostream but only
-// std::iosfwd.
-// Templates let the use of specific stream mechanisms be delayed until use at
-// which point
-// the caller will have included the required headers if needed but callers who
-// don't won't need to.
+  template <typename Stream>
+  void
+  stream_padding(Stream &os, std::size_t n)
+  {
+    static constexpr size_t pad_size = 8;
+    char padding[pad_size];
 
-template <typename Stream> void stream_padding(Stream &os, std::size_t n) {
-  static constexpr size_t pad_size = 8;
-  char padding[pad_size];
-
-  std::fill_n(padding, pad_size, os.fill());
-  for (; n >= pad_size && os.good(); n -= pad_size)
-    os.write(padding, pad_size);
-  if (n > 0 && os.good())
-    os.write(padding, n);
-}
-
-template <typename Stream>
-void aligned_stream_write(Stream &os, const BufferView &b) {
-  const std::size_t size = b.size();
-  const std::size_t alignment_size =
-      static_cast<std::size_t>(os.width()) - size;
-  const bool align_left = (os.flags() & Stream::adjustfield) == Stream::left;
-  if (!align_left) {
-    detail::stream_padding(os, alignment_size);
-    if (os.good())
-      os.write(b.begin(), size);
-  } else {
-    os.write(b.begin(), size);
-    if (os.good())
-      detail::stream_padding(os, alignment_size);
+    std::fill_n(padding, pad_size, os.fill());
+    for (; n >= pad_size && os.good(); n -= pad_size)
+      os.write(padding, pad_size);
+    if (n > 0 && os.good())
+      os.write(padding, n);
   }
-}
 
-extern template void stream_padding(std::ostream &, std::size_t);
-extern template void aligned_stream_write(std::ostream &, const BufferView &);
+  template <typename Stream>
+  void
+  aligned_stream_write(Stream &os, const BufferView &b)
+  {
+    const std::size_t size           = b.size();
+    const std::size_t alignment_size = static_cast<std::size_t>(os.width()) - size;
+    const bool align_left            = (os.flags() & Stream::adjustfield) == Stream::left;
+    if (!align_left) {
+      detail::stream_padding(os, alignment_size);
+      if (os.good())
+        os.write(b.begin(), size);
+    } else {
+      os.write(b.begin(), size);
+      if (os.good())
+        detail::stream_padding(os, alignment_size);
+    }
+  }
+
+  extern template void stream_padding(std::ostream &, std::size_t);
+  extern template void aligned_stream_write(std::ostream &, const BufferView &);
 
 } // detail
 
 // Inserter
-template <typename Stream> Stream &operator<<(Stream &os, const BufferView &b) {
+template <typename Stream>
+Stream &
+operator<<(Stream &os, const BufferView &b)
+{
   if (os.good()) {
     const std::size_t size = b.size();
-    const std::size_t w = static_cast<std::size_t>(os.width());
+    const std::size_t w    = static_cast<std::size_t>(os.width());
     if (w <= size)
       os.write(b.begin(), size);
     else
