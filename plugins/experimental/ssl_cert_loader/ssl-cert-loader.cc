@@ -83,18 +83,18 @@ typedef std::deque<IpRange> IpRangeQueue;
 Configuration Config; // global configuration
 
 void
-Parse_Addr_String(ts::ConstBuffer const &text, IpRange &range)
+Parse_Addr_String(ts::BufferView const &text, IpRange &range)
 {
   IpAddr newAddr;
-  std::string textstr(text._ptr, text._size);
+  std::string textstr(text.data(), text.size());
   // Is there a hyphen?
   size_t hyphen_pos = textstr.find("-");
 
   if (hyphen_pos != std::string::npos) {
     std::string addr1 = textstr.substr(0, hyphen_pos);
     std::string addr2 = textstr.substr(hyphen_pos + 1);
-    range.first.load(ts::ConstBuffer(addr1.c_str(), addr1.length()));
-    range.second.load(ts::ConstBuffer(addr2.c_str(), addr2.length()));
+    range.first.load(ts::BufferView(addr1.c_str(), addr1.length()));
+    range.second.load(ts::BufferView(addr2.c_str(), addr2.length()));
   } else { // Assume it is a single address
     newAddr.load(text);
     range.first  = newAddr;
@@ -263,26 +263,26 @@ Parse_Config(Value &parent, ParsedSslValues &orig_values)
   Value val = parent.find("ssl-key-name");
 
   if (val.hasValue()) {
-    cur_values.server_priv_key_file = std::string(val.getText()._ptr, val.getText()._size);
+    cur_values.server_priv_key_file = std::string(val.getText().data(), val.getText().size());
   }
   val = parent.find("server-ip");
   if (val) {
     IpRange ipRange;
 
-    Parse_Addr_String(val.getText(), ipRange);
+    Parse_Addr_String(ts::BufferView(val.getText()._ptr, val.getText()._size), ipRange);
     cur_values.server_ips.push_back(ipRange);
   }
   val = parent.find("server-name");
   if (val) {
-    cur_values.server_name = std::string(val.getText()._ptr, val.getText()._size);
+    cur_values.server_name = std::string(val.getText().data(), val.getText().size());
   }
   val = parent.find("server-cert-name");
   if (val) {
-    cur_values.server_cert_name = std::string(val.getText()._ptr, val.getText()._size);
+    cur_values.server_cert_name = std::string(val.getText().data(), val.getText().size());
   }
   val = parent.find("action");
   if (val) {
-    cur_values.action = std::string(val.getText()._ptr, val.getText()._size);
+    cur_values.action = std::string(val.getText().data(), val.getText().size());
   }
 
   val = parent.find("child-match");

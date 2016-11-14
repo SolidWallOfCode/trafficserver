@@ -34,6 +34,7 @@
 #include "LogBuffer.h"
 #include "LogAccess.h"
 #include "Log.h"
+#include <ts/BufferView.h>
 
 // clang-format off
 //
@@ -159,18 +160,7 @@ LogSlice::toStrOffset(int strlen, int *offset)
   LogField::LogField
   -------------------------------------------------------------------------*/
 
-namespace
-{
-struct cmp_str {
-  bool
-  operator()(ts::ConstBuffer a, ts::ConstBuffer b) const
-  {
-    return ptr_len_casecmp(a._ptr, a._size, b._ptr, b._size) < 0;
-  }
-};
-}
-
-typedef std::map<ts::ConstBuffer, TSMilestonesType, cmp_str> milestone_map;
+typedef std::map<ts::BufferView, TSMilestonesType, ts::BufferView::LessThanNoCase> milestone_map;
 static milestone_map m_milestone_map;
 
 struct milestone {
@@ -209,7 +199,7 @@ LogField::init_milestone_container(void)
   if (m_milestone_map.empty()) {
     for (unsigned i = 0; i < countof(milestones); ++i) {
       m_milestone_map.insert(
-        std::make_pair(ts::ConstBuffer(milestones[i].msname, strlen(milestones[i].msname)), milestones[i].mstype));
+        std::make_pair(ts::BufferView(milestones[i].msname, strlen(milestones[i].msname)), milestones[i].mstype));
     }
   }
 }
@@ -275,7 +265,7 @@ LogField::milestone_from_m_name()
   milestone_map::iterator it;
   TSMilestonesType result = TS_MILESTONE_LAST_ENTRY;
 
-  it = m_milestone_map.find(ts::ConstBuffer(m_name, strlen(m_name)));
+  it = m_milestone_map.find(ts::BufferView(m_name, strlen(m_name)));
   if (it != m_milestone_map.end()) {
     result = it->second;
   }
@@ -287,9 +277,9 @@ int
 LogField::milestones_from_m_name(TSMilestonesType *ms1, TSMilestonesType *ms2)
 {
   milestone_map::iterator it;
-  ts::ConstBuffer ms1_name, ms2_name(m_name, strlen(m_name));
+  ts::BufferView ms1_name, ms2_name(m_name, strlen(m_name));
 
-  ms1_name = ms2_name.splitOn('-');
+  ms1_name = ms2_name.splitPrefix(ms2_name.find('-'));
 
   it = m_milestone_map.find(ms1_name);
   if (it != m_milestone_map.end()) {

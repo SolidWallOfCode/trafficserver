@@ -49,17 +49,17 @@ IpRangeQueue ClientBlindTunnelIp;
 Configuration Config; // global configuration
 
 void
-Parse_Addr_String(ts::ConstBuffer const &text, IpRange &range)
+Parse_Addr_String(ts::BufferView const &text, IpRange &range)
 {
   IpAddr newAddr;
-  std::string textstr(text._ptr, text._size);
+  std::string textstr(text.data(), text.size());
   // Is there a hyphen?
   size_t hyphen_pos = textstr.find("-");
   if (hyphen_pos != std::string::npos) {
     std::string addr1 = textstr.substr(0, hyphen_pos);
     std::string addr2 = textstr.substr(hyphen_pos + 1);
-    range.first.load(ts::ConstBuffer(addr1.c_str(), addr1.length()));
-    range.second.load(ts::ConstBuffer(addr2.c_str(), addr2.length()));
+    range.first.load(ts::BufferView(addr1.c_str(), addr1.length()));
+    range.second.load(ts::BufferView(addr2.c_str(), addr2.length()));
   } else { // Assume it is a single address
     newAddr.load(text);
     range.first  = newAddr;
@@ -75,13 +75,13 @@ Load_Config_Value(Value const &parent, const char *name, IpRangeQueue &addrs)
   std::string zret;
   IpRange ipRange;
   if (v.isLiteral()) {
-    Parse_Addr_String(v.getText(), ipRange);
+    Parse_Addr_String(ts::BufferView(v.getText()._ptr, v.getText()._size), ipRange);
     addrs.push_back(ipRange);
   } else if (v.isContainer()) {
     size_t i;
     for (i = 0; i < v.childCount(); i++) {
-      std::string val_str(v[i].getText()._ptr, v[i].getText()._size);
-      Parse_Addr_String(v[i].getText(), ipRange);
+      ts::BufferView val{v[i].getText()._ptr, v[i].getText()._size};
+      Parse_Addr_String(val, ipRange);
       addrs.push_back(ipRange);
     }
   }

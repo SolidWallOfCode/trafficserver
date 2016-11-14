@@ -109,7 +109,7 @@ is_host_char(char c)
 
 // Checks if `addr` is a valid FQDN string
 bool
-validate_host_name(ts::ConstBuffer addr)
+validate_host_name(ts::BufferView addr)
 {
   while (addr) {
     if (!(is_host_char(*addr))) {
@@ -1237,7 +1237,7 @@ url_parse_internet(HdrHeap *heap, URLImpl *url, const char **start, char const *
   const char *cur = *start;
   const char *base;              // Base for host/port field.
   const char *bracket = nullptr; // marker for open bracket, if any.
-  ts::ConstBuffer user, passw, host, port;
+  ts::BufferView user, passw, host, port;
   static size_t const MAX_COLON = 8; // max # of valid colons.
   size_t n_colon                = 0;
   const char *last_colon        = nullptr; // pointer to last colon seen.
@@ -1266,7 +1266,7 @@ url_parse_internet(HdrHeap *heap, URLImpl *url, const char **start, char const *
          stripping brackets from non-IPv6 content but that gets ugly
          as well. Just not worth it.
        */
-      host.set(bracket, cur);
+      host.setView(bracket, cur);
       // Spec requires This constitute the entire host so the next
       // character must be missing (EOS), slash, or colon.
       if (cur >= end || '/' == *cur) { // done which is OK
@@ -1292,12 +1292,12 @@ url_parse_internet(HdrHeap *heap, URLImpl *url, const char **start, char const *
         return PARSE_RESULT_ERROR; // we already got one, or too many colons.
       }
       if (n_colon) {
-        user.set(base, last_colon);
-        passw.set(last_colon + 1, cur);
+        user.setView(base, last_colon);
+        passw.setView(last_colon + 1, cur);
         n_colon    = 0;
         last_colon = nullptr;
       } else {
-        user.set(base, cur);
+        user.setView(base, cur);
       }
       ++cur;
       base = cur;
@@ -1321,24 +1321,24 @@ url_parse_internet(HdrHeap *heap, URLImpl *url, const char **start, char const *
   // character past the parse area.
 
   if (user) {
-    url_user_set(heap, url, user._ptr, user._size, copy_strings_p);
+    url_user_set(heap, url, user.data(), user.size(), copy_strings_p);
     if (passw) {
-      url_password_set(heap, url, passw._ptr, passw._size, copy_strings_p);
+      url_password_set(heap, url, passw.data(), passw.size(), copy_strings_p);
     }
   }
 
   // @a host not set means no brackets to mark explicit host.
   if (!host) {
     if (1 == n_colon || MAX_COLON == n_colon) { // presume port.
-      host.set(base, last_colon);
+      host.setView(base, last_colon);
     } else { // it's all host.
-      host.set(base, cur);
+      host.setView(base, cur);
       last_colon = nullptr; // prevent port setting.
     }
   }
-  if (host._size) {
+  if (host.size()) {
     if (validate_host_name(host)) {
-      url_host_set(heap, url, host._ptr, host._size, copy_strings_p);
+      url_host_set(heap, url, host.data(), host.size(), copy_strings_p);
     } else {
       return PARSE_RESULT_ERROR;
     }
@@ -1346,11 +1346,11 @@ url_parse_internet(HdrHeap *heap, URLImpl *url, const char **start, char const *
 
   if (last_colon) {
     ink_assert(n_colon);
-    port.set(last_colon + 1, cur);
-    if (!port._size) {
+    port.setView(last_colon + 1, cur);
+    if (!port.size()) {
       return PARSE_RESULT_ERROR; // colon w/o port value.
     }
-    url_port_set(heap, url, port._ptr, port._size, copy_strings_p);
+    url_port_set(heap, url, port.data(), port.size(), copy_strings_p);
   }
   if ('/' == *cur) {
     ++cur; // must do this after filling in host/port.
@@ -1856,7 +1856,7 @@ REGRESSION_TEST(VALIDATE_HDR_FIELD)(RegressionTest *t, int /* level ATS_UNUSED *
 
   for (unsigned int i = 0; i < sizeof(http_validate_hdr_field_test_case) / sizeof(http_validate_hdr_field_test_case[0]); ++i) {
     const char *const txt = http_validate_hdr_field_test_case[i].text;
-    ts::ConstBuffer tmp   = ts::ConstBuffer(txt, strlen(txt));
+    ts::BufferView tmp   = ts::BufferView(txt, strlen(txt));
     box.check(validate_host_name(tmp) == http_validate_hdr_field_test_case[i].valid,
               "Validation of FQDN (host) header: \"%s\", expected %s, but not", txt,
               (http_validate_hdr_field_test_case[i].valid ? "true" : "false"));

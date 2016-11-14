@@ -34,10 +34,15 @@
 #include <functional>
 #include <iosfwd>
 #include <memory.h>
+#include <ts/ParseRules.h>
 
 /// Apache Traffic Server commons.
 namespace ts
 {
+class BufferView;
+int compare(BufferView const& lhs, BufferView const& rhs);
+int compare_nocase(BufferView lhs, BufferView rhs);
+
 /** A view of contiguous piece of memory.
 
     A @c BufferView does not own the memory to which it refers, it is simply a view of part of some
@@ -245,6 +250,18 @@ public:
       @return @a this.
   */
   self splitSuffix(const char *p);
+
+  // Functors for using this class in STL containers.
+  /// Ordering functor, lexicographic comparison.
+  struct LessThan
+  {
+    bool operator () (BufferView const& lhs, BufferView const& rhs) { return -1 == compare(lhs, rhs); }
+  };
+  /// Ordering functor, lexicographic case insensitive comparison.
+  struct LessThanNoCase
+  {
+    bool operator () (BufferView const& lhs, BufferView const& rhs) { return -1 == compare_nocase(lhs, rhs); }
+  };
 };
 
 // ----------------------------------------------------------

@@ -52,6 +52,7 @@ libtsutil_la_SOURCES = \
   BaseLogFile.h \
   Bitops.cc \
   Bitops.h \
+  BufferView.h BufferView.cc \
   ConsistentHash.cc \
   ConsistentHash.h \
   ContFlags.cc \
@@ -250,4 +251,3 @@ clean-local:
 
 tidy-local: $(DIST_SOURCES)
 	$(CXX_Clang_Tidy)
-

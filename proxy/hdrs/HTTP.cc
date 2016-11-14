@@ -1137,7 +1137,7 @@ validate_hdr_host(HTTPHdrImpl *hh)
     } else {
       int host_len         = 0;
       const char *host_val = host_field->value_get(&host_len);
-      ts::ConstBuffer addr, port, rest, host(host_val, host_len);
+      ts::BufferView addr, port, rest, host(host_val, host_len);
       if (0 == ats_ip_parse(host, &addr, &port, &rest)) {
         if (port) {
           if (port.size() > 5) {
