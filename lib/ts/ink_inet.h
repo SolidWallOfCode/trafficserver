@@ -30,7 +30,7 @@
 #include <sys/socket.h>
 #include "ts/ink_memory.h"
 #include "ts/ink_apidefs.h"
-#include "ts/TsBuffer.h"
+#include "ts/BufferView.h"
 
 #define INK_GETHOSTBYNAME_R_DATA_SIZE 1024
 #define INK_GETHOSTBYADDR_R_DATA_SIZE 1024
@@ -164,10 +164,10 @@ int ats_tcp_somaxconn();
 
     @return 0 if an address was found, non-zero otherwise.
 */
-int ats_ip_parse(ts::ConstBuffer src,      ///< [in] String to search.
-                 ts::ConstBuffer *addr,    ///< [out] Range containing IP address.
-                 ts::ConstBuffer *port,    ///< [out] Range containing port.
-                 ts::ConstBuffer *rest = 0 ///< [out] Remnant past the addr/port if any.
+int ats_ip_parse(ts::BufferView src,      ///< [in] String to search.
+                 ts::BufferView *addr,    ///< [out] Range containing IP address.
+                 ts::BufferView *port,    ///< [out] Range containing port.
+                 ts::BufferView *rest = 0 ///< [out] Remnant past the addr/port if any.
                  );
 
 /**  Check to see if a buffer contains only IP address characters.
@@ -176,7 +176,7 @@ int ats_ip_parse(ts::ConstBuffer src,      ///< [in] String to search.
     - AF_INET - only digits and dots.
     - AF_INET6 - colons found.
 */
-int ats_ip_check_characters(ts::ConstBuffer text);
+int ats_ip_check_characters(ts::BufferView text);
 
 /**
   Wrapper for inet_addr().
@@ -1069,7 +1069,7 @@ ats_ip_nptop(IpEndpoint const *addr, ///< Address.
 
     @return 0 on success, non-zero on failure.
 */
-int ats_ip_pton(const ts::ConstBuffer &text, ///< [in] text.
+int ats_ip_pton(const ts::BufferView &text, ///< [in] text.
                 sockaddr *addr               ///< [out] address
                 );
 
@@ -1089,11 +1089,11 @@ ats_ip_pton(const char *text,  ///< [in] text.
             sockaddr_in6 *addr ///< [out] address
             )
 {
-  return ats_ip_pton(ts::ConstBuffer(text, strlen(text)), ats_ip_sa_cast(addr));
+  return ats_ip_pton(ts::BufferView(text, strlen(text)), ats_ip_sa_cast(addr));
 }
 
 inline int
-ats_ip_pton(const ts::ConstBuffer &text, ///< [in] text.
+ats_ip_pton(const ts::BufferView &text, ///< [in] text.
             IpEndpoint *addr             ///< [out] address
             )
 {
@@ -1105,7 +1105,7 @@ ats_ip_pton(const char *text, ///< [in] text.
             IpEndpoint *addr  ///< [out] address
             )
 {
-  return ats_ip_pton(ts::ConstBuffer(text, strlen(text)), &addr->sa);
+  return ats_ip_pton(ts::BufferView(text, strlen(text)), &addr->sa);
 }
 
 inline int
@@ -1113,7 +1113,7 @@ ats_ip_pton(const char *text, ///< [in] text.
             sockaddr *addr    ///< [out] address
             )
 {
-  return ats_ip_pton(ts::ConstBuffer(text, strlen(text)), addr);
+  return ats_ip_pton(ts::BufferView(text, strlen(text)), addr);
 }
 
 /** Get the best address info for @a name.
@@ -1225,7 +1225,7 @@ struct IpAddr {
       otherwise this object is invalidated.
       @return 0 on success, non-zero on failure.
   */
-  int load(ts::ConstBuffer const &str ///< Text of IP address.
+  int load(ts::BufferView const &str ///< Text of IP address.
            );
 
   /** Output to a string.

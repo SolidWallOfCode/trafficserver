@@ -117,6 +117,9 @@ public:
   const char *end() const;
   /// Number of bytes in the view.
   size_t size() const;
+  /// Memory pointer.
+  /// @note This is equivalent to @c begin currently but it's probably good to have separation.
+  const char* data() const;
   //@}
 
   /// Set the view.
@@ -152,7 +155,7 @@ public:
 
   /** Find a byte.
       @return A pointer to the first occurence of any of @a delimiters in @a
-     this or @c nullptr if not found.
+      this or @c nullptr if not found.
   */
   char const *find(BufferView delimiters) const;
 
@@ -173,19 +176,15 @@ public:
 
   /** Split the view on the character at @a p.
 
-      The view is split in to two parts and the byte at @a p is discarded. @a
-     this retains all data
-      @b after @a p (equivalent to <tt>BufferView(p+1, this->end()</tt>). A new
-     view containing the
+      The view is split in to two parts and the byte at @a p is discarded. @a this retains all data
+      @b after @a p (equivalent to <tt>BufferView(p+1, this->end()</tt>). A new view containing the
       initial bytes up to but not including @a p is returned, (equivalent to
       <tt>BufferView(this->begin(), p)</tt>).
 
       This is convenient when tokenizing and @a p points at a delimiter.
 
-      @note If @a *p refers toa byte that is not in @a this then @a this is not
-     changed and an empty
-      buffer is returned. Therefore this method can be safely called with the
-     return value of
+      @note If @a *p refers toa byte that is not in @a this then @a this is not changed and an empty
+      buffer is returned. Therefore this method can be safely called with the return value of
       calling @c find.
 
       @code
@@ -202,29 +201,23 @@ public:
 
   /** Extract a prefix delimited by @a p.
 
-      A prefix of @a this is removed from the view and returned. If @a p is not
-     in the view then the
+      A prefix of @a this is removed from the view and returned. If @a p is not in the view then the
       entire view is extracted and returned.
 
-      If @a p points at a byte in the view this is identical to @c splitPrefix.
-     If not then the
-      entire view in @a this will be returned and @a this will become an empty
-     view. This is easier
-      to use when repeated extracting tokens. The source view will become empty
-     after extracting the
+      If @a p points at a byte in the view this is identical to @c splitPrefix.  If not then the
+      entire view in @a this will be returned and @a this will become an empty view. This is easier
+      to use when repeated extracting tokens. The source view will become empty after extracting the
       last token.
 
       @code
       BufferView text;
       while (text) {
         BufferView token = text.extractPrefix(text.find(delimiter));
-        // .. process token which will always be non-empty because text was not
-     empty.
+        // .. process token which will always be non-empty because text was not empty.
       }
       @endcode
 
-      @return The prefix bounded at @a p or the entire view if @a p is not a
-     byte in the view.
+      @return The prefix bounded at @a p or the entire view if @a p is not a byte in the view.
 
       @see splitPrefix
   */
@@ -232,8 +225,7 @@ public:
 
   /** Get the trailing segment of the view after @a p.
 
-      The byte at @a p is not included. If @a p is not in the view an empty view
-     is returned.
+      The byte at @a p is not included. If @a p is not in the view an empty view is returned.
 
       @return A buffer that contains all data after @a p.
   */
@@ -241,16 +233,13 @@ public:
 
   /** Split the view on the character at @a p.
 
-      The view is split in to two parts and the byte at @a p is discarded. @a
-     this retains all data
-      @b before @a p (equivalent to <tt>BufferView(this->begin(), p)</tt>). A
-     new view containing
-      the trailing bytes after @a p is returned, (equivalent to
-     <tt>BufferView(p+1,
+      The view is split in to two parts and the byte at @a p is discarded. @a this retains all data
+      @b before @a p (equivalent to <tt>BufferView(this->begin(), p)</tt>). A new view containing
+      the trailing bytes after @a p is returned, (equivalent to <tt>BufferView(p+1,
       this->end())</tt>).
 
-      @note If @a p does not refer to a byte in the view, an empty view is
-     returned and @a this is unchanged.
+      @note If @a p does not refer to a byte in the view, an empty view is returned and @a this is
+      unchanged.
 
       @return @a this.
   */
@@ -305,6 +294,7 @@ inline BufferView &BufferView::operator++() {
 }
 
 inline const char *BufferView::begin() const { return _ptr; }
+inline const char *BufferView::data() const { return _ptr; }
 
 inline const char *BufferView::end() const { return _ptr + _size; }
 

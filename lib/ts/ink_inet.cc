@@ -187,18 +187,18 @@ ats_ip_nptop(sockaddr const *addr, char *dst, size_t size)
 }
 
 int
-ats_ip_parse(ts::ConstBuffer src, ts::ConstBuffer *addr, ts::ConstBuffer *port, ts::ConstBuffer *rest)
+ats_ip_parse(ts::BufferView src, ts::BufferView *addr, ts::BufferView *port, ts::BufferView *rest)
 {
   // In case the incoming arguments are null.
-  ts::ConstBuffer localAddr, localPort;
+  ts::BufferView localAddr, localPort;
   if (!addr)
     addr = &localAddr;
   if (!port)
     port = &localPort;
-  addr->reset();
-  port->reset();
+  addr->clear();
+  port->clear();
   if (rest)
-    rest->reset();
+    rest->clear();
 
   // Let's see if we can find out what's in the address string.
   if (src) {
@@ -222,30 +222,30 @@ ats_ip_parse(ts::ConstBuffer src, ts::ConstBuffer *addr, ts::ConstBuffer *port, 
          So we can't depend on that sizing.
       */
       ++src; // skip bracket.
-      *addr = src.splitOn(']');
+      *addr = src.splitPrefix(src.find(']'));
       if (':' == *src) {
         colon_p = true;
         ++src;
       }
     } else {
-      ts::ConstBuffer post = src.after(':');
+      ts::BufferView post = src.suffix(src.find(':'));
       if (post.data() && !post.find(':')) {
-        *addr   = src.splitOn(post.data() - 1);
+        *addr   = src.splitPrefix(post.data() - 1);
         colon_p = true;
       } else { // presume no port, use everything.
         *addr = src;
-        src.reset();
+        src.clear();
       }
     }
     if (colon_p) {
-      ts::ConstBuffer tmp(src);
+      ts::BufferView tmp(src);
       while (src && ParseRules::is_digit(*src))
         ++src;
 
       if (tmp.data() == src.data()) {            // no digits at all
-        src.set(tmp.data() - 1, tmp.size() + 1); // back up to include colon
+        src.setView(tmp.data() - 1, tmp.size() + 1); // back up to include colon
       } else {
-        *port = tmp.clip(src.data());
+        *port = tmp.splitSuffix(src.data());
       }
     }
     if (rest)
@@ -255,10 +255,10 @@ ats_ip_parse(ts::ConstBuffer src, ts::ConstBuffer *addr, ts::ConstBuffer *port, 
 }
 
 int
-ats_ip_pton(const ts::ConstBuffer &src, sockaddr *ip)
+ats_ip_pton(const ts::BufferView &src, sockaddr *ip)
 {
   int zret = -1;
-  ts::ConstBuffer addr, port;
+  ts::BufferView addr, port;
 
   ats_ip_invalidate(ip);
   if (0 == ats_ip_parse(src, &addr, &port)) {
@@ -267,7 +267,7 @@ ats_ip_pton(const ts::ConstBuffer &src, sockaddr *ip)
       char *tmp = static_cast<char *>(alloca(addr.size() + 1));
       memcpy(tmp, addr.data(), addr.size());
       tmp[addr.size()] = 0;
-      addr.set(tmp, addr.size());
+      addr.setView(tmp, addr.size());
     }
     if (addr.find(':')) { // colon -> IPv6
       in6_addr addr6;
@@ -369,7 +369,7 @@ IpAddr::load(const char *text)
 }
 
 int
-IpAddr::load(ts::ConstBuffer const &text)
+IpAddr::load(ts::BufferView const &text)
 {
   IpEndpoint ip;
   int zret = ats_ip_pton(text, &ip.sa);
@@ -470,8 +470,8 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
   int port = 0; // port value to assign if we find an address.
   addrinfo ai_hints;
   addrinfo *ai_result;
-  ts::ConstBuffer addr_text, port_text;
-  ts::ConstBuffer src(host, strlen(host) + 1);
+  ts::BufferView addr_text, port_text;
+  ts::BufferView src(host, strlen(host) + 1);
 
   if (ip4)
     ats_ip_invalidate(ip4);
@@ -484,7 +484,7 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
       char *tmp = static_cast<char *>(alloca(addr_text.size() + 1));
       memcpy(tmp, addr_text.data(), addr_text.size());
       tmp[addr_text.size()] = 0;
-      addr_text.set(tmp, addr_text.size());
+      addr_text.setView(tmp, addr_text.size());
     }
     ink_zero(ai_hints);
     ai_hints.ai_family = AF_UNSPEC;
@@ -560,7 +560,7 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
 }
 
 int
-ats_ip_check_characters(ts::ConstBuffer text)
+ats_ip_check_characters(ts::BufferView text)
 {
   bool found_colon = false;
   bool found_hex   = false;
@@ -612,10 +612,10 @@ REGRESSION_TEST(Ink_Inet)(RegressionTest *t, int /* atype */, int *pstatus)
 
     for (unsigned i = 0; i < countof(names); ++i) {
       ip_parse_spec const &s = names[i];
-      ts::ConstBuffer host, port, rest;
+      ts::BufferView host, port, rest;
       size_t len;
 
-      box.check(ats_ip_parse(ts::ConstBuffer(s.hostspec, strlen(s.hostspec)), &host, &port, &rest) == 0, "ats_ip_parse(%s)",
+      box.check(ats_ip_parse(ts::BufferView(s.hostspec, strlen(s.hostspec)), &host, &port, &rest) == 0, "ats_ip_parse(%s)",
                 s.hostspec);
       len = strlen(s.host);
       box.check(len == host.size() && strncmp(host.data(), s.host, host.size()) == 0, "ats_ip_parse(%s) gave addr '%.*s'",
