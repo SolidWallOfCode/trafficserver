@@ -82,6 +82,11 @@ public:
                        const char *end    ///< First byte not in the view.
                        );
 
+  /** Construct from null terminated string.
+      @note The terminating null is not included. @c strlen is used to determine the length.
+  */
+  explicit constexpr BufferView(const char* s);
+
   /** Equality.
 
       This is effective a pointer comparison, buffer contents are not compared.
@@ -274,6 +279,9 @@ inline constexpr BufferView::BufferView(char const *ptr, size_t n) : _ptr(ptr), 
 {
 }
 inline constexpr BufferView::BufferView(char const *start, char const *end) : _ptr(start), _size(end - start)
+{
+}
+inline constexpr BufferView::BufferView(char const* s) : _ptr(s), _size(strlen(s))
 {
 }
 
