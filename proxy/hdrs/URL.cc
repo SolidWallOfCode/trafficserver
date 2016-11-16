@@ -1856,7 +1856,7 @@ REGRESSION_TEST(VALIDATE_HDR_FIELD)(RegressionTest *t, int /* level ATS_UNUSED *
 
   for (unsigned int i = 0; i < sizeof(http_validate_hdr_field_test_case) / sizeof(http_validate_hdr_field_test_case[0]); ++i) {
     const char *const txt = http_validate_hdr_field_test_case[i].text;
-    ts::BufferView tmp   = ts::BufferView(txt, strlen(txt));
+    ts::BufferView tmp    = ts::BufferView(txt, strlen(txt));
     box.check(validate_host_name(tmp) == http_validate_hdr_field_test_case[i].valid,
               "Validation of FQDN (host) header: \"%s\", expected %s, but not", txt,
               (http_validate_hdr_field_test_case[i].valid ? "true" : "false"));

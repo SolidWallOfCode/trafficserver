@@ -40,10 +40,10 @@
 namespace ts
 {
 class BufferView;
-int compare(BufferView const& lhs, BufferView const& rhs);
+int compare(BufferView const &lhs, BufferView const &rhs);
 int compare_nocase(BufferView lhs, BufferView rhs);
 
-/** A view of contiguous piece of memory.
+/** A read only view of contiguous piece of memory.
 
     A @c BufferView does not own the memory to which it refers, it is simply a view of part of some
     (presumably) larger memory object. The purpose is to allow working in a read only way a specific
@@ -69,7 +69,7 @@ public:
   /// Default constructor (empty buffer).
   constexpr BufferView();
 
-  /** Construct explicitly with a buffer point and size.
+  /** Construct explicitly with a pointer and size.
    */
   constexpr BufferView(const char *ptr, ///< Pointer to buffer.
                        size_t n         ///< Size of buffer.
@@ -85,11 +85,11 @@ public:
   /** Construct from null terminated string.
       @note The terminating null is not included. @c strlen is used to determine the length.
   */
-  explicit constexpr BufferView(const char* s);
+  explicit constexpr BufferView(const char *s);
 
   /** Equality.
 
-      This is effective a pointer comparison, buffer contents are not compared.
+      This is effectively a pointer comparison, buffer contents are not compared.
 
       @return @c true if @a that refers to the same view as @a this,
       @c false otherwise.
@@ -102,6 +102,7 @@ public:
    */
   bool operator!=(self const &that) const;
 
+  /// Assignment - the view is copied, not the content.
   self &operator=(self const &that);
 
   /// @return The first byte in the view.
@@ -119,6 +120,10 @@ public:
   /// Check for non-empty view.
   /// @return @c true if the view refers to a non-empty range of bytes.
   explicit operator bool() const;
+
+  /// Check for empty view (no content).
+  /// @see operator bool
+  bool is_empty() const;
 
   /// @name Accessors.
   //@{
@@ -258,14 +263,20 @@ public:
 
   // Functors for using this class in STL containers.
   /// Ordering functor, lexicographic comparison.
-  struct LessThan
-  {
-    bool operator () (BufferView const& lhs, BufferView const& rhs) { return -1 == compare(lhs, rhs); }
+  struct LessThan {
+    bool
+    operator()(BufferView const &lhs, BufferView const &rhs)
+    {
+      return -1 == compare(lhs, rhs);
+    }
   };
   /// Ordering functor, lexicographic case insensitive comparison.
-  struct LessThanNoCase
-  {
-    bool operator () (BufferView const& lhs, BufferView const& rhs) { return -1 == compare_nocase(lhs, rhs); }
+  struct LessThanNoCase {
+    bool
+    operator()(BufferView const &lhs, BufferView const &rhs)
+    {
+      return -1 == compare_nocase(lhs, rhs);
+    }
   };
 };
 
@@ -281,7 +292,7 @@ inline constexpr BufferView::BufferView(char const *ptr, size_t n) : _ptr(ptr), 
 inline constexpr BufferView::BufferView(char const *start, char const *end) : _ptr(start), _size(end - start)
 {
 }
-inline constexpr BufferView::BufferView(char const* s) : _ptr(s), _size(strlen(s))
+inline constexpr BufferView::BufferView(char const *s) : _ptr(s), _size(strlen(s))
 {
 }
 
@@ -329,6 +340,12 @@ inline bool BufferView::operator!() const
 inline BufferView::operator bool() const
 {
   return _ptr && _size;
+}
+
+inline bool
+BufferView::is_empty() const
+{
+  return !(_ptr && _size);
 }
 
 inline char BufferView::operator*() const
