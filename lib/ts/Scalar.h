@@ -412,7 +412,7 @@ Scalar<N, C, T>::operator=(Scalar<S, I, T> const &that) -> self &
 
 template <intmax_t N, typename C, typename T>
 constexpr inline intmax_t
-Scalar<N, C, T>::scale() const
+Scalar<N, C, T>::scale()
 {
   return SCALE;
 }
