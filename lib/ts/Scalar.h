@@ -296,7 +296,7 @@ public:
   self &operator/=(C n);
 
   /// Run time access to the scale (template arg @a N).
-  static constexpr intmax_t scale() const;
+  static constexpr intmax_t scale();
 
 protected:
   Count _n; ///< Number of scale units.
