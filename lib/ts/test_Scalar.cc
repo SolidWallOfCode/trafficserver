@@ -130,7 +130,7 @@ Test_2()
   sz = ts::round_down(sz_d);
   test.check(sz.count() == 29, "[8] Rounding down, got %d expected %d", sz.count(), 29);
 
-  sz   = 119;
+  sz.assign(119);
   sz_b = sz; // Should be OK because SCALE_1 is an integer multiple of SCALE_2
   //  sz = sz_b; // Should not compile.
   test.check(sz_b.count() == 119 * (SCALE_1 / SCALE_2), "Integral conversion, got %d expected %d", sz_b.count(),
@@ -170,7 +170,7 @@ Test_4()
   ts::Scalar<9> m_9;
   ts::Scalar<4> m_4, m_test;
 
-  m_9 = 95;
+  m_9.assign(95);
   //  m_4 = m_9; // Should fail to compile with static assert.
   //  m_9 = m_4; // Should fail to compile with static assert.
 
@@ -179,7 +179,7 @@ Test_4()
   m_4 = ts::round_down(m_9);
   test.check(m_4.count() == 213, "Rounding down, got %d expected %d", m_4.count(), 213);
 
-  m_4 = 213;
+  m_4.assign(213);
   m_9 = ts::round_up(m_4);
   test.check(m_9.count() == 95, "Rounding down, got %d expected %d", m_9.count(), 95);
   m_9 = ts::round_down(m_4);
@@ -218,7 +218,7 @@ Test_5()
   z1 += 128;
   test.check(z1.count() == 352, "[5] Addition got %ld expected %d", z1.count(), 352);
 
-  z2 = 2;
+  z2.assign(2);
   z1 = 3 * z2;
   test.check(z1.count() == 6144, "[6] Addition got %ld expected %d", z1.count(), 6144);
   z1 *= 5;
@@ -226,7 +226,7 @@ Test_5()
   z1 /= 3;
   test.check(z1.count() == 10240, "[8] Addition got %ld expected %d", z1.count(), 10240);
 
-  z2     = 3148;
+  z2    .assign(3148);
   auto x = z2 + MBytes(1);
   test.check(x.scale() == z2.scale(), "[9] Common type addition yielded bad scale %ld - expected %ld", x.scale(), z2.scale());
   test.check(x.count() == 4172, "[10] Common type addition yielded bad count %d - expected %d", x.count(), 4172);
@@ -246,7 +246,7 @@ Test_5()
   decltype(z2) a = z2 + ts::round_down(167229);
   test.check(a.count() == 516, "[15] Unit scale down += bad count %d - expected %d", a.count(), 516);
 
-  KiBytes k = 3148;
+  KiBytes k(3148);
   auto kx   = k + MBytes(1);
   test.check(kx.scale() == k.scale(), "[9] Common type addition yielded bad scale %ld - expected %ld", kx.scale(), k.scale());
   test.check(kx.count() == 4172, "[10] Common type addition yielded bad count %ld - expected %d", kx.count(), 4172);
