@@ -803,6 +803,12 @@ ip-resolve
 
       9090:proto=http2;http:ssl
 
+.. topic:: Example
+
+   Listen on port 9090 for TSL disabled HTTP/2 and enabled HTTP connections, accept no other session protocols.::
+
+      9090:proto=http:ssl
+
 .. ts:cv:: CONFIG proxy.config.http.connect_ports STRING 443 563
 
    The range of origin server ports that can be used for tunneling via ``CONNECT``.
@@ -1266,6 +1272,15 @@ Parent Proxy Configuration
    The timeout value (in seconds) for parent cache connection attempts.
 
    See :ref:`admin-performance-timeouts` for more discussion on |TS| timeouts.
+
+.. ts:cv:: CONFIG proxy.config.http.parent_proxy.mark_down_hostdb INT 0
+   :reloadable:
+   :overridable:
+
+   Enables (``1``) or disables (``0``) marking parent proxies down in hostdb when a connection
+   error is detected.  Normally parent selection manages parent proxies and will mark them as unavailable
+   as needed.  But when parents are defined in dns with multiple ip addresses, it may be useful to mark the
+   failing ip down in hostdb.  In this case you would enable these updates.
 
 .. ts:cv:: CONFIG proxy.config.http.forward.proxy_auth_to_parent INT 0
    :reloadable:
@@ -2051,14 +2066,14 @@ RAM Cache
    in memory in order to improve performance.
    **4MB** (4194304)
 
-.. ts:cv:: CONFIG proxy.config.cache.ram_cache.algorithm INT 0
+.. ts:cv:: CONFIG proxy.config.cache.ram_cache.algorithm INT 1
 
    Two distinct RAM caches are supported, the default (0) being the **CLFUS**
    (*Clocked Least Frequently Used by Size*). As an alternative, a simpler
    **LRU** (*Least Recently Used*) cache is also available, by changing this
    configuration to 1.
 
-.. ts:cv:: CONFIG proxy.config.cache.ram_cache.use_seen_filter INT 0
+.. ts:cv:: CONFIG proxy.config.cache.ram_cache.use_seen_filter INT 1
 
    Enabling this option will filter inserts into the RAM cache to ensure that
    they have been seen at least once.  For the **LRU**, this provides scan

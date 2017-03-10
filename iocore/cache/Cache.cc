@@ -57,10 +57,10 @@ static short int const CACHE_DB_MAJOR_VERSION_COMPATIBLE = 21;
 // Configuration
 
 int64_t cache_config_ram_cache_size            = AUTO_SIZE_RAM_CACHE;
-int cache_config_ram_cache_algorithm           = 0;
+int cache_config_ram_cache_algorithm           = 1;
 int cache_config_ram_cache_compress            = 0;
 int cache_config_ram_cache_compress_percent    = 90;
-int cache_config_ram_cache_use_seen_filter     = 0;
+int cache_config_ram_cache_use_seen_filter     = 1;
 int cache_config_http_max_alts                 = 3;
 int cache_config_dir_sync_frequency            = 60;
 int cache_config_permit_pinning                = 0;
@@ -3285,10 +3285,9 @@ ink_cache_init(ModuleVersion v)
 
   REC_ReadConfigInteger(cacheProcessor.wait_for_cache, "proxy.config.http.wait_for_cache");
 
-  const char *err = nullptr;
-  if ((err = theCacheStore.read_config())) {
-    printf("Failed to read cache storage configuration - %s\n", err);
-    exit(1);
+  Result result = theCacheStore.read_config();
+  if (result.failed()) {
+    Fatal("Failed to read cache storage configuration: %s", result.message());
   }
 }
 

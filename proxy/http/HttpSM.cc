@@ -5741,7 +5741,8 @@ HttpSM::do_setup_post_tunnel(HttpVC_t to_vc_type)
 
   // If we're half closed, we got a FIN from the client. Forward it on to the origin server
   // now that we have the tunnel operational.
-  if (ua_session->get_half_close_flag()) {
+  // HttpTunnel could broken due to bad chunked data and close all vc by chain_abort_all().
+  if (p->handler_state != HTTP_SM_POST_UA_FAIL && ua_session->get_half_close_flag()) {
     p->vc->do_io_shutdown(IO_SHUTDOWN_READ);
   }
 }
@@ -7264,7 +7265,14 @@ HttpSM::set_next_state()
       do_remap_request(true); /* run inline */
       DebugSM("url_rewrite", "completed inline remapping request for [%" PRId64 "]", sm_id);
       t_state.url_remap_success = remapProcessor.finish_remap(&t_state);
-      call_transact_and_set_next_state(nullptr);
+      if (t_state.next_action == HttpTransact::SM_ACTION_SEND_ERROR_CACHE_NOOP && t_state.transact_return_point == nullptr) {
+        // It appears that we can now set the next_action to error and transact_return_point to nullptr when
+        // going through do_remap_request presumably due to a plugin setting an error.  In that case, it seems
+        // that the error message has already been setup, so we can just return and avoid the further
+        // call_transact_and_set_next_state
+      } else {
+        call_transact_and_set_next_state(nullptr);
+      }
     } else {
       HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_remap_request);
       do_remap_request(false); /* dont run inline (iow on another thread) */

@@ -106,6 +106,6 @@ Copyright (c) <2008>, Sun Microsystems, Inc.  All rights reserved.
 
 ~~
 
-BIO_sock_non_fatal_error() is copied from
-https://github.com/openssl/openssl/blob/3befffa39dbaf2688d823fcf2bdfc07d2487be48/crypto/bio/bss_sock.c
-Copyright 1995-2016 The OpenSSL Project Authors. All Rights Reserved.
+Reusable Gold Testing System  
+https://bitbucket.org/dragon512/reusable-gold-testing-system
+Copyright (c) 2015-2016 Jason Kenny All Rights Reserved.

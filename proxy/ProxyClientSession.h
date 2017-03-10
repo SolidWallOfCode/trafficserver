@@ -88,6 +88,12 @@ public:
     user_args[ix] = arg;
   }
 
+  void
+  set_debug(bool flag)
+  {
+    debug_on = flag;
+  }
+
   // Return whether debugging is enabled for this session.
   bool
   debug() const
@@ -105,6 +111,12 @@ public:
   has_hooks() const
   {
     return this->api_hooks.has_hooks() || http_global_hooks->has_hooks();
+  }
+
+  bool
+  is_active() const
+  {
+    return m_active;
   }
 
   // Initiate an API hook invocation.
@@ -257,8 +269,6 @@ private:
   // be active until the transaction goes through or the client
   // aborts.
   bool m_active;
-
-  friend void TSHttpSsnDebugSet(TSHttpSsn, int);
 };
 
 #endif // __PROXY_CLIENT_SESSION_H__

@@ -27,7 +27,6 @@
 #include "ts/ink_base64.h"
 #include "ts/I_Layout.h"
 
-#include "ts.h"
 #include "InkAPIInternal.h"
 #include "Log.h"
 #include "URL.h"
@@ -60,6 +59,8 @@
 #include "I_RecCore.h"
 #include "I_Machine.h"
 #include "HttpProxyServerMain.h"
+
+#include "api/ts/ts.h"
 
 /****************************************************************
  *  IMPORTANT - READ ME
@@ -1802,7 +1803,8 @@ TSTrafficServerVersionGetPatch()
 const char *
 TSPluginDirGet(void)
 {
-  static const char *path = RecConfigReadPrefixPath("proxy.config.plugin.plugin_dir");
+  static const char *path = RecConfigReadPluginDir();
+
   return path;
 }
 
@@ -6084,7 +6086,7 @@ void
 TSHttpSsnDebugSet(TSHttpSsn ssnp, int on)
 {
   sdk_assert(sdk_sanity_check_http_ssn(ssnp) == TS_SUCCESS);
-  (reinterpret_cast<ProxyClientSession *>(ssnp))->debug_on = on;
+  (reinterpret_cast<ProxyClientSession *>(ssnp))->set_debug(0 != on);
 }
 
 int
@@ -8089,7 +8091,6 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     ret = &overridableHttpConfig->body_factory_template_base;
     break;
   case TS_CONFIG_HTTP_CACHE_OPEN_WRITE_FAIL_ACTION:
-    typ = OVERRIDABLE_TYPE_INT;
     ret = &overridableHttpConfig->cache_open_write_fail_action;
     break;
   case TS_CONFIG_HTTP_ENABLE_REDIRECTION:
@@ -8138,11 +8139,9 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     ret = &overridableHttpConfig->transaction_active_timeout_in;
     break;
   case TS_CONFIG_SRV_ENABLED:
-    typ = OVERRIDABLE_TYPE_INT;
     ret = &overridableHttpConfig->srv_enabled;
     break;
   case TS_CONFIG_HTTP_FORWARD_CONNECT_METHOD:
-    typ = OVERRIDABLE_TYPE_INT;
     ret = &overridableHttpConfig->forward_connect_method;
     break;
   case TS_CONFIG_SSL_CERT_FILENAME:
@@ -8152,6 +8151,9 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
   case TS_CONFIG_SSL_CERT_FILEPATH:
     typ = OVERRIDABLE_TYPE_STRING;
     ret = &overridableHttpConfig->client_cert_filepath;
+    break;
+  case TS_CONFIG_PARENT_FAILURES_UPDATE_HOSTDB:
+    ret = &overridableHttpConfig->parent_failures_update_hostdb;
     break;
   // This helps avoiding compiler warnings, yet detect unhandled enum members.
   case TS_CONFIG_NULL:
@@ -8772,6 +8774,11 @@ TSHttpTxnConfigFind(const char *name, int length, TSOverridableConfigKey *conf, 
 
   case 47:
     switch (name[length - 1]) {
+    case 'b':
+      if (!strncmp(name, "proxy.config.http.parent_proxy.mark_down_hostdb", length)) {
+        cnf = TS_CONFIG_PARENT_FAILURES_UPDATE_HOSTDB;
+      }
+      break;
     case 'd':
       if (!strncmp(name, "proxy.config.http.negative_revalidating_enabled", length)) {
         cnf = TS_CONFIG_HTTP_NEGATIVE_REVALIDATING_ENABLED;

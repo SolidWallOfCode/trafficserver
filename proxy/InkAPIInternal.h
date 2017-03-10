@@ -27,14 +27,14 @@
 #include "P_EventSystem.h"
 #include "URL.h"
 #include "P_Net.h"
-#include "ts.h"
-#include "experimental.h"
-#include "InkAPIPrivateIOCore.h"
 #include "HTTP.h"
 #include "ts/List.h"
 #include "ProxyConfig.h"
 #include "P_Cache.h"
 #include "I_Tasks.h"
+
+#include "api/ts/InkAPIPrivateIOCore.h"
+#include "api/ts/experimental.h"
 
 /* Some defines that might be candidates for configurable settings later.
  */
@@ -285,6 +285,7 @@ typedef enum {
   TS_SSL_INTERNAL_FIRST_HOOK,
   TS_VCONN_PRE_ACCEPT_INTERNAL_HOOK = TS_SSL_INTERNAL_FIRST_HOOK,
   TS_SSL_CERT_INTERNAL_HOOK,
+  TS_SSL_SERVERNAME_INTERNAL_HOOK,
   TS_SSL_INTERNAL_LAST_HOOK
 } TSSslHookInternalID;
 

@@ -16,6 +16,10 @@
 
 .. include:: ../../../common.defs
 
+.. Many types are here simply to avoid build errors in the documentation. It is reasonable to,
+   when providing additional documentation on the type, to move it from here to a more appropriate
+   file.
+
 .. default-domain:: c
 
 TSAPI Types
@@ -65,16 +69,6 @@ more widely. Those are described on this page.
 .. type:: TSHttpSsn
 
    An opaque type that represents a Traffic SeUuirver :term:`session`.
-
-.. type:: TSHttpStatus
-
-   This set of enums represents possible return values from
-   :func:`TSHttpHdrStatusGet`, which retrieves the status code from an
-   HTTP response header (:func:`TSHttpHdrStatusGet` retrieves status
-   codes only from headers of type :data:`TS_HTTP_TYPE_RESPONSE`).
-
-   You can also set the :type:`TSHttpStatus` of a response header using
-   :func:`TSHttpHdrStatusSet`.
 
 .. type:: TSHttpTxn
 
@@ -154,4 +148,22 @@ more widely. Those are described on this page.
 
 .. type:: TSVConn
 
+    A virtual connection. This is the basic mechanism for abstracting I/O operations in |TS|.
+
+.. type:: TSNetVConnection
+
+    A subtype of :type:`TSVConn` that provides additional IP network information and operations.
+
 .. type:: TSVIO
+
+.. type:: ModuleVersion
+
+    A module version.
+    
+.. cpp:type:: ModuleVersion
+
+    A module version.
+    
+.. cpp:class:: template<typename T> DLL
+
+    An anchor for a double linked instrusive list of instance of :arg:`T`.

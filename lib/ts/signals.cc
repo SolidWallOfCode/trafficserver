@@ -176,7 +176,8 @@ signal_format_siginfo(int signo, siginfo_t *info, const char *msg)
   snprintf(buf, sizeof(buf), "%s: received signal %d\n", msg, signo);
 #endif
 
-  write(STDERR_FILENO, buf, strlen(buf));
+  ssize_t ignored = write(STDERR_FILENO, buf, strlen(buf));
+  (void)ignored; // because gcc and glibc are stupid, "(void)write(...)" doesn't suffice.
 #endif
 }
 

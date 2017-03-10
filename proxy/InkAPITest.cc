@@ -5550,7 +5550,8 @@ typedef enum {
   ORIG_TS_SSL_FIRST_HOOK,
   ORIG_TS_VCONN_PRE_ACCEPT_HOOK = ORIG_TS_SSL_FIRST_HOOK,
   ORIG_TS_SSL_SNI_HOOK,
-  ORIG_TS_SSL_LAST_HOOK = ORIG_TS_SSL_SNI_HOOK,
+  ORIG_TS_SSL_SERVERNAME_HOOK,
+  ORIG_TS_SSL_LAST_HOOK = TS_SSL_SERVERNAME_HOOK,
   ORIG_TS_HTTP_LAST_HOOK
 } ORIG_TSHttpHookID;
 
@@ -7621,6 +7622,7 @@ const char *SDK_Overridable_Configs[TS_CONFIG_LAST_ENTRY] = {
   "proxy.config.http.forward_connect_method",
   "proxy.config.ssl.client.cert.filename",
   "proxy.config.ssl.client.cert.path",
+  "proxy.config.http.parent_proxy.mark_down_hostdb",
 };
 
 REGRESSION_TEST(SDK_API_OVERRIDABLE_CONFIGS)(RegressionTest *test, int /* atype ATS_UNUSED */, int *pstatus)
