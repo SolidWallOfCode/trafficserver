@@ -512,7 +512,7 @@ operator<=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   typedef std::ratio<N, S> R;
   if (N == S)
-    return lhs.count <= rhs.count();
+    return lhs.count() <= rhs.count();
   else if (R::den == 1)
     return lhs.count() * R::num <= rhs.count();
   else if (R::num == 1)
