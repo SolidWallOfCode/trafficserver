@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <ratio>
 #include <ostream>
+#include <type_traits>
 
 namespace tag
 {
@@ -43,6 +44,15 @@ template <intmax_t N, typename C, typename T> class Scalar;
 
 namespace detail
 {
+  // @internal - althought these conversion methods look bulky, in practice they compile down to
+  // very small amounts of code due to dead code elimination and that all of the conditions are
+  // compile time constants.
+
+  // The general case where neither N nor S are a multiple of the other seems a bit long but this
+  // minimizes the risk of integer overflow.  I need to validate that under -O2 the compiler will
+  // only do 1 division to get both the quotient and remainder for (n/N) and (n%N). In cases where
+  // N,S are powers of 2 I have verified recent GNU compilers will optimize to bit operations.
+
   /// Convert a count @a c that is scale @s S to scale @c N
   template <intmax_t N, intmax_t S>
   intmax_t
@@ -73,11 +83,6 @@ namespace detail
     } else if (R::num == 1) {
       return c * R::den; // S = k N
     } else {
-      // General case where neither N nor S are a multiple of the other.
-      // Yes, a bit odd, but this minimizes the risk of integer overflow.
-      // I need to validate that under -O2 the compiler will only do 1 division to get
-      // both the quotient and remainder for (n/N) and (n%N). In cases where N,S are
-      // powers of 2 I have verified recent GNU compilers will optimize to bit operations.
       return (c / R::num) * R::den + ((c % R::num) * R::den) / R::num;
     }
   }
@@ -101,8 +106,8 @@ namespace detail
      some ugliness due to the fact that in some cases two user conversions which is difficult to
      deal with. I have tried it both ways and overall this seems a cleaner implementation.
 
-     Much of this is driven by the fact that the assignment operator can not be templated and
-     therefore to have a nice interace for assignment this split is needed.
+     Much of this is driven by the fact that the assignment operator, in some case, can not be
+     templated and therefore to have a nice interace for assignment this split is needed.
    */
 
   // Unit value, to be rounded up.
@@ -203,24 +208,27 @@ public:
   typedef C Count; ///< Type used to hold the count.
   typedef T Tag;   ///< Make tag accessible.
 
+  static_assert(N > 0, "The scaling factor (1st template argument) must be a positive integer");
+  static_assert(std::is_integral<C>::value, "The counter type (2nd template argument) must be an integral type");
+
   constexpr Scalar(); ///< Default contructor.
   ///< Construct to have @a n scaled units.
   constexpr Scalar(Count n);
   /// Copy constructor.
   constexpr Scalar(self const &that); /// Copy constructor.
-  /// Conversion constructor.
-  /// @note Requires that @c S be an integer multiple of @c SCALE.
-  template <intmax_t S, typename I> Scalar(Scalar<S, I, T> const &that);
-  /// Scaling constructor.
-  Scalar(detail::scalar_round_up_t<N, C, T> const &that);
-  /// Scaling constructor.
-  Scalar(detail::scalar_round_down_t<N, C, T> const &that);
-  /// Scale units value @a x to this type, rounding up.
-  template <typename I> constexpr Scalar(detail::scalar_unit_round_up_t<I> v);
-  /// Scale units value @a x to this type, rounding down.
-  template <typename I> constexpr Scalar(detail::scalar_unit_round_down_t<I> v);
   /// Copy constructor for same scale.
   template <typename I> constexpr Scalar(Scalar<N, I, T> const &that);
+  /// Direct conversion constructor.
+  /// @note Requires that @c S be an integer multiple of @c SCALE.
+  template <intmax_t S, typename I> constexpr Scalar(Scalar<S, I, T> const &that);
+  /// Conversion constructor.
+  constexpr Scalar(detail::scalar_round_up_t<N, C, T> const &that);
+  /// Conversion constructor.
+  constexpr Scalar(detail::scalar_round_down_t<N, C, T> const &that);
+  /// Conversion constructor.
+  template <typename I> constexpr Scalar(detail::scalar_unit_round_up_t<I> v);
+  /// Conversion constructor.
+  template <typename I> constexpr Scalar(detail::scalar_unit_round_down_t<I> v);
 
   /// Assignment operator.
   /// The value is scaled appropriately.
@@ -232,7 +240,7 @@ public:
   /// Direct assignment.
   /// The count is set to @a n.
   self &operator=(Count n);
-  // Scaling assignments.
+  // Conversion assignments.
   template <typename I> self &operator=(detail::scalar_unit_round_up_t<I> n);
   template <typename I> self &operator=(detail::scalar_unit_round_down_t<I> n);
   self &operator                      =(detail::scalar_round_up_t<N, C, T> v);
@@ -275,6 +283,7 @@ public:
   self &operator-=(C n);
   /// Subtraction - subtract @a n as a number of scaled units.
   self &operator-=(self const &that);
+
   template <typename I> self &operator-=(detail::scalar_unit_round_up_t<I> n);
   template <typename I> self &operator-=(detail::scalar_unit_round_down_t<I> n);
   self &operator-=(detail::scalar_round_up_t<N, C, T> v);
@@ -307,16 +316,19 @@ template <typename I>
 constexpr Scalar<N, C, T>::Scalar(Scalar<N, I, T> const &that) : _n(static_cast<C>(that.count()))
 {
 }
-template <intmax_t N, typename C, typename T> template <intmax_t S, typename I> Scalar<N, C, T>::Scalar(Scalar<S, I, T> const &that)
+template <intmax_t N, typename C, typename T>
+template <intmax_t S, typename I>
+constexpr Scalar<N, C, T>::Scalar(Scalar<S, I, T> const &that) : _n(std::ratio<S, N>::num * that.count())
 {
-  typedef std::ratio<S, N> R;
-  static_assert(R::den == 1, "Construction not permitted - target scale is not an integral multiple of source scale.");
-  _n = that.count() * R::num;
+  static_assert(std::ratio<S, N>::den == 1,
+                "Construction not permitted - target scale is not an integral multiple of source scale.");
 }
-template <intmax_t N, typename C, typename T> Scalar<N, C, T>::Scalar(detail::scalar_round_up_t<N, C, T> const &v) : _n(v._n)
+template <intmax_t N, typename C, typename T>
+constexpr Scalar<N, C, T>::Scalar(detail::scalar_round_up_t<N, C, T> const &v) : _n(v._n)
 {
 }
-template <intmax_t N, typename C, typename T> Scalar<N, C, T>::Scalar(detail::scalar_round_down_t<N, C, T> const &v) : _n(v._n)
+template <intmax_t N, typename C, typename T>
+constexpr Scalar<N, C, T>::Scalar(detail::scalar_round_down_t<N, C, T> const &v) : _n(v._n)
 {
 }
 template <intmax_t N, typename C, typename T>
@@ -406,97 +418,73 @@ Scalar<N, C, T>::scale()
 }
 
 // --- Compare operators
+// These optimize nicely due to dead code elimination.
 
-// Try for a bit of performance boost - if the metrics have the same scale
-// just comparing the counts is sufficient and scaling conversion is avoided.
-template <intmax_t N, typename C1, typename C2, typename T>
+template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
-operator<(Scalar<N, C1, T> const &lhs, Scalar<N, C2, T> const &rhs)
+operator<(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
-  return lhs.count() < rhs.count();
-}
-
-template <intmax_t N, typename C1, typename C2, typename T>
-bool
-operator==(Scalar<N, C1, T> const &lhs, Scalar<N, C2, T> const &rhs)
-{
-  return lhs.count() == rhs.count();
-}
-
-// Could be derived but if we're optimizing let's avoid the extra negation.
-// Or we could check if the compiler can optimize that out anyway.
-template <intmax_t N, typename C1, typename C2, typename T>
-bool
-operator<=(Scalar<N, C1, T> const &lhs, Scalar<N, C2, T> const &rhs)
-{
-  return lhs.count() <= rhs.count();
-}
-
-// General base cases.
-
-template <intmax_t N1, typename C1, intmax_t N2, typename C2, typename T>
-bool
-operator<(Scalar<N1, C1, T> const &lhs, Scalar<N2, C2, T> const &rhs)
-{
-  typedef std::ratio<N1, N2> R;
-  // Based on tests with the GNU compiler, the fact that the conditionals are compile time
-  // constant causes the never taken paths to be dropped so there are no runtime conditional
-  // checks, even with no optimization at all.
-  if (R::den == 1) {
+  typedef std::ratio<N, S> R;
+  if (N == S)
+    return lhs.count() < rhs.count();
+  else if (R::den == 1)
     return lhs.count() * R::num < rhs.count();
-  } else if (R::num == 1) {
+  else if (R::num == 1)
     return lhs.count() < rhs.count() * R::den;
-  } else
+  else
     return lhs.units() < rhs.units();
 }
 
-template <intmax_t N1, typename C1, intmax_t N2, typename C2, typename T>
+template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
-operator==(Scalar<N1, C1, T> const &lhs, Scalar<N2, C2, T> const &rhs)
+operator==(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
-  typedef std::ratio<N1, N2> R;
-  if (R::den == 1) {
+  typedef std::ratio<N, S> R;
+  if (N == S)
+    return lhs.count() == rhs.count();
+  else if (R::den == 1)
     return lhs.count() * R::num == rhs.count();
-  } else if (R::num == 1) {
+  else if (R::num == 1)
     return lhs.count() == rhs.count() * R::den;
-  } else
+  else
     return lhs.units() == rhs.units();
 }
 
-template <intmax_t N1, typename C1, intmax_t N2, typename C2, typename T>
+template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
-operator<=(Scalar<N1, C1, T> const &lhs, Scalar<N2, C2, T> const &rhs)
+operator<=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
-  typedef std::ratio<N1, N2> R;
-  if (R::den == 1) {
+  typedef std::ratio<N, S> R;
+  if (N == S)
+    return lhs.count <= rhs.count();
+  else if (R::den == 1)
     return lhs.count() * R::num <= rhs.count();
-  } else if (R::num == 1) {
+  else if (R::num == 1)
     return lhs.count() <= rhs.count() * R::den;
-  } else
+  else
     return lhs.units() <= rhs.units();
 }
 
-// Derived compares. No narrowing optimization needed because if the scales
-// are the same the nested call with be optimized.
+// Derived compares.
 
-template <intmax_t N1, typename C1, intmax_t N2, typename C2, typename T>
+template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
-operator>(Scalar<N1, C1, T> const &lhs, Scalar<N2, C2, T> const &rhs)
+operator>(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   return rhs < lhs;
 }
 
-template <intmax_t N1, typename C1, intmax_t N2, typename C2, typename T>
+template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
-operator>=(Scalar<N1, C1, T> const &lhs, Scalar<N2, C2, T> const &rhs)
+operator>=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   return rhs <= lhs;
 }
 
 // Do the integer compares.
-// A bit ugly to handle the issue that integers without explicit type are 'int'. Therefore suppport must be provided
-// for comparison not just the counter type C but also explicitly 'int'. That makes the operators ambiguous if C is
-// 'int'. The specializations for 'int' resolve this as their presence "covers" the generic cases.
+// A bit ugly to handle the issue that integers without explicit type are <int>. Therefore suppport
+// must be provided for comparison not just to the counter type C but also explicitly <int>, otherwise
+// function template argument deduction may fail (because it can't figure out what to use for <C>).
 
 template <intmax_t N, typename C, typename T>
 bool
@@ -915,7 +903,7 @@ template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
 operator-(C n, Scalar<N, C, T> const &rhs)
 {
-  return Scalar<N, C, T>(rhs) -= n;
+  return Scalar<N, C, T>(n) -= rhs;
 }
 template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
@@ -927,7 +915,7 @@ template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
 operator-(int n, Scalar<N, C, T> const &rhs)
 {
-  return Scalar<N, C, T>(rhs) -= n;
+  return Scalar<N, C, T>(n) -= rhs;
 }
 template <intmax_t N>
 Scalar<N, int>
@@ -939,7 +927,7 @@ template <intmax_t N>
 Scalar<N, int>
 operator-(int n, Scalar<N, int> const &rhs)
 {
-  return Scalar<N, int>(rhs) -= n;
+  return Scalar<N, int>(n) -= rhs;
 }
 template <intmax_t N, typename C, typename T, typename I>
 Scalar<N, C, T>
@@ -969,7 +957,7 @@ template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
 operator-(detail::scalar_round_up_t<N, C, T> lhs, Scalar<N, C, T> const &rhs)
 {
-  return Scalar<N, C, T>(rhs) -= lhs._n;
+  return Scalar<N, C, T>(lhs._n) -= rhs;
 }
 template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
@@ -981,7 +969,7 @@ template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
 operator-(detail::scalar_round_down_t<N, C, T> lhs, Scalar<N, C, T> const &rhs)
 {
-  return Scalar<N, C, T>(rhs) -= lhs._n;
+  return Scalar<N, C, T>(lhs._n) -= rhs;
 }
 template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
@@ -1111,7 +1099,7 @@ template <intmax_t N, typename C, typename T>
 ostream &
 operator<<(ostream &s, ApacheTrafficServer::Scalar<N, C, T> const &x)
 {
-  static ApacheTrafficServer::detail::tag_label_B b;
+  static ApacheTrafficServer::detail::tag_label_B b; // Can't be const or the compiler gets upset.
   s << x.units();
   return ApacheTrafficServer::detail::tag_label<T>(s, b);
 }

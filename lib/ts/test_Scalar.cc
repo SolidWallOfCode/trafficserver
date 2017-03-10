@@ -195,7 +195,7 @@ Test_5()
   TestBox test("TS Scalar: arithmetic operator tests");
 
   typedef ts::Scalar<1024> KBytes;
-  typedef ts::Scalar<1025, long int> KiBytes;
+  typedef ts::Scalar<1024, long int> KiBytes;
   typedef ts::Scalar<1, int64_t> Bytes;
   typedef ts::Scalar<1024 * KBytes::SCALE> MBytes;
 
