@@ -103,9 +103,9 @@ struct Stripe {
 
   /// Piece wise memory storage for the directory.
   struct Chunk {
-    Bytes _start = 0; ///< Starting offset relative to physical device of span.
-    Bytes _skip  = 0; ///< # of bytes not valid at the start of the first block.
-    Bytes _clip  = 0; ///< # of bytes not valid at the end of the last block.
+    Bytes _start; ///< Starting offset relative to physical device of span.
+    Bytes _skip; ///< # of bytes not valid at the start of the first block.
+    Bytes _clip; ///< # of bytes not valid at the end of the last block.
 
     typedef std::vector<MemView> Chain;
     Chain _chain; ///< Chain of blocks.
@@ -278,21 +278,21 @@ Stripe::loadMeta()
 
   // Header A must be at the start of the stripe block.
   // Todo: really need to check pread() for failure.
-  n = pread(fd, stripe_buff, SBSIZE, pos.units());
-  data.setView(stripe_buff, n.units());
+  n.assign(pread(fd, stripe_buff, SBSIZE, pos));
+  data.setView(stripe_buff, n);
   meta = data.template at_ptr<StripeMeta>(0);
   if (this->validateMeta(meta)) {
-    delta              = data.template at_ptr<char>(0) - stripe_buff;
+    delta              = Bytes(data.template at_ptr<char>(0) - stripe_buff);
     _meta[A][HEAD]     = *meta;
     _meta_pos[A][HEAD] = round_down(pos + Bytes(delta));
     pos += SBSIZE;
-    _directory._skip = SBSIZE; // first guess, updated in @c updateLiveData when the header length is computed.
+    _directory._skip = Bytes(SBSIZE); // first guess, updated in @c updateLiveData when the header length is computed.
     // Search for Footer A. Nothing for it except to grub through the disk.
     // The searched data is cached so it's available for directory parsing later if needed.
     while (pos < limit) {
       char *buff = static_cast<char*>(ats_memalign(io_align, N));
       bulk_buff.reset(buff);
-      n = pread(fd, buff, N, pos.units());
+      n.assign(pread(fd, buff, N, pos));
       data.setView(buff, n.units());
       found = this->probeMeta(data, &_meta[A][HEAD]);
       if (found) {
@@ -300,7 +300,7 @@ Stripe::loadMeta()
         _meta_pos[A][FOOT] = round_down(pos + Bytes(diff));
         // don't bother attaching block if the footer is at the start
         if (diff > 0) {
-          _directory._clip   = N - diff;
+          _directory._clip   = Bytes(N - diff);
           _directory.append({bulk_buff.release(), N});
         }
         data += SBSIZE; // skip footer for checking on B copy.
@@ -322,7 +322,7 @@ Stripe::loadMeta()
     // do another read.
     if (data.size() < CacheStoreBlocks::SCALE) {
       pos += N;
-      n = pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos.units());
+      n = Bytes(pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos));
       data.setView(stripe_buff, n.units());
     }
     meta = data.template at_ptr<StripeMeta>(0);
@@ -332,7 +332,7 @@ Stripe::loadMeta()
 
       // Footer B must be at the same relative offset to Header B as Footer A -> Header A.
       pos += delta;
-      n = pread(fd, stripe_buff, ts::CacheStoreBlocks::SCALE, pos.units());
+      n = Bytes(pread(fd, stripe_buff, ts::CacheStoreBlocks::SCALE, pos));
       data.setView(stripe_buff, n.units());
       meta = data.template at_ptr<StripeMeta>(0);
       if (this->validateMeta(meta)) {
@@ -376,7 +376,7 @@ struct VolumeConfig {
   struct Data {
     int _idx        = 0;      ///< Volume index.
     int _percent    = 0;      ///< Size if specified as a percent.
-    Megabytes _size = 0;      ///< Size if specified as an absolute.
+    Megabytes _size {0};      ///< Size if specified as an absolute.
     CacheStripeBlocks _alloc; ///< Allocation size.
 
     // Methods handy for parsing
@@ -450,7 +450,7 @@ struct Cache {
 
   Errata loadSpan(FilePath const &path);
   Errata loadSpanConfig(FilePath const &path);
-  Errata loadSpanDirect(FilePath const &path, int vol_idx = -1, Bytes size = -1);
+  Errata loadSpanDirect(FilePath const &path, int vol_idx = -1, Bytes size = Bytes(-1));
 
   /// Change the @a span to have a single, unused stripe occupying the entire @a span.
   Errata clearSpan(Span *span);
@@ -705,7 +705,7 @@ Cache::dumpSpans(SpanDumpDepth depth)
             Errata r = stripe->loadMeta();
             if (r) {
               std::cout << "      " << stripe->_segments << " segments with " << stripe->_buckets
-                        << " buckets per segment for " << stripe->_buckets * stripe->_segments * 4
+                        << " buckets per segment for " << stripe->_buckets * stripe->_segments * ts::ENTRIES_PER_BUCKET
                         << " total directory entries taking "
                         << stripe->_buckets * stripe->_segments * sizeof(CacheDirEntry) * ts::ENTRIES_PER_BUCKET
                         //                        << " out of " << (delta-header_len).units() << " bytes."
@@ -995,7 +995,7 @@ VolumeConfig::load(FilePath const &path)
             if (text) {
               ts::StringView percent(text.end(), value.end()); // clip parsed number.
               if (!percent) {
-                v._size = round_up(v._size = n);
+                v._size = CacheStripeBlocks(round_up(Megabytes(n)));
                 if (v._size.count() != n) {
                   zret.push(0, 0, "Line ", ln, " size ", n, " was rounded up to ", v._size);
                 }

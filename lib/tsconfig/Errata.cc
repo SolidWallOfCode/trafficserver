@@ -79,7 +79,7 @@ Errata::Errata(self const& that)
   : m_data(that.m_data) {
 }
 
-inline Errata::Errata(self && that)
+Errata::Errata(self && that)
   : m_data(that.m_data) {
 }
 
