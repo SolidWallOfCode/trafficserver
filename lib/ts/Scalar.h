@@ -135,12 +135,12 @@ namespace detail
   // Scalar value, to be rounded up.
   template <intmax_t N, typename C, typename T> struct scalar_round_up_t {
     C _n;
-    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return scale_conversion_round_up<S, N>(_n); }
+    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return Scalar<S,I,T>(scale_conversion_round_up<S, N>(_n)); }
   };
   // Scalar value, to be rounded down.
   template <intmax_t N, typename C, typename T> struct scalar_round_down_t {
     C _n;
-    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return scale_conversion_round_down<S, N>(_n); }
+    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return Scalar<S,I,T>(scale_conversion_round_down<S, N>(_n)); }
   };
 }
 
@@ -213,7 +213,7 @@ public:
 
   constexpr Scalar(); ///< Default contructor.
   ///< Construct to have @a n scaled units.
-  constexpr Scalar(Count n);
+  explicit constexpr Scalar(Count n);
   /// Copy constructor.
   constexpr Scalar(self const &that); /// Copy constructor.
   /// Copy constructor for same scale.
@@ -231,25 +231,37 @@ public:
   template <typename I> constexpr Scalar(detail::scalar_unit_round_down_t<I> v);
 
   /// Assignment operator.
-  /// The value is scaled appropriately.
+  /// The value @a that is scaled appropriately.
   /// @note Requires the scale of @a that be an integer multiple of the scale of @a this. If this isn't the case then
   /// the @c round_up or @c round_down must be used to indicate the rounding direction.
   template <intmax_t S, typename I> self &operator=(Scalar<S, I, T> const &that);
   /// Assignment from same scale.
   self &operator=(self const &that);
-  /// Direct assignment.
-  /// The count is set to @a n.
-  self &operator=(Count n);
   // Conversion assignments.
   template <typename I> self &operator=(detail::scalar_unit_round_up_t<I> n);
   template <typename I> self &operator=(detail::scalar_unit_round_down_t<I> n);
   self &operator                      =(detail::scalar_round_up_t<N, C, T> v);
   self &operator                      =(detail::scalar_round_down_t<N, C, T> v);
 
+  /// Direct assignment.
+  /// The count is set to @a n.
+  self &assign(Count n);
+  /// The value @a that is scaled appropriately.
+  /// @note Requires the scale of @a that be an integer multiple of the scale of @a this. If this isn't the case then
+  /// the @c round_up or @c round_down must be used to indicate the rounding direction.
+  template <intmax_t S, typename I> self &assign(Scalar<S, I, T> const &that);
+  // Conversion assignments.
+  template <typename I> self &assign(detail::scalar_unit_round_up_t<I> n);
+  template <typename I> self &assign(detail::scalar_unit_round_down_t<I> n);
+  self &                      assign(detail::scalar_round_up_t<N, C, T> v);
+  self &                      assign(detail::scalar_round_down_t<N, C, T> v);
+
   /// The number of scale units.
   constexpr Count count() const;
   /// The scaled value.
   constexpr Count units() const;
+  /// User conversion to scaled value.
+  constexpr operator Count() const;
 
   /// Addition operator.
   /// The value is scaled from @a that to @a this.
@@ -354,10 +366,14 @@ Scalar<N, C, T>::units() const -> Count
 {
   return _n * SCALE;
 }
+template <intmax_t N, typename C, typename T> constexpr Scalar<N, C, T>::operator C() const
+{
+  return _n * SCALE;
+}
 
 template <intmax_t N, typename C, typename T>
 inline auto
-Scalar<N, C, T>::operator=(Count n) -> self &
+Scalar<N, C, T>::assign(Count n) -> self &
 {
   _n = n;
   return *this;
@@ -378,7 +394,21 @@ Scalar<N, C, T>::operator=(detail::scalar_round_up_t<N, C, T> v) -> self &
 }
 template <intmax_t N, typename C, typename T>
 inline auto
+Scalar<N, C, T>::assign(detail::scalar_round_up_t<N, C, T> v) -> self &
+{
+  _n = v._n;
+  return *this;
+}
+template <intmax_t N, typename C, typename T>
+inline auto
 Scalar<N, C, T>::operator=(detail::scalar_round_down_t<N, C, T> v) -> self &
+{
+  _n = v._n;
+  return *this;
+}
+template <intmax_t N, typename C, typename T>
+inline auto
+Scalar<N, C, T>::assign(detail::scalar_round_down_t<N, C, T> v) -> self &
 {
   _n = v._n;
   return *this;
@@ -394,7 +424,23 @@ Scalar<N, C, T>::operator=(detail::scalar_unit_round_up_t<I> v) -> self &
 template <intmax_t N, typename C, typename T>
 template <typename I>
 inline auto
+Scalar<N, C, T>::assign(detail::scalar_unit_round_up_t<I> v) -> self &
+{
+  _n = v.template scale<N, C>();
+  return *this;
+}
+template <intmax_t N, typename C, typename T>
+template <typename I>
+inline auto
 Scalar<N, C, T>::operator=(detail::scalar_unit_round_down_t<I> v) -> self &
+{
+  _n = v.template scale<N, C>();
+  return *this;
+}
+template <intmax_t N, typename C, typename T>
+template <typename I>
+inline auto
+Scalar<N, C, T>::assign(detail::scalar_unit_round_down_t<I> v) -> self &
 {
   _n = v.template scale<N, C>();
   return *this;
@@ -409,10 +455,20 @@ Scalar<N, C, T>::operator=(Scalar<S, I, T> const &that) -> self &
   _n = that.count() * R::num;
   return *this;
 }
+template <intmax_t N, typename C, typename T>
+template <intmax_t S, typename I>
+auto
+Scalar<N, C, T>::assign(Scalar<S, I, T> const &that) -> self &
+{
+  typedef std::ratio<S, N> R;
+  static_assert(R::den == 1, "Assignment not permitted - target scale is not an integral multiple of source scale.");
+  _n = that.count() * R::num;
+  return *this;
+}
 
 template <intmax_t N, typename C, typename T>
 constexpr inline intmax_t
-Scalar<N, C, T>::scale() const
+Scalar<N, C, T>::scale()
 {
   return SCALE;
 }
