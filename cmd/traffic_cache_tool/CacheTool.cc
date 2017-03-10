@@ -297,6 +297,7 @@ Stripe::loadMeta()
       found = this->probeMeta(data, &_meta[A][HEAD]);
       if (found) {
         ptrdiff_t diff = data.template at_ptr<char>(0) - buff;
+        _meta[A][FOOT] = data.template at<StripeMeta>(0);
         _meta_pos[A][FOOT] = round_down(pos + Bytes(diff));
         // don't bother attaching block if the footer is at the start
         if (diff > 0) {
