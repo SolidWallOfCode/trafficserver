@@ -135,12 +135,18 @@ namespace detail
   // Scalar value, to be rounded up.
   template <intmax_t N, typename C, typename T> struct scalar_round_up_t {
     C _n;
-    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return Scalar<S,I,T>(scale_conversion_round_up<S, N>(_n)); }
+    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const
+    {
+      return Scalar<S, I, T>(scale_conversion_round_up<S, N>(_n));
+    }
   };
   // Scalar value, to be rounded down.
   template <intmax_t N, typename C, typename T> struct scalar_round_down_t {
     C _n;
-    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const { return Scalar<S,I,T>(scale_conversion_round_down<S, N>(_n)); }
+    template <intmax_t S, typename I> constexpr operator Scalar<S, I, T>() const
+    {
+      return Scalar<S, I, T>(scale_conversion_round_down<S, N>(_n));
+    }
   };
 }
 
@@ -253,8 +259,8 @@ public:
   // Conversion assignments.
   template <typename I> self &assign(detail::scalar_unit_round_up_t<I> n);
   template <typename I> self &assign(detail::scalar_unit_round_down_t<I> n);
-  self &                      assign(detail::scalar_round_up_t<N, C, T> v);
-  self &                      assign(detail::scalar_round_down_t<N, C, T> v);
+  self &assign(detail::scalar_round_up_t<N, C, T> v);
+  self &assign(detail::scalar_round_down_t<N, C, T> v);
 
   /// The number of scale units.
   constexpr Count count() const;
@@ -546,185 +552,185 @@ template <intmax_t N, typename C, typename T>
 bool
 operator<(Scalar<N, C, T> const &lhs, C n)
 {
-  return lhs.count() < n;
+  return lhs.units() < n;
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<(C n, Scalar<N, C, T> const &rhs)
 {
-  return n < rhs.count();
+  return n < rhs.units();
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<(Scalar<N, C, T> const &lhs, int n)
 {
-  return lhs.count() < static_cast<C>(n);
+  return lhs.units() < static_cast<C>(n);
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<(int n, Scalar<N, C, T> const &rhs)
 {
-  return static_cast<C>(n) < rhs.count();
+  return static_cast<C>(n) < rhs.units();
 }
 template <intmax_t N>
 bool
 operator<(Scalar<N, int> const &lhs, int n)
 {
-  return lhs.count() < n;
+  return lhs.units() < n;
 }
 template <intmax_t N>
 bool
 operator<(int n, Scalar<N, int> const &rhs)
 {
-  return n < rhs.count();
+  return n < rhs.units();
 }
 
 template <intmax_t N, typename C, typename T>
 bool
 operator==(Scalar<N, C, T> const &lhs, C n)
 {
-  return lhs.count() == n;
+  return lhs.units() == n;
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator==(C n, Scalar<N, C, T> const &rhs)
 {
-  return n == rhs.count();
+  return n == rhs.units();
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator==(Scalar<N, C, T> const &lhs, int n)
 {
-  return lhs.count() == static_cast<C>(n);
+  return lhs.units() == static_cast<C>(n);
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator==(int n, Scalar<N, C, T> const &rhs)
 {
-  return static_cast<C>(n) == rhs.count();
+  return static_cast<C>(n) == rhs.units();
 }
 template <intmax_t N>
 bool
 operator==(Scalar<N, int> const &lhs, int n)
 {
-  return lhs.count() == n;
+  return lhs.units() == n;
 }
 template <intmax_t N>
 bool
 operator==(int n, Scalar<N, int> const &rhs)
 {
-  return n == rhs.count();
+  return n == rhs.units();
 }
 
 template <intmax_t N, typename C, typename T>
 bool
 operator>(Scalar<N, C, T> const &lhs, C n)
 {
-  return lhs.count() > n;
+  return lhs.units() > n;
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>(C n, Scalar<N, C, T> const &rhs)
 {
-  return n > rhs.count();
+  return n > rhs.units();
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>(Scalar<N, C, T> const &lhs, int n)
 {
-  return lhs.count() > static_cast<C>(n);
+  return lhs.units() > static_cast<C>(n);
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>(int n, Scalar<N, C, T> const &rhs)
 {
-  return static_cast<C>(n) > rhs.count();
+  return static_cast<C>(n) > rhs.units();
 }
 template <intmax_t N>
 bool
 operator>(Scalar<N, int> const &lhs, int n)
 {
-  return lhs.count() > n;
+  return lhs.units() > n;
 }
 template <intmax_t N>
 bool
 operator>(int n, Scalar<N, int> const &rhs)
 {
-  return n > rhs.count();
+  return n > rhs.units();
 }
 
 template <intmax_t N, typename C, typename T>
 bool
 operator<=(Scalar<N, C, T> const &lhs, C n)
 {
-  return lhs.count() <= n;
+  return lhs.units() <= n;
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<=(C n, Scalar<N, C, T> const &rhs)
 {
-  return n <= rhs.count();
+  return n <= rhs.units();
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<=(Scalar<N, C, T> const &lhs, int n)
 {
-  return lhs.count() <= static_cast<C>(n);
+  return lhs.units() <= static_cast<C>(n);
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator<=(int n, Scalar<N, C, T> const &rhs)
 {
-  return static_cast<C>(n) <= rhs.count();
+  return static_cast<C>(n) <= rhs.units();
 }
 template <intmax_t N>
 bool
 operator<=(Scalar<N, int> const &lhs, int n)
 {
-  return lhs.count() <= n;
+  return lhs.units() <= n;
 }
 template <intmax_t N>
 bool
 operator<=(int n, Scalar<N, int> const &rhs)
 {
-  return n <= rhs.count();
+  return n <= rhs.units();
 }
 
 template <intmax_t N, typename C, typename T>
 bool
 operator>=(Scalar<N, C, T> const &lhs, C n)
 {
-  return lhs.count() >= n;
+  return lhs.units() >= n;
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>=(C n, Scalar<N, C, T> const &rhs)
 {
-  return n >= rhs.count();
+  return n >= rhs.units();
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>=(Scalar<N, C, T> const &lhs, int n)
 {
-  return lhs.count() >= static_cast<C>(n);
+  return lhs.units() >= static_cast<C>(n);
 }
 template <intmax_t N, typename C, typename T>
 bool
 operator>=(int n, Scalar<N, C, T> const &rhs)
 {
-  return static_cast<C>(n) >= rhs.count();
+  return static_cast<C>(n) >= rhs.units();
 }
 template <intmax_t N>
 bool
 operator>=(Scalar<N, int> const &lhs, int n)
 {
-  return lhs.count() >= n;
+  return lhs.units() >= n;
 }
 template <intmax_t N>
 bool
 operator>=(int n, Scalar<N, int> const &rhs)
 {
-  return n >= rhs.count();
+  return n >= rhs.units();
 }
 
 // Arithmetic operators
