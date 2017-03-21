@@ -233,12 +233,12 @@ Stripe::updateLiveData(enum Copy c)
   // should only be a few iterations.
   do {
     ++header_len;
-    n_buckets  = (delta - header_len).units() / (sizeof(CacheDirEntry) * ts::ENTRIES_PER_BUCKET);
+    n_buckets  = Bytes(delta - header_len) / (sizeof(CacheDirEntry) * ts::ENTRIES_PER_BUCKET);
     n_segments = n_buckets / ts::MAX_BUCKETS_PER_SEGMENT;
     // This should never be more than one loop, usually none.
     while ((n_buckets / n_segments) > ts::MAX_BUCKETS_PER_SEGMENT)
       ++n_segments;
-  } while (Bytes(sizeof(StripeMeta) + sizeof(uint16_t) * n_segments) > header_len);
+  } while ((sizeof(StripeMeta) + sizeof(uint16_t) * n_segments) > static_cast<size_t>(header_len));
 
   _buckets  = n_buckets / n_segments;
   _segments = n_segments;
@@ -439,7 +439,7 @@ VolumeConfig::convertToAbsolute(ts::CacheStripeBlocks n)
 {
   for (auto &vol : _volumes) {
     if (vol._percent) {
-      vol._alloc = (n * vol._percent + 99) / 100;
+      vol._alloc.assign((n.count() * vol._percent + 99) / 100);
     } else {
       vol._alloc = round_up(vol._size);
     }
@@ -577,11 +577,11 @@ VolumeAllocator::fillEmptySpans()
         // Not sure why this is needed. But a large and empty volume can dominate the shares
         // enough to get more than it actually needs if the other volume are relative small or full.
         // I need to do more math to see if the weighting can be adjusted to not have this happen.
-        n = std::min(n, delta);
+        n = std::min<decltype(n)>(n, delta);
         v._size += n;
         span_used += n;
         total_shares -= v._shares;
-        span->allocStripe(v._config._idx, n);
+        span->allocStripe(v._config._idx, round_up(n));
         std::cout << "           " << n << " to volume " << v._config._idx << std::endl;
       }
     }
@@ -1093,7 +1093,7 @@ Simulate_Span_Allocation(int argc, char *argv[])
         ts::CacheStripeBlocks total = cache.calcTotalSpanConfiguredSize();
         struct V {
           int idx;
-          ts::CacheStripeBlocks alloc; // target allocation
+          ts::CacheStripeBlocks target; // target allocation
           ts::CacheStripeBlocks size;  // actually allocated space
           int64_t deficit;
           int64_t shares;
@@ -1101,39 +1101,35 @@ Simulate_Span_Allocation(int argc, char *argv[])
         std::vector<V> av;
         vols.convertToAbsolute(total);
         for (auto &vol : vols) {
-          ts::CacheStripeBlocks size(0);
-          auto spot = cache._volumes.find(vol._idx);
-          if (spot != cache._volumes.end())
-            size = round_down(spot->second._size);
-          av.push_back({vol._idx, vol._alloc, size, 0, 0});
+          av.push_back({vol._idx, vol._alloc, round_up(0), 0, 0});
         }
         for (auto span : cache._spans) {
-          if (span->_free_space <= 0)
-            continue;
           static const int64_t SCALE = 1000;
           int64_t total_shares       = 0;
+          // Allocate shares.
           for (auto &v : av) {
-            auto delta = v.alloc - v.size;
+            auto delta = v.target - v.size;
             if (delta > 0) {
-              v.deficit = (delta.count() * SCALE) / v.alloc.count();
+              v.deficit = (delta.count() * SCALE) / v.target.count();
               v.shares  = delta.count() * v.deficit;
               total_shares += v.shares;
-              std::cout << "Volume " << v.idx << " allocated " << v.alloc << " has " << v.size << " needs " << (v.alloc - v.size)
+              std::cout << "Volume " << v.idx << " allocated " << v.target << " has " << v.size << " needs " << (v.target - v.size)
                         << " deficit " << v.deficit << std::endl;
             } else {
               v.shares = 0;
             }
           }
           // Now allocate blocks.
-          ts::CacheStripeBlocks span_blocks = round_down(span->_free_space);
-          ts::CacheStripeBlocks span_used(0);
+          ts::CacheStripeBlocks span_blocks{round_down(span->_len)};
+          ts::CacheStripeBlocks span_used{0};
           std::cout << "Allocation from span of " << span_blocks << std::endl;
           // sort by deficit so least relatively full volumes go first.
           std::sort(av.begin(), av.end(), [](V const &lhs, V const &rhs) { return lhs.deficit > rhs.deficit; });
           for (auto &v : av) {
             if (v.shares) {
-              auto n     = (((span_blocks - span_used) * v.shares) + total_shares - 1) / total_shares;
-              auto delta = v.alloc - v.size;
+              CacheStripeBlocks n{(((span_blocks.count() - span_used.count()) * v.shares) + total_shares - 1) / total_shares};
+              CacheStripeBlocks delta = v.target - v.size;
+
               // Not sure why this is needed. But a large and empty volume can dominate the shares
               // enough to get more than it actually needs if the other volume are relative small or full.
               // I need to do more math to see if the weighting can be adjusted to not have this happen.
@@ -1141,7 +1137,7 @@ Simulate_Span_Allocation(int argc, char *argv[])
               v.size += n;
               span_used += n;
               std::cout << "Volume " << v.idx << " allocated " << n << " of " << delta << " needed to total of " << v.size << " of "
-                        << v.alloc << std::endl;
+                        << v.target << std::endl;
               std::cout << "         with " << v.shares << " shares of " << total_shares << " total - "
                         << static_cast<double>((v.shares * SCALE) / total_shares) / 10.0 << "%" << std::endl;
               total_shares -= v.shares;
@@ -1149,6 +1145,7 @@ Simulate_Span_Allocation(int argc, char *argv[])
           }
           std::cout << "Span allocated " << span_used << " of " << span_blocks << std::endl;
         }
+        cache.dumpVolumes();
       }
     }
   }
