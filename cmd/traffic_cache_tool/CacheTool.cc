@@ -51,6 +51,12 @@ using ts::CacheDirEntry;
 
 const Bytes ts::CacheSpan::OFFSET{CacheStoreBlocks{1}};
 
+enum {
+  SILENT = 0,
+  NORMAL,
+  VERBOSE
+} Verbosity = NORMAL;
+
 namespace
 {
 FilePath SpanFile;
@@ -367,7 +373,26 @@ struct Volume {
   int _idx;               ///< Volume index.
   CacheStoreBlocks _size; ///< Amount of storage allocated.
   std::vector<Stripe *> _stripes;
+
+  /// Remove all data related to @a span.
+  void clearSpan(Span* span);
+  /// Remove all allocated space and stripes.
+  void clear();
 };
+
+void
+Volume::clearSpan(Span* span)
+{
+  auto spot = std::remove_if(_stripes.begin(), _stripes.end(), [span,this](Stripe* stripe) { return stripe->_span == span ? ( this->_size -= stripe->_len , true ) : false; });
+  _stripes.erase(spot, _stripes.end());
+}
+
+void
+Volume::clear()
+{
+  _size.assign(0);
+  _stripes.clear();
+}
 /* --------------------------------------------------------------------------------------- */
 /// Data parsed from the volume config file.
 struct VolumeConfig {
@@ -453,8 +478,12 @@ struct Cache {
   Errata loadSpanConfig(FilePath const &path);
   Errata loadSpanDirect(FilePath const &path, int vol_idx = -1, Bytes size = Bytes(-1));
 
+  Errata allocStripe(Span* span, int vol_idx, CacheStripeBlocks len);
+
   /// Change the @a span to have a single, unused stripe occupying the entire @a span.
-  Errata clearSpan(Span *span);
+  void clearSpan(Span *span);
+  /// Clear all allocated space.
+  void clearAllocation();
 
   enum class SpanDumpDepth { SPAN, STRIPE, DIRECTORY };
   void dumpSpans(SpanDumpDepth depth);
@@ -466,6 +495,30 @@ struct Cache {
   std::list<Span *> _spans;
   std::map<int, Volume> _volumes;
 };
+
+Errata
+Cache::allocStripe(Span* span, int vol_idx, CacheStripeBlocks len)
+{
+  auto rv = span->allocStripe(vol_idx, len);
+  if (rv.isOK()) {
+    _volumes[vol_idx]._stripes.push_back(rv);
+  }
+  return rv.errata();
+}
+
+void
+Cache::clearSpan(Span* span)
+{
+  for ( auto& item : _volumes ) item.second.clearSpan(span);
+  span->clear();
+}
+
+void
+Cache::clearAllocation()
+{
+  for ( auto span : _spans) span->clear();
+  for ( auto& item : _volumes ) item.second.clear();
+}
 /* --------------------------------------------------------------------------------------- */
 /// Temporary structure used for doing allocation computations.
 class VolumeAllocator
@@ -474,8 +527,8 @@ class VolumeAllocator
   struct V {
     VolumeConfig::Data const &_config; ///< Configuration instance.
     CacheStripeBlocks _size;           ///< Current actual size.
-    int64_t _deficit;
-    int64_t _shares;
+    int64_t _deficit; ///< fractional deficit
+    int64_t _shares; ///< relative amount of free space to allocate
 
     V(VolumeConfig::Data const &config, CacheStripeBlocks size, int64_t deficit = 0, int64_t shares = 0)
       : _config(config), _size(size), _deficit(deficit), _shares(shares)
@@ -494,12 +547,21 @@ class VolumeAllocator
 
   Cache _cache;       ///< Current state.
   VolumeConfig _vols; ///< Configuration state.
+  bool _dry_run = true; ///< Don't update.
 
 public:
   VolumeAllocator();
 
   Errata load(FilePath const &spanFile, FilePath const &volumeFile);
   Errata fillEmptySpans();
+  Errata fillAllSpans();
+
+  void dumpVolumes();
+
+protected:
+
+  /// Update the allocation for a span.
+  Errata allocateFor(Span& span);
 };
 
 VolumeAllocator::VolumeAllocator()
@@ -536,63 +598,98 @@ VolumeAllocator::load(FilePath const &spanFile, FilePath const &volumeFile)
   return zret;
 }
 
+void
+VolumeAllocator::dumpVolumes()
+{
+  _cache.dumpVolumes();
+}
+
 Errata
 VolumeAllocator::fillEmptySpans()
+{
+  Errata zret;
+  // Walk the spans, skipping ones that are not empty.
+  for (auto span : _cache._spans) {
+    if (span->isEmpty())
+      this->allocateFor(*span);
+  }
+  return zret;
+}
+
+Errata
+VolumeAllocator::fillAllSpans()
+{
+  Errata zret;
+  // clear all current volume allocations.
+  for (auto &v : _av) {
+    v._size.assign(0);
+  }
+  // Allocate for each span, clearing as it goes.
+  _cache.clearAllocation();
+  for (auto span : _cache._spans) {
+    this->allocateFor(*span);
+  }
+  return zret;
+}
+
+Errata
+VolumeAllocator::allocateFor(Span& span)
 {
   Errata zret;
 
   /// Scaling factor for shares, effectively the accuracy.
   static const int64_t SCALE = 1000;
+  int64_t total_shares = 0;
 
-  // Walk the spans, skipping ones that are not empty.
-  for (auto span : _cache._spans) {
-    int64_t total_shares = 0;
+  if (Verbosity >= NORMAL)
+    std::cout << "Allocating " << CacheStripeBlocks(round_down(span._len)).count() << " stripe blocks from span " << span._path << std::endl;
 
-    if (!span->isEmpty())
-      continue;
-
-    std::cout << "Allocating " << CacheStripeBlocks(round_down(span->_len)) << " from span " << span->_path << std::endl;
-
-    // Walk the volumes and get the relative allocations.
-    for (auto &v : _av) {
-      auto delta = v._config._alloc - v._size;
-      if (delta > 0) {
-        v._deficit = (delta.count() * SCALE) / v._config._alloc.count();
-        v._shares  = delta.count() * v._deficit;
-        total_shares += v._shares;
-      } else {
-        v._shares = 0;
-      }
+  // Walk the volumes and get the relative allocations.
+  for (auto &v : _av) {
+    auto delta = v._config._alloc - v._size;
+    if (delta > 0) {
+      v._deficit = (delta.count() * SCALE) / v._config._alloc.count();
+      v._shares  = delta.count() * v._deficit;
+      total_shares += v._shares;
+    } else {
+      v._shares = 0;
     }
-    // Now allocate blocks.
-    ts::CacheStripeBlocks span_blocks = round_up(span->_free_space);
-    ts::CacheStripeBlocks span_used(0);
+  }
+  // Now allocate blocks.
+  CacheStripeBlocks span_blocks{round_down(span._free_space)};
+  CacheStripeBlocks span_used{0};
 
-    // sort by deficit so least relatively full volumes go first.
-    std::sort(_av.begin(), _av.end(), [](V const &lhs, V const &rhs) { return lhs._deficit > rhs._deficit; });
-    for (auto &v : _av) {
-      if (v._shares) {
-        auto n     = (((span_blocks - span_used) * v._shares) + total_shares - 1) / total_shares;
-        auto delta = v._config._alloc - v._size;
-        // Not sure why this is needed. But a large and empty volume can dominate the shares
-        // enough to get more than it actually needs if the other volume are relative small or full.
-        // I need to do more math to see if the weighting can be adjusted to not have this happen.
-        n = std::min<decltype(n)>(n, delta);
-        v._size += n;
-        span_used += n;
-        total_shares -= v._shares;
-        span->allocStripe(v._config._idx, round_up(n));
-        std::cout << "           " << n << " to volume " << v._config._idx << std::endl;
-      }
+  // sort by deficit so least relatively full volumes go first.
+  std::sort(_av.begin(), _av.end(), [](V const &lhs, V const &rhs) { return lhs._deficit > rhs._deficit; });
+  for (auto &v : _av) {
+    if (v._shares) {
+      CacheStripeBlocks n{(((span_blocks - span_used).count() * v._shares) + total_shares - 1) / total_shares};
+      CacheStripeBlocks delta{v._config._alloc - v._size};
+      // Not sure why this is needed. But a large and empty volume can dominate the shares
+      // enough to get more than it actually needs if the other volume are relative small or full.
+      // I need to do more math to see if the weighting can be adjusted to not have this happen.
+      n = std::min(n, delta);
+      v._size += n;
+      span_used += n;
+      total_shares -= v._shares;
+      Errata z = _cache.allocStripe(&span, v._config._idx, round_up(n));
+      if (Verbosity >= NORMAL) std::cout << "           " << n << " to volume " << v._config._idx << std::endl;
+      if (!z) std::cout << z;
     }
-    std::cout << "     Total " << span_used << std::endl;
-    std::cout << " Updating Header ... ";
-    zret = span->updateHeader();
+  }
+  if (Verbosity >= NORMAL) std::cout << "     Total " << span_used << std::endl;
+  if (!_dry_run) {
+    if (Verbosity >= NORMAL) std::cout << " Updating Header ... ";
+    zret = span.updateHeader();
+  }
+  _cache.dumpVolumes(); // debug
+  if (Verbosity >= NORMAL) {
     if (zret)
       std::cout << " Done" << std::endl;
     else
       std::cout << " Error" << std::endl << zret;
   }
+
   return zret;
 }
 /* --------------------------------------------------------------------------------------- */
@@ -1077,8 +1174,7 @@ Errata
 Simulate_Span_Allocation(int argc, char *argv[])
 {
   Errata zret;
-  VolumeConfig vols;
-  Cache cache;
+  VolumeAllocator va;
 
   if (!VolumeFile)
     zret.push(0, 9, "Volume config file not set");
@@ -1086,67 +1182,9 @@ Simulate_Span_Allocation(int argc, char *argv[])
     zret.push(0, 9, "Span file not set");
 
   if (zret) {
-    zret = vols.load(VolumeFile);
-    if (zret) {
-      zret = cache.loadSpan(SpanFile);
-      if (zret) {
-        ts::CacheStripeBlocks total = cache.calcTotalSpanConfiguredSize();
-        struct V {
-          int idx;
-          ts::CacheStripeBlocks target; // target allocation
-          ts::CacheStripeBlocks size;  // actually allocated space
-          int64_t deficit;
-          int64_t shares;
-        };
-        std::vector<V> av;
-        vols.convertToAbsolute(total);
-        for (auto &vol : vols) {
-          av.push_back({vol._idx, vol._alloc, round_up(0), 0, 0});
-        }
-        for (auto span : cache._spans) {
-          static const int64_t SCALE = 1000;
-          int64_t total_shares       = 0;
-          // Allocate shares.
-          for (auto &v : av) {
-            auto delta = v.target - v.size;
-            if (delta > 0) {
-              v.deficit = (delta.count() * SCALE) / v.target.count();
-              v.shares  = delta.count() * v.deficit;
-              total_shares += v.shares;
-              std::cout << "Volume " << v.idx << " allocated " << v.target << " has " << v.size << " needs " << (v.target - v.size)
-                        << " deficit " << v.deficit << std::endl;
-            } else {
-              v.shares = 0;
-            }
-          }
-          // Now allocate blocks.
-          ts::CacheStripeBlocks span_blocks{round_down(span->_len)};
-          ts::CacheStripeBlocks span_used{0};
-          std::cout << "Allocation from span of " << span_blocks << std::endl;
-          // sort by deficit so least relatively full volumes go first.
-          std::sort(av.begin(), av.end(), [](V const &lhs, V const &rhs) { return lhs.deficit > rhs.deficit; });
-          for (auto &v : av) {
-            if (v.shares) {
-              CacheStripeBlocks n{(((span_blocks.count() - span_used.count()) * v.shares) + total_shares - 1) / total_shares};
-              CacheStripeBlocks delta = v.target - v.size;
-
-              // Not sure why this is needed. But a large and empty volume can dominate the shares
-              // enough to get more than it actually needs if the other volume are relative small or full.
-              // I need to do more math to see if the weighting can be adjusted to not have this happen.
-              n = std::min(n, delta);
-              v.size += n;
-              span_used += n;
-              std::cout << "Volume " << v.idx << " allocated " << n << " of " << delta << " needed to total of " << v.size << " of "
-                        << v.target << std::endl;
-              std::cout << "         with " << v.shares << " shares of " << total_shares << " total - "
-                        << static_cast<double>((v.shares * SCALE) / total_shares) / 10.0 << "%" << std::endl;
-              total_shares -= v.shares;
-            }
-          }
-          std::cout << "Span allocated " << span_used << " of " << span_blocks << std::endl;
-        }
-        cache.dumpVolumes();
-      }
+    if ((zret = va.load(SpanFile, VolumeFile)).isOK()) {
+      zret = va.fillAllSpans();
+      va.dumpVolumes();
     }
   }
   return zret;
