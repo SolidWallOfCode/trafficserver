@@ -385,18 +385,40 @@ static ClassAllocator<MIMEFieldSDKHandle> mHandleAllocator("MIMEFieldSDKHandle")
 //
 ////////////////////////////////////////////////////////////////////
 void
+LogAPIError(const char *fmt, va_list args)
+{
+  if (is_action_tag_set("deft") || is_action_tag_set("sdk_vbos_errors")) {
+    ErrorV(fmt, args);
+  }
+  Log::va_error(fmt, args);
+}
+
+void
 TSError(const char *fmt, ...)
 {
   va_list args;
-
-  if (is_action_tag_set("deft") || is_action_tag_set("sdk_vbos_errors")) {
-    va_start(args, fmt);
-    ErrorV(fmt, args);
-    va_end(args);
-  }
-
   va_start(args, fmt);
-  Log::va_error((char *)fmt, args);
+  LogAPIError(fmt, args);
+  va_end(args);
+}
+
+void
+TSFatal(const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  LogAPIError(fmt, args);
+  ink_fatal_va(fmt, args);
+  va_end(args);
+}
+
+void
+TSEmergency(const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  LogAPIError(fmt, args);
+  ink_emergency_va(fmt, args);
   va_end(args);
 }
 

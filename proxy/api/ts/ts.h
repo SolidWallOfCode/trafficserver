@@ -262,6 +262,11 @@ tsapi char *TSfgets(TSFile filep, char *buf, size_t length);
 */
 tsapi void TSError(const char *fmt, ...) TS_PRINTFLIKE(1, 2);
 
+/* The same as TSError and additionally the traffic_server process will terminate. */
+tsapi void TSFatal(const char *fmt, ...) TS_PRINTFLIKE(1, 2);
+/* The same as TSFatal and additional the traffic_server process will not be restarted by traffic_manager. */
+tsapi void TSEmergency(const char *fmt, ...) TS_PRINTFLIKE(1, 2);
+
 /* --------------------------------------------------------------------------
    Assertions */
 tsapi void _TSReleaseAssert(const char *txt, const char *f, int l) TS_NORETURN;
