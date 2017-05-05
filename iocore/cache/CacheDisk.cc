@@ -221,6 +221,7 @@ CacheDisk::openDone(int /* event ATS_UNUSED */, void * /* data ATS_UNUSED */)
 int
 CacheDisk::sync()
 {
+  Debug("cache_sync", "span %s offset %" PRId64 "========>>>>>>>>", path, skip);
   io.aiocb.aio_offset = skip;
   io.aiocb.aio_buf    = header;
   io.aiocb.aio_nbytes = header_len;

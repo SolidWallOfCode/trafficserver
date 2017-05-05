@@ -37,6 +37,9 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheFragType type, co
   ink_assert(caches[type] == this);
 
   Vol *vol = key_to_vol(key, hostname, host_len);
+  char hashStr[33];
+  Debug("cache", "Url: hostname %.*s assigned vol hashID %s : ID %s", host_len, hostname,
+        ink_code_to_hex_str(hashStr, (unsigned char *)&vol->hash_id), vol->hash_text.get());
   Dir result, *last_collision = nullptr;
   ProxyMutex *mutex = cont->mutex.get();
   OpenDirEntry *od  = nullptr;
@@ -103,6 +106,9 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request,
   ink_assert(caches[type] == this);
 
   Vol *vol = key_to_vol(key, hostname, host_len);
+  char hashStr[33];
+  Debug("cache", "Url: hostname %.*s assigned vol hashID %s : ID %s", host_len, hostname,
+        ink_code_to_hex_str(hashStr, (unsigned char *)&vol->hash_id), vol->hash_text.get());
   Dir result, *last_collision = nullptr;
   ProxyMutex *mutex = cont->mutex.get();
   OpenDirEntry *od  = nullptr;

@@ -1209,7 +1209,7 @@ int Vol::dir_check(bool /* fix ATS_UNUSED */) // TODO: we should eliminate this 
 
   ink_zero(frag_demographics);
 
-  printf("Stripe '[%s]'\n", hash_text.get());
+  printf("  Stripe '[%s]'\n", hash_text.get());
   printf("  Directory Bytes: %" PRIu64 "\n", total_buckets * SIZEOF_DIR);
   printf("  Segments:  %d\n", segments);
   printf("  Buckets per segment:   %" PRIu64 "\n", buckets);
