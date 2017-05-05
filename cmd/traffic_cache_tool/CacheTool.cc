@@ -380,12 +380,14 @@ struct Volume {
   void clear();
 };
 
+# if 0
 void
 Volume::clearSpan(Span* span)
 {
   auto spot = std::remove_if(_stripes.begin(), _stripes.end(), [span,this](Stripe* stripe) { return stripe->_span == span ? ( this->_size -= stripe->_len , true ) : false; });
   _stripes.erase(spot, _stripes.end());
 }
+# endif
 
 void
 Volume::clear()
@@ -447,6 +449,7 @@ struct VolumeConfig {
   void convertToAbsolute(ts::CacheStripeBlocks total_span_size);
 };
 
+# if 0
 Errata
 VolumeConfig::validatePercentAllocation()
 {
@@ -458,6 +461,7 @@ VolumeConfig::validatePercentAllocation()
     zret.push(0, 10, "Volume percent allocation ", n, " is more than 100%");
   return zret;
 }
+# endif
 
 void
 VolumeConfig::convertToAbsolute(ts::CacheStripeBlocks n)
@@ -481,7 +485,7 @@ struct Cache {
   Errata allocStripe(Span* span, int vol_idx, CacheStripeBlocks len);
 
   /// Change the @a span to have a single, unused stripe occupying the entire @a span.
-  void clearSpan(Span *span);
+//  void clearSpan(Span *span);
   /// Clear all allocated space.
   void clearAllocation();
 
@@ -489,7 +493,7 @@ struct Cache {
   void dumpSpans(SpanDumpDepth depth);
   void dumpVolumes();
 
-  ts::CacheStripeBlocks calcTotalSpanPhysicalSize();
+//  ts::CacheStripeBlocks calcTotalSpanPhysicalSize();
   ts::CacheStripeBlocks calcTotalSpanConfiguredSize();
 
   std::list<Span *> _spans;
@@ -506,12 +510,14 @@ Cache::allocStripe(Span* span, int vol_idx, CacheStripeBlocks len)
   return rv.errata();
 }
 
+# if 0
 void
 Cache::clearSpan(Span* span)
 {
   for ( auto& item : _volumes ) item.second.clearSpan(span);
   span->clear();
 }
+# endif
 
 void
 Cache::clearAllocation()
@@ -843,6 +849,7 @@ Cache::calcTotalSpanConfiguredSize()
   return zret;
 }
 
+# if 0
 ts::CacheStripeBlocks
 Cache::calcTotalSpanPhysicalSize()
 {
@@ -854,6 +861,7 @@ Cache::calcTotalSpanPhysicalSize()
   }
   return zret;
 }
+# endif
 
 Cache::~Cache()
 {
