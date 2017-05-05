@@ -556,6 +556,7 @@ operator>=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
   return rhs <= lhs;
 }
 
+# if 0
 // Do the integer compares.
 // A bit ugly to handle the issue that integers without explicit type are <int>. Therefore suppport
 // must be provided for comparison not just to the counter type C but also explicitly <int>, otherwise
@@ -745,7 +746,7 @@ operator>=(int n, Scalar<N, int> const &rhs)
 {
   return n >= rhs.value();
 }
-
+# endif
 // Arithmetic operators
 template <intmax_t N, typename C, typename T>
 auto
@@ -1066,6 +1067,7 @@ Scalar<N, C, T>::operator/=(C n) -> self &
   return *this;
 }
 
+# if 0
 template <intmax_t N, typename C, typename T>
 Scalar<N, C, T>
 operator/(Scalar<N, C, T> const &lhs, C n)
@@ -1086,6 +1088,7 @@ operator/(Scalar<N, int> const &lhs, int n)
 {
   return Scalar<N, int>(lhs) /= n;
 }
+# endif
 
 template <intmax_t N, typename C, typename T>
 auto

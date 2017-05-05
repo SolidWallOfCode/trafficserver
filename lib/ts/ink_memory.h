@@ -278,6 +278,8 @@ public:
   ats_scoped_resource() : _r(Traits::initValue()) {}
   /// Construct with contained resource.
   explicit ats_scoped_resource(value_type rt) : _r(rt) {}
+  /// rvalue constructor
+  ats_scoped_resource(self &&that) : _r(that.release()) {}
   /// Destructor.
   ~ats_scoped_resource()
   {
@@ -394,6 +396,8 @@ public:
   ats_scoped_fd() : super() {}
   /// Construct with contained resource.
   explicit ats_scoped_fd(value_type rt) : super(rt) {}
+  /// rvalue / move constructor
+  ats_scoped_fd(self &&that) : super(static_cast<super &&>(that)) {}
   /** Place a new resource @a rt in the container.
       Any resource currently contained is destroyed.
       This object becomes the owner of @a rt.
@@ -485,7 +489,9 @@ public:
     else
       _r = strdup(s.data());
   }
-  /// Assign a string @a s to this container.
+  /// rvalue constructor
+  ats_scoped_str(self &&that) : super(static_cast<super &&>(that)) {}
+  /// Assign a string @a s to this container.`
   self &
   operator=(char *s)
   {
@@ -564,7 +570,7 @@ public:
      @return A newly @x ats_malloc string of the combined paths.
 */
 inline char *
-path_join(ats_scoped_str const &lhs, ats_scoped_str const &rhs)
+path_join(char const *lhs, char const *rhs)
 {
   size_t ln        = strlen(lhs);
   size_t rn        = strlen(rhs);
@@ -584,6 +590,7 @@ path_join(ats_scoped_str const &lhs, ats_scoped_str const &rhs)
 
   return x.release();
 }
+
 #endif /* __cplusplus */
 
 #endif
