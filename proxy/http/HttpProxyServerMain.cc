@@ -176,7 +176,7 @@ MakeHttpProxyAcceptor(HttpProxyAcceptor &acceptor, HttpProxyPort &port, unsigned
 
   ProtocolProbeSessionAccept *probe = new ProtocolProbeSessionAccept();
   HttpSessionAccept *http           = nullptr; // don't allocate this unless it will be used.
-  probe->port=&port;
+  probe->port                       = &port;
 
   if (port.m_session_protocol_preference.intersects(HTTP_PROTOCOL_SET)) {
     http = new HttpSessionAccept(accept_opt);
@@ -215,7 +215,7 @@ MakeHttpProxyAcceptor(HttpProxyAcceptor &acceptor, HttpProxyPort &port, unsigned
 
     SCOPED_MUTEX_LOCK(lock, ssl_plugin_mutex, this_ethread());
     ssl_plugin_acceptors.push(ssl);
-    ssl->port=&port;
+    ssl->port        = &port;
     acceptor._accept = ssl;
   } else {
     acceptor._accept = probe;

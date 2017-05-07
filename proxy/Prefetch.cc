@@ -1925,11 +1925,11 @@ PrefetchConfiguration::readConfiguration()
     html_attrs_table = &prefetch_allowable_html_attrs[0];
   }
 
-  ink_release_assert(0==close(fd));
+  ink_release_assert(0 == close(fd));
   return 0;
 Lerror:
   if (fd >= 0)
-    ink_release_assert(0==close(fd));
+    ink_release_assert(0 == close(fd));
   prefetch_enabled = 0;
   return -1;
 }

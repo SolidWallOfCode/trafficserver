@@ -49,7 +49,7 @@ create_npn_advertisement(const SSLNextProtocolSet::NextProtocolEndpoint::list_ty
   unsigned char *advertised;
 
   ats_free_null(*npn);
-  *npn=nullptr;
+  *npn = nullptr;
   *len = 0;
 
   for (ep = endpoints.head; ep != nullptr; ep = endpoints.next(ep)) {
@@ -63,7 +63,7 @@ create_npn_advertisement(const SSLNextProtocolSet::NextProtocolEndpoint::list_ty
   }
 
   for (ep = endpoints.head; ep != nullptr; ep = endpoints.next(ep)) {
-    Debug("ssl", "advertising protocol %s, %p", ep->protocol,ep->endpoint);
+    Debug("ssl", "advertising protocol %s, %p", ep->protocol, ep->endpoint);
     advertised = append_protocol(ep->protocol, advertised);
   }
 
@@ -76,17 +76,17 @@ fail:
   return false;
 }
 
-//copies th eprotocols but not the endpoints
+// copies th eprotocols but not the endpoints
 
-SSLNextProtocolSet*
+SSLNextProtocolSet *
 SSLNextProtocolSet::clone() const
 {
-    const SSLNextProtocolSet::NextProtocolEndpoint *ep;
-    SSLNextProtocolSet* newProtoSet= new SSLNextProtocolSet();
-    for(ep=this->endpoints.head;ep!=nullptr;ep=this->endpoints.next(ep)){
-        newProtoSet->registerEndpoint(ep->protocol,ep->endpoint);
-    }
-    return newProtoSet;
+  const SSLNextProtocolSet::NextProtocolEndpoint *ep;
+  SSLNextProtocolSet *newProtoSet = new SSLNextProtocolSet();
+  for (ep = this->endpoints.head; ep != nullptr; ep = this->endpoints.next(ep)) {
+    newProtoSet->registerEndpoint(ep->protocol, ep->endpoint);
+  }
+  return newProtoSet;
 }
 
 bool

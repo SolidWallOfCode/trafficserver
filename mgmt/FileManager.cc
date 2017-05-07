@@ -520,7 +520,7 @@ FileManager::readFile(const char *filePath, textBuffer *contents)
   while ((readResult = contents->readFromFD(diskFD)) > 0) {
     ;
   }
-  ink_release_assert(0==close(diskFD));
+  ink_release_assert(0 == close(diskFD));
 
   if (readResult < 0) {
     mgmt_log("[FileManager::readFile] Read of snapshot file failed %s: %s\n", filePath, strerror(errno));
@@ -576,7 +576,7 @@ FileManager::copyFile(Rollback *rb, const char *snapPath)
 
   delete[] filePath;
   delete copyBuf;
-  ink_release_assert(0==close(diskFD));
+  ink_release_assert(0 == close(diskFD));
   return result;
 }
 

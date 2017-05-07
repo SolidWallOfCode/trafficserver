@@ -1506,13 +1506,13 @@ IOBufferChain::operator+=(self const &that)
 inline IOBufferBlock const *
 IOBufferChain::head() const
 {
-  return _blocks;
+  return _blocks.get();
 }
 
 inline IOBufferBlock *
 IOBufferChain::head()
 {
-  return _blocks;
+  return _blocks.get();
 }
 
 inline void

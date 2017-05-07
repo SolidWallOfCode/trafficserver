@@ -1351,7 +1351,7 @@ SSLNetVConnection::sslClientHandShakeEvent(int &err)
 }
 
 void
-SSLNetVConnection::registerNextProtocolSet( SSLNextProtocolSet *s)
+SSLNetVConnection::registerNextProtocolSet(SSLNextProtocolSet *s)
 {
   ink_release_assert(this->npnSet == nullptr);
   this->npnSet = s;

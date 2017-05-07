@@ -109,8 +109,8 @@ crash_logger_init()
   case 0:
     // Dupe the child socket to stdin.
     dup2(pipe[1], STDIN_FILENO);
-    ink_release_assert(0==close(pipe[0]));
-    ink_release_assert(0==close(pipe[1]));
+    ink_release_assert(0 == close(pipe[0]));
+    ink_release_assert(0 == close(pipe[1]));
 
     // Starting after stderr, keep closing file descriptors until we run out.
     for (int fd = STDERR_FILENO + 1; fd; ++fd) {
@@ -123,7 +123,7 @@ crash_logger_init()
     return; // not reached.
   }
 
-  ink_release_assert(0==close(pipe[1]));
+  ink_release_assert(0 == close(pipe[1]));
   crash_logger_pid = child;
   crash_logger_fd  = pipe[0];
 
@@ -133,7 +133,7 @@ crash_logger_init()
 
     if (WIFEXITED(status)) {
       Warning("crash logger '%s' unexpectedly exited with status %d", (const char *)logger, WEXITSTATUS(status));
-      ink_release_assert(0==close(crash_logger_pid));
+      ink_release_assert(0 == close(crash_logger_pid));
       crash_logger_pid = -1;
       crash_logger_fd  = NO_FD;
     }

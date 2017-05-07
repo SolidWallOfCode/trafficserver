@@ -169,16 +169,16 @@ SSLNextProtocolAccept::SSLNextProtocolAccept(Continuation *ep, bool transparent_
   SET_HANDLER(&SSLNextProtocolAccept::mainEvent);
 }
 
-SSLNextProtocolSet*
+SSLNextProtocolSet *
 SSLNextProtocolAccept::getProtoSet()
 {
-    return &this->protoset;
+  return &this->protoset;
 }
 
-SSLNextProtocolSet*
+SSLNextProtocolSet *
 SSLNextProtocolAccept::cloneProtoSet()
 {
-    return this->protoset.clone();
+  return this->protoset.clone();
 }
 
 SSLNextProtocolAccept::~SSLNextProtocolAccept()

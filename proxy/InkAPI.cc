@@ -9188,57 +9188,64 @@ TSSslContextDestroy(TSSslContext ctx)
   SSLReleaseContext(reinterpret_cast<SSL_CTX *>(ctx));
 }
 
-void TSRegisterProtocolSet(TSVConn sslp, TSNextProtocolSet ps)
+void
+TSRegisterProtocolSet(TSVConn sslp, TSNextProtocolSet ps)
 {
   NetVConnection *vc        = reinterpret_cast<NetVConnection *>(sslp);
   SSLNetVConnection *ssl_vc = dynamic_cast<SSLNetVConnection *>(vc);
-  if(ssl_vc){
+  if (ssl_vc) {
     ssl_vc->clearnpnSet();
-    ssl_vc->registerNextProtocolSet(reinterpret_cast<SSLNextProtocolSet*>(ps));
+    ssl_vc->registerNextProtocolSet(reinterpret_cast<SSLNextProtocolSet *>(ps));
   }
 }
 
-TSNextProtocolSet TSUnregisterProtocol(TSNextProtocolSet protoset, const char* protocol)
+TSNextProtocolSet
+TSUnregisterProtocol(TSNextProtocolSet protoset, const char *protocol)
 {
-    SSLNextProtocolSet* snps = reinterpret_cast<SSLNextProtocolSet*> (protoset);
-    if(snps){
-        snps->unregisterEndpoint(protocol,nullptr);
-        return reinterpret_cast<TSNextProtocolSet>(snps);
-    }
-    return nullptr;
+  SSLNextProtocolSet *snps = reinterpret_cast<SSLNextProtocolSet *>(protoset);
+  if (snps) {
+    snps->unregisterEndpoint(protocol, nullptr);
+    return reinterpret_cast<TSNextProtocolSet>(snps);
+  }
+  return nullptr;
 }
 
-TSAcceptor TSAcceptorGet(TSVConn sslp)
+TSAcceptor
+TSAcceptorGet(TSVConn sslp)
 {
   NetVConnection *vc        = reinterpret_cast<NetVConnection *>(sslp);
   SSLNetVConnection *ssl_vc = dynamic_cast<SSLNetVConnection *>(vc);
-  return ssl_vc?reinterpret_cast<TSAcceptor>(ssl_vc->accept_object):nullptr;
+  return ssl_vc ? reinterpret_cast<TSAcceptor>(ssl_vc->accept_object) : nullptr;
 }
 
-extern std::vector<NetAccept*> naVec;
-TSAcceptor TSAcceptorGetbyID(int ID)
+extern std::vector<NetAccept *> naVec;
+TSAcceptor
+TSAcceptorGetbyID(int ID)
 {
-    Debug("ssl","getNetAccept in INK API.cc %p",naVec.at(ID));
-    return reinterpret_cast<TSAcceptor>(naVec.at(ID));
+  Debug("ssl", "getNetAccept in INK API.cc %p", naVec.at(ID));
+  return reinterpret_cast<TSAcceptor>(naVec.at(ID));
 }
 
-int TSAcceptorIDGet(TSAcceptor acceptor)
+int
+TSAcceptorIDGet(TSAcceptor acceptor)
 {
-    NetAccept* na = reinterpret_cast<NetAccept*> (acceptor);
-    return na?na->id:-1;
+  NetAccept *na = reinterpret_cast<NetAccept *>(acceptor);
+  return na ? na->id : -1;
 }
 
-int TSAcceptorCount()
+int
+TSAcceptorCount()
 {
-     return naVec.size();
+  return naVec.size();
 }
 
-//clones the protoset associated with netAccept
-TSNextProtocolSet TSGetcloneProtoSet(TSAcceptor tna)
+// clones the protoset associated with netAccept
+TSNextProtocolSet
+TSGetcloneProtoSet(TSAcceptor tna)
 {
-    NetAccept* na = reinterpret_cast<NetAccept*>(tna);
-    //clone protoset
-    return (na && na->snpa)? reinterpret_cast<TSNextProtocolSet>(na->snpa->cloneProtoSet()):nullptr;
+  NetAccept *na = reinterpret_cast<NetAccept *>(tna);
+  // clone protoset
+  return (na && na->snpa) ? reinterpret_cast<TSNextProtocolSet>(na->snpa->cloneProtoSet()) : nullptr;
 }
 
 tsapi int

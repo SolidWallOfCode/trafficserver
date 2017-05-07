@@ -309,6 +309,6 @@ plugin_init(bool validateOnly)
     }
   }
 
-  ink_release_assert(0==close(fd));
+  ink_release_assert(0 == close(fd));
   return retVal;
 }

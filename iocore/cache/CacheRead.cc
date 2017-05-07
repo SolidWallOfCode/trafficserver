@@ -99,7 +99,7 @@ Cache::open_read(Continuation *cont, CacheVConnection *vc, HTTPHdr *client_reque
   CacheVC *write_vc = dynamic_cast<CacheVC *>(vc);
   if (write_vc) {
     Vol *vol          = write_vc->vol;
-    ProxyMutex *mutex = cont->mutex; // needed for stat macros
+    ProxyMutex *mutex = cont->mutex.get(); // needed for stat macros
     CacheVC *c        = new_CacheVC(cont);
 
     c->vol       = write_vc->vol;
@@ -209,10 +209,10 @@ CacheVC::load_http_info(CacheHTTPInfoVector *info, Doc *doc, RefCountObj *block_
       cache_config_compatibility_4_2_0_fixup && // manual override not engaged
       !this->f.doc_from_ram_cache &&            // it's already been done for ram cache fragments
       vol->header->version.ink_major == 23 && vol->header->version.ink_minor == 0) {
-    for (int i = info->xcount - 1; i >= 0; --i) {
-      info->data(i)._alternate.m_alt->m_response_hdr.m_mime->recompute_accelerators_and_presence_bits();
-      info->data(i)._alternate.m_alt->m_request_hdr.m_mime->recompute_accelerators_and_presence_bits();
-    }
+    info->template for_each_slice([](CacheHTTPInfoVector::Slice& slice) {
+      slice._alternate.m_alt->m_response_hdr.m_mime->recompute_accelerators_and_presence_bits();
+      slice._alternate.m_alt->m_request_hdr.m_mime->recompute_accelerators_and_presence_bits();
+      });
   }
   return zret;
 }
@@ -312,30 +312,30 @@ CacheVC::openReadFromWriter(int event, Event *e)
   // For now the vol lock must be held to deal with clean up of potential failures. Need to fix
   // that at some point.
 
-  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (alternate_index = get_alternate_index(&(od->vector), write_vc->earliest_key))) {
+  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (slice_ref = od->vector.slice_ref_for(write_vc->earliest_key))._idx) {
     MUTEX_RELEASE(lock);
     // Found the alternate for our write VC. Really, though, if we have a write_vc we should never fail to get
     // the alternate - we should probably check for that.
-    alternate.copy_shallow(od->vector.get(alternate_index));
+    alternate.copy_shallow(&slice_ref._slice->_alternate);
     MUTEX_RELEASE(lock_od);
     key = earliest_key = alternate.object_key_get();
     doc_len            = alternate.object_size_get();
-    Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, alternate_index,
+    Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, slice_ref._idx,
           alternate.m_alt);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);
   } else {
     if (cache_config_select_alternate) {
-      alternate_index = HttpTransactCache::SelectFromAlternates(&od->vector, &request, params);
-      if (alternate_index < 0) {
+      slice_ref._idx = HttpTransactCache::SelectFromAlternates(&od->vector, &request, params);
+      if (slice_ref._idx < 0) {
         MUTEX_RELEASE(lock_od);
         SET_HANDLER(&CacheVC::openReadFromWriterFailure);
         return openReadFromWriterFailure(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<Event *>(-ECACHE_ALT_MISS));
       }
-      Debug("amc", "[openReadFromWriter] select alt: %d %p (current %p)", alternate_index, od->vector.get(alternate_index)->m_alt,
+      Debug("amc", "[openReadFromWriter] select alt: %d %p (current %p)", slice_ref._idx, od->vector.get(slice_ref._idx)->m_alt,
             alternate.m_alt);
     } else {
-      alternate_index = 0;
+      slice_ref._idx = 0;
     }
     MUTEX_RELEASE(lock);
     MUTEX_RELEASE(lock_od);
@@ -366,9 +366,9 @@ CacheVC::waitForAltUpdate(int event, Event *e)
 
     // @a e carries a cookie which is computed from the earliest key of the alt selected by the writerVC.
     for (i = od->vector.count() - 1; i >= 0; --i) {
-      CacheHTTPInfoVector::Item &item = od->vector.data[i];
-      if (reinterpret_cast<void *>(item._alternate.m_alt->m_earliest.m_key.fold()) == tag) {
-        alternate.copy_shallow(&item._alternate);
+      CacheHTTPInfoVector::Slice &slice = *(od->vector.data[i]._slices.head);
+      if (reinterpret_cast<void *>(slice._alternate.m_alt->m_earliest.m_key.fold()) == tag) {
+        alternate.copy_shallow(&slice._alternate);
         earliest_key = alternate.m_alt->m_earliest.m_key;
         doc_len      = alternate.object_size_get();
         break;
@@ -511,7 +511,7 @@ Lerror:
 Lcallreturn:
   return handleEvent(AIO_EVENT_DONE, nullptr);
 LreadMain:
-  wait_buffer.write(buf, doc->data_len(), doc->prefix_len()); // just the content part.
+  wait_buffer.write(buf.get(), doc->data_len(), doc->prefix_len()); // just the content part.
   wait_position = alternate.get_frag_offset(fragment);
   // I think these are all useless now.
   doc_pos = doc->prefix_len();
@@ -801,7 +801,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
         Doc *doc1    = (Doc *)first_buf->data();
         uint32_t len = this->load_http_info(&(od->vector), doc1);
         ink_assert(len == doc1->hlen && od->vector.count() > 0);
-        od->vector.remove(alternate_index, true);
+        od->vector.remove(slice_ref._idx, true);
         // if the vector had one alternate, delete it's directory entry
         if (len != doc1->hlen || !od->vector.count()) {
           // sometimes the delete fails when there is a race and another read
@@ -828,7 +828,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
           vio.op          = VIO::WRITE;
           total_len       = 0;
           f.update        = 1;
-          alternate_index = CACHE_ALT_REMOVED;
+          slice_ref._idx = CACHE_ALT_REMOVED;
           /////////////////////////////////////////////////////////////////
           // change to create a directory entry for a resident alternate //
           // when another alternate does not exist.                      //
@@ -887,7 +887,7 @@ CacheVC::openReadVecWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */
       f.evac_vector   = false;
       last_collision  = nullptr;
       f.update        = 0;
-      alternate_index = CACHE_ALT_INDEX_DEFAULT;
+      slice_ref.clear();
       f.use_first_key = 0;
       vio.op          = VIO::READ;
       dir_overwrite(&first_key, vol, &dir, &od->first_dir);
@@ -1010,16 +1010,16 @@ CacheVC::openReadStartHead(int event, Event *e)
       // Instead try the @a earliest_key - if that's a match then that's the correct alt, written
       // by the paired write VC.
       if (cache_config_select_alternate && params) {
-        alternate_index = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
-        if (alternate_index < 0) {
+        slice_ref._idx = HttpTransactCache::SelectFromAlternates(&vector, &request, params);
+        if (slice_ref._idx < 0) {
           err = ECACHE_ALT_MISS;
           goto Ldone;
         }
-        Debug("amc", "[openReadStartHead] select alt: %d %p (current %p, od %p)", alternate_index,
-              vector.get(alternate_index)->m_alt, alternate.m_alt, od);
-      } else if (CACHE_ALT_INDEX_DEFAULT == (alternate_index = get_alternate_index(&vector, earliest_key)))
-        alternate_index = 0;
-      alternate_tmp     = vector.get(alternate_index);
+        Debug("amc", "[openReadStartHead] select alt: %d %p (current %p, od %p)", slice_ref._idx,
+              vector.get(slice_ref._idx)->m_alt, alternate.m_alt, od);
+      } else if (CACHE_ALT_INDEX_DEFAULT == (slice_ref._idx = get_alternate_index(&vector, earliest_key)))
+        slice_ref._idx = 0;
+      alternate_tmp     = vector.get(slice_ref._idx);
       if (!alternate_tmp->valid()) {
         if (buf) {
           Note("OpenReadHead failed for cachekey %X : alternate inconsistency", key.slice32(0));

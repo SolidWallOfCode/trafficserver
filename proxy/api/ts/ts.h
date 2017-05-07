@@ -1235,7 +1235,7 @@ tsapi TSSslContext TSSslContextFindByAddr(struct sockaddr const *);
 // Create a new SSL context based on the settings in records.config
 tsapi TSSslContext TSSslServerContextCreate(void);
 tsapi void TSSslContextDestroy(TSSslContext ctx);
-tsapi TSNextProtocolSet TSUnregisterProtocol(TSNextProtocolSet protoset, const char* protocol);
+tsapi TSNextProtocolSet TSUnregisterProtocol(TSNextProtocolSet protoset, const char *protocol);
 TSAcceptor TSAcceptorGet(TSVConn sslp);
 TSNextProtocolSet TSGetcloneProtoSet(TSAcceptor tna);
 TSAcceptor TSAcceptorGetbyID(int ID);

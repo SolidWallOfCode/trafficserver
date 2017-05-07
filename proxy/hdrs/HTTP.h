@@ -1493,7 +1493,7 @@ HTTPHdr::reason_set(HTTPStatus status)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-inline MIMEParseResult
+inline ParseResult
 HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing)
 {
   ink_assert(valid());
@@ -1980,8 +1980,7 @@ HTTPInfo::object_size_set(int64_t size)
   if (!m_alt->m_flag.complete_p) {
     int64_t mco = 0; // maximum cached offset + 1
     if (m_alt->m_fragments) {
-      if (m_alt->m_fragments->m_cached_idx >= 0)
-        mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
+      mco = this->get_frag_offset(m_alt->m_fragments->m_cached_idx) + this->get_frag_fixed_size();
     } else if (m_alt->m_earliest.m_flag.cached_p) {
       mco = this->get_frag_fixed_size();
     }

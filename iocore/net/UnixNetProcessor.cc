@@ -29,8 +29,8 @@
 // For Stat Pages
 #include "StatPages.h"
 
-volatile int net_accept_number=0;
-extern std::vector<NetAccept*> naVec;
+volatile int net_accept_number = 0;
+extern std::vector<NetAccept *> naVec;
 NetProcessor::AcceptOptions const NetProcessor::DEFAULT_ACCEPT_OPTIONS;
 
 NetProcessor::AcceptOptions &
@@ -94,8 +94,8 @@ UnixNetProcessor::accept_internal(Continuation *cont, int fd, AcceptOptions cons
   char thr_name[MAX_THREAD_NAME_LENGTH];
 
   NetAccept *na = createNetAccept(opt);
-  na->id = ink_atomic_increment(&net_accept_number,1);
-  Debug("iocore_net_accept","creating new net accept number %d",na->id);
+  na->id        = ink_atomic_increment(&net_accept_number, 1);
+  Debug("iocore_net_accept", "creating new net accept number %d", na->id);
 
   // Fill in accept thread from configuration if necessary.
   if (opt.accept_threads < 0) {
@@ -130,9 +130,9 @@ UnixNetProcessor::accept_internal(Continuation *cont, int fd, AcceptOptions cons
   if (should_filter_int > 0 && opt.etype == ET_NET)
     na->server.http_accept_filter = true;
 
-  SessionAccept* sa = dynamic_cast<SessionAccept*>(cont);
-  na->port = sa->port;
-  na->snpa=dynamic_cast<SSLNextProtocolAccept*>(cont);
+  SessionAccept *sa = dynamic_cast<SessionAccept *>(cont);
+  na->port          = sa->port;
+  na->snpa          = dynamic_cast<SSLNextProtocolAccept *>(cont);
 
   na->action_         = new NetAcceptAction();
   *na->action_        = cont;
@@ -153,7 +153,8 @@ UnixNetProcessor::accept_internal(Continuation *cont, int fd, AcceptOptions cons
         }
 
         // Start the "template" accept thread last.
-        Debug("iocore_net_accept", "Created accept thread #%d for port %d", accept_threads, ats_ip_port_host_order(&accept_ip));
+        Debug("iocore_net_accept", "Created accept thread #%d for port %d map len %" PRIu64, accept_threads,
+              ats_ip_port_host_order(&accept_ip), naVec.size());
         snprintf(thr_name, MAX_THREAD_NAME_LENGTH, "[ACCEPT %d:%d]", accept_threads - 1, ats_ip_port_host_order(&accept_ip));
         na->init_accept_loop(thr_name);
 #if !TS_USE_POSIX_CAP

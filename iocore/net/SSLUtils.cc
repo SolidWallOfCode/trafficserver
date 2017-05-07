@@ -874,43 +874,41 @@ SSLInitializeLibrary()
   open_ssl_initialized = true;
 }
 
-
 // SSL_CheckThreadLockCallBack() - there is only one CRYPTO locking_callback() per
 // 	execution space and unfortunately, plugins and /or their dependencies
 // 	can mess with our setting and cause threading issues (crashing) down the line.
 // 	This lightweight mitigation routine, checks and resets if it's wrong.
 // 	It will flag warning, which should help us diagnose the evil deviant plugin.
 
-void SSL_CheckThreadLockCallBack()
+void
+SSL_CheckThreadLockCallBack()
 {
-static int numTimesCalledBefore = 0;
-void *tmp;
+  static int numTimesCalledBefore = 0;
+  void *tmp;
 
-  if (numTimesCalledBefore > 100000)  {
-      // Though this mitigation check is cheap,  We can probably stop checking
-      // after we've been running for a little bit and execution paths have been
-      // exercised.  As the whole point of this is mitigating for something that shouldn't
-      // happen from plugins or their dependencies, we really don't know how long and
-      // when to end, so we ball park this after a conservative 100,000 calls.
-      // if number is too low, we risk a false negative and no correction or warning.
-        return;
-    }
-  else numTimesCalledBefore++;
+  if (numTimesCalledBefore > 100000) {
+    // Though this mitigation check is cheap,  We can probably stop checking
+    // after we've been running for a little bit and execution paths have been
+    // exercised.  As the whole point of this is mitigating for something that shouldn't
+    // happen from plugins or their dependencies, we really don't know how long and
+    // when to end, so we ball park this after a conservative 100,000 calls.
+    // if number is too low, we risk a false negative and no correction or warning.
+    return;
+  } else
+    numTimesCalledBefore++;
 
-  if (((void *)SSL_locking_callback) !=  (tmp = (void *) CRYPTO_get_locking_callback())) {
+  if (((void *)SSL_locking_callback) != (tmp = (void *)CRYPTO_get_locking_callback())) {
     Warning("CRYPTO locking_callback() changed. FIXING! bad callback address=%p, suppose to be %p. May have misbehaving plugin\n",
-        tmp, SSL_locking_callback);
+            tmp, SSL_locking_callback);
     CRYPTO_set_locking_callback(SSL_locking_callback);
-    }
+  }
 
-  if (((void *)SSL_pthreads_thread_id) !=  (tmp = (void *) CRYPTO_THREADID_get_callback())) {
-    Warning("CRYPTO id_callback() changed. FIXING! bad callback address=%p, suppose to be %p. May have misbehaving plugin\n",
-        tmp, SSL_pthreads_thread_id);
+  if (((void *)SSL_pthreads_thread_id) != (tmp = (void *)CRYPTO_THREADID_get_callback())) {
+    Warning("CRYPTO id_callback() changed. FIXING! bad callback address=%p, suppose to be %p. May have misbehaving plugin\n", tmp,
+            SSL_pthreads_thread_id);
     CRYPTO_THREADID_set_callback(SSL_pthreads_thread_id);
   }
 }
-
-
 
 void
 SSLInitializeStatistics()

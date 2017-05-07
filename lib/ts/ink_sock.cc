@@ -249,7 +249,7 @@ fd_read_line(int fd, char *s, int len)
 int
 close_socket(int s)
 {
-    return s < 0 ? -1 : close(s);
+  return s < 0 ? -1 : close(s);
 }
 
 int

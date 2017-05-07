@@ -935,10 +935,10 @@ Store::clear(char *filename, bool clear_dirs)
         return -1;
       for (int b = 0; d->blocks; b++)
         if (socketManager.pwrite(fd, z, STORE_BLOCK_SIZE, d->offset + (b * STORE_BLOCK_SIZE)) < 0) {
-          ink_release_assert(0==close(fd));
+          ink_release_assert(0 == close(fd));
           return -1;
         }
-       ink_release_assert(0==close(fd));
+      ink_release_assert(0 == close(fd));
     }
   }
   return 0;

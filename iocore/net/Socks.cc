@@ -515,7 +515,7 @@ loadSocksConfiguration(socks_conf_struct *socks_conf_stuff)
     goto error;
   }
   Debug("Socks", "Socks Turned on");
-   ink_release_assert(0==::close(socks_config_fd));
+  ink_release_assert(0 == ::close(socks_config_fd));
 
   return;
 error:
@@ -523,7 +523,7 @@ error:
   socks_conf_stuff->socks_needed   = 0;
   socks_conf_stuff->accept_enabled = 0;
   if (socks_config_fd >= 0)
-    ink_release_assert(0==::close(socks_config_fd));
+    ink_release_assert(0 == ::close(socks_config_fd));
 }
 
 int

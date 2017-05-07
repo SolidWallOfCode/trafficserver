@@ -8079,7 +8079,7 @@ HttpTransact::build_response(State *s, HTTPHdr *base_response, HTTPHdr *outgoing
       //
       handle_content_length_header(s, outgoing_response, base_response);
 
-    } else
+    } else {
       switch (status_code) {
       case HTTP_STATUS_NOT_MODIFIED:
         HttpTransactHeaders::build_base_response(outgoing_response, status_code, reason_phrase, strlen(reason_phrase),

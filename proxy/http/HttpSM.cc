@@ -4569,28 +4569,28 @@ HttpSM::calculate_output_cl(int64_t content_length, int64_t num_chars)
 
   if (t_state.range_setup != HttpTransact::RANGE_REQUESTED)
     return;
-  }
+}
 
-  ink_assert(t_state.ranges);
+ink_assert(t_state.ranges);
 
-  if (t_state.num_range_fields == 1) {
-    t_state.range_output_cl = t_state.ranges[0]._end - t_state.ranges[0]._start + 1;
-  } else {
-    for (i = 0; i < t_state.num_range_fields; i++) {
-      if (t_state.ranges[i]._start >= 0) {
-        t_state.range_output_cl += boundary_size;
-        t_state.range_output_cl += sub_header_size + content_length;
-        t_state.range_output_cl +=
-          num_chars_for_int(t_state.ranges[i]._start) + num_chars_for_int(t_state.ranges[i]._end) + num_chars + 2;
-        t_state.range_output_cl += t_state.ranges[i]._end - t_state.ranges[i]._start + 1;
-        t_state.range_output_cl += 2;
-      }
+if (t_state.num_range_fields == 1) {
+  t_state.range_output_cl = t_state.ranges[0]._end - t_state.ranges[0]._start + 1;
+} else {
+  for (i = 0; i < t_state.num_range_fields; i++) {
+    if (t_state.ranges[i]._start >= 0) {
+      t_state.range_output_cl += boundary_size;
+      t_state.range_output_cl += sub_header_size + content_length;
+      t_state.range_output_cl +=
+        num_chars_for_int(t_state.ranges[i]._start) + num_chars_for_int(t_state.ranges[i]._end) + num_chars + 2;
+      t_state.range_output_cl += t_state.ranges[i]._end - t_state.ranges[i]._start + 1;
+      t_state.range_output_cl += 2;
     }
-
-    t_state.range_output_cl += boundary_size + 2;
   }
 
-  Debug("http_range", "Pre-calculated Content-Length for Range response is %" PRId64, t_state.range_output_cl);
+  t_state.range_output_cl += boundary_size + 2;
+}
+
+Debug("http_range", "Pre-calculated Content-Length for Range response is %" PRId64, t_state.range_output_cl);
 #endif
 }
 
@@ -8250,4 +8250,15 @@ HttpSM::find_proto_string(HTTPVersion version) const
   } else {
     return nullptr;
   }
+}
+
+char const *
+HttpSM::handlerName(int (HttpSM::*ptm)(int, void *))
+{
+  char const *zret = "*method*";
+  if (ptm == &HttpSM::tunnel_handler)
+    zret = "tunnel_handler";
+  else if (ptm == &HttpSM::state_cache_open_partial_read)
+    zret = "state_cache_open_partial_read";
+  return zret;
 }

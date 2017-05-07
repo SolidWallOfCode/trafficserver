@@ -257,16 +257,16 @@ void
 init_stats(void)
 {
   /* noncoupled: */
-  method_count_redirected_connect   = INKStatCreate("method.count.redirected.connect", INKSTAT_TYPE_INT64);
-  method_count_redirected_delete    = INKStatCreate("method.count.redirected.delete", INKSTAT_TYPE_INT64);
-  method_count_redirected_get       = INKStatCreate("method.count.redirected.get", INKSTAT_TYPE_INT64);
-  method_count_redirected_head      = INKStatCreate("method.count.redirected.head", INKSTAT_TYPE_FLOAT);
-  method_count_redirected_options   = INKStatCreate("method.count.redirected.options", INKSTAT_TYPE_INT64);
-  method_count_redirected_post      = INKStatCreate("method.count.redirected.post", INKSTAT_TYPE_INT64);
-  method_count_redirected_purge     = INKStatCreate("method.count.redirected.purge", INKSTAT_TYPE_INT64);
-  method_count_redirected_put       = INKStatCreate("method.count.redirected.put", INKSTAT_TYPE_INT64);
-  method_count_redirected_trace     = INKStatCreate("method.count.redirected.trace", INKSTAT_TYPE_INT64);
-  method_count_redirected_unknown   = INKStatCreate("method.count.redirected.unknown", INKSTAT_TYPE_INT64);
+  method_count_redirected_connect = INKStatCreate("method.count.redirected.connect", INKSTAT_TYPE_INT64);
+  method_count_redirected_delete  = INKStatCreate("method.count.redirected.delete", INKSTAT_TYPE_INT64);
+  method_count_redirected_get     = INKStatCreate("method.count.redirected.get", INKSTAT_TYPE_INT64);
+  method_count_redirected_head    = INKStatCreate("method.count.redirected.head", INKSTAT_TYPE_FLOAT);
+  method_count_redirected_options = INKStatCreate("method.count.redirected.options", INKSTAT_TYPE_INT64);
+  method_count_redirected_post    = INKStatCreate("method.count.redirected.post", INKSTAT_TYPE_INT64);
+  method_count_redirected_purge   = INKStatCreate("method.count.redirected.purge", INKSTAT_TYPE_INT64);
+  method_count_redirected_put     = INKStatCreate("method.count.redirected.put", INKSTAT_TYPE_INT64);
+  method_count_redirected_trace   = INKStatCreate("method.count.redirected.trace", INKSTAT_TYPE_INT64);
+  method_count_redirected_unknown = INKStatCreate("method.count.redirected.unknown", INKSTAT_TYPE_INT64);
 
   /* coupled: */
   request_outcomes   = INKStatCoupledGlobalCategoryCreate("request_outcomes");

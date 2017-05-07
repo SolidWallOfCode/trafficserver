@@ -948,8 +948,8 @@ inline HttpConfigParams::~HttpConfigParams()
   ats_free(connect_ports_string);
   ats_free(reverse_proxy_no_host_redirect);
 
-  int len = codeNegCache.n-1;
-  for(int i=len;i>=0;i--){
+  int len = codeNegCache.n - 1;
+  for (int i = len; i >= 0; i--) {
     codeNegCache.remove_index(i);
   }
   codeNegCache.clear();

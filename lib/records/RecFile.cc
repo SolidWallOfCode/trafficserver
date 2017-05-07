@@ -238,13 +238,13 @@ RecPipeConnect(const char *base_path, const char *name)
   // set so that child process doesn't inherit our fd
   if (fcntl(sockfd, F_SETFD, FD_CLOEXEC) < 0) {
     RecLog(DL_Warning, "[RecPipeConnect] fcntl error\n");
-    ink_release_assert(0==close(sockfd));
+    ink_release_assert(0 == close(sockfd));
     return REC_HANDLE_INVALID;
   }
   // blocking connect
   if ((connect(sockfd, (struct sockaddr *)&servaddr, servaddr_len)) < 0) {
     RecLog(DL_Warning, "[RecPipeConnect] connect error\n");
-    ink_release_assert(0==close(sockfd));
+    ink_release_assert(0 == close(sockfd));
     return REC_HANDLE_INVALID;
   }
 
@@ -310,8 +310,8 @@ RecPipeClose(RecHandle h_pipe)
 // RecCloseListener
 //
 
-void RecCloseListener(RecHandle listener_fd)
+void
+RecCloseListener(RecHandle listener_fd)
 {
-    ink_release_assert(close(listener_fd) ==0);
+  ink_release_assert(close(listener_fd) == 0);
 }
-

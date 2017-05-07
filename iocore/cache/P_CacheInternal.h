@@ -456,8 +456,14 @@ struct CacheVC : public CacheVConnection {
 #ifdef HTTP_CACHE
   CacheHTTPHdr request;
 #endif
+  // These are used primarily in the solitary read case where the object has no ODE and all requested
+  // content is in the cache. In this case no interaction with other CacheVCs is needed and everything
+  // is handled locally. This is expected to be by far the common case and is therefore optimized.
   CacheHTTPInfoVector vector;
   CacheHTTPInfo alternate;
+  // In the mixed case, these track where the data is in the ODE.
+  CacheHTTPInfoVector::SliceRef slice_ref;
+
   Ptr<IOBufferData> buf;
   Ptr<IOBufferData> first_buf;
   Ptr<IOBufferBlock> blocks; // data available to write
@@ -472,7 +478,7 @@ struct CacheVC : public CacheVConnection {
 
   OpenDirEntry *od;
   AIOCallbackInternal io;
-  int alternate_index;         // preferred position in vector
+  //  int alternate_index;         // preferred position in vector - replaced by alt_ref
   LINK(CacheVC, OpenDir_Link); ///< Reader/writer link per alternate in @c OpenDir.
   LINK(CacheVC, Active_Link);  ///< Active I/O pending list in @c OpenDir.
 #ifdef CACHE_STAT_PAGES
@@ -615,11 +621,8 @@ CacheVC *new_DocEvacuator(int nbytes, Vol *d);
 TS_INLINE CacheVC *
 new_CacheVC(Continuation *cont)
 {
-  EThread *t = cont->mutex->thread_holding;
-  CacheVC *c = THREAD_ALLOC(cacheVConnectionAllocator, t);
-#ifdef HTTP_CACHE
-  c->vector.data.data = &c->vector.data.fast_data[0];
-#endif
+  EThread *t        = cont->mutex->thread_holding;
+  CacheVC *c        = THREAD_ALLOC(cacheVConnectionAllocator, t);
   c->_action        = cont;
   c->initial_thread = t->tt == DEDICATED ? nullptr : t;
   c->mutex          = cont->mutex;
@@ -660,18 +663,11 @@ free_CacheVC(CacheVC *cont)
   cont->io.aio_result        = 0;
   cont->io.aiocb.aio_nbytes  = 0;
   cont->io.aiocb.aio_reqprio = AIO_DEFAULT_PRIORITY;
-#ifdef HTTP_CACHE
   cont->request.reset();
   cont->vector.clear();
-#endif
   cont->vio.buffer.clear();
   cont->vio.mutex.clear();
-#ifdef HTTP_CACHE
-  if (cont->vio.op == VIO::WRITE && cont->alternate_index == CACHE_ALT_INDEX_DEFAULT)
-    cont->alternate.destroy();
-  else
-    cont->alternate.clear();
-#endif
+  cont->alternate.clear();
   cont->_action.cancelled = 0;
   cont->_action.mutex.clear();
   cont->mutex.clear();
@@ -679,7 +675,8 @@ free_CacheVC(CacheVC *cont)
   cont->first_buf.clear();
   cont->blocks.clear();
   cont->writer_buf.clear();
-  cont->alternate_index = CACHE_ALT_INDEX_DEFAULT;
+  //  cont->alternate_index = CACHE_ALT_INDEX_DEFAULT;
+  cont->slice_ref.clear();
   if (cont->scan_vol_map)
     ats_free(cont->scan_vol_map);
   cont->resp_range.clear();

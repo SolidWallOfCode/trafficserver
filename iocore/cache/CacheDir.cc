@@ -83,7 +83,6 @@ OpenDir::open_entry(Vol *vol, CryptoHash const &key, bool force_p)
   od->mutex                 = new_ProxyMutex();
   od->first_key             = key;
   od->num_active            = 1;
-  od->vector.data.data      = &od->vector.data.fast_data[0];
   od->dont_update_directory = 0;
   od->move_resident_alt     = 0;
   od->reading_vec           = 0;
@@ -131,7 +130,7 @@ OpenDir::close_entry(CacheVC *vc)
     // Clean up empty alternates, which can be left behind if the origin is being difficult.
     // If this results in no alternates, clean up the entire object.
     vc->od->vector.clean();
-    if (vc->od->vector.xcount <= 0)
+    if (vc->od->vector.count() <= 0)
       dir_delete(&vc->first_key, vc->vol, &vc->od->first_dir);
     vc->od->vector.clear();
     vc->od->mutex = 0;

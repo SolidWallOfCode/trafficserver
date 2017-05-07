@@ -262,7 +262,7 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         hostinfo_copied = 1;
       }
       vector.get(i)->object_key_get(&key);
-      alternate_index = i;
+      slice_ref._idx = i;
       // verify that the earliest block exists, reducing 'false hit' callbacks
       if (!(key == doc->key)) {
         last_collision = nullptr;
@@ -285,9 +285,9 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         i = 0;
         break;
       case CACHE_SCAN_RESULT_UPDATE:
-        ink_assert(alternate_index >= 0);
-        vector.insert(&alternate, alternate_index);
-        if (!vector.get(alternate_index)->valid())
+        ink_assert(slice_ref._idx >= 0);
+        vector.insert(&alternate, slice_ref._idx);
+        if (!vector.get(slice_ref._idx)->valid())
           continue;
         changed = true;
         continue;
@@ -312,7 +312,7 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         f.use_first_key = 1;
         f.evac_vector   = 1;
         first_key = key   = doc->first_key;
-        alternate_index   = CACHE_ALT_REMOVED;
+        slice_ref._idx   = CACHE_ALT_REMOVED;
         earliest_key      = zero_key;
         writer_lock_retry = 0;
         SET_HANDLER(&CacheVC::scanOpenWrite);

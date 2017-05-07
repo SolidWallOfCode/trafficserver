@@ -31,7 +31,7 @@
   -------------------------------------------------------------------------*/
 
 void
-CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position, int64_t length)
+CacheHTTPInfoVector::Slice::addSideBuffer(IOBufferBlock *block, int64_t position, int64_t length)
 {
   // Blend in to overlapping existing buffer or insert in order.
   CacheBuffer *cb = _content_buffers.head;
@@ -79,7 +79,7 @@ CacheHTTPInfoVector::Item::addSideBuffer(IOBufferBlock *block, int64_t position,
 }
 
 bool
-CacheHTTPInfoVector::Item::getSideBufferContent(IOBufferChain &data, int64_t position, int64_t length)
+CacheHTTPInfoVector::Slice::getSideBufferContent(IOBufferChain &data, int64_t position, int64_t length)
 {
   CacheBuffer *cb = _content_buffers.head;
 
@@ -93,7 +93,7 @@ CacheHTTPInfoVector::Item::getSideBufferContent(IOBufferChain &data, int64_t pos
   return false;
 }
 
-CacheHTTPInfoVector::Item::~Item()
+CacheHTTPInfoVector::Slice::~Slice()
 {
   CacheBuffer *cb = _content_buffers.head;
   while (cb) {
@@ -106,12 +106,9 @@ CacheHTTPInfoVector::Item::~Item()
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-// Guaranteed to be all zero?
-static CacheHTTPInfoVector::Item default_vec_info;
-
 #ifdef HTTP_CACHE
 
-CacheHTTPInfoVector::CacheHTTPInfoVector() : magic(nullptr), data(&default_vec_info, 4), xcount(0)
+CacheHTTPInfoVector::CacheHTTPInfoVector()
 {
 }
 
@@ -120,25 +117,43 @@ CacheHTTPInfoVector::CacheHTTPInfoVector() : magic(nullptr), data(&default_vec_i
 
 CacheHTTPInfoVector::~CacheHTTPInfoVector()
 {
-  int i;
-
-  for (i = 0; i < xcount; i++) {
-    data[i].~Item();
+  for ( auto& group : data ) {
+    for ( auto& slice : group )
+      slice.~Slice();
   }
+  data.clear();
   vector_buf.clear();
   magic = nullptr;
 }
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
+CacheHTTPInfoVector::Slice*
+CacheHTTPInfoVector::alloc_slice(int& idx)
+{
+  Slice* slice;
+
+  if (CACHE_ALT_INDEX_DEFAULT == idx) {
+    idx = data.size();
+    data.resize(idx+1);
+  }
+  if (idx < static_cast<int>(PRE_ALLOCATED_ALT_COUNT) && !fixed_slices[idx]._alternate.valid()) {
+    slice = &fixed_slices[idx];
+  } else {
+    slice = new Slice;
+  }
+
+  data[idx].push_front(slice);
+  return slice;
+}
+/*-------------------------------------------------------------------------
+  -------------------------------------------------------------------------*/
 
 int
 CacheHTTPInfoVector::insert(CacheHTTPInfo *info, int index)
 {
-  if (index == CACHE_ALT_INDEX_DEFAULT)
-    index = xcount++;
-
-  data(index)._alternate.copy_shallow(info);
+  Slice* slice = this->alloc_slice(index);
+  slice->_alternate.copy_shallow(info);
   return index;
 }
 
@@ -148,19 +163,19 @@ CacheHTTPInfoVector::insert(CacheHTTPInfo *info, int index)
 void
 CacheHTTPInfoVector::detach(int idx, CacheHTTPInfo *r)
 {
-  int i;
-
   ink_assert(idx >= 0);
-  ink_assert(idx < xcount);
+  ink_assert(idx < data.size());
 
+  # if 0
   r->copy_shallow(&data[idx]._alternate);
   data[idx]._alternate.destroy();
 
   for (i = idx; i < (xcount - 1); i++) {
     data[i] = data[i + i];
   }
-
-  xcount -= 1;
+  # else
+  ink_release_assert(false); // this needs to be implemented.
+  # endif
 }
 
 /*-------------------------------------------------------------------------
@@ -169,6 +184,7 @@ CacheHTTPInfoVector::detach(int idx, CacheHTTPInfo *r)
 void
 CacheHTTPInfoVector::remove(int idx, bool destroy)
 {
+  # if 0
   if (destroy)
     data[idx]._alternate.destroy();
 
@@ -176,6 +192,9 @@ CacheHTTPInfoVector::remove(int idx, bool destroy)
     data[idx] = data[idx + 1];
 
   xcount--;
+  # else
+  ink_release_assert(false);
+  # endif
 }
 
 /*-------------------------------------------------------------------------
@@ -184,6 +203,7 @@ CacheHTTPInfoVector::remove(int idx, bool destroy)
 void
 CacheHTTPInfoVector::clear(bool destroy)
 {
+  # if 0
   int i;
 
   if (destroy) {
@@ -194,6 +214,9 @@ CacheHTTPInfoVector::clear(bool destroy)
   xcount = 0;
   data.clear();
   vector_buf.clear();
+  # else
+  ink_release_assert(false);
+  # endif
 }
 
 /*-------------------------------------------------------------------------
@@ -202,6 +225,7 @@ CacheHTTPInfoVector::clear(bool destroy)
 void
 CacheHTTPInfoVector::clean()
 {
+  # if 0
   int idx, dst, n = xcount;
 
   for (dst = idx = 0; idx < n; ++idx) {
@@ -212,6 +236,9 @@ CacheHTTPInfoVector::clean()
     }
   }
   xcount = dst;
+  # else
+  ink_release_assert(false);
+  # endif
 }
 
 /*-------------------------------------------------------------------------
@@ -222,34 +249,36 @@ CacheHTTPInfoVector::print(char *buffer, size_t buf_size, bool temps)
 {
   char buf[33], *p;
   int purl;
-  int i, tmp;
+  int tmp;
 
   p    = buffer;
   purl = 1;
 
-  for (i = 0; i < xcount; i++) {
-    if (data[i]._alternate.valid()) {
-      if (purl) {
-        Arena arena;
-        char *url;
+  for ( auto& group : data ) {
+    for ( auto& slice : group ) {
+      if (slice._alternate.valid()) {
+        if (purl) {
+          Arena arena;
+          char *url;
 
-        purl = 0;
-        URL u;
-        data[i]._alternate.request_url_get(&u);
-        url = u.string_get(&arena);
-        if (url) {
-          snprintf(p, buf_size, "[%s] ", url);
+          purl = 0;
+          URL u;
+          slice._alternate.request_url_get(&u);
+          url = u.string_get(&arena);
+          if (url) {
+            snprintf(p, buf_size, "[%s] ", url);
+            tmp = strlen(p);
+            p += tmp;
+            buf_size -= tmp;
+          }
+        }
+
+        if (temps || !(slice._alternate.object_key_get() == zero_key)) {
+          snprintf(p, buf_size, "[%d %s]", slice._alternate.id_get(), CacheKey(slice._alternate.object_key_get()).toHexStr(buf));
           tmp = strlen(p);
           p += tmp;
           buf_size -= tmp;
         }
-      }
-
-      if (temps || !(data[i]._alternate.object_key_get() == zero_key)) {
-        snprintf(p, buf_size, "[%d %s]", data[i]._alternate.id_get(), CacheKey(data[i]._alternate.object_key_get()).toHexStr(buf));
-        tmp = strlen(p);
-        p += tmp;
-        buf_size -= tmp;
       }
     }
   }
@@ -263,9 +292,8 @@ CacheHTTPInfoVector::marshal_length()
 {
   int length = 0;
 
-  for (int i = 0; i < xcount; i++) {
-    length += data[i]._alternate.marshal_length();
-  }
+  for ( auto& group : data )
+    length += group.marshal_length();
 
   return length;
 }
@@ -280,8 +308,8 @@ CacheHTTPInfoVector::marshal(char *buf, int length)
 
   ink_assert(!(((intptr_t)buf) & 3)); // buf must be aligned
 
-  for (int i = 0; i < xcount; i++) {
-    int tmp = data[i]._alternate.marshal(buf, length);
+  for ( auto& group : data ) {
+    int tmp = group.marshal(buf, length);
     length -= tmp;
     buf += tmp;
     count++;
@@ -302,11 +330,11 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block
 
   const char *start = buf;
   CacheHTTPInfo info;
-  xcount = 0;
 
   vector_buf = block_ptr;
 
   while (length - (buf - start) > (int)sizeof(HTTPCacheAlt)) {
+    int idx = CACHE_ALT_INDEX_DEFAULT;
     int tmp = info.get_handle((char *)buf, length - (buf - start));
     if (tmp < 0) {
       ink_assert(!"CacheHTTPInfoVector::unmarshal get_handle() failed");
@@ -314,8 +342,8 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block
     }
     buf += tmp;
 
-    data(xcount)._alternate = info;
-    xcount++;
+    Slice* slice = this->alloc_slice(idx);
+    slice->_alternate = info;
   }
 
   return ((caddr_t)buf - (caddr_t)start);
@@ -327,21 +355,39 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block
 int
 CacheHTTPInfoVector::index_of(CacheKey const &alt_key)
 {
-  int zret;
-  for (zret = 0; zret < xcount && alt_key != data[zret]._alternate.object_key_get(); ++zret)
-    ;
-  return zret < xcount ? zret : CACHE_ALT_INDEX_DEFAULT;
+  for (int idx = 0, n = data.size(); idx < n ; ++idx) {
+    auto& group = data[idx];
+    if (group._slices.head && alt_key == group._slices.head->_alternate.object_key_get())
+      return idx;
+  }
+  return CACHE_ALT_INDEX_DEFAULT;
 }
 
+CacheHTTPInfoVector::SliceRef
+CacheHTTPInfoVector::slice_ref_for(CacheKey const& alt_key)
+{
+  SliceRef zret;
+
+  for (int idx = 0, n = data.size(); idx < n ; ++idx) {
+    for (auto& slice : data[idx]) {
+      if (alt_key == slice._alternate.object_key_get()) {
+        zret._idx = idx;
+        zret._slice = &slice;
+        zret._gen = slice._gen;
+        return zret;
+      }
+    }
+  }
+  return zret;
+}
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
 CacheKey const &
 CacheHTTPInfoVector::key_for(CacheKey const &alt_key, int64_t offset)
 {
-  int idx    = this->index_of(alt_key);
-  Item &item = data[idx];
-  return item._alternate.get_frag_key_of(offset);
+  SliceRef sr = this->slice_ref_for(alt_key);
+  return sr._slice->_alternate.get_frag_key_of(offset);
 }
 
 /*-------------------------------------------------------------------------
@@ -350,12 +396,11 @@ CacheHTTPInfoVector::key_for(CacheKey const &alt_key, int64_t offset)
 CacheHTTPInfoVector &
 CacheHTTPInfoVector::write_active(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
-  int idx    = this->index_of(alt_key);
-  Item &item = data[idx];
+  SliceRef sr = this->slice_ref_for(alt_key);
 
   Debug("amc", "[CacheHTTPInfoVector::write_active] VC %p write %" PRId64, vc, offset);
 
-  item._active.push(vc);
+  sr._slice->_active.push(vc);
   return *this;
 }
 
@@ -365,8 +410,7 @@ CacheHTTPInfoVector::write_active(CacheKey const &alt_key, CacheVC *vc, int64_t 
 CacheHTTPInfoVector &
 CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheBuffer const &cb, bool success)
 {
-  int idx    = this->index_of(alt_key);
-  Item &item = data[idx];
+  SliceRef sr = this->slice_ref_for(alt_key);
   CacheVC *reader;
   DLL<CacheVC, Link_CacheVC_Active_Link> waiters;
   static void *cookie = reinterpret_cast<void *>(0x56); // tracking value, not used.
@@ -374,12 +418,12 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
   Debug("amc", "[CacheHTTPInfoVector::write_complete] VC %p write of %" PRId64 " bytes at %" PRId64 "  %s", vc, cb._data.length(),
         cb._position, (success ? "succeeded" : "failed"));
 
-  item._active.remove(vc);
+  sr._slice->_active.remove(vc);
   if (success)
-    item._alternate.mark_frag_write(vc->fragment);
+    sr._slice->_alternate.mark_frag_write(vc->fragment);
 
   // Kick all the waiters, success or fail.
-  std::swap(waiters, item._waiting); // moves all waiting VCs to local list.
+  std::swap(waiters, sr._slice->_waiting); // moves all waiting VCs to local list.
   while (NULL != (reader = waiters.pop())) {
     if (reader->fragment == vc->fragment) {
       Debug("amc", "[write_complete] wake up %p", reader);
@@ -388,7 +432,7 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
       reader->wake_up(EVENT_IMMEDIATE, cookie);
       //      reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x56);
     } else {
-      item._waiting.push(reader); // not waiting for this, put it back.
+      sr._slice->_waiting.push(reader); // not waiting for this, put it back.
     }
   }
 
@@ -401,34 +445,31 @@ CacheHTTPInfoVector::write_complete(CacheKey const &alt_key, CacheVC *vc, CacheB
 CacheHTTPInfoVector &
 CacheHTTPInfoVector::addSideBuffer(CacheKey const &alt_key, IOBufferBlock *block, int64_t len, int64_t position)
 {
-  int idx    = this->index_of(alt_key);
-  Item &item = data[idx];
-  item.addSideBuffer(block, position, len);
+  SliceRef sr = this->slice_ref_for(alt_key);
+  sr._slice->addSideBuffer(block, position, len);
   return *this;
 }
 
 bool
 CacheHTTPInfoVector::getSideBufferContent(CacheKey const &alt_key, IOBufferChain &chain, int64_t position, int64_t length)
 {
-  int idx    = this->index_of(alt_key);
-  Item &item = data[idx];
-  return item.getSideBufferContent(chain, position, length);
+  SliceRef sr = this->slice_ref_for(alt_key);
+  return sr._slice->getSideBufferContent(chain, position, length);
 }
 
 bool
 CacheHTTPInfoVector::has_writer(CacheKey const &alt_key)
 {
-  int alt_idx = this->index_of(alt_key);
-  return alt_idx >= 0 && data[alt_idx]._writers.head != NULL;
+  SliceRef sr = this->slice_ref_for(alt_key);
+  return sr._idx >= 0 && sr._slice->_writers.head != nullptr;
 }
 
 bool
 CacheHTTPInfoVector::is_write_active(CacheKey const &alt_key, int64_t offset)
 {
-  int alt_idx  = this->index_of(alt_key);
-  Item &item   = data[alt_idx];
-  int frag_idx = item._alternate.get_frag_index_of(offset);
-  for (CacheVC *vc = item._active.head; vc; vc = item._active.next(vc)) {
+  SliceRef sr = this->slice_ref_for(alt_key);
+  int frag_idx = sr._slice->_alternate.get_frag_index_of(offset);
+  for (CacheVC *vc = sr._slice->_active.head; vc; vc = sr._slice->_active.next(vc)) {
     if (vc->fragment == frag_idx)
       return true;
   }
@@ -442,8 +483,8 @@ bool
 CacheHTTPInfoVector::wait_for(CacheKey const &alt_key, CacheVC *vc, int64_t offset)
 {
   bool zret    = true;
-  int alt_idx  = this->index_of(alt_key);
-  Item &item   = data[alt_idx];
+  SliceRef sr = this->slice_ref_for(alt_key);
+  Slice& item = *(sr._slice);
   int frag_idx = item._alternate.get_frag_index_of(offset);
   ink_assert(vc->fragment == frag_idx);
   //  vc->fragment = frag_idx; // really? Shouldn't this already be set?
@@ -463,14 +504,14 @@ CacheHTTPInfoVector &
 CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
 {
   CacheVC *reader;
-  int alt_idx = this->index_of(alt_key);
+  SliceRef sr = this->slice_ref_for(alt_key);
   // If the writer aborts before before the transaction completes, it won't have an ALT assigned.
-  if (alt_idx != CACHE_ALT_INDEX_DEFAULT) {
-    Item &item = data[alt_idx];
-    item._writers.remove(vc);
-    if (item._writers.empty()) {
+  if (sr._idx != CACHE_ALT_INDEX_DEFAULT) {
+    Slice& slice = *(sr._slice);
+    slice._writers.remove(vc);
+    if (slice._writers.empty()) {
       // if there are no more writers, none of these will ever wake up normally so kick them all now.
-      while (NULL != (reader = item._waiting.pop())) {
+      while (NULL != (reader = slice._waiting.pop())) {
         Debug("amc", "[close_writer] no writers left wake up %p", reader);
         reader->wake_up_thread->schedule_imm(reader)->cookie = reinterpret_cast<void *>(0x112);
       }
@@ -485,37 +526,37 @@ CacheHTTPInfoVector::close_writer(CacheKey const &alt_key, CacheVC *vc)
 HTTPRangeSpec::Range
 CacheHTTPInfoVector::get_uncached_hull(CacheKey const &alt_key, HTTPRangeSpec const &req, int64_t initial)
 {
-  int alt_idx = this->index_of(alt_key);
-  Item &item  = data[alt_idx];
+  SliceRef sr = this->slice_ref_for(alt_key);
+  Slice& slice = *(sr._slice);
   Queue<CacheVC, Link_CacheVC_OpenDir_Link> writers;
   CacheVC *vc;
   CacheVC *cycle_vc = NULL;
   // Yeah, this need to be tunable.
-  int64_t DELTA = item._alternate.get_frag_fixed_size() * 16;
-  HTTPRangeSpec::Range r(item._alternate.get_uncached_hull(req, initial));
+  int64_t DELTA = slice._alternate.get_frag_fixed_size() * 16;
+  HTTPRangeSpec::Range r(slice._alternate.get_uncached_hull(req, initial));
 
   if (r.isValid()) {
     /* Now clip against the writers.
        We move all the writers to a local list and move them back as we are done using them to clip.
        This is so we don't skip a potentially valid writer because they are not in start order.
     */
-    writers.append(item._writers);
-    item._writers.clear();
+    writers.append(slice._writers);
+    slice._writers.clear();
     while (r._min < r._max && NULL != (vc = writers.pop())) {
       int64_t base  = static_cast<int64_t>(writers.head->resp_range.getOffset());
       int64_t delta = static_cast<int64_t>(writers.head->resp_range.getRemnantSize());
 
       if (base + delta < r._min || base > r._max) {
-        item._writers.push(vc); // of no use to us, just put it back.
+        slice._writers.push(vc); // of no use to us, just put it back.
       } else if (base < r._min + DELTA) {
         r._min = base + delta;     // we can wait, so depend on this writer and clip.
-        item._writers.push(vc);    // we're done with it, put it back.
+        slice._writers.push(vc);    // we're done with it, put it back.
         cycle_vc = NULL;           // we did something so clear cycle indicator
       } else if (vc == cycle_vc) { // we're looping.
         // put everyone back and drop out of the loop.
-        item._writers.push(vc);
+        slice._writers.push(vc);
         while (NULL != (vc = writers.pop()))
-          item._writers.push(vc);
+          slice._writers.push(vc);
         break;
       } else {
         writers.enqueue(vc); // put it back to later checking.
@@ -645,7 +686,7 @@ CacheRange::calcContentLength() const
 REGRESSION_TEST(CacheSideContent)(RegressionTest *t, int, int *pstatus)
 {
   TestBox box(t, pstatus, REGRESSION_TEST_PASSED);
-  CacheHTTPInfoVector::Item item;
+  CacheHTTPInfoVector::Slice item;
   IOBufferChain data;
   IOBufferBlock src;
 

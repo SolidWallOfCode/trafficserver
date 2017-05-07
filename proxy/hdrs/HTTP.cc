@@ -2195,7 +2195,6 @@ HTTPInfo::force_frag_at(unsigned int idx)
   FragmentDescriptorTable *old_table = 0;
 
   ink_assert(m_alt);
-  ink_assert(idx >= 0);
 
   if (0 == idx)
     return &m_alt->m_earliest;
@@ -2264,7 +2263,6 @@ void
 HTTPInfo::mark_frag_write(unsigned int idx)
 {
   ink_assert(m_alt);
-  ink_assert(idx >= 0);
 
   if (idx >= m_alt->m_frag_count)
     m_alt->m_frag_count = idx + 1;

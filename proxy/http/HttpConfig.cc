@@ -1139,7 +1139,6 @@ HttpConfig::startup()
   c.cluster_time_delta = 0;
   RegisterMgmtCallback(MGMT_EVENT_HTTP_CLUSTER_DELTA, cluster_delta_cb, nullptr);
 
-
   // The responses with following status code WILL BE cached with negative caching enabled.
   c.codeNegCache.add(HTTP_STATUS_NO_CONTENT);
   c.codeNegCache.add(HTTP_STATUS_USE_PROXY);

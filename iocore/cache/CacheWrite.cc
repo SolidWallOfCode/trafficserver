@@ -110,7 +110,7 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       alternate_index = od->vector.insert(&alternate, alternate_index);
     }
 
-    if (od->move_resident_alt && first_buf._ptr() /* && !od->has_multiple_writers() */) {
+    if (od->move_resident_alt && first_buf.get() /* && !od->has_multiple_writers() */) {
       Doc *doc         = (Doc *)first_buf->data();
       int small_doc    = (int64_t)doc->data_len() < (int64_t)cache_config_alt_rewrite_max_size;
       int have_res_alt = doc->key == od->single_doc_key;
@@ -1234,14 +1234,14 @@ CacheVC::openWriteCloseDataDone(int event, Event *e)
 
   {
     CacheBuffer c;
-    c._data.write(blocks, write_len);
+    c._data.write(blocks.get(), write_len);
     c._position = write_pos;
     SCOPED_MUTEX_LOCK(lock, od->mutex, mutex->thread_holding);
     od->vector.write_complete(earliest_key, this, c, true);
   }
 
   write_pos += write_len;
-  blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+  blocks = iobufferblock_skip(blocks.get(), &offset, &length, write_len);
   next_CacheKey(&key, &key);
   if (length) {
     write_len = length;
@@ -1331,7 +1331,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
     earliest_dir = dir;
 
   CacheBuffer cb;
-  cb._data.write(blocks, write_len, offset);
+  cb._data.write(blocks.get(), write_len, offset);
   cb._position = write_pos;
   ink_assert(cb._data.length() == write_len);
 
@@ -1343,7 +1343,7 @@ CacheVC::openWriteWriteDone(int event, Event *e)
   DDebug("cache_insert", "WriteDone: %X, %X, %d", key.slice32(0), first_key.slice32(0), write_len);
 
   resp_range.consume(write_len);
-  blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+  blocks = iobufferblock_skip(blocks.get(), &offset, &length, write_len);
 
   if (closed)
     return die();
@@ -1492,7 +1492,7 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         Debug("amc", "Fragment %d already cached", fragment);
         // Drop the data, it's useless.
         resp_range.consume(write_len);
-        blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+        blocks = iobufferblock_skip(blocks.get(), &offset, &length, write_len);
         continue;
       } else if ((static_cast<int64_t>(write_pos) != frag_offset) || // not at start of fixed sized fragment
                  // if not writing a full fragment, then it needs to be all of the last fragment.
@@ -1509,9 +1509,9 @@ CacheVC::openWriteMain(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         // clip to not go past next fragment boundary.
         write_len = std::min(write_len, static_cast<uint32_t>((frag_offset + ffs) - write_pos));
 
-        od->vector.addSideBuffer(earliest_key, blocks, write_len, write_pos);
+        od->vector.addSideBuffer(earliest_key, blocks.get(), write_len, write_pos);
         resp_range.consume(write_len);
-        blocks = iobufferblock_skip(blocks, &offset, &length, write_len);
+        blocks = iobufferblock_skip(blocks.get(), &offset, &length, write_len);
         Debug("amc", "[openWriteMain] Partial fragment of %u bytes at base %" PRId64 " stored at %" PRId64, write_len, frag_offset,
               write_pos);
         continue;
@@ -1637,7 +1637,7 @@ CacheVC::openWriteStartDone(int event, Event *e)
       if (!(doc->first_key == first_key))
         goto Lcollision;
 
-      if (doc->magic != DOC_MAGIC || !doc->hlen || this->load_http_info(&od->vector, doc, buf) != doc->hlen) {
+      if (doc->magic != DOC_MAGIC || !doc->hlen || this->load_http_info(&od->vector, doc, buf.get()) != doc->hlen) {
         err = ECACHE_BAD_META_DATA;
         goto Lfailure;
       }

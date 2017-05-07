@@ -140,7 +140,6 @@ public:
   static int select_next_protocol(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in,
                                   unsigned inlen, void *);
 
-
   Continuation *
   endpoint() const
   {
@@ -270,11 +269,11 @@ public:
   {
     clientVerifyEnable = enable != 0;
   }
-  void clearnpnSet()
+  void
+  clearnpnSet()
   {
-      npnSet = nullptr;
+    npnSet = nullptr;
   }
-
 
 private:
   SSLNetVConnection(const SSLNetVConnection &);

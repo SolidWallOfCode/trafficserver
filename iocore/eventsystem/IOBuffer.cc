@@ -134,7 +134,7 @@ MIOBuffer::write_and_transfer_left_over_space(IOBufferReader *r, int64_t alen, i
 int64_t
 MIOBuffer::write(IOBufferReader *r, int64_t len, int64_t offset)
 {
-  return this->write(r->block, len, offset + r->start_offset);
+  return this->write(r->block.get(), len, offset + r->start_offset);
 }
 
 int64_t
@@ -303,7 +303,7 @@ IOBufferChain::write(IOBufferBlock *blocks, int64_t length, int64_t offset)
       this->append(bb);
       n -= bytes;
     }
-    blocks = blocks->next;
+    blocks = blocks->next.get();
   }
 
   length -= n; // actual bytes written to chain.
@@ -332,7 +332,8 @@ void
 IOBufferChain::append(IOBufferBlock *block)
 {
   if (NULL == _tail) {
-    _tail = _blocks = block;
+    _blocks = block;
+    _tail   = block;
   } else {
     _tail->next = block;
     _tail       = block;

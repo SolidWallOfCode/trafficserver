@@ -59,12 +59,27 @@ LINK_FORWARD_DECLARATION(CacheVC, OpenDir_Link) // forward declaration
 LINK_FORWARD_DECLARATION(CacheVC, Active_Link)  // forward declaration
 
 struct CacheHTTPInfoVector {
+  /// The number of alts kept in fixed (stack) memory.
+  static const size_t PRE_ALLOCATED_ALT_COUNT = 4;
+
   typedef CacheHTTPInfoVector self; ///< Self reference type.
 
-  /// Descriptor for an alternate for this object.
-  struct Item {
-    CacheHTTPInfo _alternate; ///< The basic alternate object.
-    /// CacheVCs which are interacting with this alternate.
+  /** Each alternate is represented by a list of @c Slice instances.
+
+      A @c Slice represents a temporally distinct instance of an alternate. These only exist for an
+      active object. In the persistent store an alternate has only one slice and these are
+      effectively equivalent.  In a live object there is usually only one slice. The most common
+      case for multiple slices is to handle serving stale content while the alternate is being
+      updated. The stale data is one slice and the fresh data is another slice. In extreme cases
+      (which hopefully don't actually occur) there can be more slices, each representing an update
+      for the alternate while it is being served. This could theoretically happen if, while an
+      alternate is serving stale content and being updated from the origin, the origin also updates
+      the alternate (e.g. by changing the ETAG).  These are distinguished via the generation number
+      (@a _gen). When writing to disk, only the most recent slice is kept.
+   */
+  struct Slice {
+    CacheHTTPInfo _alternate; ///< This slice's alternate data.
+    /// CacheVCs which are interacting with this slice.
     DLL<CacheVC, Link_CacheVC_OpenDir_Link> _writers;
     ///@{ Active I/O
     /** These two lists tracks active / outstanding I/O operations on The @a _active list is for writers
@@ -102,11 +117,23 @@ struct CacheHTTPInfoVector {
         unsigned int dirty : 1;
       } f;
     };
+    /** Generation #.
+        This is used to detect that an alternate has gone stale and been replaced by an updated version.
+        A CacheVC may be serving from the current alternate when another CacheVC initiates a IMS refresh.
+        If that refresh comes back with new content the current content is moved to the stale list and
+        replaced with the update. Any CacheVC already serving from that content must be able to detect
+        this replacement and switch to the appropriate stale element.
+     */
+    int16_t _gen;
+
     /// List of content buffers.
     /// These are content that could not be written to cache but were recieved from the origin and
     /// therefore are expected to be needed by a reader for this alternate.
     /// @note This should be cleaned out when the last VC associated with this alternate finishes.
     CacheBuffer::List _content_buffers;
+
+    /// The vector is a vector of lists of @c Slice instances, linked through this.
+    LINK(Slice, link);
 
     /** Put content in to the content buffer list.
         A new chain of buffers blocks is created to detach the content from the existing
@@ -123,26 +150,61 @@ struct CacheHTTPInfoVector {
     /// @internal Need to augment this at some point to check for writers to a specific offset.
     bool has_writers() const;
 
-    ~Item();
+    ~Slice();
   };
 
-  /** Record for an alternate that is stale and being held aside for use.
+  /** Track a particular slice of an alternate in the vector.
+
+      @internal At some point it might be worth while to promote this and unify it with the ODE pointer.
+      Currently the ODE containing the vector is presumed to be known via some other mechanism.
+
+      @internal The generation number isn't strictly needed but it does provide a bit of redundancy for safety.
+  */
+  struct SliceRef {
+    typedef SliceRef self; ///< Self reference.
+
+    int _idx                     = -1;      ///< Alternate index in the over vector.
+    Slice *_slice                  = nullptr; ///< The specific item.
+    int _gen                     = -1;      ///< Generation number.
+
+    self &clear(); ///< Reset the reference to initial state, invalid reference.
+  };
+
+  /** Container for the alternate slices.
    */
-  struct StaleItem {
-    typedef StaleItem self; ///< Self reference type.
+  struct SlicedAlt
+  {
+    DLL<Slice> _slices;
 
-    /// The alternate.
-    CacheHTTPInfo _alternate;
-    /// CacheVCs serving content from this alternate.
-    DLL<CacheVC, Link_CacheVC_Active_Link> _readers;
+    // Methods that parallel those for a non-sliced alternate.
+    int marshal_length() const;
+    int marshal(char* buffer, int length) const;
 
-    /// Need a list of instances of this type.
-    LINK(StaleItem, link);
+    // STL like container support.
+    struct iterator
+    {
+      Slice* _spot = nullptr;
+
+      iterator() {}
+      iterator(Slice* slice) : _spot(slice) {}
+
+      bool operator == (iterator const& that) { return _spot == that._spot; }
+      bool operator != (iterator const& that) { return _spot != that._spot; }
+
+      Slice* operator -> () const { return _spot; }
+      Slice& operator * () const { return *_spot; }
+
+      iterator& operator ++ () { _spot = DLL<Slice>::next(_spot); return *this; }
+    };
+
+    iterator begin() { return iterator(_slices.head); }
+    iterator end() { return iterator(nullptr); }
+
+    SlicedAlt& push_front(Slice* slice) { _slices.push(slice); return *this; }
   };
+  typedef SplitVector<SlicedAlt, PRE_ALLOCATED_ALT_COUNT> InfoVector;
 
-  typedef CacheArray<Item> InfoVector;
-
-  void *magic;
+  void *magic = nullptr;
 
   CacheHTTPInfoVector();
   ~CacheHTTPInfoVector();
@@ -150,7 +212,7 @@ struct CacheHTTPInfoVector {
   int
   count()
   {
-    return xcount;
+    return data.size();
   }
 
   int insert(CacheHTTPInfo *info, int id = -1);
@@ -164,7 +226,6 @@ struct CacheHTTPInfoVector {
   void
   reset()
   {
-    xcount = 0;
     data.clear();
   }
   void print(char *buffer, size_t buf_size, bool temps = true);
@@ -173,9 +234,13 @@ struct CacheHTTPInfoVector {
   int marshal(char *buf, int length);
   uint32_t get_handles(const char *buf, int length, RefCountObj *block_ptr = nullptr);
   int unmarshal(const char *buf, int length, RefCountObj *block_ptr);
+  // F must be a functor accept a @c Slice.
+  template < typename F > void for_each_slice(F f);
 
   /// Get the alternate index for the @a key.
   int index_of(CacheKey const &key);
+  /// Get a slice reference for an earliest key.
+  SliceRef slice_ref_for(CacheKey const& key);
   /// Check if there are any writers for the alternate of @a alt_key.
   bool has_writer(CacheKey const &alt_key);
   /// Mark a @c CacheVC as actively writing at @a offset on the alternate with @a alt_key.
@@ -207,19 +272,25 @@ struct CacheHTTPInfoVector {
 
   /** Sigh, yet another custom array class.
       @c Vec doesn't work because it really only works well with pointers, not objects.
+      @c std::vector always does allocation, which we want to avoid for the common case.
   */
   InfoVector data;
 
-  /// Currently in use stale alternates.
-  /// Elements should be cleaned up when the last cache VC serving from it finishes.
-  /// @internal AFAICT no alternate is destroyed except by explicit remove during the lifetime of the ODE.
-  /// Therefore just moving the pointer here suffices, if it is removed from the alt vector at the same time.
-  /// The real point of this list is to do the cleanup that would not otherwise happen when the pointer is moved
-  /// out of the alt vector.
-  DLL<StaleItem> _stale_list;
+  /// Pre-allocated storage for a small (fixed) number of alts for use in @a data
+  std::array<Slice, PRE_ALLOCATED_ALT_COUNT> fixed_slices;
 
-  int xcount;
   Ptr<RefCountObj> vector_buf;
+
+protected:
+  /** Allocate a slice.
+      The @a fixed_slices are used if the next index is within the pre-allocation range and the
+      corresponding fixed slice is not already in use. @a idx is updated to be the actual index
+      where the slice is located.
+
+      @internal In the common case, when there isn't stale content and no extra alternates are used, no
+      actual allocation will be done.
+  */
+  Slice* alloc_slice(int& idx);
 };
 
 /** Range operation tracking.
@@ -327,18 +398,47 @@ protected:
   bool _pending_range_shift_p; ///< The current range has been consumed and the next range will start.
 };
 
-TS_INLINE bool
-CacheHTTPInfoVector::Item::has_writers() const
+template < typename F >
+void CacheHTTPInfoVector::for_each_slice(F f)
+{
+  for ( auto& group : data )
+    for ( auto& slice : group)
+      f(slice);
+}
+
+inline bool
+CacheHTTPInfoVector::Slice::has_writers() const
 {
   return NULL != _writers.head;
 }
 
+inline int
+CacheHTTPInfoVector::SlicedAlt::marshal_length() const
+{
+  return _slices.head ? _slices.head->_alternate.marshal_length() : 0;
+}
+
+inline int
+CacheHTTPInfoVector::SlicedAlt::marshal(char* buffer, int length) const
+{
+  return _slices.head ? _slices.head->_alternate.marshal(buffer, length) : 0;
+}
+
+#if 0
 TS_INLINE CacheHTTPInfo *
 CacheHTTPInfoVector::get(int idx)
 {
   ink_assert(idx >= 0);
   ink_assert(idx < xcount);
   return &data[idx]._alternate;
+}
+#endif
+
+inline auto
+CacheHTTPInfoVector::SliceRef::clear() -> self &
+{
+  new (this) SliceRef();
+  return *this;
 }
 
 inline bool

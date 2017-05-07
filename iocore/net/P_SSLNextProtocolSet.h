@@ -39,7 +39,7 @@ public:
   bool unregisterEndpoint(const char *, Continuation *);
   bool unregisterEndpoint(const char *proto);
   bool advertiseProtocols(const unsigned char **out, unsigned *len) const;
-  SSLNextProtocolSet* clone() const;
+  SSLNextProtocolSet *clone() const;
 
   Continuation *findEndpoint(const unsigned char *, unsigned) const;
 

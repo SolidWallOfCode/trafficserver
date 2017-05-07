@@ -131,7 +131,7 @@ ts_connect()
 #endif
   // connect call
   if (connect(main_socket_fd, (struct sockaddr *)&client_sock, sockaddr_len) < 0) {
-    ink_release_assert(0==close(main_socket_fd));
+    ink_release_assert(0 == close(main_socket_fd));
     main_socket_fd = -1;
     goto ERROR; // connection is down
   }
@@ -140,7 +140,7 @@ ts_connect()
   event_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (event_socket_fd < 0) {
     // fprintf(stderr, "[connect] ERROR: can't open event socket\n");
-    ink_release_assert(0==close(main_socket_fd)); // close the other socket too!
+    ink_release_assert(0 == close(main_socket_fd)); // close the other socket too!
     main_socket_fd = -1;
     goto ERROR; // ERROR - can't open socket
   }
@@ -156,8 +156,8 @@ ts_connect()
   // connect call
   if (connect(event_socket_fd, (struct sockaddr *)&client_event_sock, sockaddr_len) < 0) {
     // fprintf(stderr, "[connect] ERROR (event_socket_fd %d): %s\n", event_socket_fd, strerror(int(errno)));
-    ink_release_assert(0==close(event_socket_fd));
-    ink_release_assert(0==close(main_socket_fd));
+    ink_release_assert(0 == close(event_socket_fd));
+    ink_release_assert(0 == close(main_socket_fd));
     event_socket_fd = -1;
     main_socket_fd  = -1;
     goto ERROR; // connection is down
@@ -365,9 +365,9 @@ mgmtapi_sender::send(void *msg, size_t msglen) const
     }
 
     // clean-up sockets
-    ink_release_assert(0==close(main_socket_fd));
-    ink_release_assert(0==close(event_socket_fd));
-    main_socket_fd = -1;
+    ink_release_assert(0 == close(main_socket_fd));
+    ink_release_assert(0 == close(event_socket_fd));
+    main_socket_fd  = -1;
     event_socket_fd = -1;
 
     err = main_socket_reconnect();
