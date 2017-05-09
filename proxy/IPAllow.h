@@ -34,11 +34,11 @@
 #include "Main.h"
 #include "hdrs/HTTP.h"
 #include "ts/IpMap.h"
-#include "ts/Vec.h"
 #include "ProxyConfig.h"
 
 #include <string>
 #include <set>
+#include <vector>
 
 // forward declare in name only so it can be a friend.
 struct IpAllowUpdate;
@@ -54,24 +54,29 @@ static uint64_t const IP_ALLOW_TIMEOUT = HRTIME_HOUR;
     It has the methods permitted and the source line.
 */
 struct AclRecord {
-  uint32_t _method_mask;
-  int _src_line;
+  uint32_t _method_mask = 0;
+  int _src_line = 0;
   typedef std::set<std::string> MethodSet;
   MethodSet _nonstandard_methods;
-  bool _deny_nonstandard_methods;
+  bool _deny_nonstandard_methods = false;
   static const uint32_t ALL_METHOD_MASK = ~0; // Mask for all methods.
 
   /// Default constructor.
   /// Present only to make Vec<> happy, do not use.
-  AclRecord() : _method_mask(0), _src_line(0), _deny_nonstandard_methods(false) {}
-  AclRecord(uint32_t method_mask) : _method_mask(method_mask), _src_line(0), _deny_nonstandard_methods(false) {}
-  AclRecord(uint32_t method_mask, int ln, const MethodSet &nonstandard_methods, bool deny_nonstandard_methods)
+  AclRecord() {}
+  AclRecord(uint32_t method_mask) : _method_mask(method_mask) {}
+  AclRecord(uint32_t method_mask, int ln, MethodSet &&nonstandard_methods, bool deny_nonstandard_methods)
     : _method_mask(method_mask),
       _src_line(ln),
       _nonstandard_methods(nonstandard_methods),
       _deny_nonstandard_methods(deny_nonstandard_methods)
   {
   }
+  // Don't allow copy to be sure no inefficient copies are done.
+  AclRecord(AclRecord const&) = delete;
+  AclRecord& operator= (AclRecord const& that) = delete;
+  // Provide MoveInsertable property, required by @c std::vector.
+  AclRecord(AclRecord&& that) = default;
 
   static uint32_t
   MethodIdxToMask(int wksidx)
@@ -168,8 +173,8 @@ private:
   const char *action;
   IpMap _src_map;
   IpMap _dest_map;
-  Vec<AclRecord> _src_acls;
-  Vec<AclRecord> _dest_acls;
+  std::vector<AclRecord> _src_acls;
+  std::vector<AclRecord> _dest_acls;
 };
 
 inline AclRecord *
