@@ -72,6 +72,9 @@ struct AclRecord {
       _deny_nonstandard_methods(deny_nonstandard_methods)
   {
   }
+  // Prevent copying.
+  AclRecord(AclRecord const&) = delete;
+  AclRecord& operator = (AclRecord const&) = delete;
 
   static uint32_t
   MethodIdxToMask(int wksidx)
