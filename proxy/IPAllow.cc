@@ -286,7 +286,7 @@ IpAllow::BuildTable()
           if (method_found) {
             Vec<AclRecord> &acls = is_dest_ip ? _dest_acls : _src_acls;
             IpMap &map           = is_dest_ip ? _dest_map : _src_map;
-            acls.push_back(AclRecord(acl_method_mask, line_num, nonstandard_methods, deny_nonstandard_methods));
+            acls.push_back(AclRecord(acl_method_mask, line_num, std::move(nonstandard_methods), deny_nonstandard_methods));
             // Color with index in acls because at this point the address is volatile.
             map.fill(&addr1, &addr2, reinterpret_cast<void *>(acls.length() - 1));
           } else {

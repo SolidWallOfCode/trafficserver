@@ -65,7 +65,7 @@ struct AclRecord {
   /// Present only to make Vec<> happy, do not use.
   AclRecord() = default;
   AclRecord(uint32_t method_mask) : _method_mask(method_mask) {}
-  AclRecord(uint32_t method_mask, int ln, const MethodSet &nonstandard_methods, bool deny_nonstandard_methods)
+  AclRecord(uint32_t method_mask, int ln, MethodSet &&nonstandard_methods, bool deny_nonstandard_methods)
     : _method_mask(method_mask),
       _src_line(ln),
       _nonstandard_methods(nonstandard_methods),
