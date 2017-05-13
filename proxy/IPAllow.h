@@ -34,11 +34,11 @@
 #include "Main.h"
 #include "hdrs/HTTP.h"
 #include "ts/IpMap.h"
-#include "ts/Vec.h"
 #include "ProxyConfig.h"
 
 #include <string>
 #include <set>
+#include <vector>
 
 // forward declare in name only so it can be a friend.
 struct IpAllowUpdate;
@@ -61,9 +61,6 @@ struct AclRecord {
   bool _deny_nonstandard_methods = false;
   static const uint32_t ALL_METHOD_MASK = ~0; // Mask for all methods.
 
-  /// Default constructor.
-  /// Present only to make Vec<> happy, do not use.
-  AclRecord() = default;
   AclRecord(uint32_t method_mask) : _method_mask(method_mask) {}
   AclRecord(uint32_t method_mask, int ln, MethodSet &&nonstandard_methods, bool deny_nonstandard_methods)
     : _method_mask(method_mask),
@@ -75,6 +72,8 @@ struct AclRecord {
   // Prevent copying.
   AclRecord(AclRecord const&) = delete;
   AclRecord& operator = (AclRecord const&) = delete;
+  // Move constructor for std::vector
+  AclRecord(AclRecord&&) = default;
 
   static uint32_t
   MethodIdxToMask(int wksidx)
@@ -171,8 +170,8 @@ private:
   const char *action;
   IpMap _src_map;
   IpMap _dest_map;
-  Vec<AclRecord> _src_acls;
-  Vec<AclRecord> _dest_acls;
+  std::vector<AclRecord> _src_acls;
+  std::vector<AclRecord> _dest_acls;
 };
 
 inline AclRecord *
