@@ -54,17 +54,17 @@ static uint64_t const IP_ALLOW_TIMEOUT = HRTIME_HOUR;
     It has the methods permitted and the source line.
 */
 struct AclRecord {
-  uint32_t _method_mask;
-  int _src_line;
+  uint32_t _method_mask = 0;
+  int _src_line = 0;
   typedef std::set<std::string> MethodSet;
   MethodSet _nonstandard_methods;
-  bool _deny_nonstandard_methods;
+  bool _deny_nonstandard_methods = false;
   static const uint32_t ALL_METHOD_MASK = ~0; // Mask for all methods.
 
   /// Default constructor.
   /// Present only to make Vec<> happy, do not use.
-  AclRecord() : _method_mask(0), _src_line(0), _deny_nonstandard_methods(false) {}
-  AclRecord(uint32_t method_mask) : _method_mask(method_mask), _src_line(0), _deny_nonstandard_methods(false) {}
+  AclRecord() {}
+  AclRecord(uint32_t method_mask) : _method_mask(method_mask) {}
   AclRecord(uint32_t method_mask, int ln, const MethodSet &nonstandard_methods, bool deny_nonstandard_methods)
     : _method_mask(method_mask),
       _src_line(ln),
