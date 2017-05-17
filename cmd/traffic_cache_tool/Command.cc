@@ -40,12 +40,6 @@ ERR_COMMAND_TAG_NOT_FOUND(char const *tag)
   return ts::Errata(s.str());
 }
 
-ts::Errata
-ERR_SUBCOMMAND_REQUIRED()
-{
-  return ts::Errata(std::string("Incomplete command, additional keyword required"));
-}
-
 CommandTable::Command::Command()
 {
 }
@@ -87,10 +81,15 @@ CommandTable::Command::invoke(int argc, char *argv[])
 
   if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
     // Tail of command keywords, try to invoke.
-    if (_func)
+    if (_func) {
       zret = _func(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
-    else
-      zret = ERR_SUBCOMMAND_REQUIRED();
+    } else {
+      std::ostringstream s;
+      s << "Incomplete command, additional keyword required";
+      s << std::endl;
+      this->helpMessage(0, nullptr, s, "+-  ");
+      zret.push(s.str());
+    }
   } else {
     char const *tag = argv[CommandTable::_opt_idx];
     auto spot       = std::find_if(_group.begin(), _group.end(),

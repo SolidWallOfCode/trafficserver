@@ -703,8 +703,10 @@ Errata
 Cache::loadSpan(FilePath const &path)
 {
   Errata zret;
-  if (!path.is_readable())
-    zret = Errata::Message(0, EPERM, path, " is not readable.");
+  if (!path.has_path())
+    zret = Errata::Message(0, EINVAL, "A span file specified by --span is required");
+  else if (!path.is_readable())
+    zret = Errata::Message(0, EPERM, '\'', path.path(),  "' is not readable.");
   else if (path.is_regular_file())
     zret = this->loadSpanConfig(path);
   else
