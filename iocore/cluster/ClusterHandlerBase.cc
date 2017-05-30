@@ -997,12 +997,12 @@ ClusterHandler::startClusterEvent(int event, Event *e)
         machine->msg_proto_major = proto_major;
         machine->msg_proto_minor = proto_minor;
 
-        if (eventProcessor.n_threads_for_type[ET_CLUSTER] != num_of_cluster_threads) {
+        if (eventProcessor.thread_group[ET_CLUSTER]._count != num_of_cluster_threads) {
           cluster_connect_state = ClusterHandler::CLCON_ABORT_CONNECT;
           break;
         }
 
-        thread = eventProcessor.eventthread[ET_CLUSTER][id % num_of_cluster_threads];
+        thread = eventProcessor.thread_group[ET_CLUSTER]._thread[id % num_of_cluster_threads];
         if (net_vc->thread == thread) {
           cluster_connect_state = CLCON_CONN_BIND_OK;
           break;

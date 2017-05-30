@@ -34,15 +34,7 @@ Description
 These types are provided by the compiler ("built-in") or from a required operating system, POSIX, or package header.
 
 
-   
+
 .. cpp:type:: uint24_t
-   
-
-   
-.. cpp:type:: Event
-
-
 .. cpp:type:: DLL
-
-
 .. cpp:type:: INK_MD5

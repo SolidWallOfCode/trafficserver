@@ -331,8 +331,8 @@ struct CacheContinuation : public Continuation {
   {
     int etype = ET_CLUSTER;
     int i;
-    for (i = 0; i < eventProcessor.n_threads_for_type[etype]; ++i) {
-      if (et == eventProcessor.eventthread[etype][i]) {
+    for (i = 0; i < eventProcessor.thread_group[etype]._count; ++i) {
+      if (et == eventProcessor.thread_group[etype]._thread[i]) {
         return true;
       }
     }

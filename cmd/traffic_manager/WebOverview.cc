@@ -275,7 +275,7 @@ overviewRecord::varFloatFromName(const char *name, MgmtFloat *value)
 
 overviewPage::overviewPage() : sortRecords(10, false)
 {
-  ink_mutex_init(&accessLock, "overviewRecord");
+  ink_mutex_init(&accessLock);
   nodeRecords = ink_hash_table_create(InkHashTableKeyType_Word);
   numHosts    = 0;
   ourAddr     = 0; // We will update this when we add the record for

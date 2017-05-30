@@ -660,9 +660,9 @@ ClusterProcessor::start()
     size_t stacksize;
 
     REC_ReadConfigInteger(stacksize, "proxy.config.thread.default.stacksize");
-    ET_CLUSTER = eventProcessor.spawn_event_threads(num_of_cluster_threads, "ET_CLUSTER", stacksize);
-    for (int i = 0; i < eventProcessor.n_threads_for_type[ET_CLUSTER]; i++) {
-      initialize_thread_for_net(eventProcessor.eventthread[ET_CLUSTER][i]);
+    ET_CLUSTER = eventProcessor.spawn_event_threads("ET_CLUSTER", num_of_cluster_threads, stacksize);
+    for (int i = 0; i < eventProcessor.thread_group[ET_CLUSTER]._count; i++) {
+      initialize_thread_for_net(eventProcessor.thread_group[ET_CLUSTER]._thread[i]);
     }
     REC_RegisterConfigUpdateFunc("proxy.config.cluster.cluster_configuration", machine_config_change, (void *)CLUSTER_CONFIG);
     do_machine_config_change((void *)CLUSTER_CONFIG, "proxy.config.cluster.cluster_configuration");
