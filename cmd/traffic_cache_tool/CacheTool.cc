@@ -51,11 +51,7 @@ using ts::CacheDirEntry;
 
 const Bytes ts::CacheSpan::OFFSET{CacheStoreBlocks{1}};
 
-enum {
-  SILENT = 0,
-  NORMAL,
-  VERBOSE
-} Verbosity = NORMAL;
+enum { SILENT = 0, NORMAL, VERBOSE } Verbosity = NORMAL;
 
 namespace
 {
@@ -110,8 +106,8 @@ struct Stripe {
   /// Piece wise memory storage for the directory.
   struct Chunk {
     Bytes _start; ///< Starting offset relative to physical device of span.
-    Bytes _skip; ///< # of bytes not valid at the start of the first block.
-    Bytes _clip; ///< # of bytes not valid at the end of the last block.
+    Bytes _skip;  ///< # of bytes not valid at the start of the first block.
+    Bytes _clip;  ///< # of bytes not valid at the end of the last block.
 
     typedef std::vector<MemView> Chain;
     Chain _chain; ///< Chain of blocks.
@@ -139,7 +135,7 @@ struct Stripe {
 
       @return @c true if @a mem has valid data, @c false otherwise.
   */
-  bool probeMeta(MemView &mem, StripeMeta const* meta = nullptr);
+  bool probeMeta(MemView &mem, StripeMeta const *meta = nullptr);
 
   /// Check a buffer for being valid stripe metadata.
   /// @return @c true if valid, @c false otherwise.
@@ -208,15 +204,13 @@ Stripe::validateMeta(StripeMeta const *meta)
 }
 
 bool
-Stripe::probeMeta(MemView &mem, StripeMeta const* base_meta)
+Stripe::probeMeta(MemView &mem, StripeMeta const *base_meta)
 {
   while (mem.size() >= sizeof(StripeMeta)) {
-    StripeMeta const* meta = mem.template at_ptr<StripeMeta>(0);
-    if (this->validateMeta(meta) &&
-        (base_meta == nullptr || // no base version to check against.
-         ( meta->version == base_meta->version ) // need more checks here I think.
-          ))
-    {
+    StripeMeta const *meta = mem.template at_ptr<StripeMeta>(0);
+    if (this->validateMeta(meta) && (base_meta == nullptr ||               // no base version to check against.
+                                     (meta->version == base_meta->version) // need more checks here I think.
+                                     )) {
       return true;
     }
     // The meta data is stored aligned on a stripe block boundary, so only need to check there.
@@ -246,8 +240,8 @@ Stripe::updateLiveData(enum Copy c)
       ++n_segments;
   } while ((sizeof(StripeMeta) + sizeof(uint16_t) * n_segments) > static_cast<size_t>(header_len));
 
-  _buckets  = n_buckets / n_segments;
-  _segments = n_segments;
+  _buckets         = n_buckets / n_segments;
+  _segments        = n_segments;
   _directory._skip = header_len;
 }
 
@@ -270,15 +264,17 @@ Stripe::loadMeta()
   Bytes pos = _start;
   // Avoid searching the entire span, because some of it must be content. Assume that AOS is more than 160
   // which means at most 10/160 (1/16) of the span can be directory/header.
-  Bytes limit = pos + _len / 16;
+  Bytes limit     = pos + _len / 16;
   size_t io_align = _span->_geometry.blocksz;
   StripeMeta const *meta;
 
-  std::unique_ptr<char> bulk_buff; // Buffer for bulk reads.
+  std::unique_ptr<char> bulk_buff;                      // Buffer for bulk reads.
   static const size_t SBSIZE = CacheStoreBlocks::SCALE; // save some typing.
-  alignas(SBSIZE) char stripe_buff[SBSIZE]; // Use when reading a single stripe block.
+  alignas(SBSIZE) char stripe_buff[SBSIZE];             // Use when reading a single stripe block.
 
-  if (io_align > SBSIZE) return Errata::Message(0,1,"Cannot load stripe ", _idx, " on span ", _span->_path, " because the I/O block alignment ", io_align, " is larger than the buffer alignment ", SBSIZE);
+  if (io_align > SBSIZE)
+    return Errata::Message(0, 1, "Cannot load stripe ", _idx, " on span ", _span->_path, " because the I/O block alignment ",
+                           io_align, " is larger than the buffer alignment ", SBSIZE);
 
   _directory._start = pos;
 
@@ -296,18 +292,18 @@ Stripe::loadMeta()
     // Search for Footer A. Nothing for it except to grub through the disk.
     // The searched data is cached so it's available for directory parsing later if needed.
     while (pos < limit) {
-      char *buff = static_cast<char*>(ats_memalign(io_align, N));
+      char *buff = static_cast<char *>(ats_memalign(io_align, N));
       bulk_buff.reset(buff);
       n.assign(pread(fd, buff, N, pos));
       data.setView(buff, n.units());
       found = this->probeMeta(data, &_meta[A][HEAD]);
       if (found) {
-        ptrdiff_t diff = data.template at_ptr<char>(0) - buff;
-        _meta[A][FOOT] = data.template at<StripeMeta>(0);
+        ptrdiff_t diff     = data.template at_ptr<char>(0) - buff;
+        _meta[A][FOOT]     = data.template at<StripeMeta>(0);
         _meta_pos[A][FOOT] = round_down(pos + Bytes(diff));
         // don't bother attaching block if the footer is at the start
         if (diff > 0) {
-          _directory._clip   = Bytes(N - diff);
+          _directory._clip = Bytes(N - diff);
           _directory.append({bulk_buff.release(), N});
         }
         data += SBSIZE; // skip footer for checking on B copy.
@@ -375,19 +371,19 @@ struct Volume {
   std::vector<Stripe *> _stripes;
 
   /// Remove all data related to @a span.
-  void clearSpan(Span* span);
+  void clearSpan(Span *span);
   /// Remove all allocated space and stripes.
   void clear();
 };
 
-# if 0
+#if 0
 void
 Volume::clearSpan(Span* span)
 {
   auto spot = std::remove_if(_stripes.begin(), _stripes.end(), [span,this](Stripe* stripe) { return stripe->_span == span ? ( this->_size -= stripe->_len , true ) : false; });
   _stripes.erase(spot, _stripes.end());
 }
-# endif
+#endif
 
 void
 Volume::clear()
@@ -402,9 +398,9 @@ struct VolumeConfig {
 
   /// Data direct from the config file.
   struct Data {
-    int _idx        = 0;      ///< Volume index.
-    int _percent    = 0;      ///< Size if specified as a percent.
-    Megabytes _size {0};      ///< Size if specified as an absolute.
+    int _idx     = 0;         ///< Volume index.
+    int _percent = 0;         ///< Size if specified as a percent.
+    Megabytes _size{0};       ///< Size if specified as an absolute.
     CacheStripeBlocks _alloc; ///< Allocation size.
 
     // Methods handy for parsing
@@ -449,7 +445,7 @@ struct VolumeConfig {
   void convertToAbsolute(ts::CacheStripeBlocks total_span_size);
 };
 
-# if 0
+#if 0
 Errata
 VolumeConfig::validatePercentAllocation()
 {
@@ -461,7 +457,7 @@ VolumeConfig::validatePercentAllocation()
     zret.push(0, 10, "Volume percent allocation ", n, " is more than 100%");
   return zret;
 }
-# endif
+#endif
 
 void
 VolumeConfig::convertToAbsolute(ts::CacheStripeBlocks n)
@@ -482,10 +478,10 @@ struct Cache {
   Errata loadSpanConfig(FilePath const &path);
   Errata loadSpanDirect(FilePath const &path, int vol_idx = -1, Bytes size = Bytes(-1));
 
-  Errata allocStripe(Span* span, int vol_idx, CacheStripeBlocks len);
+  Errata allocStripe(Span *span, int vol_idx, CacheStripeBlocks len);
 
   /// Change the @a span to have a single, unused stripe occupying the entire @a span.
-//  void clearSpan(Span *span);
+  //  void clearSpan(Span *span);
   /// Clear all allocated space.
   void clearAllocation();
 
@@ -493,7 +489,7 @@ struct Cache {
   void dumpSpans(SpanDumpDepth depth);
   void dumpVolumes();
 
-//  ts::CacheStripeBlocks calcTotalSpanPhysicalSize();
+  //  ts::CacheStripeBlocks calcTotalSpanPhysicalSize();
   ts::CacheStripeBlocks calcTotalSpanConfiguredSize();
 
   std::list<Span *> _spans;
@@ -501,7 +497,7 @@ struct Cache {
 };
 
 Errata
-Cache::allocStripe(Span* span, int vol_idx, CacheStripeBlocks len)
+Cache::allocStripe(Span *span, int vol_idx, CacheStripeBlocks len)
 {
   auto rv = span->allocStripe(vol_idx, len);
   if (rv.isOK()) {
@@ -510,20 +506,22 @@ Cache::allocStripe(Span* span, int vol_idx, CacheStripeBlocks len)
   return rv.errata();
 }
 
-# if 0
+#if 0
 void
 Cache::clearSpan(Span* span)
 {
   for ( auto& item : _volumes ) item.second.clearSpan(span);
   span->clear();
 }
-# endif
+#endif
 
 void
 Cache::clearAllocation()
 {
-  for ( auto span : _spans) span->clear();
-  for ( auto& item : _volumes ) item.second.clear();
+  for (auto span : _spans)
+    span->clear();
+  for (auto &item : _volumes)
+    item.second.clear();
 }
 /* --------------------------------------------------------------------------------------- */
 /// Temporary structure used for doing allocation computations.
@@ -533,8 +531,8 @@ class VolumeAllocator
   struct V {
     VolumeConfig::Data const &_config; ///< Configuration instance.
     CacheStripeBlocks _size;           ///< Current actual size.
-    int64_t _deficit; ///< fractional deficit
-    int64_t _shares; ///< relative amount of free space to allocate
+    int64_t _deficit;                  ///< fractional deficit
+    int64_t _shares;                   ///< relative amount of free space to allocate
 
     V(VolumeConfig::Data const &config, CacheStripeBlocks size, int64_t deficit = 0, int64_t shares = 0)
       : _config(config), _size(size), _deficit(deficit), _shares(shares)
@@ -551,8 +549,8 @@ class VolumeAllocator
   typedef std::vector<V> AV;
   AV _av; ///< Working vector of volume data.
 
-  Cache _cache;       ///< Current state.
-  VolumeConfig _vols; ///< Configuration state.
+  Cache _cache;         ///< Current state.
+  VolumeConfig _vols;   ///< Configuration state.
   bool _dry_run = true; ///< Don't update.
 
 public:
@@ -565,9 +563,8 @@ public:
   void dumpVolumes();
 
 protected:
-
   /// Update the allocation for a span.
-  Errata allocateFor(Span& span);
+  Errata allocateFor(Span &span);
 };
 
 VolumeAllocator::VolumeAllocator()
@@ -639,16 +636,17 @@ VolumeAllocator::fillAllSpans()
 }
 
 Errata
-VolumeAllocator::allocateFor(Span& span)
+VolumeAllocator::allocateFor(Span &span)
 {
   Errata zret;
 
   /// Scaling factor for shares, effectively the accuracy.
   static const int64_t SCALE = 1000;
-  int64_t total_shares = 0;
+  int64_t total_shares       = 0;
 
   if (Verbosity >= NORMAL)
-    std::cout << "Allocating " << CacheStripeBlocks(round_down(span._len)).count() << " stripe blocks from span " << span._path << std::endl;
+    std::cout << "Allocating " << CacheStripeBlocks(round_down(span._len)).count() << " stripe blocks from span " << span._path
+              << std::endl;
 
   // Walk the volumes and get the relative allocations.
   for (auto &v : _av) {
@@ -679,13 +677,17 @@ VolumeAllocator::allocateFor(Span& span)
       span_used += n;
       total_shares -= v._shares;
       Errata z = _cache.allocStripe(&span, v._config._idx, round_up(n));
-      if (Verbosity >= NORMAL) std::cout << "           " << n << " to volume " << v._config._idx << std::endl;
-      if (!z) std::cout << z;
+      if (Verbosity >= NORMAL)
+        std::cout << "           " << n << " to volume " << v._config._idx << std::endl;
+      if (!z)
+        std::cout << z;
     }
   }
-  if (Verbosity >= NORMAL) std::cout << "     Total " << span_used << std::endl;
+  if (Verbosity >= NORMAL)
+    std::cout << "     Total " << span_used << std::endl;
   if (!_dry_run) {
-    if (Verbosity >= NORMAL) std::cout << " Updating Header ... ";
+    if (Verbosity >= NORMAL)
+      std::cout << " Updating Header ... ";
     zret = span.updateHeader();
   }
   _cache.dumpVolumes(); // debug
@@ -706,7 +708,7 @@ Cache::loadSpan(FilePath const &path)
   if (!path.has_path())
     zret = Errata::Message(0, EINVAL, "A span file specified by --span is required");
   else if (!path.is_readable())
-    zret = Errata::Message(0, EPERM, '\'', path.path(),  "' is not readable.");
+    zret = Errata::Message(0, EPERM, '\'', path.path(), "' is not readable.");
   else if (path.is_regular_file())
     zret = this->loadSpanConfig(path);
   else
@@ -726,7 +728,7 @@ Cache::loadSpanDirect(FilePath const &path, int vol_idx, Bytes size)
       for (auto i = 0; i < nspb; ++i) {
         ts::CacheStripeDescriptor &raw = span->_header->stripes[i];
         Stripe *stripe                 = new Stripe(span.get(), raw.offset, raw.len);
-        stripe->_idx = i;
+        stripe->_idx                   = i;
         if (raw.free == 0) {
           stripe->_vol_idx = raw.vol_idx;
           stripe->_type    = raw.type;
@@ -804,15 +806,15 @@ Cache::dumpSpans(SpanDumpDepth depth)
 
         for (auto stripe : span->_stripes) {
           std::cout << "    : "
-                    << "Stripe " << static_cast<int>(stripe->_idx) << " @ " << stripe->_start << " len=" << stripe->_len.count() << " blocks "
+                    << "Stripe " << static_cast<int>(stripe->_idx) << " @ " << stripe->_start << " len=" << stripe->_len.count()
+                    << " blocks "
                     << " vol=" << static_cast<int>(stripe->_vol_idx) << " type=" << static_cast<int>(stripe->_type) << " "
                     << (stripe->isFree() ? "free" : "in-use") << std::endl;
           if (depth >= SpanDumpDepth::STRIPE) {
             Errata r = stripe->loadMeta();
             if (r) {
-              std::cout << "      " << stripe->_segments << " segments with " << stripe->_buckets
-                        << " buckets per segment for " << stripe->_buckets * stripe->_segments * ts::ENTRIES_PER_BUCKET
-                        << " total directory entries taking "
+              std::cout << "      " << stripe->_segments << " segments with " << stripe->_buckets << " buckets per segment for "
+                        << stripe->_buckets * stripe->_segments * ts::ENTRIES_PER_BUCKET << " total directory entries taking "
                         << stripe->_buckets * stripe->_segments * sizeof(CacheDirEntry) * ts::ENTRIES_PER_BUCKET
                         //                        << " out of " << (delta-header_len).units() << " bytes."
                         << std::endl;
@@ -851,7 +853,7 @@ Cache::calcTotalSpanConfiguredSize()
   return zret;
 }
 
-# if 0
+#if 0
 ts::CacheStripeBlocks
 Cache::calcTotalSpanPhysicalSize()
 {
@@ -863,7 +865,7 @@ Cache::calcTotalSpanPhysicalSize()
   }
   return zret;
 }
-# endif
+#endif
 
 Cache::~Cache()
 {

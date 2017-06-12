@@ -231,10 +231,10 @@ Errata::write(
 ) const {
 
   for ( auto m : *this ) {
-    if ((offset + indent) > 0)
+    if ((offset + indent) > 0) {
       out << std::setw(indent + offset) << std::setfill(' ')
           << ((indent > 0 && lead) ? lead : " ");
-}
+    }
 
     out << m.m_id << " [" << m.m_code << "]: " << m.m_text
         << std::endl
