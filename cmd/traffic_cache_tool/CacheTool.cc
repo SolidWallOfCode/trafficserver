@@ -287,7 +287,7 @@ Stripe::loadMeta()
     delta              = Bytes(data.template at_ptr<char>(0) - stripe_buff);
     _meta[A][HEAD]     = *meta;
     _meta_pos[A][HEAD] = round_down(pos + Bytes(delta));
-    pos += SBSIZE;
+    pos += round_up(SBSIZE);
     _directory._skip = Bytes(SBSIZE); // first guess, updated in @c updateLiveData when the header length is computed.
     // Search for Footer A. Nothing for it except to grub through the disk.
     // The searched data is cached so it's available for directory parsing later if needed.
@@ -295,7 +295,7 @@ Stripe::loadMeta()
       char *buff = static_cast<char *>(ats_memalign(io_align, N));
       bulk_buff.reset(buff);
       n.assign(pread(fd, buff, N, pos));
-      data.setView(buff, n.units());
+      data.setView(buff, n);
       found = this->probeMeta(data, &_meta[A][HEAD]);
       if (found) {
         ptrdiff_t diff     = data.template at_ptr<char>(0) - buff;
@@ -310,7 +310,7 @@ Stripe::loadMeta()
         break;
       } else {
         _directory.append({bulk_buff.release(), N});
-        pos += N;
+        pos += round_up(N);
       }
     }
   } else {
@@ -324,9 +324,9 @@ Stripe::loadMeta()
     // Header B should be immediately after Footer A. If at the end of the last read,
     // do another read.
     if (data.size() < CacheStoreBlocks::SCALE) {
-      pos += N;
+      pos += round_up(N);
       n = Bytes(pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos));
-      data.setView(stripe_buff, n.units());
+      data.setView(stripe_buff, n);
     }
     meta = data.template at_ptr<StripeMeta>(0);
     if (this->validateMeta(meta)) {
@@ -336,7 +336,7 @@ Stripe::loadMeta()
       // Footer B must be at the same relative offset to Header B as Footer A -> Header A.
       pos += delta;
       n = Bytes(pread(fd, stripe_buff, ts::CacheStoreBlocks::SCALE, pos));
-      data.setView(stripe_buff, n.units());
+      data.setView(stripe_buff, n);
       meta = data.template at_ptr<StripeMeta>(0);
       if (this->validateMeta(meta)) {
         _meta[B][FOOT]     = *meta;
@@ -802,7 +802,7 @@ Cache::dumpSpans(SpanDumpDepth depth)
       } else {
         std::cout << "Span: " << span->_path << " " << span->_header->num_volumes << " Volumes " << span->_header->num_used
                   << " in use " << span->_header->num_free << " free " << span->_header->num_diskvol_blks << " stripes "
-                  << span->_header->num_blocks.units() << " blocks" << std::endl;
+                  << span->_header->num_blocks.value() << " blocks" << std::endl;
 
         for (auto stripe : span->_stripes) {
           std::cout << "    : "
@@ -835,7 +835,7 @@ Cache::dumpVolumes()
   for (auto const &elt : _volumes) {
     size_t size = 0;
     for (auto const &r : elt.second._stripes)
-      size += r->_len.units();
+      size += r->_len;
 
     std::cout << "Volume " << elt.first << " has " << elt.second._stripes.size() << " stripes and " << size << " bytes"
               << std::endl;
@@ -907,7 +907,7 @@ Span::loadDevice()
 
   if (fd) {
     if (ink_file_get_geometry(fd, _geometry)) {
-      off_t offset = ts::CacheSpan::OFFSET.units();
+      off_t offset = ts::CacheSpan::OFFSET;
       CacheStoreBlocks span_hdr_size(1);                        // default.
       static const ssize_t BUFF_SIZE = CacheStoreBlocks::SCALE; // match default span_hdr_size
       alignas(512) char buff[BUFF_SIZE];
@@ -919,12 +919,12 @@ Span::loadDevice()
         if (span_hdr.magic == ts::SpanHeader::MAGIC && span_hdr.num_diskvol_blks == span_hdr.num_used + span_hdr.num_free) {
           int nspb      = span_hdr.num_diskvol_blks;
           span_hdr_size = round_up(sizeof(ts::SpanHeader) + (nspb - 1) * sizeof(ts::CacheStripeDescriptor));
-          _header.reset(new (malloc(span_hdr_size.units())) ts::SpanHeader);
-          if (span_hdr_size.units() <= BUFF_SIZE) {
-            memcpy(_header.get(), buff, span_hdr_size.units());
+          _header.reset(new (malloc(span_hdr_size)) ts::SpanHeader);
+          if (span_hdr_size <= BUFF_SIZE) {
+            memcpy(_header.get(), buff, span_hdr_size);
           } else {
             // TODO - check the pread return
-            pread(fd, _header.get(), span_hdr_size.units(), offset);
+            pread(fd, _header.get(), span_hdr_size, offset);
           }
           _len = _header->num_blocks;
         } else {
@@ -991,7 +991,7 @@ Span::clear()
   // with internal calculations so have to match that here. Yay.
   CacheStoreBlocks eff = _len - _base; // starting # of usable blocks.
   // The maximum number of volumes that can store stored, accounting for the space used to store the descriptors.
-  int n   = (eff.units() - sizeof(ts::SpanHeader)) / (CacheStripeBlocks::SCALE + sizeof(CacheStripeDescriptor));
+  int n   = (eff - sizeof(ts::SpanHeader)) / (CacheStripeBlocks::SCALE + sizeof(CacheStripeDescriptor));
   _offset = _base + round_up(sizeof(ts::SpanHeader) + (n - 1) * sizeof(CacheStripeDescriptor));
   stripe  = new Stripe(this, _offset, _len - _offset);
   _stripes.push_back(stripe);
@@ -1007,7 +1007,7 @@ Span::updateHeader()
   int n = _stripes.size();
   CacheStripeDescriptor *sd;
   CacheStoreBlocks hdr_size = round_up(sizeof(ts::SpanHeader) + (n - 1) * sizeof(ts::CacheStripeDescriptor));
-  void *raw                 = ats_memalign(512, hdr_size.units());
+  void *raw                 = ats_memalign(512, hdr_size);
   ts::SpanHeader *hdr       = static_cast<ts::SpanHeader *>(raw);
   std::bitset<ts::MAX_VOLUME_IDX + 1> volume_mask;
 
@@ -1038,8 +1038,8 @@ Span::updateHeader()
   hdr->num_volumes = volume_mask.count();
   _header.reset(hdr);
   if (OPEN_RW_FLAG) {
-    ssize_t r = pwrite(_fd, hdr, hdr_size.units(), ts::CacheSpan::OFFSET.units());
-    if (r < ts::CacheSpan::OFFSET.units())
+    ssize_t r = pwrite(_fd, hdr, hdr_size, ts::CacheSpan::OFFSET);
+    if (r < ts::CacheSpan::OFFSET)
       zret.push(0, errno, "Failed to update span - ", strerror(errno));
   } else {
     std::cout << "Writing not enabled, no updates perfomed" << std::endl;
@@ -1053,7 +1053,7 @@ Span::clearPermanently()
   if (OPEN_RW_FLAG) {
     alignas(512) static char zero[CacheStoreBlocks::SCALE]; // should be all zero, it's static.
     std::cout << "Clearing " << _path << " permanently on disk ";
-    ssize_t n = pwrite(_fd, zero, sizeof(zero), ts::CacheSpan::OFFSET.units());
+    ssize_t n = pwrite(_fd, zero, sizeof(zero), ts::CacheSpan::OFFSET);
     if (n == sizeof(zero))
       std::cout << "done";
     else {
