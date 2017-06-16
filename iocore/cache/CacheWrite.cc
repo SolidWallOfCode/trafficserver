@@ -73,9 +73,8 @@ CacheVC::updateVector(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       VC_SCHED_LOCK_RETRY();
 
     int vec = alternate.valid();
+    int alternate_index = slice_ref.get_alternate_index(od);
     if (f.update) {
-      // all Update cases. Need to get the alternate index.
-      alternate_index = get_alternate_index(&od->vector, update_key, alternate_index);
       Debug("cache_update", "updating alternate index %d frags %d", alternate_index,
             alternate_index >= 0 ? od->vector.get(alternate_index)->get_frag_count() : -1);
       // if its an alternate delete
@@ -406,7 +405,7 @@ CacheVC::evacuateReadHead(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */
       Note("bad vector detected during evacuation");
       goto Ldone;
     }
-    alternate_index = get_alternate_index(&vector, earliest_key);
+    int alternate_index = slice_ref.get_alternate_index(od);
     if (alternate_index < 0)
       goto Ldone;
     alternate_tmp = vector.get(alternate_index);
@@ -791,13 +790,13 @@ agg_copy(char *p, CacheVC *vc)
           // As the header is finalized the fragment vector should be trimmed if the object is complete.
           if (!vc->f.update && !vc->f.evac_vector) {
             ink_assert(!(vc->first_key == zero_key));
-            CacheHTTPInfo *http_info = vc->od->vector.get(vc->alternate_index);
+            CacheHTTPInfo *http_info = &(vc->slice_ref._slice->_alternate);
             http_info->object_size_set(vc->total_len);
           }
           // update + data_written =>  Update case (b)
           // need to change the old alternate's object length
           if (vc->f.update && vc->total_len) {
-            CacheHTTPInfo *http_info = vc->od->vector.get(vc->alternate_index);
+            CacheHTTPInfo *http_info = &(vc->slice_ref._slice->_alternate);
             http_info->object_size_set(vc->total_len);
           }
         }
@@ -1090,6 +1089,7 @@ CacheVC::openWriteCloseDir(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED *
     if (closed < 0 && fragment)
       dir_delete(&earliest_key, vol, &earliest_dir);
   }
+  int alternate_index = slice_ref.get_alternate_index(od);
   if (is_debug_tag_set("cache_update")) {
     if (f.update && closed > 0) {
       if (!total_len && alternate_index != CACHE_ALT_REMOVED) {
@@ -1388,7 +1388,8 @@ CacheVC::openWriteInit(int eid, Event *event)
       alternate.object_key_get(&earliest_key);
     }
     // Get synchronized with the OD vector.
-    if (-1 == (alternate_index = get_alternate_index(&(od->vector), earliest_key))) {
+    int alternate_index = slice_ref.get_alternate_index(od);
+    if (-1 == alternate_index) {
       Debug("amc", "[openWriteInit] alt not found, inserted");
       alternate_index = od->vector.insert(&alternate); // not there, add it
     } else {
@@ -1402,7 +1403,7 @@ CacheVC::openWriteInit(int eid, Event *event)
       }
     }
     // mark us as an writer.
-    od->vector.data[alternate_index]._writers.push(this);
+    slice_ref._slice->_writers.push(this);
     alternate.copy_shallow(od->vector.get(alternate_index));
 
     od->close_open_writer(this);

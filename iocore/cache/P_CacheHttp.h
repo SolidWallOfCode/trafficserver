@@ -32,6 +32,7 @@
 typedef URL CacheURL;
 typedef HTTPHdr CacheHTTPHdr;
 typedef HTTPInfo CacheHTTPInfo;
+class OpenDirEntry;
 
 #define OFFSET_BITS 24
 enum {
@@ -59,7 +60,7 @@ LINK_FORWARD_DECLARATION(CacheVC, OpenDir_Link) // forward declaration
 LINK_FORWARD_DECLARATION(CacheVC, Active_Link)  // forward declaration
 
 struct CacheHTTPInfoVector {
-  /// The number of alts kept in fixed (stack) memory.
+  /// The number of alts kept in fixed memory, allocated as part of this object.
   static const size_t PRE_ALLOCATED_ALT_COUNT = 4;
 
   typedef CacheHTTPInfoVector self; ///< Self reference type.
@@ -153,30 +154,13 @@ struct CacheHTTPInfoVector {
     ~Slice();
   };
 
-  /** Track a particular slice of an alternate in the vector.
-
-      @internal At some point it might be worth while to promote this and unify it with the ODE pointer.
-      Currently the ODE containing the vector is presumed to be known via some other mechanism.
-
-      @internal The generation number isn't strictly needed but it does provide a bit of redundancy for safety.
-  */
-  struct SliceRef {
-    typedef SliceRef self; ///< Self reference.
-
-    int _idx                     = -1;      ///< Alternate index in the over vector.
-    Slice *_slice                  = nullptr; ///< The specific item.
-    int _gen                     = -1;      ///< Generation number.
-
-    self &clear(); ///< Reset the reference to initial state, invalid reference.
-  };
-
   /** Container for the alternate slices.
    */
   struct SlicedAlt
   {
     DLL<Slice> _slices;
 
-    // Methods that parallel those for a non-sliced alternate.
+    // Methods that parallel those for a non-sliced alternate. These use the first slice.
     int marshal_length() const;
     int marshal(char* buffer, int length) const;
 
@@ -202,7 +186,29 @@ struct CacheHTTPInfoVector {
 
     SlicedAlt& push_front(Slice* slice) { _slices.push(slice); return *this; }
   };
-  typedef SplitVector<SlicedAlt, PRE_ALLOCATED_ALT_COUNT> InfoVector;
+  typedef SplitVector<SlicedAlt *, PRE_ALLOCATED_ALT_COUNT> InfoVector;
+
+  /** Track a particular slice of an alternate in the vector.
+
+      @internal At some point it might be worth while to promote this and unify it with the ODE
+      pointer in the CacheVC.  Currently the ODE containing the vector is presumed to be known via
+      some other mechanism.
+
+      @internal The generation number isn't strictly needed but it does provide a bit of redundancy for safety.
+  */
+  struct SliceRef {
+    typedef SliceRef self; ///< Self reference.
+
+    int _idx                     = -1;      ///< index in the alternate vector.
+    Slice *_slice                = nullptr; ///< The specific item.
+    SlicedAlt *_container        = nullptr; ///< The slice group containing this slice.
+    int _gen                     = -1;      ///< Generation number.
+
+    self &clear(); ///< Reset the reference to initial state, invalid reference.
+
+    /// Get the alternate index for this slice.
+    int get_alternate_index(OpenDirEntry* od);
+  };
 
   void *magic = nullptr;
 
@@ -234,7 +240,7 @@ struct CacheHTTPInfoVector {
   int marshal(char *buf, int length);
   uint32_t get_handles(const char *buf, int length, RefCountObj *block_ptr = nullptr);
   int unmarshal(const char *buf, int length, RefCountObj *block_ptr);
-  // F must be a functor accept a @c Slice.
+  // F must be a functor with the signature <void (Slice&)>
   template < typename F > void for_each_slice(F f);
 
   /// Get the alternate index for the @a key.
@@ -437,7 +443,7 @@ CacheHTTPInfoVector::get(int idx)
 inline auto
 CacheHTTPInfoVector::SliceRef::clear() -> self &
 {
-  new (this) SliceRef();
+  new (this) SliceRef(); // just reset to constructed state.
   return *this;
 }
 
