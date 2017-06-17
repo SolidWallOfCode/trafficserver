@@ -31,11 +31,11 @@
     - The memory is not guaranteed to be contiguous.
     - A fixed number of elements are pre-allocated as part of the class.
 
-    This is useful if, in most cases, the fixed size is sufficient in which case no additional heap
-    allocations are done. If the size exceeds the fixed size then additional space is allocated as needed.
-    In general @a N should be small - if it is large then the utility of this class is dubious.
+    This is useful if, in most cases, the fixed size is sufficient in which case no heap allocations
+    are done. If the size exceeds the fixed size then additional space is allocated as needed.  In
+    general @a N should be small - if it is large then the utility of this class is dubious.
 */
-template <typename T, int N = 4> class SplitVector
+template <typename T, ssize_t N = 4> class SplitVector
 {
 protected:
   typedef SplitVector self; ///< Self reference type.
@@ -45,10 +45,11 @@ protected:
 public:
   class const_iterator
   {
- protected:
+  protected:
     T *_ptr             = nullptr; ///< Current item.
     SplitVector *_owner = nullptr; ///< Needed to handle split transitions.
 
+    /// Constructor for container use.
     const_iterator(SplitVector *owner, T *current);
 
   public:
@@ -80,14 +81,22 @@ public:
     iterator &operator--();
   };
 
+  /// Construct an empty container.
   SplitVector();
 
   T &operator[](int idx);
   T const &operator[](int idx) const;
 
-  self &resize(int n);
+  ///< Set the size of the container.
+  self &resize(ssize_t n);
+///< Remove all elements.
   self &clear();
-  int size() const;
+///< Allocate sufficient storage to contain @a n elements.
+  self &reserve(ssize_t n);
+///< Return the number of elements that can be stored without further allocation.
+  ssize_t capacity() const;
+///< Number of elements in the container.
+  ssize_t size() const;
 
   const_iterator begin() const;
   const_iterator end() const;
@@ -103,27 +112,29 @@ private:
   friend class iterator;
 };
 
-template <typename T, int N> SplitVector<T, N>::SplitVector()
+template <typename T, ssize_t N> SplitVector<T, N>::SplitVector()
 {
   static_assert(N > 0, "A SplitVector must have a fixed portion of non-zero size");
 }
-template <typename T, int N> T &SplitVector<T, N>::operator[](int idx)
+template <typename T, ssize_t N> T &SplitVector<T, N>::operator[](int idx)
 {
   return idx < N ? _data[idx] : _ext[idx - N];
 }
-template <typename T, int N> T const &SplitVector<T, N>::operator[](int idx) const
+template <typename T, ssize_t N> T const &SplitVector<T, N>::operator[](int idx) const
 {
   return idx < N ? _data[idx] : _ext[idx - N];
 }
-template <typename T, int N>
-int
+
+template <typename T, ssize_t N>
+ssize_t
 SplitVector<T, N>::size() const
 {
   return _ext.size() + N;
 }
-template <typename T, int N>
+
+template <typename T, ssize_t N>
 auto
-SplitVector<T, N>::resize(int n) -> self &
+SplitVector<T, N>::resize(ssize_t n) -> self &
 {
   if (n <= N) {
     _ext.clear();
@@ -134,7 +145,26 @@ SplitVector<T, N>::resize(int n) -> self &
   return *this;
 }
 
-template <typename T, int N>
+template <typename T, ssize_t N>
+auto
+SplitVector<T, N>::reserve(ssize_t n) -> self &
+{
+  if (n <= N) {
+    _ext.clear();
+  } else {
+    _ext.reserve(n - N);
+  }
+  return *this;
+}
+
+template <typename T, ssize_t N>
+auto
+SplitVector<T, N>::capacity(ssize_t n) -> self &
+{
+  return N + _ext.capacity();
+}
+
+template <typename T, ssize_t N>
 auto
 SplitVector<T, N>::clear() -> self &
 {
@@ -143,21 +173,21 @@ SplitVector<T, N>::clear() -> self &
   return *this;
 }
 
-template <typename T, int N>
+template <typename T, ssize_t N>
 bool
 SplitVector<T, N>::is_fixed(T const*current) const
 {
   return _data <= current && current <= _data + N;
 }
 
-template <typename T, int N>
+template <typename T, ssize_t N>
 T const*
 SplitVector<T, N>::next(T const*current) const
 {
   return (current == nullptr) ? nullptr : (current == &_data[N - 1]) ? &_ext.front() : current + 1;
 }
 
-template <typename T, int N>
+template <typename T, ssize_t N>
 T const*
 SplitVector<T, N>::prev(T const*current) const
 {
@@ -166,44 +196,44 @@ SplitVector<T, N>::prev(T const*current) const
 }
 
 // Iterators
-template <typename T, int N> SplitVector<T, N>::const_iterator::const_iterator(SplitVector<T,N>* owner, T* current) : _ptr(current), _owner(owner)
+template <typename T, ssize_t N> SplitVector<T, N>::const_iterator::const_iterator(SplitVector<T,N>* owner, T* current) : _ptr(current), _owner(owner)
 {
 }
 
-template <typename T, int N> bool SplitVector<T, N>::const_iterator::operator == (const_iterator const& that) const
+template <typename T, ssize_t N> bool SplitVector<T, N>::const_iterator::operator == (const_iterator const& that) const
 {
   return _ptr == that._ptr;
 }
 
-template <typename T, int N> bool SplitVector<T, N>::const_iterator::operator != (const_iterator const& that) const
+template <typename T, ssize_t N> bool SplitVector<T, N>::const_iterator::operator != (const_iterator const& that) const
 {
   return _ptr != that._ptr;
 }
 
-template <typename T, int N> auto SplitVector<T, N>::const_iterator::operator++() -> const_iterator &
+template <typename T, ssize_t N> auto SplitVector<T, N>::const_iterator::operator++() -> const_iterator &
 {
   _ptr = _owner->next(_ptr);
   return *this;
 }
 
-template <typename T, int N> auto SplitVector<T, N>::const_iterator::operator++(int) -> const_iterator
+template <typename T, ssize_t N> auto SplitVector<T, N>::const_iterator::operator++(int) -> const_iterator
 {
   const_iterator zret(*this);
   _ptr = _owner->next(_ptr);
   return zret;
 }
 
-template <typename T, int N> SplitVector<T, N>::iterator::iterator(SplitVector<T,N>* owner, T* current) : const_iterator(owner, current)
+template <typename T, ssize_t N> SplitVector<T, N>::iterator::iterator(SplitVector<T,N>* owner, T* current) : const_iterator(owner, current)
 {
 }
 
-template <typename T, int N> auto SplitVector<T, N>::iterator::operator++() -> iterator &
+template <typename T, ssize_t N> auto SplitVector<T, N>::iterator::operator++() -> iterator &
 {
   _ptr = const_cast<T*>(_owner->next(_ptr));
   return *this;
 }
 
-template <typename T, int N> auto SplitVector<T, N>::iterator::operator++(int) -> iterator
+template <typename T, ssize_t N> auto SplitVector<T, N>::iterator::operator++(int) -> iterator
 {
   iterator zret(*this);
   _ptr = const_cast<T*>(_owner->next(_ptr));
