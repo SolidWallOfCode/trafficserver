@@ -46,6 +46,8 @@
 #include "ts/ink_assert.h"
 #include "ts/ink_resource.h"
 
+#include <iterator>
+
 struct MIOBufferAccessor;
 
 class MIOBuffer;
@@ -544,7 +546,7 @@ class IOBufferChain
 
 public:
   /// Default constructor - construct empty chain.
-  IOBufferChain() : _blocks(NULL), _tail(NULL), _len(0) {}
+  IOBufferChain() = default;
   /// Shallow copy.
   self &operator=(self const &that);
 
@@ -581,6 +583,52 @@ public:
   IOBufferBlock *head();
   IOBufferBlock const *head() const;
 
+  /// STL Container support.
+
+  /// Block iterator.
+  /// @internal The reason for this is to override the increment operator.
+  class const_iterator : public std::forward_iterator_tag
+  {
+  protected:
+    /// Current buffer block.
+    IOBufferBlock* _b = nullptr;
+  public:
+    typedef const_iterator self; ///< Self reference type.
+    typedef const IOBufferBlock value_type; ///< Iterator value type.
+
+    const_iterator() {} ///< Default constructor.
+    const_iterator(self const& that) : _b(that._b) {}
+    self& operator = (self const& rhs) { _b = rhs._b; return *this; }
+
+    bool operator == (self const& rhs) const { return _b == rhs._b; }
+    bool operator != (self const& rhs) const { return _b != rhs._b; }
+
+    value_type& operator* () const { return *_b; }
+    value_type* operator -> () const { return _b; }
+
+    self& operator ++ () { _b = _b->next; return *this; }
+    self operator ++ (int) { auto pre{*this}; ++*this; return pre; }
+
+  };
+
+  class iterator : public const_iterator
+  {
+  public:
+    typedef iterator self;
+    typedef IOBufferBlock value_type;
+
+    value_type& operator* () const { return *_b; }
+    value_type* operator -> () const { return _b; }
+  };
+
+  typedef IOBufferBlock value_type;
+
+  iterator begin();
+  const_iterator begin() const;
+
+  iterator end();
+  const_iterator end() const;
+
 protected:
   /// Append @a block.
   void append(IOBufferBlock *block);
@@ -588,10 +636,10 @@ protected:
   /// Head of buffer block chain.
   Ptr<IOBufferBlock> _blocks;
   /// Tail of the block chain.
-  IOBufferBlock *_tail;
+  IOBufferBlock *_tail = nullptr;
   /// The amount of data of interest.
   /// Not necessarily the amount of data in the chain of blocks.
-  int64_t _len;
+  int64_t _len = 0;
 };
 
 /**

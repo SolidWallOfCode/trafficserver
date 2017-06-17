@@ -568,7 +568,7 @@ CacheVC::shipContent()
       offset = r_pos - wait_position;
     if (offset >= wait_buffer.length()) {
       // Not making progress, something has gone wrong.
-      Debug("amc", "No content shipped (% " PRId64 " bytes) because data length %" PRId64 " was less than range offset %" PRId64
+      Debug("amc", "No content shipped (% " PRId64 " bytes) because content buffer length %" PRId64 " was less than content buffer offset %" PRId64
                    " [data @ %" PRId64 ", output @ %" PRId64 "].",
             bytes, wait_buffer.length(), offset, wait_position, r_pos);
       ink_release_assert(false); // core out for now, remove this for real production.
