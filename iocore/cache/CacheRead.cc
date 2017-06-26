@@ -56,14 +56,15 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheFragType type, co
       CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
       SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);
     }
-    if (!c)
+    if (!c) // got the lock but didn't find it in the open dir entries or the directory
       goto Lmiss;
     if (!lock.is_locked()) {
       CONT_SCHED_LOCK_RETRY(c);
       return &c->_action;
     }
-    if (c->od)
+    if (c->od) // if an ODE was found, then there is (or recently was) a writer
       goto Lwriter;
+    // Otherwise start a local read of the first doc.
     c->dir            = result;
     c->last_collision = last_collision;
     switch (c->do_read_call(&c->key)) {
@@ -90,7 +91,9 @@ Lcallreturn:
   return &c->_action;
 }
 
-#ifdef HTTP_CACHE
+/** Open reader from writer @a vc
+    This is used from a write VC to open a corresponding read VC to serve the content.
+*/
 Action *
 Cache::open_read(Continuation *cont, CacheVConnection *vc, HTTPHdr *client_request_hdr)
 {
@@ -199,7 +202,6 @@ Lcallreturn:
     return ACTION_RESULT_DONE;
   return &c->_action;
 }
-#endif
 
 uint32_t
 CacheVC::load_http_info(CacheHTTPInfoVector *info, Doc *doc, RefCountObj *block_ptr)
@@ -312,7 +314,7 @@ CacheVC::openReadFromWriter(int event, Event *e)
   // For now the vol lock must be held to deal with clean up of potential failures. Need to fix
   // that at some point.
 
-  if (write_vc && CACHE_ALT_INDEX_DEFAULT != (slice_ref = od->vector.slice_ref_for(write_vc->earliest_key))._idx) {
+  if (write_vc && (slice_ref = od->vector.slice_ref_for(write_vc->earliest_key)).is_valid()) {
     MUTEX_RELEASE(lock);
     // Found the alternate for our write VC. Really, though, if we have a write_vc we should never fail to get
     // the alternate - we should probably check for that.

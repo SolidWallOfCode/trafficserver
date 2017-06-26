@@ -68,16 +68,14 @@ OpenDir::open_entry(Vol *vol, CryptoHash const &key, bool force_p)
   unsigned int h = key.slice32(0);
   int b          = h % OPEN_DIR_BUCKETS;
   for (OpenDirEntry *d = bucket[b].head; d; d = d->link.next) {
-    if (!(d->first_key == key))
-      continue;
-    ++(d->num_active);
-    //    cont->od = d;
-    //    cont->write_vector = &d->vector;
-    return d;
+    if (d->first_key == key) {
+      ++(d->num_active);
+      return d;
+    }
   }
 
   if (!force_p)
-    return NULL;
+    return nullptr;
 
   OpenDirEntry *od          = THREAD_ALLOC(openDirEntryAllocator, vol->mutex->thread_holding);
   od->mutex                 = new_ProxyMutex();
@@ -88,8 +86,6 @@ OpenDir::open_entry(Vol *vol, CryptoHash const &key, bool force_p)
   od->reading_vec           = 0;
   od->writing_vec           = 0;
   dir_clear(&od->first_dir);
-  //  cont->od = od;
-  //  cont->write_vector = &od->vector;
   bucket[b].push(od);
   return od;
 }

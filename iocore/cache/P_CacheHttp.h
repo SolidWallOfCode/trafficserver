@@ -204,6 +204,11 @@ struct CacheHTTPInfoVector {
     SlicedAlt *_container        = nullptr; ///< The slice group containing this slice.
     int _gen                     = -1;      ///< Generation number.
 
+    /// Valid reference check.
+    explicit operator bool () const;
+    /// Valid reference check.
+    bool is_valid() const;
+
     self &clear(); ///< Reset the reference to initial state, invalid reference.
 
     /// Get the alternate index for this slice.
@@ -439,6 +444,18 @@ CacheHTTPInfoVector::get(int idx)
   return &data[idx]._alternate;
 }
 #endif
+
+inline bool
+CacheHTTPInfoVector::SliceRef::is_valid() const
+{
+  return _slice != nullptr;
+}
+
+inline
+CacheHTTPInfoVector::SliceRef::operator bool() const
+{
+  return this->is_valid();
+}
 
 inline auto
 CacheHTTPInfoVector::SliceRef::clear() -> self &
