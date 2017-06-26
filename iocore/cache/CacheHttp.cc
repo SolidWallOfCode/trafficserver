@@ -137,9 +137,15 @@ CacheHTTPInfoVector::alloc_slice(int& idx)
     idx = data.size();
     data.resize(idx+1);
   }
-  if (idx < static_cast<int>(PRE_ALLOCATED_ALT_COUNT) && !fixed_slices[idx]._alternate.valid()) {
-    slice = &fixed_slices[idx];
-  } else {
+  // See if there is a pre-allocated available.
+  for (s& : fixed_slices) {
+    if (s._alternate.valid()) {
+      slice = &s;
+      break;
+    }
+  }
+
+  if (!slice) { // no pre-allocated, do a real allocation.
     slice = new Slice;
   }
 

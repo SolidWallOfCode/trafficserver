@@ -158,6 +158,7 @@ struct CacheHTTPInfoVector {
    */
   struct SlicedAlt
   {
+    int id; ///< Used to mark the instance for when the vector is compacted.
     DLL<Slice> _slices;
 
     // Methods that parallel those for a non-sliced alternate. These use the first slice.
@@ -186,7 +187,7 @@ struct CacheHTTPInfoVector {
 
     SlicedAlt& push_front(Slice* slice) { _slices.push(slice); return *this; }
   };
-  typedef SplitVector<SlicedAlt *, PRE_ALLOCATED_ALT_COUNT> InfoVector;
+  typedef SplitVector<SlicedAlt, PRE_ALLOCATED_ALT_COUNT> InfoVector;
 
   /** Track a particular slice of an alternate in the vector.
 
