@@ -138,7 +138,7 @@ CacheHTTPInfoVector::alloc_slice(int& idx)
     data.resize(idx+1);
   }
   // See if there is a pre-allocated available.
-  for (s& : fixed_slices) {
+  for (auto& s : fixed_slices) {
     if (s._alternate.valid()) {
       slice = &s;
       break;
@@ -359,9 +359,31 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block
   -------------------------------------------------------------------------*/
 
 int
+CacheHTTPInfoVector::SliceRef::get_alternate_index(OpenDirEntry* od)
+{
+  // Check to see if a search is appropriate.
+  if (_idx < 0 || od->vector[_idx]._id != _alt_id) {
+    int base_idx = _idx; // remember this.
+    if (_alt_id > 0) { // if not set, no target alternate, search auto fails.
+      // search backwards as that's the most likely direction.
+      while (--_idx >= 0 && od->vector[_idx]._id != _alt_id)
+        ;
+      if (_idx < 0) { // didn't find it, search from the top down.
+        _idx = od->vector.count();
+        while (--_idx > base_idx && od->vector[_idx]._id != _alt_id)
+          ;
+      }
+    }
+    if (_idx == base_idx) // error condition - unable to find matching alt.
+      _idx = CACHE_ALT_INDEX_DEFAULT;
+  }
+  return _idx;
+}
+
+int
 CacheHTTPInfoVector::index_of(CacheKey const &alt_key)
 {
-  for (int idx = 0, n = data.size(); idx < n ; ++idx) {
+  for (int idx = 0, n = this->count(); idx < n ; ++idx) {
     auto& group = data[idx];
     if (group._slices.head && alt_key == group._slices.head->_alternate.object_key_get())
       return idx;
@@ -378,6 +400,7 @@ CacheHTTPInfoVector::slice_ref_for(CacheKey const& alt_key)
     for (auto& slice : data[idx]) {
       if (alt_key == slice._alternate.object_key_get()) {
         zret._idx = idx;
+        zret._alt_id = data[idx]._id;
         zret._slice = &slice;
         zret._gen = slice._gen;
         return zret;

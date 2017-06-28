@@ -134,6 +134,8 @@ Cache::open_read(Continuation *cont, CacheVConnection *vc, HTTPHdr *client_reque
   return zret;
 }
 
+/** Base open read for HTTP objects.
+ */
 Action *
 Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request, CacheLookupHttpConfig *params, CacheFragType type,
                  const char *hostname, int host_len)
@@ -152,6 +154,7 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request,
 
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
+    // if not locked or found, create a vc to read or retry locks.
     if (!lock.is_locked() || (od = vol->open_read(key)) || dir_probe(key, vol, &result, &last_collision)) {
       c            = new_CacheVC(cont);
       c->vol       = vol;
@@ -169,9 +172,9 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request,
       CONT_SCHED_LOCK_RETRY(c);
       return &c->_action;
     }
-    if (!c)
+    if (!c) // got the lock but key was not found.
       goto Lmiss;
-    if (c->od)
+    if (c->od) //
       goto Lwriter;
     // hit
     c->dir = c->first_dir = result;

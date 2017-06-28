@@ -310,14 +310,12 @@ CacheVC::CacheVC()
   wait_position = -1;
 }
 
-#ifdef HTTP_CACHE
 HTTPInfo::FragmentDescriptorTable *
 CacheVC::get_frag_table()
 {
   ink_assert(alternate.valid());
   return alternate.valid() ? alternate.get_frag_table() : nullptr;
 }
-#endif
 
 VIO *
 CacheVC::do_io_read(Continuation *c, int64_t nbytes, MIOBuffer *abuf)
@@ -423,11 +421,9 @@ bool
 CacheVC::get_data(int i, void *data)
 {
   switch (i) {
-#ifdef HTTP_CACHE
   case CACHE_DATA_HTTP_INFO:
     *((CacheHTTPInfo **)data) = &alternate;
     return true;
-#endif
   case CACHE_DATA_RAM_CACHE_HIT_FLAG:
     *((int *)data) = !f.not_from_ram_cache;
     return true;
@@ -450,15 +446,13 @@ CacheVC::set_data(int /* i ATS_UNUSED */, void * /* data */)
   return true;
 }
 
-#ifdef HTTP_CACHE
 void
 CacheVC::get_http_info(CacheHTTPInfo **ainfo)
 {
-  *ainfo = &((CacheVC *)this)->alternate;
+  *ainfo = &this->alternate;
 }
 
 // set_http_info must be called before do_io_write
-// cluster vc does an optimization where it calls do_io_write() before
 // calling set_http_info(), but it guarantees that the info will
 // be set before transferring any bytes
 void
@@ -487,7 +481,6 @@ CacheVC::set_http_info(CacheHTTPInfo *ainfo)
   alternate.m_alt->m_fixed_fragment_size = cache_config_target_fragment_size - sizeofDoc;
   ainfo->clear();
 }
-#endif
 
 int64_t
 CacheVC::set_inbound_range(int64_t min, int64_t max)
@@ -630,23 +623,23 @@ CacheProcessor::start(int, size_t)
   return start_internal(0);
 }
 
-static const int DEFAULT_CACHE_OPTIONS = (O_RDWR);
+static const int DEFAULT_CACHE_OPTIONS = O_RDWR;
 
 int
 CacheProcessor::start_internal(int flags)
 {
-  ink_assert((int)TS_EVENT_CACHE_OPEN_READ == (int)CACHE_EVENT_OPEN_READ);
-  ink_assert((int)TS_EVENT_CACHE_OPEN_READ_FAILED == (int)CACHE_EVENT_OPEN_READ_FAILED);
-  ink_assert((int)TS_EVENT_CACHE_OPEN_WRITE == (int)CACHE_EVENT_OPEN_WRITE);
-  ink_assert((int)TS_EVENT_CACHE_OPEN_WRITE_FAILED == (int)CACHE_EVENT_OPEN_WRITE_FAILED);
-  ink_assert((int)TS_EVENT_CACHE_REMOVE == (int)CACHE_EVENT_REMOVE);
-  ink_assert((int)TS_EVENT_CACHE_REMOVE_FAILED == (int)CACHE_EVENT_REMOVE_FAILED);
-  ink_assert((int)TS_EVENT_CACHE_SCAN == (int)CACHE_EVENT_SCAN);
-  ink_assert((int)TS_EVENT_CACHE_SCAN_FAILED == (int)CACHE_EVENT_SCAN_FAILED);
-  ink_assert((int)TS_EVENT_CACHE_SCAN_OBJECT == (int)CACHE_EVENT_SCAN_OBJECT);
-  ink_assert((int)TS_EVENT_CACHE_SCAN_OPERATION_BLOCKED == (int)CACHE_EVENT_SCAN_OPERATION_BLOCKED);
-  ink_assert((int)TS_EVENT_CACHE_SCAN_OPERATION_FAILED == (int)CACHE_EVENT_SCAN_OPERATION_FAILED);
-  ink_assert((int)TS_EVENT_CACHE_SCAN_DONE == (int)CACHE_EVENT_SCAN_DONE);
+  static_assert(static_cast<int>(TS_EVENT_CACHE_OPEN_READ) == static_cast<int>(CACHE_EVENT_OPEN_READ));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_OPEN_READ_FAILED) == static_cast<int>(CACHE_EVENT_OPEN_READ_FAILED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_OPEN_WRITE) == static_cast<int>(CACHE_EVENT_OPEN_WRITE));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_OPEN_WRITE_FAILED) == static_cast<int>(CACHE_EVENT_OPEN_WRITE_FAILED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_REMOVE) == static_cast<int>(CACHE_EVENT_REMOVE));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_REMOVE_FAILED) == static_cast<int>(CACHE_EVENT_REMOVE_FAILED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN) == static_cast<int>(CACHE_EVENT_SCAN));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN_FAILED) == static_cast<int>(CACHE_EVENT_SCAN_FAILED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN_OBJECT) == static_cast<int>(CACHE_EVENT_SCAN_OBJECT));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN_OPERATION_BLOCKED) == static_cast<int>(CACHE_EVENT_SCAN_OPERATION_BLOCKED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN_OPERATION_FAILED) == static_cast<int>(CACHE_EVENT_SCAN_OPERATION_FAILED));
+  static_assert(static_cast<int>(TS_EVENT_CACHE_SCAN_DONE) == static_cast<int>(CACHE_EVENT_SCAN_DONE));
 
 #if AIO_MODE == AIO_MODE_NATIVE
   int etype            = ET_NET;
@@ -3203,7 +3196,7 @@ reg_int(const char *str, int stat, RecRawStatBlock *rsb, const char *prefix, Rec
   RecRegisterRawStat(rsb, RECT_PROCESS, stat_str, RECD_INT, RECP_NON_PERSISTENT, stat, sync_cb);
   DOCACHE_CLEAR_DYN_STAT(stat)
 }
-#define REG_INT(_str, _stat) reg_int(_str, (int)_stat, rsb, prefix)
+#define REG_INT(_str, _stat) reg_int(_str, static_cast<int>(_stat), rsb, prefix)
 
 // Register Stats
 void

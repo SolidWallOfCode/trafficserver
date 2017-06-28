@@ -158,7 +158,7 @@ struct CacheHTTPInfoVector {
    */
   struct SlicedAlt
   {
-    int id; ///< Used to mark the instance for when the vector is compacted.
+    int _id; ///< Used to mark the instance for when the vector is compacted.
     DLL<Slice> _slices;
 
     // Methods that parallel those for a non-sliced alternate. These use the first slice.
@@ -197,14 +197,9 @@ struct CacheHTTPInfoVector {
 
       @internal The generation number isn't strictly needed but it does provide a bit of redundancy for safety.
   */
-  struct SliceRef {
+  class SliceRef {
     typedef SliceRef self; ///< Self reference.
-
-    int _idx                     = -1;      ///< index in the alternate vector.
-    Slice *_slice                = nullptr; ///< The specific item.
-    SlicedAlt *_container        = nullptr; ///< The slice group containing this slice.
-    int _gen                     = -1;      ///< Generation number.
-
+  public:
     /// Valid reference check.
     explicit operator bool () const;
     /// Valid reference check.
@@ -214,9 +209,18 @@ struct CacheHTTPInfoVector {
 
     /// Get the alternate index for this slice.
     int get_alternate_index(OpenDirEntry* od);
+
+  protected:
+    int _idx                     = -1;      ///< index in the alternate vector.
+    int _alt_id = -1; ///< Local ID of target alternate.
+    Slice *_slice                = nullptr; ///< The specific item.
+    int _gen                     = -1;      ///< Generation number.
+
+    friend class CacheHTTPInfoVector;
   };
 
   void *magic = nullptr;
+  int alt_id_counter = 0; ///< Counter for assigning local alt identifiers.
 
   CacheHTTPInfoVector();
   ~CacheHTTPInfoVector();
@@ -229,6 +233,7 @@ struct CacheHTTPInfoVector {
 
   int insert(CacheHTTPInfo *info, int id = -1);
   CacheHTTPInfo *get(int idx);
+  SlicedAlt& operator [] (int idx);
   void detach(int idx, CacheHTTPInfo *r);
   void remove(int idx, bool destroy);
   void clear(bool destroy = true);
@@ -463,6 +468,12 @@ CacheHTTPInfoVector::SliceRef::clear() -> self &
 {
   new (this) SliceRef(); // just reset to constructed state.
   return *this;
+}
+
+inline auto
+CacheHTTPInfoVector::operator [] (int idx) -> SlicedAlt&
+{
+  return data[idx];
 }
 
 inline bool

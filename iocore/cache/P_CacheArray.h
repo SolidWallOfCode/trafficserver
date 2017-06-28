@@ -158,8 +158,8 @@ SplitVector<T, N>::reserve(ssize_t n) -> self &
 }
 
 template <typename T, ssize_t N>
-auto
-SplitVector<T, N>::capacity(ssize_t n) -> self &
+ssize_t
+SplitVector<T, N>::capacity() const
 {
   return N + _ext.capacity();
 }

@@ -606,7 +606,7 @@ public:
     value_type& operator* () const { return *_b; }
     value_type* operator -> () const { return _b; }
 
-    self& operator ++ () { _b = _b->next; return *this; }
+    self& operator ++ () { _b = _b->next.get(); return *this; }
     self operator ++ (int) { auto pre{*this}; ++*this; return pre; }
 
   };
