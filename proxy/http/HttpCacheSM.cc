@@ -390,3 +390,10 @@ HttpCacheSM::open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, Cac
     return &captive_action;
   }
 }
+
+bool
+HttpCacheSM::is_readwhilewrite_inprogress();
+{
+  // [AMC]: This needs to check with the cacheVC to see if there is a write on the ODE.
+  return readwhilewrite_inprogress;
+}

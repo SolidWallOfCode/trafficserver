@@ -83,24 +83,11 @@ public:
   bool read_locked;
   bool write_locked;
   // Flag to check whether read-while-write is in progress or not
-  bool readwhilewrite_inprogress;
 
   HttpSM *master_sm;
   Action *pending_action;
 
-  // Function to set readwhilewrite_inprogress flag
-  inline void
-  set_readwhilewrite_inprogress(bool value)
-  {
-    readwhilewrite_inprogress = value;
-  }
-
-  // Function to get the readwhilewrite_inprogress flag
-  inline bool
-  is_readwhilewrite_inprogress()
-  {
-    return readwhilewrite_inprogress;
-  }
+  bool is_readwhilewrite_inprogress() const;
 
   bool
   is_ram_cache_hit()
