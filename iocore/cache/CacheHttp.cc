@@ -129,7 +129,7 @@ CacheHTTPInfoVector::~CacheHTTPInfoVector()
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 CacheHTTPInfoVector::Slice*
-CacheHTTPInfoVector::alloc_slice(int& idx)
+CacheHTTPInfoVector::create_slice_at(int& idx)
 {
   Slice* slice;
 
@@ -149,7 +149,10 @@ CacheHTTPInfoVector::alloc_slice(int& idx)
     slice = new Slice;
   }
 
+  if (data[idx]._id <= 0) // in use now, force an ID.
+    data[idx]._id = ++_alt_id;
   data[idx].push_front(slice);
+
   return slice;
 }
 /*-------------------------------------------------------------------------
@@ -348,7 +351,7 @@ CacheHTTPInfoVector::get_handles(const char *buf, int length, RefCountObj *block
     }
     buf += tmp;
 
-    Slice* slice = this->alloc_slice(idx);
+    Slice* slice = this->create_slice_at(idx);
     slice->_alternate = info;
   }
 

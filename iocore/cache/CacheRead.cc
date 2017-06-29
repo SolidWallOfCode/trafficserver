@@ -948,7 +948,7 @@ CacheVC::openReadStartHead(int event, Event *e)
     // an object needs to be outside the aggregation window in order to be
     // be evacuated as it is read
     if (!dir_agg_valid(vol, &dir)) {
-      // a directory entry which is nolonger valid may have been overwritten
+      // a directory entry which is no longer valid may have been overwritten
       if (!dir_valid(vol, &dir))
         last_collision = nullptr;
       goto Lread;

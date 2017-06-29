@@ -299,15 +299,18 @@ struct CacheHTTPInfoVector {
   Ptr<RefCountObj> vector_buf;
 
 protected:
-  /** Allocate a slice.
+  /** Create a slice.
+
+      The slice is create and pushed to the front of the alt at @a idx. If @a idx is invalid the
+      next available index is used and @a idx updated to that value.
+
       The @a fixed_slices are used if the next index is within the pre-allocation range and the
-      corresponding fixed slice is not already in use. @a idx is updated to be the actual index
-      where the slice is located.
+      corresponding fixed slice is not already in use.
 
       @internal In the common case, when there isn't stale content and no extra alternates are used, no
       actual allocation will be done.
   */
-  Slice* alloc_slice(int& idx);
+  Slice* create_slice_at(int& idx);
 };
 
 /** Range operation tracking.
