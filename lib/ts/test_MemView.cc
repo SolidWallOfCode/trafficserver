@@ -157,5 +157,9 @@ main(int, char *argv[])
   if (p != 0x2af)
     std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0x2af << std::endl;
 
+  p = Example_Parser(StringView("by=intf:for:proto:host=pristine,addr", StringView::literal));
+  if (p != 0x2af)
+    std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0x2af << std::endl;
+
   return zret ? 0 : 1;
 }
