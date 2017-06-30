@@ -1814,7 +1814,7 @@ CacheVC::updateWriteStateFromRange()
   return write_pos;
 }
 
-#ifdef HTTP_CACHE
+
 // main entry point for writing of http documents
 Action *
 Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, time_t apin_in_cache,
@@ -1897,7 +1897,7 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
   {
     CACHE_TRY_LOCK(lock, c->vol->mutex, cont->mutex->thread_holding);
     if (lock.is_locked()) {
-      if ((err = c->vol->open_write(c)) > 0)
+      if ((err = c->vol->open_write(c)) > 0) // od is set here
         goto Lfailure;
       // If there are multiple writers, then this one cannot be an update.
       // Only the first writer can do an update. If that's the case, we can
@@ -1959,5 +1959,3 @@ Lcallreturn:
     return ACTION_RESULT_DONE;
   return &c->_action;
 }
-
-#endif

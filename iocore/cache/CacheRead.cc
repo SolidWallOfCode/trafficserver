@@ -977,7 +977,7 @@ CacheVC::openReadStartHead(int event, Event *e)
     if (f.lookup)
       goto Lookup;
     earliest_dir = dir;
-#ifdef HTTP_CACHE
+
     CacheHTTPInfo *alternate_tmp;
     if (frag_type == CACHE_FRAG_TYPE_HTTP) {
       uint32_t uml;
@@ -1056,7 +1056,7 @@ CacheVC::openReadStartHead(int event, Event *e)
         f.single_fragment = false;
       }
     } else
-#endif
+
     {
       next_CacheKey(&key, &doc->key);
       fragment          = 1;
