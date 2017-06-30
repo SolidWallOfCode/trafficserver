@@ -100,7 +100,7 @@ uint64_t
 Example_Parser(StringView input)
 {
   static constexpr StringView OUTER_DELIMITERS{"|:", StringView::literal};
-  static constexpr char INNER_DELIMITERS { '-' };
+  static constexpr char INNER_DELIMITERS { ',' };
   struct Tag {
     Token _tag;
     std::vector<Token> _opts;
@@ -109,23 +109,23 @@ Example_Parser(StringView input)
     Tag(std::initializer_list<Token> const& tokens) : _tag(*tokens.begin()), _opts(tokens.begin()+1, tokens.end()) {}
   };
 
-  static std::array<Tag, 5> tags { Tag{{"by", 0}, {"intf", 1 }, {"hidden" , 2 }},
-  Tag{{"for", 3}},
-  Tag{{"host", 4}},
-  Tag{{"proto", 5}},
-  Tag{{"connection", 6}}
+  static std::array<Tag, 5> tags { Tag{{"by", 0}, {"intf", 5}, {"hidden", 6}},
+  Tag{{"for", 1}},
+    Tag{{"host", 2}, {"pristine", 7}, {"remap", 8}, {"addr", 9}},
+  Tag{{"proto", 3}},
+  Tag{{"connection", 4}}
   };
 
   int zret = 0;
   while (input) {
-    StringView tag = input.extractPrefix(OUTER_DELIMITERS);
-    StringView opts = input.splitPrefix(INNER_DELIMITERS);
+    StringView opts = input.extractPrefix(OUTER_DELIMITERS);
+    StringView tag = opts.extractPrefix('=');
     tag.trim(&isspace);
     for ( Tag const& t : tags ) {
       if (0 == strcasecmp(tag, t._tag._name)) {
         zret |= (1 << t._tag._idx);
         while (opts) {
-          StringView opt = opts.extractPrefix(',');
+          StringView opt = opts.extractPrefix(INNER_DELIMITERS);
           opt.trim(&isspace);
           for ( Token const& o : t._opts ) {
             if (0 == strcasecmp(opt, o._name))
@@ -149,8 +149,16 @@ main(int, char *argv[])
   uint64_t p;
 
   p = Example_Parser(StringView("by|for|proto", StringView::literal));
-  if (p != 0x29)
+  if (p != 0xb)
     std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0xb << std::endl;
+
+  p = Example_Parser(StringView("by=hidden|for|proto", StringView::literal));
+  if (p != 0x4b)
+    std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0x4b << std::endl;
+
+  p = Example_Parser(StringView("by=intf|for|proto|host=pristine,addr", StringView::literal));
+  if (p != 0x2af)
+    std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0x2af << std::endl;
 
   return zret ? 0 : 1;
 }
