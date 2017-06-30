@@ -27,6 +27,7 @@
 #include <ios>
 #include <iostream>
 #include <string>
+#include <vector>
 
 using namespace ts;
 
@@ -84,6 +85,59 @@ Test_Compile()
   MemView mcv(x, y);
 }
 
+// Example parser
+// Parse a nest option string of the form "tag|tag=opt|tag=opt,opt,opt" where ':' can be used instead of '|'.
+// For test, put the results in bits for comparison.
+
+struct Token {
+  StringView _name;
+  int _idx; ///< Bit index for result.
+
+  template < intmax_t N >  Token(const char (&s)[N], int n) : _name(s, StringView::literal), _idx(n) {}
+};
+
+uint64_t
+Example_Parser(StringView input)
+{
+  static constexpr StringView OUTER_DELIMITERS{"|:", StringView::literal};
+  static constexpr char INNER_DELIMITERS { '-' };
+  struct Tag {
+    Token _tag;
+    std::vector<Token> _opts;
+
+    Tag(Token const& token) : _tag(token) {}
+    Tag(std::initializer_list<Token> const& tokens) : _tag(*tokens.begin()), _opts(tokens.begin()+1, tokens.end()) {}
+  };
+
+  static std::array<Tag, 5> tags { Tag{{"by", 0}, {"intf", 1 }, {"hidden" , 2 }},
+  Tag{{"for", 3}},
+  Tag{{"host", 4}},
+  Tag{{"proto", 5}},
+  Tag{{"connection", 6}}
+  };
+
+  int zret = 0;
+  while (input) {
+    StringView tag = input.extractPrefix(OUTER_DELIMITERS);
+    StringView opts = input.splitPrefix(INNER_DELIMITERS);
+    tag.trim(&isspace);
+    for ( Tag const& t : tags ) {
+      if (0 == strcasecmp(tag, t._tag._name)) {
+        zret |= (1 << t._tag._idx);
+        while (opts) {
+          StringView opt = opts.extractPrefix(',');
+          opt.trim(&isspace);
+          for ( Token const& o : t._opts ) {
+            if (0 == strcasecmp(opt, o._name))
+              zret |= (1 << o._idx);
+          }
+        }
+      }
+    }
+  }
+  return zret;
+}
+
 int
 main(int, char *argv[])
 {
@@ -91,6 +145,12 @@ main(int, char *argv[])
 
   zret = zret && Test_1();
   zret = zret && Test_2();
+
+  uint64_t p;
+
+  p = Example_Parser(StringView("by|for|proto", StringView::literal));
+  if (p != 0x29)
+    std::cout << "FAIL Parse test - got " << std::hex << p << " expected " << 0xb << std::endl;
 
   return zret ? 0 : 1;
 }
