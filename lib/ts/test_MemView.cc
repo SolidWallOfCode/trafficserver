@@ -93,41 +93,38 @@ struct Token {
   StringView _name;
   int _idx; ///< Bit index for result.
 
-  template < intmax_t N >  Token(const char (&s)[N], int n) : _name(s, StringView::literal), _idx(n) {}
+  template <intmax_t N> Token(const char (&s)[N], int n) : _name(s, StringView::literal), _idx(n) {}
 };
 
 uint64_t
 Example_Parser(StringView input)
 {
   static constexpr StringView OUTER_DELIMITERS{"|:", StringView::literal};
-  static constexpr char INNER_DELIMITERS { ',' };
+  static constexpr char INNER_DELIMITERS{','};
   struct Tag {
     Token _tag;
     std::vector<Token> _opts;
 
-    Tag(Token const& token) : _tag(token) {}
-    Tag(std::initializer_list<Token> const& tokens) : _tag(*tokens.begin()), _opts(tokens.begin()+1, tokens.end()) {}
+    Tag(Token const &token) : _tag(token) {}
+    Tag(std::initializer_list<Token> const &tokens) : _tag(*tokens.begin()), _opts(tokens.begin() + 1, tokens.end()) {}
   };
 
-  static std::array<Tag, 5> tags { Tag{{"by", 0}, {"intf", 5}, {"hidden", 6}},
-  Tag{{"for", 1}},
-    Tag{{"host", 2}, {"pristine", 7}, {"remap", 8}, {"addr", 9}},
-  Tag{{"proto", 3}},
-  Tag{{"connection", 4}}
-  };
+  static std::array<Tag, 5> tags{Tag{{"by", 0}, {"intf", 5}, {"hidden", 6}}, Tag{{"for", 1}},
+                                 Tag{{"host", 2}, {"pristine", 7}, {"remap", 8}, {"addr", 9}}, Tag{{"proto", 3}},
+                                 Tag{{"connection", 4}}};
 
   int zret = 0;
   while (input) {
     StringView opts = input.extractPrefix(OUTER_DELIMITERS);
-    StringView tag = opts.extractPrefix('=');
+    StringView tag  = opts.extractPrefix('=');
     tag.trim(&isspace);
-    for ( Tag const& t : tags ) {
+    for (Tag const &t : tags) {
       if (0 == strcasecmp(tag, t._tag._name)) {
         zret |= (1 << t._tag._idx);
         while (opts) {
           StringView opt = opts.extractPrefix(INNER_DELIMITERS);
           opt.trim(&isspace);
-          for ( Token const& o : t._opts ) {
+          for (Token const &o : t._opts) {
             if (0 == strcasecmp(opt, o._name))
               zret |= (1 << o._idx);
           }
