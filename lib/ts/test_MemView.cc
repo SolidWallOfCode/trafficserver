@@ -101,6 +101,11 @@ Example_Parser(StringView input)
 {
   static constexpr StringView OUTER_DELIMITERS{"|:", StringView::literal};
   static constexpr char INNER_DELIMITERS{','};
+  /* Test data structures.
+     These map tags to bit indicies. The parsing logic finds the names and sets the corresponding bits.
+     The names are grouped as tags and options. Tags are separated by the @c OUTER_DELIMITERS. Each tag
+     can have options, which are specified by a '=' followed by a list with @c INNER_DELIMITERS separators.
+  */
   struct Tag {
     Token _tag;
     std::vector<Token> _opts;
