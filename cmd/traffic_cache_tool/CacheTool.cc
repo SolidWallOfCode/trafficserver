@@ -118,9 +118,6 @@ struct Stripe {
     void clear();
   };
 
-  /// Hold a list of chunks representing an extended piece of memory.
-  typedef std::vector<Chunk> Memory;
-
   /// Construct from span header data.
   Stripe(Span *span, Bytes start, CacheStoreBlocks len);
 
@@ -1244,9 +1241,9 @@ main(int argc, char *argv[])
   }
 
   Commands
-    .add(std::string("list"), std::string("List elements of the cache"),
+    .add("list", "List elements of the cache",
          [](int argc, char *argv[]) { return List_Stripes(Cache::SpanDumpDepth::SPAN, argc, argv); })
-    .subCommand(std::string("stripes"), std::string("The stripes"),
+    .subCommand(std::string("stripes"), std::string("List the stripes"),
                 [](int argc, char *argv[]) { return List_Stripes(Cache::SpanDumpDepth::STRIPE, argc, argv); });
   Commands.add(std::string("clear"), std::string("Clear spans"), &Clear_Spans);
   Commands.add(std::string("volumes"), std::string("Volumes"), &Simulate_Span_Allocation);

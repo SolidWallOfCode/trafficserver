@@ -31,6 +31,8 @@ namespace ts
 {
 int CommandTable::_opt_idx = 0;
 
+static const std::string LEADING(":-  ");
+
 // Error message functions.
 ts::Errata
 ERR_COMMAND_TAG_NOT_FOUND(char const *tag)
@@ -87,7 +89,7 @@ CommandTable::Command::invoke(int argc, char *argv[])
       std::ostringstream s;
       s << "Incomplete command, additional keyword required";
       s << std::endl;
-      this->helpMessage(0, nullptr, s, "+-  ");
+      this->helpMessage(0, nullptr, s, LEADING);
       zret.push(s.str());
     }
   } else {
@@ -162,6 +164,6 @@ CommandTable::helpMessage(int argc, char *argv[]) const
 {
   _opt_idx = 0;
   std::cerr << "Command tree" << std::endl;
-  _top.helpMessage(argc, argv, std::cerr, std::string("* "));
+  _top.helpMessage(argc, argv, std::cerr, LEADING);
 }
 }
