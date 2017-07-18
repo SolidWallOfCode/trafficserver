@@ -548,7 +548,6 @@ class VolumeAllocator
 
   Cache _cache;         ///< Current state.
   VolumeConfig _vols;   ///< Configuration state.
-  bool _dry_run = true; ///< Don't update.
 
 public:
   VolumeAllocator();
