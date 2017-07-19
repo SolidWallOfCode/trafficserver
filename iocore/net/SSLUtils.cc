@@ -892,6 +892,7 @@ SSLInitializeLibrary()
 
 void SSL_CheckThreadLockCallBack()
 {
+#if defined(CRYPTO_LOCK) && !defined(CRYPTO_set_locking_callback)
 static int numTimesCalledBefore = 0;
 void *tmp;
 
@@ -917,6 +918,7 @@ void *tmp;
         tmp, SSL_pthreads_thread_id);
     CRYPTO_THREADID_set_callback(SSL_pthreads_thread_id);
   }
+#endif
 }
 
 
