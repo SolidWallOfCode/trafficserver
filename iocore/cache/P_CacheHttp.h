@@ -204,6 +204,10 @@ struct CacheHTTPInfoVector {
     explicit operator bool () const;
     /// Valid reference check.
     bool is_valid() const;
+    /// Retrieve the specific alt.
+    CacheHTTPInfo& alternate();
+    /// Slice ID
+    int id() const;
 
     self &clear(); ///< Reset the reference to initial state, invalid reference.
 
@@ -458,6 +462,18 @@ inline bool
 CacheHTTPInfoVector::SliceRef::is_valid() const
 {
   return _slice != nullptr;
+}
+
+inline int
+CacheHTTPInfoVector::SliceRef::id() const
+{
+  return _alt_id;
+}
+
+inline CacheHTTPInfo&
+CacheHTTPInfoVector::SliceRef::alternate()
+{
+  return _slice->_alternate;
 }
 
 inline

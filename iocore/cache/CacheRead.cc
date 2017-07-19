@@ -319,11 +319,11 @@ CacheVC::openReadFromWriter(int event, Event *e)
     MUTEX_RELEASE(lock);
     // Found the alternate for our write VC. Really, though, if we have a write_vc we should never fail to get
     // the alternate - we should probably check for that.
-    alternate.copy_shallow(&slice_ref._slice->_alternate);
+    alternate.copy_shallow(&slice_ref.alternate());
     MUTEX_RELEASE(lock_od);
     key = earliest_key = alternate.object_key_get();
     doc_len            = alternate.object_size_get();
-    Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, slice_ref._idx,
+    Debug("amc", "[openReadFromWriter] - setting alternate from write_vc %p to #%d : %p", write_vc, slice_ref.id(),
           alternate.m_alt);
     SET_HANDLER(&CacheVC::openReadStartEarliest);
     return openReadStartEarliest(event, e);

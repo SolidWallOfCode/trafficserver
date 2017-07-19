@@ -150,7 +150,7 @@ CacheHTTPInfoVector::create_slice_at(int& idx)
   }
 
   if (data[idx]._id <= 0) // in use now, force an ID.
-    data[idx]._id = ++_alt_id;
+    data[idx]._id = ++alt_id_counter;
   data[idx].push_front(slice);
 
   return slice;
@@ -161,7 +161,7 @@ CacheHTTPInfoVector::create_slice_at(int& idx)
 int
 CacheHTTPInfoVector::insert(CacheHTTPInfo *info, int index)
 {
-  Slice* slice = this->alloc_slice(index);
+  Slice* slice = this->create_slice_at(index);
   slice->_alternate.copy_shallow(info);
   return index;
 }
