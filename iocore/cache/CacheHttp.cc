@@ -412,6 +412,17 @@ CacheHTTPInfoVector::slice_ref_for(CacheKey const& alt_key)
   }
   return zret;
 }
+
+CacheHTTPInfoVector::SliceRef
+CacheHTTPInfoVector::slice_ref_at(int idx)
+{
+  SliceRef zret;
+
+  if (0 <= idx && idx < data.size()) {
+    zret = data[idx].front();
+  }
+  return zret;
+}
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 

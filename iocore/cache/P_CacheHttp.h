@@ -154,6 +154,8 @@ struct CacheHTTPInfoVector {
     ~Slice();
   };
 
+  class SliceRef;
+
   /** Container for the alternate slices.
    */
   struct SlicedAlt
@@ -186,6 +188,8 @@ struct CacheHTTPInfoVector {
     iterator end() { return iterator(nullptr); }
 
     SlicedAlt& push_front(Slice* slice) { _slices.push(slice); return *this; }
+    /// Get the first slice in this alt, or an invalid reference if no alts.
+    SliceRef front();
   };
   typedef SplitVector<SlicedAlt, PRE_ALLOCATED_ALT_COUNT> InfoVector;
 
@@ -216,7 +220,7 @@ struct CacheHTTPInfoVector {
 
   protected:
     int _idx                     = -1;      ///< index in the alternate vector.
-    int _alt_id = -1; ///< Local ID of target alternate.
+    int _alt_id = -1; ///< Local ID of target alternate (slice ID).
     Slice *_slice                = nullptr; ///< The specific item.
     int _gen                     = -1;      ///< Generation number.
 
@@ -236,7 +240,6 @@ struct CacheHTTPInfoVector {
   }
 
   int insert(CacheHTTPInfo *info, int id = -1);
-  CacheHTTPInfo *get(int idx);
   SlicedAlt& operator [] (int idx);
   void detach(int idx, CacheHTTPInfo *r);
   void remove(int idx, bool destroy);
@@ -262,6 +265,8 @@ struct CacheHTTPInfoVector {
   int index_of(CacheKey const &key);
   /// Get a slice reference for an earliest key.
   SliceRef slice_ref_for(CacheKey const& key);
+  /// Get a slice reference for the first alt at a specific @a idx
+  SliceRef slice_ref_at(int idx);
   /// Check if there are any writers for the alternate of @a alt_key.
   bool has_writer(CacheKey const &alt_key);
   /// Mark a @c CacheVC as actively writing at @a offset on the alternate with @a alt_key.

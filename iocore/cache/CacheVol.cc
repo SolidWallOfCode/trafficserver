@@ -252,17 +252,16 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
       goto Lskip;
     changed         = false;
     hostinfo_copied = 0;
-    for (i = 0; i < vector.count(); i++) {
-      if (!vector.get(i)->valid())
-        goto Lskip;
+    for (i = 0; i < vector.count(); ++i) {
+      slice_ref = vector.slice_ref_at(i);
+      if (!slice_ref.is_valid()) goto Lskip;
       if (!hostinfo_copied) {
-        memccpy(hname, vector.get(i)->request_get()->host_get(&hlen), 0, 500);
+        memccpy(hname, slice_ref.alternate().request_get()->host_get(&hlen), 0, 500);
         hname[hlen] = 0;
         Debug("cache_scan", "hostname = '%s', hostlen = %d", hname, hlen);
         hostinfo_copied = 1;
       }
-      vector.get(i)->object_key_get(&key);
-      slice_ref._idx = i;
+      slice_ref.alternate().object_key_get(&key);
       // verify that the earliest block exists, reducing 'false hit' callbacks
       if (!(key == doc->key)) {
         last_collision = nullptr;
@@ -270,7 +269,7 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
           continue;
       }
       earliest_key = key;
-      int result1  = _action.continuation->handleEvent(CACHE_EVENT_SCAN_OBJECT, vector.get(i));
+      int result1  = _action.continuation->handleEvent(CACHE_EVENT_SCAN_OBJECT, &slice_ref.alternate());
       switch (result1) {
       case CACHE_SCAN_RESULT_CONTINUE:
         continue;
@@ -285,9 +284,8 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         i = 0;
         break;
       case CACHE_SCAN_RESULT_UPDATE:
-        ink_assert(slice_ref._idx >= 0);
-        vector.insert(&alternate, slice_ref._idx);
-        if (!vector.get(slice_ref._idx)->valid())
+        vector.insert(&alternate, i);
+        if (!vector.slice_ref_at(i).is_valid())
           continue;
         changed = true;
         continue;
@@ -306,13 +304,13 @@ CacheVC::scanObject(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
         cacheProcessor.remove(this, &doc->first_key, true, CACHE_FRAG_TYPE_HTTP, hname, hlen);
         return EVENT_CONT;
       } else {
-        offset          = (char *)doc - buf->data();
+        offset          = reinterpret_cast<char *>(doc) - buf->data();
         write_len       = 0;
         frag_type       = CACHE_FRAG_TYPE_HTTP;
         f.use_first_key = 1;
         f.evac_vector   = 1;
         first_key = key   = doc->first_key;
-        slice_ref._idx   = CACHE_ALT_REMOVED;
+        slice_ref.clear();
         earliest_key      = zero_key;
         writer_lock_retry = 0;
         SET_HANDLER(&CacheVC::scanOpenWrite);
@@ -423,7 +421,7 @@ CacheVC::scanOpenWrite(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
     // put all the alternates in the open directory vector
     int alt_count = vector.count();
     for (int i = 0; i < alt_count; i++) {
-      od->vector.insert(vector.get(i));
+      od->vector.insert(&vector.slice_ref_at(i).alternate());
     }
     od->writing_vec = 1;
     vector.clear(false);

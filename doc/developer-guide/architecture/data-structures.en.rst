@@ -53,12 +53,6 @@ Data Structures
 
    Holds the data from a line in :file:`cache.config`.
 
-.. cpp:class:: CacheHTTPInfoVector
-
-   Defined in |P-CacheHttp.h|_. This is an array of :cpp:class:`HTTPInfo`
-   objects and serves as the respository of information about alternates of an
-   object. It is marshaled as part of the metadata for an object in the cache.
-
 .. cpp:class:: HTTPInfo
 
    Defined in |HTTP.h|_.
@@ -205,4 +199,3 @@ Data Structures
 
    Changed in version 3.2.0. This previously resided in the first ``Doc`` but
    that caused different alternates to share the same fragment table.
-
