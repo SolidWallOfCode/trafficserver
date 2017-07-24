@@ -1106,6 +1106,7 @@ AC_CHECK_LIB([resolv],[__putlong],[AC_SUBST([LIBRESOLV],["-lresolv"])])
 # ncurses compile tests does not generate unused variable warnings.
 __saved_CFLAGS="$CFLAGS"
 TS_REMOVEFROM(CFLAGS, -Werror)
+TS_ADDTO(CFLAGS, [-Wl,--add-needed])
 AX_WITH_CURSES
 CFLAGS="$__saved_CFLAGS"
 
