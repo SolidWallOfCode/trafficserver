@@ -3139,6 +3139,12 @@ HttpTransact::HandleCacheOpenReadMiss(State *s)
   HTTPHdr *h = &s->hdr_info.client_request;
 
   if (!h->is_cache_control_set(HTTP_VALUE_ONLY_IF_CACHED)) {
+    // Initialize the server_info structure if we haven't been through DNS
+    // Otherwise, the http_version will not be initialized
+    if (!s->current.server || !s->current.server->dst_addr.isValid()) {
+      s->server_info.http_version = HTTPVersion(0,0);
+      get_ka_info_from_config(s, &s->server_info); 
+    }
     find_server_and_update_current_info(s);
     // a parent lookup could come back as PARENT_FAIL if in parent.config go_direct == false and
     // there are no available parents (all down).
