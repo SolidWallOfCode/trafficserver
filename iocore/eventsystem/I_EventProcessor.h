@@ -244,11 +244,6 @@ public:
   /// Schedule the function @a f to be called in a thread of type @a ev_type when it is spawned.
   Event *schedule_spawn(void (*f)(EThread *), EventType ev_type);
 
-  /// Schedule an @a event on continuation @a c to be called when a thread is spawned by this processor.
-  /// The @a cookie is attached to the event instance passed to the continuation.
-  /// @return The scheduled event.
-  //  Event *schedule_spawn(Continuation *c, int event, void *cookie = NULL);
-
   EventProcessor();
   ~EventProcessor();
   EventProcessor(const EventProcessor &) = delete;

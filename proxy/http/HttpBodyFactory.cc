@@ -138,6 +138,11 @@ HttpBodyFactory::fabricate_with_old_api(const char *type, HttpTransact::State *c
   // if failed, try to fabricate the default custom response //
   /////////////////////////////////////////////////////////////
   if (buffer == nullptr) {
+    if (is_response_body_precluded(context->http_return_code)) {
+      *resulting_buffer_length = 0;
+      unlock();
+      return nullptr;
+    }
     buffer = fabricate(&acpt_language_list, &acpt_charset_list, "default", context, resulting_buffer_length, &lang_ptr,
                        &charset_ptr, &set);
   }
@@ -158,6 +163,7 @@ HttpBodyFactory::fabricate_with_old_api(const char *type, HttpTransact::State *c
   // handle return of instantiated template and generate the content //
   // language and content type return values                         //
   /////////////////////////////////////////////////////////////////////
+
   if (buffer) { // got an instantiated template
     if (!plain_flag) {
       snprintf(content_language_out_buf, content_language_buf_size, "%s", lang_ptr);
@@ -254,6 +260,7 @@ HttpBodyFactory::reconfigure()
 //#endif
 {
   RecInt e;
+  RecString s = nullptr;
   bool all_found;
   int rec_err;
 
@@ -289,14 +296,20 @@ HttpBodyFactory::reconfigure()
   all_found                 = all_found && (rec_err == REC_ERR_OKAY);
   Debug("body_factory", "response_suppression_mode = %d (found = %" PRId64 ")", response_suppression_mode, e);
 
-  ats_scoped_str directory_of_template_sets(RecConfigReadConfigPath("proxy.config.body_factory.template_sets_dir", "body_factory"));
+  ats_scoped_str directory_of_template_sets;
 
-  if (access(directory_of_template_sets, R_OK) < 0) {
-    Warning("Unable to access() directory '%s': %d, %s", (const char *)directory_of_template_sets, errno, strerror(errno));
-    Warning(" Please set 'proxy.config.body_factory.template_sets_dir' ");
+  rec_err   = RecGetRecordString_Xmalloc("proxy.config.body_factory.template_sets_dir", &s);
+  all_found = all_found && (rec_err == REC_ERR_OKAY);
+  if (rec_err == REC_ERR_OKAY) {
+    directory_of_template_sets = Layout::get()->relative(s);
+    if (access(directory_of_template_sets, R_OK) < 0) {
+      Warning("Unable to access() directory '%s': %d, %s", (const char *)directory_of_template_sets, errno, strerror(errno));
+      Warning(" Please set 'proxy.config.body_factory.template_sets_dir' ");
+    }
   }
 
-  Debug("body_factory", "directory_of_template_sets = '%s' ", (const char *)directory_of_template_sets);
+  Debug("body_factory", "directory_of_template_sets = '%s' (found = %s)", (const char *)directory_of_template_sets, s);
+  ats_free(s);
 
   if (!all_found) {
     Warning("config changed, but can't fetch all proxy.config.body_factory values");
@@ -334,7 +347,14 @@ HttpBodyFactory::HttpBodyFactory()
   ////////////////////////////////////
   // initialize first-time defaults //
   ////////////////////////////////////
+
+  magic = HTTP_BODY_FACTORY_MAGIC;
   ink_mutex_init(&mutex);
+
+  table_of_sets         = nullptr;
+  enable_customizations = 0;
+  enable_logging        = true;
+  callbacks_established = false;
 
   //////////////////////////////////////////////////////
   // set up management configuration-change callbacks //
@@ -377,7 +397,7 @@ HttpBodyFactory::fabricate(StrList *acpt_language_list, StrList *acpt_charset_li
   char *buffer;
   const char *pType = context->txn_conf->body_factory_template_base;
   const char *set;
-  HttpBodyTemplate *t = nullptr;
+  HttpBodyTemplate *t = NULL;
   HttpBodySet *body_set;
   char template_base[PATH_NAME_MAX];
 
@@ -406,6 +426,8 @@ HttpBodyFactory::fabricate(StrList *acpt_language_list, StrList *acpt_charset_li
     set = determine_set_by_language(acpt_language_list, acpt_charset_list);
   } else if (enable_customizations == 3) {
     set = determine_set_by_host(context);
+  } else if (is_response_body_precluded(context->http_return_code)) {
+    return nullptr;
   } else {
     set = "default";
   }
@@ -424,6 +446,9 @@ HttpBodyFactory::fabricate(StrList *acpt_language_list, StrList *acpt_charset_li
 
   // Check for base customizations if specializations didn't work.
   if (t == nullptr) {
+    if (is_response_body_precluded(context->http_return_code)) {
+      return nullptr;
+    }
     t = find_template(set, type, &body_set); // this executes if the template_base is wrong and doesn't exist
   }
 
