@@ -44,8 +44,10 @@ class CommandTable
 {
   typedef CommandTable self; ///< Self reference type.
 public:
-  /// Signature for actual command implementation.
-  typedef std::function<ts::Errata(int argc, char *argv[])> CommandFunction;
+  /// Signature for a leaf command.
+  using Action = std::function<ts::Errata(int argc, char *argv[])>;
+  /// Signature for a argumentless command.
+  using NullaryAction = std::function<ts::Errata ()>;
 
   CommandTable();
 
@@ -56,6 +58,7 @@ public:
   {
     typedef Command self; ///< Self reference type.
   public:
+    Command(Command && that);
     ~Command();
 
     /** Add a subcommand to this command.
@@ -65,11 +68,13 @@ public:
     /** Add a subcommand to this command.
         @return The new sub command instance.
     */
-    Command &subCommand(std::string const &name, std::string const &help, CommandFunction const &f);
+    Command &subCommand(std::string const &name, std::string const &help, NullaryAction const &f);
     /** Add a leaf command.
         @return This new sub command instance.
     */
-    Command &set(CommandFunction const &f);
+    Command &subCommand(std::string const &name, std::string const &help, Action const &f);
+
+    //    Command &set(CommandFunction const &f);
 
     /** Invoke a command.
         @return The return value of the executed command, or an error value if the command was not found.
@@ -80,11 +85,23 @@ public:
 
   protected:
     typedef std::vector<Command> CommandGroup;
+    struct nil_t {};
 
     std::string _name; ///< Command name.
     std::string _help; ///< Help message.
-    /// Command to execute if no more keywords.
-    CommandFunction _func;
+    enum {
+      SUPER, ///< Pure super command, not valid itself
+      LEAF, ///< Leaf command (always invoke)
+      NO_ARGS ///< Argumentless command, invoke if no more args.
+    } _style = SUPER;
+    /// Command to execute.
+    union ActionContainer{
+      ActionContainer(){}
+      ~ActionContainer(){}
+      nil_t _nil;
+      Action _a;
+      NullaryAction _na;
+    } _action;
     /// Next command for current keyword.
     CommandGroup _group;
 
@@ -93,7 +110,9 @@ public:
     /// Construct with a function for this command.
     Command(std::string const &name, std::string const &help);
     /// Construct with a function for this command.
-    Command(std::string const &name, std::string const &help, CommandFunction const &f);
+    Command(std::string const &name, std::string const &help, Action const &f);
+    /// Construct with a function for this command.
+    Command(std::string const &name, std::string const &help, NullaryAction const &f);
 
     friend class CommandTable;
   };
@@ -101,7 +120,12 @@ public:
   /** Add a direct command.
       @return The created @c Command instance.
    */
-  Command &add(std::string const &name, std::string const &help, CommandFunction const &f);
+  Command &add(std::string const &name, std::string const &help, Action const &f);
+
+  /** Add a direct command.
+      @return The created @c Command instance.
+   */
+  Command &add(std::string const &name, std::string const &help, NullaryAction const &f);
 
   /** Add a parent command.
       @return The created @c Command instance.

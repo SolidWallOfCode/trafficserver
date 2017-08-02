@@ -42,37 +42,65 @@ ERR_COMMAND_TAG_NOT_FOUND(char const *tag)
   return ts::Errata(s.str());
 }
 
-CommandTable::Command::Command()
-{
-}
-
 CommandTable::Command::Command(std::string const &name, std::string const &help) : _name(name), _help(help)
 {
 }
 
-CommandTable::Command::Command(std::string const &name, std::string const &help, CommandFunction const &f)
-  : _name(name), _help(help), _func(f)
+CommandTable::Command::Command(std::string const &name, std::string const &help, Action const &f)
+  : _name(name), _help(help), _style(LEAF)
 {
+  _action._a = f;
 }
 
+CommandTable::Command::Command(std::string const &name, std::string const &help, NullaryAction const &f)
+  : _name(name), _help(help), _style(NO_ARGS)
+{
+  _action._na = f;
+}
+
+CommandTable::Command::Command(Command && that) : _name(std::move(that._name)), _help(std::move(that._help)), _style(that._style) {
+  switch (_style) {
+  case SUPER: break;
+  case NO_ARGS: _action._na = std::move(that._action._na); break;
+  case LEAF: _action._a = std::move(that._action._a); break;
+  }
+}
+
+CommandTable::Command::~Command() {
+  switch (_style) {
+  case SUPER: break;
+  case NO_ARGS: _action._na.~NullaryAction(); break;
+  case LEAF: _action._a.~Action(); break;
+  }
+}
+
+# if 0
 auto
 CommandTable::Command::set(CommandFunction const &f) -> self &
 {
   _func = f;
   return *this;
 }
+#endif
 
 CommandTable::Command &
-CommandTable::Command::subCommand(std::string const &name, std::string const &help, CommandFunction const &f)
+CommandTable::Command::subCommand(std::string const &name, std::string const &help, Action const &f)
 {
-  _group.emplace_back(Command(name, help, f));
+  _group.push_back(Command(name, help, f));
+  return _group.back();
+}
+
+CommandTable::Command &
+CommandTable::Command::subCommand(std::string const &name, std::string const &help, NullaryAction const &f)
+{
+  _group.push_back(Command(name, help, f));
   return _group.back();
 }
 
 auto
 CommandTable::Command::subCommand(std::string const &name, std::string const &help) -> self &
 {
-  _group.emplace_back(Command(name, help));
+  _group.push_back(Command(name, help));
   return _group.back();
 }
 
@@ -81,10 +109,11 @@ CommandTable::Command::invoke(int argc, char *argv[])
 {
   ts::Errata zret;
 
-  if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
-    // Tail of command keywords, try to invoke.
-    if (_func) {
-      zret = _func(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
+  if (LEAF == _style) {
+    zret = _action._a(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
+  } else if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
+    if (NO_ARGS == _style) {
+      zret = _action._na();
     } else {
       std::ostringstream s;
       s << "Incomplete command, additional keyword required";
@@ -132,10 +161,6 @@ CommandTable::Command::helpMessage(int argc, char *argv[], std::ostream &out, st
   }
 }
 
-CommandTable::Command::~Command()
-{
-}
-
 CommandTable::CommandTable()
 {
 }
@@ -147,7 +172,13 @@ CommandTable::add(std::string const &name, std::string const &help) -> Command &
 }
 
 auto
-CommandTable::add(std::string const &name, std::string const &help, CommandFunction const &f) -> Command &
+CommandTable::add(std::string const &name, std::string const &help, Action const &f) -> Command &
+{
+  return _top.subCommand(name, help, f);
+}
+
+auto
+CommandTable::add(std::string const &name, std::string const &help, NullaryAction const &f) -> Command &
 {
   return _top.subCommand(name, help, f);
 }
