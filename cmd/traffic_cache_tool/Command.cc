@@ -42,6 +42,8 @@ ERR_COMMAND_TAG_NOT_FOUND(char const *tag)
   return ts::Errata(s.str());
 }
 
+CommandTable::Command::Command() {}
+
 CommandTable::Command::Command(std::string const &name, std::string const &help) : _name(name), _help(help)
 {
 }
@@ -73,15 +75,6 @@ CommandTable::Command::~Command() {
   case LEAF: _action._a.~Action(); break;
   }
 }
-
-# if 0
-auto
-CommandTable::Command::set(CommandFunction const &f) -> self &
-{
-  _func = f;
-  return *this;
-}
-#endif
 
 CommandTable::Command &
 CommandTable::Command::subCommand(std::string const &name, std::string const &help, Action const &f)

@@ -74,8 +74,6 @@ public:
     */
     Command &subCommand(std::string const &name, std::string const &help, Action const &f);
 
-    //    Command &set(CommandFunction const &f);
-
     /** Invoke a command.
         @return The return value of the executed command, or an error value if the command was not found.
     */
