@@ -1252,7 +1252,7 @@ main(int argc, char *argv[])
   Commands.setArgIndex(optind);
 
   if (help) {
-    Commands.helpMessage(argc-1, argv+1);
+    Commands.helpMessage(argc - 1, argv + 1);
     exit(1);
   }
 

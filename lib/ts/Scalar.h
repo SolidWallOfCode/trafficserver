@@ -493,21 +493,14 @@ Scalar<N, C, T>::scale()
 }
 
 // --- Compare operators
-// These optimize nicely due to dead code elimination.
+// These optimize nicely because if R::num or R::den is 1 the compiler will drop it.
 
 template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
 bool
 operator<(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   typedef std::ratio<N, S> R;
-  if (N == S)
-    return lhs.count() < rhs.count();
-  else if (R::den == 1)
-    return lhs.count() * R::num < rhs.count();
-  else if (R::num == 1)
-    return lhs.count() < rhs.count() * R::den;
-  else
-    return lhs.value() < rhs.value();
+  return lhs.count() * R::num < rhs.count() * R::den;
 }
 
 template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
@@ -515,14 +508,7 @@ bool
 operator==(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   typedef std::ratio<N, S> R;
-  if (N == S)
-    return lhs.count() == rhs.count();
-  else if (R::den == 1)
-    return lhs.count() * R::num == rhs.count();
-  else if (R::num == 1)
-    return lhs.count() == rhs.count() * R::den;
-  else
-    return lhs.value() == rhs.value();
+  return lhs.count() * R::num == rhs.count() * R::den;
 }
 
 template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
@@ -530,220 +516,22 @@ bool
 operator<=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   typedef std::ratio<N, S> R;
-  if (N == S)
-    return lhs.count() <= rhs.count();
-  else if (R::den == 1)
-    return lhs.count() * R::num <= rhs.count();
-  else if (R::num == 1)
-    return lhs.count() <= rhs.count() * R::den;
-  else
-    return lhs.value() <= rhs.value();
+  return lhs.count() * R::num <= rhs.count() * R::den;
 }
 
 // Derived compares.
-
-template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
+template <intmax_t N, typename C, intmax_t S, typename I, typename T>
 bool
-operator>(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
+operator>(Scalar<N, C, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   return rhs < lhs;
 }
 
-template <intmax_t N, typename C1, intmax_t S, typename I, typename T>
+template <intmax_t N, typename C, intmax_t S, typename I, typename T>
 bool
-operator>=(Scalar<N, C1, T> const &lhs, Scalar<S, I, T> const &rhs)
+operator>=(Scalar<N, C, T> const &lhs, Scalar<S, I, T> const &rhs)
 {
   return rhs <= lhs;
-}
-
-// Do the integer compares.
-// A bit ugly to handle the issue that integers without explicit type are <int>. Therefore suppport
-// must be provided for comparison not just to the counter type C but also explicitly <int>, otherwise
-// function template argument deduction may fail (because it can't figure out what to use for <C>).
-
-template <intmax_t N, typename C, typename T>
-bool
-operator<(Scalar<N, C, T> const &lhs, C n)
-{
-  return lhs.value() < n;
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<(C n, Scalar<N, C, T> const &rhs)
-{
-  return n < rhs.value();
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<(Scalar<N, C, T> const &lhs, int n)
-{
-  return lhs.value() < static_cast<C>(n);
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<(int n, Scalar<N, C, T> const &rhs)
-{
-  return static_cast<C>(n) < rhs.value();
-}
-template <intmax_t N>
-bool
-operator<(Scalar<N, int> const &lhs, int n)
-{
-  return lhs.value() < n;
-}
-template <intmax_t N>
-bool
-operator<(int n, Scalar<N, int> const &rhs)
-{
-  return n < rhs.value();
-}
-
-template <intmax_t N, typename C, typename T>
-bool
-operator==(Scalar<N, C, T> const &lhs, C n)
-{
-  return lhs.value() == n;
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator==(C n, Scalar<N, C, T> const &rhs)
-{
-  return n == rhs.value();
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator==(Scalar<N, C, T> const &lhs, int n)
-{
-  return lhs.value() == static_cast<C>(n);
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator==(int n, Scalar<N, C, T> const &rhs)
-{
-  return static_cast<C>(n) == rhs.value();
-}
-template <intmax_t N>
-bool
-operator==(Scalar<N, int> const &lhs, int n)
-{
-  return lhs.value() == n;
-}
-template <intmax_t N>
-bool
-operator==(int n, Scalar<N, int> const &rhs)
-{
-  return n == rhs.value();
-}
-
-template <intmax_t N, typename C, typename T>
-bool
-operator>(Scalar<N, C, T> const &lhs, C n)
-{
-  return lhs.value() > n;
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>(C n, Scalar<N, C, T> const &rhs)
-{
-  return n > rhs.value();
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>(Scalar<N, C, T> const &lhs, int n)
-{
-  return lhs.value() > static_cast<C>(n);
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>(int n, Scalar<N, C, T> const &rhs)
-{
-  return static_cast<C>(n) > rhs.value();
-}
-template <intmax_t N>
-bool
-operator>(Scalar<N, int> const &lhs, int n)
-{
-  return lhs.value() > n;
-}
-template <intmax_t N>
-bool
-operator>(int n, Scalar<N, int> const &rhs)
-{
-  return n > rhs.value();
-}
-
-template <intmax_t N, typename C, typename T>
-bool
-operator<=(Scalar<N, C, T> const &lhs, C n)
-{
-  return lhs.value() <= n;
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<=(C n, Scalar<N, C, T> const &rhs)
-{
-  return n <= rhs.value();
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<=(Scalar<N, C, T> const &lhs, int n)
-{
-  return lhs.value() <= static_cast<C>(n);
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator<=(int n, Scalar<N, C, T> const &rhs)
-{
-  return static_cast<C>(n) <= rhs.value();
-}
-template <intmax_t N>
-bool
-operator<=(Scalar<N, int> const &lhs, int n)
-{
-  return lhs.value() <= n;
-}
-template <intmax_t N>
-bool
-operator<=(int n, Scalar<N, int> const &rhs)
-{
-  return n <= rhs.value();
-}
-
-template <intmax_t N, typename C, typename T>
-bool
-operator>=(Scalar<N, C, T> const &lhs, C n)
-{
-  return lhs.value() >= n;
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>=(C n, Scalar<N, C, T> const &rhs)
-{
-  return n >= rhs.value();
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>=(Scalar<N, C, T> const &lhs, int n)
-{
-  return lhs.value() >= static_cast<C>(n);
-}
-template <intmax_t N, typename C, typename T>
-bool
-operator>=(int n, Scalar<N, C, T> const &rhs)
-{
-  return static_cast<C>(n) >= rhs.value();
-}
-template <intmax_t N>
-bool
-operator>=(Scalar<N, int> const &lhs, int n)
-{
-  return lhs.value() >= n;
-}
-template <intmax_t N>
-bool
-operator>=(int n, Scalar<N, int> const &rhs)
-{
-  return n >= rhs.value();
 }
 
 // Arithmetic operators
@@ -1064,6 +852,14 @@ Scalar<N, C, T>::operator/=(C n) -> self &
 {
   _n /= n;
   return *this;
+}
+
+template <intmax_t N, typename C, intmax_t S, typename I, typename T>
+auto
+operator/(Scalar<N, C, T> lhs, Scalar<S, I, T> rhs) -> typename std::common_type<C, I>::type
+{
+  using R = std::ratio<N, S>;
+  return (lhs.count() * R::num) / (rhs.count() * R::den);
 }
 
 template <intmax_t N, typename C, typename T, typename I>

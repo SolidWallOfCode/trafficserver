@@ -344,6 +344,31 @@ struct KBytes_tag {
 std::string const KBytes_tag::label(" bytes");
 
 void
+Test_8()
+{
+  using ts::Scalar;
+  using S16 = Scalar<16>;
+  using S48 = Scalar<48>;
+  using S64 = Scalar<64>;
+  using S91 = Scalar<91>;
+
+  TestBox test("TS.Scalar: division tests");
+
+  S16 s16(9);
+  S48 s48(27);
+  S64 s64(54);
+  S91 s91(17);
+
+  test.equal(s16 / 9, S16::scale());
+  test.equal(s64 / s16, 24);
+  test.equal(s91 / 16, S91::scale());
+  test.equal(s48 / 24, 48); // correct because of rounding.
+  test.equal(s48 / 12, 96);
+  test.equal(s48 / 3, 432);
+  test.equal(s91 / s16, 10);
+}
+
+void
 Test_IO()
 {
   typedef ts::Scalar<1024, long int, KBytes_tag> KBytes;
@@ -401,6 +426,7 @@ main(int, char **)
   Test_5();
   Test_6();
   Test_7();
+  Test_8();
   Test_IO();
   TestBox::print_summary();
   return 0;
