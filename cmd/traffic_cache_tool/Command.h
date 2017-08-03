@@ -25,6 +25,7 @@
 #include <functional>
 #include <string>
 #include <iostream>
+#include <memory.h>
 #include <tsconfig/Errata.h>
 
 #if !defined(CACHE_TOOL_COMMAND_H)
@@ -45,7 +46,7 @@ class CommandTable
   typedef CommandTable self; ///< Self reference type.
 public:
   /// Signature for a leaf command.
-  using Action = std::function<ts::Errata(int argc, char *argv[])>;
+  using LeafAction = std::function<ts::Errata(int argc, char *argv[])>;
   /// Signature for a argumentless command.
   using NullaryAction = std::function<ts::Errata ()>;
 
@@ -58,7 +59,7 @@ public:
   {
     typedef Command self; ///< Self reference type.
   public:
-    Command(Command && that);
+    Command(Command && that) = default;
     ~Command();
 
     /** Add a subcommand to this command.
@@ -72,7 +73,7 @@ public:
     /** Add a leaf command.
         @return This new sub command instance.
     */
-    Command &subCommand(std::string const &name, std::string const &help, Action const &f);
+    Command &subCommand(std::string const &name, std::string const &help, LeafAction const &f);
 
     /** Invoke a command.
         @return The return value of the executed command, or an error value if the command was not found.
@@ -83,23 +84,73 @@ public:
 
   protected:
     typedef std::vector<Command> CommandGroup;
-    struct nil_t {};
 
     std::string _name; ///< Command name.
     std::string _help; ///< Help message.
-    enum {
-      SUPER, ///< Pure super command, not valid itself
-      LEAF, ///< Leaf command (always invoke)
-      NO_ARGS ///< Argumentless command, invoke if no more args.
-    } _style = SUPER;
-    /// Command to execute.
-    union ActionContainer{
-      ActionContainer(){}
-      ~ActionContainer(){}
-      nil_t _nil;
-      Action _a;
-      NullaryAction _na;
+
+    /** Class to hold varying types of functions.
+
+	@internal A bit ugly, I need to do better wrapping and type erasure.
+    */
+    class Action {
+    public:
+      /// Type of the function stored.
+      enum Type {
+	NIL, ///< Nothing / empty
+	LEAF, ///< Leaf action (arguments)
+	NULLARY, ///< Nullary action.
+      };
+      Action() { }
+      Action(Action && that) {
+	_type = that._type;
+	memcpy(_data, that._data, sizeof(_data));
+	that._type = NIL;
+      }
+      ~Action() { this->clear(); }
+
+      Action& operator = (LeafAction const& a) {
+	this->clear();
+	_type = LEAF;
+	new (_data) LeafAction(a);
+	return *this;
+      }
+
+      Action& operator = (NullaryAction const& a) {
+	this->clear();
+	_type = NULLARY;
+	new (_data) NullaryAction(a);
+	return *this;
+      }
+
+      Errata invoke(int argc, char *argv[]) {
+	assert(LEAF == _type);
+	return (*reinterpret_cast<LeafAction*>(_data))(argc, argv);
+      }
+
+      Errata invoke() {
+	assert(NULLARY == _type);
+	return (*reinterpret_cast<NullaryAction*>(_data))();
+      }
+
+      bool is_leaf() const { return LEAF == _type; }
+      bool is_nullary() const { return NULLARY == _type; }
+
+    protected:
+
+      void clear() {
+	switch (_type) {
+	case NIL: break;
+	case LEAF: reinterpret_cast<LeafAction*>(_data)->~LeafAction(); break;
+	case NULLARY: reinterpret_cast<NullaryAction*>(_data)->~NullaryAction(); break;
+	}
+	_type = NIL;
+      }
+
+      Type _type = NIL; ///< Type of function stored.
+      /// Raw storage for the function.
+      char _data[sizeof(NullaryAction) > sizeof(LeafAction) ? sizeof(NullaryAction) : sizeof(LeafAction)];
     } _action;
+
     /// Next command for current keyword.
     CommandGroup _group;
 
@@ -108,7 +159,7 @@ public:
     /// Construct with a function for this command.
     Command(std::string const &name, std::string const &help);
     /// Construct with a function for this command.
-    Command(std::string const &name, std::string const &help, Action const &f);
+    Command(std::string const &name, std::string const &help, LeafAction const &f);
     /// Construct with a function for this command.
     Command(std::string const &name, std::string const &help, NullaryAction const &f);
 
@@ -118,7 +169,7 @@ public:
   /** Add a direct command.
       @return The created @c Command instance.
    */
-  Command &add(std::string const &name, std::string const &help, Action const &f);
+  Command &add(std::string const &name, std::string const &help, LeafAction const &f);
 
   /** Add a direct command.
       @return The created @c Command instance.

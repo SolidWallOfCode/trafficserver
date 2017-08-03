@@ -48,36 +48,23 @@ CommandTable::Command::Command(std::string const &name, std::string const &help)
 {
 }
 
-CommandTable::Command::Command(std::string const &name, std::string const &help, Action const &f)
-  : _name(name), _help(help), _style(LEAF)
+CommandTable::Command::Command(std::string const &name, std::string const &help, LeafAction const &f)
+  : _name(name), _help(help)
 {
-  _action._a = f;
+  _action = f;
 }
 
 CommandTable::Command::Command(std::string const &name, std::string const &help, NullaryAction const &f)
-  : _name(name), _help(help), _style(NO_ARGS)
+  : _name(name), _help(help)
 {
-  _action._na = f;
-}
-
-CommandTable::Command::Command(Command && that) : _name(std::move(that._name)), _help(std::move(that._help)), _style(that._style) {
-  switch (_style) {
-  case SUPER: break;
-  case NO_ARGS: _action._na = std::move(that._action._na); break;
-  case LEAF: _action._a = std::move(that._action._a); break;
-  }
+  _action = f;
 }
 
 CommandTable::Command::~Command() {
-  switch (_style) {
-  case SUPER: break;
-  case NO_ARGS: _action._na.~NullaryAction(); break;
-  case LEAF: _action._a.~Action(); break;
-  }
 }
 
 CommandTable::Command &
-CommandTable::Command::subCommand(std::string const &name, std::string const &help, Action const &f)
+CommandTable::Command::subCommand(std::string const &name, std::string const &help, LeafAction const &f)
 {
   _group.push_back(Command(name, help, f));
   return _group.back();
@@ -102,11 +89,11 @@ CommandTable::Command::invoke(int argc, char *argv[])
 {
   ts::Errata zret;
 
-  if (LEAF == _style) {
-    zret = _action._a(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
+  if (_action.is_leaf()) {
+    zret = _action.invoke(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
   } else if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
-    if (NO_ARGS == _style) {
-      zret = _action._na();
+    if (_action.is_nullary()) {
+      zret = _action.invoke();
     } else {
       std::ostringstream s;
       s << "Incomplete command, additional keyword required";
@@ -165,7 +152,7 @@ CommandTable::add(std::string const &name, std::string const &help) -> Command &
 }
 
 auto
-CommandTable::add(std::string const &name, std::string const &help, Action const &f) -> Command &
+CommandTable::add(std::string const &name, std::string const &help, LeafAction const &f) -> Command &
 {
   return _top.subCommand(name, help, f);
 }
