@@ -1151,7 +1151,7 @@ struct option Options[] = {{"help", 0, nullptr, 'h'},
 }
 
 Errata
-List_Stripes(Cache::SpanDumpDepth depth, int argc, char *argv[])
+List_Stripes(Cache::SpanDumpDepth depth)
 {
   Errata zret;
   Cache cache;
@@ -1241,9 +1241,9 @@ main(int argc, char *argv[])
 
   Commands
     .add("list", "List elements of the cache",
-         [](int argc, char *argv[]) { return List_Stripes(Cache::SpanDumpDepth::SPAN, argc, argv); })
+         []() { return List_Stripes(Cache::SpanDumpDepth::SPAN); })
     .subCommand(std::string("stripes"), std::string("List the stripes"),
-                [](int argc, char *argv[]) { return List_Stripes(Cache::SpanDumpDepth::STRIPE, argc, argv); });
+                []() { return List_Stripes(Cache::SpanDumpDepth::STRIPE); });
   Commands.add(std::string("clear"), std::string("Clear spans"), &Clear_Spans);
   Commands.add(std::string("volumes"), std::string("Volumes"), &Simulate_Span_Allocation);
   Commands.add(std::string("alloc"), std::string("Storage allocation"))

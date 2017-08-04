@@ -42,37 +42,45 @@ ERR_COMMAND_TAG_NOT_FOUND(char const *tag)
   return ts::Errata(s.str());
 }
 
-CommandTable::Command::Command()
-{
-}
+CommandTable::Command::Command() {}
 
 CommandTable::Command::Command(std::string const &name, std::string const &help) : _name(name), _help(help)
 {
 }
 
-CommandTable::Command::Command(std::string const &name, std::string const &help, CommandFunction const &f)
-  : _name(name), _help(help), _func(f)
+CommandTable::Command::Command(std::string const &name, std::string const &help, LeafAction const &f)
+  : _name(name), _help(help)
 {
+  _action = f;
 }
 
-auto
-CommandTable::Command::set(CommandFunction const &f) -> self &
+CommandTable::Command::Command(std::string const &name, std::string const &help, NullaryAction const &f)
+  : _name(name), _help(help)
 {
-  _func = f;
-  return *this;
+  _action = f;
+}
+
+CommandTable::Command::~Command() {
 }
 
 CommandTable::Command &
-CommandTable::Command::subCommand(std::string const &name, std::string const &help, CommandFunction const &f)
+CommandTable::Command::subCommand(std::string const &name, std::string const &help, LeafAction const &f)
 {
-  _group.emplace_back(Command(name, help, f));
+  _group.push_back(Command(name, help, f));
+  return _group.back();
+}
+
+CommandTable::Command &
+CommandTable::Command::subCommand(std::string const &name, std::string const &help, NullaryAction const &f)
+{
+  _group.push_back(Command(name, help, f));
   return _group.back();
 }
 
 auto
 CommandTable::Command::subCommand(std::string const &name, std::string const &help) -> self &
 {
-  _group.emplace_back(Command(name, help));
+  _group.push_back(Command(name, help));
   return _group.back();
 }
 
@@ -81,10 +89,11 @@ CommandTable::Command::invoke(int argc, char *argv[])
 {
   ts::Errata zret;
 
-  if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
-    // Tail of command keywords, try to invoke.
-    if (_func) {
-      zret = _func(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
+  if (_action.is_leaf()) {
+    zret = _action.invoke(argc - CommandTable::_opt_idx, argv + CommandTable::_opt_idx);
+  } else if (CommandTable::_opt_idx >= argc || argv[CommandTable::_opt_idx][0] == '-') {
+    if (_action.is_nullary()) {
+      zret = _action.invoke();
     } else {
       std::ostringstream s;
       s << "Incomplete command, additional keyword required";
@@ -132,10 +141,6 @@ CommandTable::Command::helpMessage(int argc, char *argv[], std::ostream &out, st
   }
 }
 
-CommandTable::Command::~Command()
-{
-}
-
 CommandTable::CommandTable()
 {
 }
@@ -147,7 +152,13 @@ CommandTable::add(std::string const &name, std::string const &help) -> Command &
 }
 
 auto
-CommandTable::add(std::string const &name, std::string const &help, CommandFunction const &f) -> Command &
+CommandTable::add(std::string const &name, std::string const &help, LeafAction const &f) -> Command &
+{
+  return _top.subCommand(name, help, f);
+}
+
+auto
+CommandTable::add(std::string const &name, std::string const &help, NullaryAction const &f) -> Command &
 {
   return _top.subCommand(name, help, f);
 }
