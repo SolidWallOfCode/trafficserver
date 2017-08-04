@@ -37,6 +37,12 @@
 #include "File.h"
 #include "CacheDefs.h"
 #include "Command.h"
+#include "ts/ink_code.h"
+#include "ts/INK_MD5.h"
+#include <cstring>
+#include <openssl/md5.h>
+#include <vector>
+#include <unordered_set>
 
 using ts::Bytes;
 using ts::Megabytes;
@@ -49,6 +55,10 @@ using ts::FilePath;
 using ts::MemView;
 using ts::CacheDirEntry;
 
+constexpr int VOL_HASH_TABLE_SIZE = 32707;
+CacheStoreBlocks Vol_hash_alloc_size(1024);
+constexpr unsigned short VOL_HASH_EMPTY = 65535;
+constexpr int DIR_TAG_WIDTH             = 12;
 const Bytes ts::CacheSpan::OFFSET{CacheStoreBlocks{1}};
 
 enum { SILENT = 0, NORMAL, VERBOSE } Verbosity = NORMAL;
@@ -145,6 +155,7 @@ struct Stripe {
   void updateLiveData(enum Copy c);
 
   Span *_span;           ///< Hosting span.
+  INK_MD5 hash_id;       /// hash_id
   Bytes _start;          ///< Offset of first byte of stripe.
   Bytes _content;        ///< Start of content.
   CacheStoreBlocks _len; ///< Length of stripe.
@@ -154,6 +165,7 @@ struct Stripe {
 
   int64_t _buckets;  ///< Number of buckets per segment.
   int64_t _segments; ///< Number of segments.
+  const char *hashText = nullptr;
 
   /// Meta copies, indexed by A/B then HEAD/FOOT.
   StripeMeta _meta[2][2];
@@ -182,6 +194,16 @@ Stripe::Chunk::clear()
 
 Stripe::Stripe(Span *span, Bytes start, CacheStoreBlocks len) : _span(span), _start(start), _len(len)
 {
+  const char *diskPath        = span->_path.path();
+  const size_t hash_seed_size = strlen(diskPath);
+  const size_t hash_text_size = hash_seed_size + 32;
+  char *hash_text             = static_cast<char *>(ats_malloc(hash_text_size));
+  strncpy(hash_text, diskPath, hash_text_size);
+  snprintf(hash_text + hash_seed_size, (hash_text_size - hash_seed_size), " %" PRIu64 ":%" PRIu64 "", (uint64_t)_start,
+           (uint64_t)_len.count());
+  printf("hash id of stripe is hash of %s\n", hash_text);
+  ink_code_md5((unsigned char *)hash_text, strlen(hash_text), (unsigned char *)&hash_id);
+  hashText = hash_text;
 }
 
 bool
@@ -474,6 +496,7 @@ struct Cache {
   Errata loadSpan(FilePath const &path);
   Errata loadSpanConfig(FilePath const &path);
   Errata loadSpanDirect(FilePath const &path, int vol_idx = -1, Bytes size = Bytes(-1));
+  Errata loadURLs(FilePath const &path);
 
   Errata allocStripe(Span *span, int vol_idx, CacheStripeBlocks len);
 
@@ -485,18 +508,23 @@ struct Cache {
   enum class SpanDumpDepth { SPAN, STRIPE, DIRECTORY };
   void dumpSpans(SpanDumpDepth depth);
   void dumpVolumes();
-
+  void build_stripe_hash_table();
+  Stripe *key_to_stripe(INK_MD5 *key, const char *hostname, int host_len);
   //  ts::CacheStripeBlocks calcTotalSpanPhysicalSize();
   ts::CacheStripeBlocks calcTotalSpanConfiguredSize();
 
   std::list<Span *> _spans;
   std::map<int, Volume> _volumes;
+  std::vector<Stripe *> globalVec_stripe;
+  std::unordered_set<std::string> URLset;
+  unsigned short *stripes_hash_table;
 };
 
 Errata
 Cache::allocStripe(Span *span, int vol_idx, CacheStripeBlocks len)
 {
   auto rv = span->allocStripe(vol_idx, len);
+  std::cout << span->_path << ":" << vol_idx << std::endl;
   if (rv.isOK()) {
     _volumes[vol_idx]._stripes.push_back(rv);
   }
@@ -546,8 +574,8 @@ class VolumeAllocator
   typedef std::vector<V> AV;
   AV _av; ///< Working vector of volume data.
 
-  Cache _cache;         ///< Current state.
-  VolumeConfig _vols;   ///< Configuration state.
+  Cache _cache;       ///< Current state.
+  VolumeConfig _vols; ///< Configuration state.
 
 public:
   VolumeAllocator();
@@ -734,6 +762,7 @@ Cache::loadSpanDirect(FilePath const &path, int vol_idx, Bytes size)
           span->_free_space += stripe->_len;
         }
         span->_stripes.push_back(stripe);
+        globalVec_stripe.push_back(stripe);
       }
       span->_vol_idx = vol_idx;
     } else {
@@ -780,6 +809,34 @@ Cache::loadSpanConfig(FilePath const &path)
           }
         }
         zret = this->loadSpan(FilePath(path));
+      }
+    }
+  } else {
+    zret = Errata::Message(0, EBADF, "Unable to load ", path);
+  }
+  return zret;
+}
+
+Errata
+Cache::loadURLs(FilePath const &path)
+{
+  static const ts::StringView TAG_VOL("url");
+
+  Errata zret;
+
+  ts::BulkFile cfile(path);
+  if (0 == cfile.load()) {
+    ts::StringView content = cfile.content();
+
+    while (content) {
+      ts::StringView blob = content.splitPrefix('\n');
+
+      ts::StringView tag(blob.splitPrefix('='));
+      if (!tag) {
+      } else if (0 == strcasecmp(tag, TAG_VOL)) {
+        std::string url;
+        url.assign(blob.begin(), blob.size());
+        URLset.insert(url);
       }
     }
   } else {
@@ -1064,6 +1121,125 @@ Span::clearPermanently()
     std::cout << "Clearing " << _path << " not performed, write not enabled" << std::endl;
   }
 }
+
+// explicit pair for random table in build_vol_hash_table
+struct rtable_pair {
+  unsigned int rval; ///< relative value, used to sort.
+  unsigned int idx;  ///< volume mapping table index.
+};
+
+// comparison operator for random table in build_vol_hash_table
+// sorts based on the randomly assigned rval
+static int
+cmprtable(const void *aa, const void *bb)
+{
+  rtable_pair *a = (rtable_pair *)aa;
+  rtable_pair *b = (rtable_pair *)bb;
+  if (a->rval < b->rval) {
+    return -1;
+  }
+  if (a->rval > b->rval) {
+    return 1;
+  }
+  return 0;
+}
+
+unsigned int
+next_rand(unsigned int *p)
+{
+  unsigned int seed = *p;
+  seed              = 1103515145 * seed + 12345;
+  *p                = seed;
+  return seed;
+}
+
+void
+Cache::build_stripe_hash_table()
+{
+  int num_stripes = globalVec_stripe.size();
+  CacheStoreBlocks total;
+  unsigned int *forvol         = (unsigned int *)ats_malloc(sizeof(unsigned int) * num_stripes);
+  unsigned int *gotvol         = (unsigned int *)ats_malloc(sizeof(unsigned int) * num_stripes);
+  unsigned int *rnd            = (unsigned int *)ats_malloc(sizeof(unsigned int) * num_stripes);
+  unsigned short *ttable       = (unsigned short *)ats_malloc(sizeof(unsigned short) * VOL_HASH_TABLE_SIZE);
+  unsigned int *rtable_entries = (unsigned int *)ats_malloc(sizeof(unsigned int) * num_stripes);
+  unsigned int rtable_size     = 0;
+  int i                        = 0;
+  uint64_t used                = 0;
+  // estimate allocation
+  for (auto &elt : globalVec_stripe) {
+    // printf("stripe length %" PRId64 "\n", elt->_len.count());
+    rtable_entries[i] = static_cast<int64_t>(elt->_len) / Vol_hash_alloc_size;
+    rtable_size += rtable_entries[i];
+    uint64_t x = elt->hash_id.fold();
+    // seed random number generator
+    rnd[i] = (unsigned int)x;
+    total += elt->_len;
+    i++;
+  }
+  i = 0;
+  for (auto &elt : globalVec_stripe) {
+    forvol[i] = static_cast<int64_t>(VOL_HASH_TABLE_SIZE * elt->_len) / total;
+    used += forvol[i];
+    gotvol[i] = 0;
+    i++;
+  }
+
+  // spread around the excess
+  int extra = VOL_HASH_TABLE_SIZE - used;
+  for (int i = 0; i < extra; i++) {
+    forvol[i % num_stripes]++;
+  }
+
+  // initialize table to "empty"
+  for (int i = 0; i < VOL_HASH_TABLE_SIZE; i++) {
+    ttable[i] = VOL_HASH_EMPTY;
+  }
+
+  // generate random numbers proportaion to allocation
+  rtable_pair *rtable = (rtable_pair *)ats_malloc(sizeof(rtable_pair) * rtable_size);
+  int rindex          = 0;
+  for (int i = 0; i < num_stripes; i++) {
+    for (int j = 0; j < (int)rtable_entries[i]; j++) {
+      rtable[rindex].rval = next_rand(&rnd[i]);
+      rtable[rindex].idx  = i;
+      rindex++;
+    }
+  }
+  assert(rindex == (int)rtable_size);
+  // sort (rand #, vol $ pairs)
+  qsort(rtable, rtable_size, sizeof(rtable_pair), cmprtable);
+  unsigned int width = (1LL << 32) / VOL_HASH_TABLE_SIZE;
+  unsigned int pos; // target position to allocate
+  // select vol with closest random number for each bucket
+  i = 0; // index moving through the random numbers
+  for (int j = 0; j < VOL_HASH_TABLE_SIZE; j++) {
+    pos = width / 2 + j * width; // position to select closest to
+    while (pos > rtable[i].rval && i < (int)rtable_size - 1) {
+      i++;
+    }
+    ttable[j] = rtable[i].idx;
+    gotvol[rtable[i].idx]++;
+  }
+  for (int i = 0; i < num_stripes; i++) {
+    printf("build_vol_hash_table index %d mapped to %d requested %d got %d\n", i, i, forvol[i], gotvol[i]);
+  }
+  stripes_hash_table = ttable;
+
+  ats_free(forvol);
+  ats_free(gotvol);
+  ats_free(rnd);
+  ats_free(rtable_entries);
+  ats_free(rtable);
+}
+
+Stripe *
+Cache::key_to_stripe(INK_MD5 *key, const char *hostname, int host_len)
+{
+  uint32_t h = (key->slice32(2) >> DIR_TAG_WIDTH) % VOL_HASH_TABLE_SIZE;
+  return globalVec_stripe[stripes_hash_table[h]];
+}
+
 /* --------------------------------------------------------------------------------------- */
 Errata
 VolumeConfig::load(FilePath const &path)
@@ -1143,11 +1319,8 @@ VolumeConfig::load(FilePath const &path)
   return zret;
 }
 /* --------------------------------------------------------------------------------------- */
-struct option Options[] = {{"help", 0, nullptr, 'h'},
-                           {"spans", 1, nullptr, 's'},
-                           {"volumes", 1, nullptr, 'v'},
-                           {"write", 0, nullptr, 'w'},
-                           {nullptr, 0, nullptr, 0}};
+struct option Options[] = {{"help", 0, nullptr, 'h'},  {"spans", 1, nullptr, 's'}, {"volumes", 1, nullptr, 'v'},
+                           {"write", 0, nullptr, 'w'}, {"input", 1, nullptr, 'i'}, {nullptr, 0, nullptr, 0}};
 }
 
 Errata
@@ -1214,12 +1387,37 @@ Clear_Spans(int argc, char *argv[])
   return zret;
 }
 
+Errata
+Find_Stripe(FilePath const &input_file_path)
+{
+  Errata zret;
+  Cache cache;
+  if (input_file_path)
+    printf("passed argv %s\n", input_file_path.path());
+  cache.loadURLs(input_file_path);
+  if ((zret = cache.loadSpan(SpanFile))) {
+    cache.dumpSpans(Cache::SpanDumpDepth::SPAN);
+    cache.build_stripe_hash_table();
+    for (auto host : cache.URLset) {
+      INK_MD5 hash;
+      char hashStr[33];
+      ink_code_md5((unsigned char *)host.data(), host.size(), (unsigned char *)&hash);
+      Stripe *stripe_ = cache.key_to_stripe(&hash, host.data(), host.size());
+      printf("hash of %.*s is %s: Stripe  %s \n", (int)host.size(), host.data(),
+             ink_code_to_hex_str(hashStr, (unsigned char *)&hash), stripe_->hashText);
+    }
+  }
+
+  return zret;
+}
+
 int
 main(int argc, char *argv[])
 {
   int opt_idx = 0;
   int opt_val;
   bool help = false;
+  FilePath input_url_file;
   while (-1 != (opt_val = getopt_long(argc, argv, "h", Options, &opt_idx))) {
     switch (opt_val) {
     case 'h':
@@ -1236,6 +1434,9 @@ main(int argc, char *argv[])
       OPEN_RW_FLAG = O_RDWR;
       std::cout << "NOTE: Writing to physical devices enabled" << std::endl;
       break;
+    case 'i':
+      input_url_file = optarg;
+      break;
     }
   }
 
@@ -1248,6 +1449,8 @@ main(int argc, char *argv[])
   Commands.add(std::string("volumes"), std::string("Volumes"), &Simulate_Span_Allocation);
   Commands.add(std::string("alloc"), std::string("Storage allocation"))
     .subCommand(std::string("free"), std::string("Allocate storage on free (empty) spans"), &Cmd_Allocate_Empty_Spans);
+  Commands.add(std::string("find"), std::string("Find Stripe Assignment"))
+    .subCommand(std::string("url"), std::string("URL"), [&](int, char *argv[]) { return Find_Stripe(input_url_file); });
 
   Commands.setArgIndex(optind);
 

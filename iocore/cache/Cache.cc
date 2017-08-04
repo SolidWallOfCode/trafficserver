@@ -1275,6 +1275,7 @@ Vol::init(char *s, off_t blocks, off_t dir_skip, bool clear)
   ink_strlcpy(hash_text, seed_str, hash_text_size);
   snprintf(hash_text + hash_seed_size, (hash_text_size - hash_seed_size), " %" PRIu64 ":%" PRIu64 "", (uint64_t)dir_skip,
            (uint64_t)blocks);
+  Debug("cache_init", "**** hash string %s*****", hash_text.get());
   MD5Context().hash_immediate(hash_id, hash_text, strlen(hash_text));
 
   dir_skip = ROUND_TO_STORE_BLOCK((dir_skip < START_POS ? START_POS : dir_skip));
@@ -1869,6 +1870,7 @@ build_vol_hash_table(CacheHostRecord *cp)
 
   // estimate allocation
   for (int i = 0; i < num_vols; i++) {
+    printf("stripe len %" PRId64 "\n", p[i]->len);
     forvol[i] = (VOL_HASH_TABLE_SIZE * (p[i]->len >> STORE_BLOCK_SHIFT)) / total;
     used += forvol[i];
     rtable_entries[i] = p[i]->len / VOL_HASH_ALLOC_SIZE;
