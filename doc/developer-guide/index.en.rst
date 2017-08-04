@@ -44,10 +44,10 @@ duplicate bugs is encouraged, but not required.
    testing-with-vagrant/index.en
    debugging/index.en
    architecture/index.en
+   threads-and-events.en
    plugins/index.en
    config-vars.en
    api/index.en
    continuous-integration/index.en
    documentation/index.en
    host-resolution-proposal.en
-

@@ -349,7 +349,7 @@ HttpBodyFactory::HttpBodyFactory()
   ////////////////////////////////////
 
   magic = HTTP_BODY_FACTORY_MAGIC;
-  ink_mutex_init(&mutex, "HttpBodyFactory::lock");
+  ink_mutex_init(&mutex);
 
   table_of_sets         = nullptr;
   enable_customizations = 0;

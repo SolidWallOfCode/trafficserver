@@ -439,7 +439,7 @@ ClusterCom::ClusterCom(unsigned long oip, char *host, int mcport, char *group, i
 
   last_shared_send = 0;
 
-  ink_mutex_init(&mutex, "ccom-mutex");
+  ink_mutex_init(&mutex);
   peers       = ink_hash_table_create(InkHashTableKeyType_String);
   mismatchLog = ink_hash_table_create(InkHashTableKeyType_String);
 

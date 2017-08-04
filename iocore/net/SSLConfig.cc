@@ -75,7 +75,7 @@ static ConfigUpdateHandler<SSLCertificateConfig> *sslCertUpdate;
 
 SSLConfigParams::SSLConfigParams()
 {
-  ink_mutex_init(&ctxMapLock, "Context List Lock");
+  ink_mutex_init(&ctxMapLock);
   reset();
 }
 
