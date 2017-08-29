@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <bitset>
 #include <cstddef>
 #include <cassert>
 #include <ts/ts.h>
@@ -40,7 +41,10 @@ struct atscppapi::TransactionPluginState : noncopyable {
   TSCont cont_ = nullptr;
   TSHttpTxn ats_txn_handle_;
   std::shared_ptr<Mutex> mutex_;
-  TransactionPluginState(TSHttpTxn ats_txn_handle) : ats_txn_handle_(ats_txn_handle), mutex_(new Mutex(Mutex::TYPE_RECURSIVE)) {}
+  /// Which hooks are active for this plugin.
+  std::bitset<Plugin::N_HOOKS> hook_set_;
+  TransactionPluginState(TSHttpTxn ats_txn_handle) : ats_txn_handle_(ats_txn_handle), mutex_(new Mutex(Mutex::TYPE_RECURSIVE)) {
+  }
 };
 
 namespace
@@ -91,5 +95,16 @@ TransactionPlugin::registerHook(Plugin::HookType hook_type)
   LOG_DEBUG("TransactionPlugin=%p tshttptxn=%p registering hook_type=%d [%s]", this, state_->ats_txn_handle_, hook_type,
             HOOK_TYPE_STRINGS[hook_type].c_str());
   TSHttpHookID hook_id = atscppapi::utils::internal::convertInternalHookToTsHook(hook_type);
-  TSHttpTxnHookAdd(state_->ats_txn_handle_, hook_id, state_->cont_);
+  // Because global hooks go before transaction hooks, a transaction hook on TXN_CLOSE will never work.
+  // Long term we shouldn't add a hook at all here, but just register and depend on the Transaction to
+  // add the hook and call the TransactionPlugin hooks from there instead of doing it from the core.
+  if (HOOK_TXN_CLOSE != hook_type)
+    TSHttpTxnHookAdd(state_->ats_txn_handle_, hook_id, state_->cont_);
+  this->state_->hook_set_[hook_type] = true;
+}
+
+bool
+TransactionPlugin::isHookRegistered(Plugin::HookType hook_type) const
+{
+  return this->state_->hook_set_[hook_type];
 }

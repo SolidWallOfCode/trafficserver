@@ -35,6 +35,7 @@ public:
   {
     char_ptr_ = new char[100];
     TransactionPlugin::registerHook(HOOK_SEND_RESPONSE_HEADERS);
+    TransactionPlugin::registerHook(HOOK_TXN_CLOSE);
     std::cout << "Constructed!" << std::endl;
   }
   ~TransactionHookPlugin() override
@@ -46,6 +47,12 @@ public:
   handleSendResponseHeaders(Transaction &transaction) override
   {
     std::cout << "Send response headers!" << std::endl;
+    transaction.resume();
+  }
+  void
+  handleTxnClose(Transaction &transaction) override
+  {
+    std::cout << "Transaction closing!" << std::endl;
     transaction.resume();
   }
 

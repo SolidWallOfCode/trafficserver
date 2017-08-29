@@ -92,6 +92,7 @@ public:
    * @see Plugin
    */
   void registerHook(Plugin::HookType hook_type);
+  bool isHookRegistered(Plugin::HookType hook_type) const;
   virtual ~TransactionPlugin();
 
   bool isWebsocket() const;

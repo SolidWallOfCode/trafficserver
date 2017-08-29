@@ -41,6 +41,50 @@ namespace
 /// The index used to store required transaction based data.
 int TRANSACTION_STORAGE_INDEX = -1;
 
+void inline invokePluginForEvent(Plugin *plugin, TSHttpTxn ats_txn_handle, TSEvent event)
+{
+  Transaction &transaction = utils::internal::getTransaction(ats_txn_handle);
+  switch (event) {
+  case TS_EVENT_HTTP_PRE_REMAP:
+    plugin->handleReadRequestHeadersPreRemap(transaction);
+    break;
+  case TS_EVENT_HTTP_POST_REMAP:
+    plugin->handleReadRequestHeadersPostRemap(transaction);
+    break;
+  case TS_EVENT_HTTP_SEND_REQUEST_HDR:
+    plugin->handleSendRequestHeaders(transaction);
+    break;
+  case TS_EVENT_HTTP_READ_RESPONSE_HDR:
+    plugin->handleReadResponseHeaders(transaction);
+    break;
+  case TS_EVENT_HTTP_SEND_RESPONSE_HDR:
+    plugin->handleSendResponseHeaders(transaction);
+    break;
+  case TS_EVENT_HTTP_OS_DNS:
+    plugin->handleOsDns(transaction);
+    break;
+  case TS_EVENT_HTTP_READ_REQUEST_HDR:
+    plugin->handleReadRequestHeaders(transaction);
+    break;
+  case TS_EVENT_HTTP_READ_CACHE_HDR:
+    plugin->handleReadCacheHeaders(transaction);
+    break;
+  case TS_EVENT_HTTP_CACHE_LOOKUP_COMPLETE:
+    plugin->handleReadCacheLookupComplete(transaction);
+    break;
+  case TS_EVENT_HTTP_SELECT_ALT:
+    plugin->handleSelectAlt(transaction);
+    break;
+  case TS_EVENT_HTTP_TXN_CLOSE:
+    plugin->handleTxnClose(transaction);
+    break;
+
+  default:
+    assert(false); /* we should never get here */
+    break;
+  }
+}
+
 void
 resetTransactionHandles(Transaction &transaction, TSEvent event)
 {
@@ -76,6 +120,16 @@ handleTransactionEvents(TSCont cont, TSEvent event, void *edata)
   case TS_EVENT_HTTP_TXN_CLOSE: { // opening scope to declare plugins variable below
     resetTransactionHandles(transaction, event);
     const std::list<TransactionPlugin *> &plugins = utils::internal::getTransactionPlugins(transaction);
+    // Dispatch any TXN_CLOSE plugins
+    // For now, this is a hack. Future work should adopt this style for all the other hooks, where the plugin object
+    // doesn't actually add a hook, it just registers its interest and the transaction, if needed, adds the actual
+    // hook. For now we depend on just knowing the TXN_CLOSE hook is always added.
+    for (auto plugin : plugins) {
+      if (plugin->isHookRegistered(Plugin::HOOK_TXN_CLOSE)) {
+        utils::internal::invokePluginForEvent(plugin, ats_txn_handle, event);
+      }
+    }
+    // Do cleanup after all hooks have run.
     for (auto plugin : plugins) {
       std::shared_ptr<Mutex> trans_mutex = utils::internal::getTransactionPluginMutex(*plugin);
       LOG_DEBUG("Locking TransacitonPlugin mutex to delete transaction plugin at %p", plugin);
@@ -108,47 +162,6 @@ setupTransactionManagement()
   TSHttpHookAdd(TS_HTTP_SEND_RESPONSE_HDR_HOOK, cont);
   TSHttpHookAdd(TS_HTTP_READ_CACHE_HDR_HOOK, cont);
   TSHttpHookAdd(TS_HTTP_TXN_CLOSE_HOOK, cont);
-}
-
-void inline invokePluginForEvent(Plugin *plugin, TSHttpTxn ats_txn_handle, TSEvent event)
-{
-  Transaction &transaction = utils::internal::getTransaction(ats_txn_handle);
-  switch (event) {
-  case TS_EVENT_HTTP_PRE_REMAP:
-    plugin->handleReadRequestHeadersPreRemap(transaction);
-    break;
-  case TS_EVENT_HTTP_POST_REMAP:
-    plugin->handleReadRequestHeadersPostRemap(transaction);
-    break;
-  case TS_EVENT_HTTP_SEND_REQUEST_HDR:
-    plugin->handleSendRequestHeaders(transaction);
-    break;
-  case TS_EVENT_HTTP_READ_RESPONSE_HDR:
-    plugin->handleReadResponseHeaders(transaction);
-    break;
-  case TS_EVENT_HTTP_SEND_RESPONSE_HDR:
-    plugin->handleSendResponseHeaders(transaction);
-    break;
-  case TS_EVENT_HTTP_OS_DNS:
-    plugin->handleOsDns(transaction);
-    break;
-  case TS_EVENT_HTTP_READ_REQUEST_HDR:
-    plugin->handleReadRequestHeaders(transaction);
-    break;
-  case TS_EVENT_HTTP_READ_CACHE_HDR:
-    plugin->handleReadCacheHeaders(transaction);
-    break;
-  case TS_EVENT_HTTP_CACHE_LOOKUP_COMPLETE:
-    plugin->handleReadCacheLookupComplete(transaction);
-    break;
-  case TS_EVENT_HTTP_SELECT_ALT:
-    plugin->handleSelectAlt(transaction);
-    break;
-
-  default:
-    assert(false); /* we should never get here */
-    break;
-  }
 }
 
 } /* anonymous namespace */
@@ -195,6 +208,8 @@ utils::internal::convertInternalHookToTsHook(Plugin::HookType hooktype)
     return TS_HTTP_CACHE_LOOKUP_COMPLETE_HOOK;
   case Plugin::HOOK_SELECT_ALT:
     return TS_HTTP_SELECT_ALT_HOOK;
+  case Plugin::HOOK_TXN_CLOSE:
+    return TS_HTTP_TXN_CLOSE_HOOK;
   default:
     assert(false); // shouldn't happen, let's catch it early
     break;

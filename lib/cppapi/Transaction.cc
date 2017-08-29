@@ -26,6 +26,7 @@
 #include <map>
 #include <string>
 #include <utility>
+#include <bitset>
 
 #include "atscppapi/Transaction.h"
 #include "ts/ink_memory.h"
@@ -42,6 +43,7 @@ using namespace atscppapi;
  */
 struct atscppapi::TransactionState : noncopyable {
   TSHttpTxn txn_;
+  std::bitset<Plugin::N_HOOKS> hooks_set_; ///< Map of which hooks have been set in the core.
   TSEvent event_; ///< Current event being dispatched.
   std::list<TransactionPlugin *> plugins_;
   TSMBuffer client_request_hdr_buf_;
@@ -161,7 +163,10 @@ Transaction::configFind(std::string const &name, TSOverridableConfigKey *conf, T
 void
 Transaction::resume()
 {
-  TSHttpTxnReenable(state_->txn_, static_cast<TSEvent>(TS_EVENT_HTTP_CONTINUE));
+  // Not all events are resumable from a transaction
+  if (TS_EVENT_HTTP_TXN_CLOSE != state_->event_) {
+    TSHttpTxnReenable(state_->txn_, static_cast<TSEvent>(TS_EVENT_HTTP_CONTINUE));
+  }
 }
 
 void
