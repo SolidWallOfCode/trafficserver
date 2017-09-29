@@ -1827,7 +1827,6 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
 
   ink_assert(caches[type] == this);
   intptr_t err = 0;
-  //  int if_writers = (uintptr_t)info == CACHE_ALLOW_MULTIPLE_WRITES;
   CacheVC *c        = new_CacheVC(cont);
   ProxyMutex *mutex = cont->mutex.get();
   c->vio.op         = VIO::WRITE;
@@ -1840,7 +1839,7 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
       The transition from single fragment document to a multi-fragment document
       would cause a problem if the key and the first_key collide. In case of
       a collision, old vector data could be served to HTTP. Need to avoid that.
-      Also, when evacuating a fragment, we have to decide if its the first_key
+      Also, when evacuating a fragment, we have to decide if it's the first_key
       or the earliest_key based on the dir_tag.
     */
     do {
@@ -1853,7 +1852,7 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
   c->vol       = key_to_vol(key, hostname, host_len);
   Vol *vol     = c->vol;
   c->info      = info;
-  if (c->info && (uintptr_t)info != CACHE_ALLOW_MULTIPLE_WRITES) {
+  if (c->info) {
     /*
        Update has the following code paths :
        a) Update alternate header only :
@@ -1889,23 +1888,17 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
     info->object_key_get(&c->update_key);
     ink_assert(!(c->update_key == zero_key));
     c->update_len = info->object_size_get();
-  } else
+  } else {
     c->base_stat = cache_write_active_stat;
+  }
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
-  c->pin_in_cache = (uint32_t)apin_in_cache;
+  c->pin_in_cache = static_cast<uint32_t>(apin_in_cache);
 
   {
     CACHE_TRY_LOCK(lock, c->vol->mutex, cont->mutex->thread_holding);
     if (lock.is_locked()) {
       if ((err = c->vol->open_write(c)) > 0) // od is set here
         goto Lfailure;
-      // If there are multiple writers, then this one cannot be an update.
-      // Only the first writer can do an update. If that's the case, we can
-      // return success to the state machine now.;
-      /*
-            if (c->od->has_multiple_writers())
-              goto Lmiss;
-      */
       if (!dir_probe(key, c->vol, &c->dir, &c->last_collision)) {
         if (c->f.update) {
           // fail update because vector has been GC'd
@@ -1918,7 +1911,7 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
         c->od->open_writer = c;
         goto Lmiss;
       } else {
-        c->od->reading_vec = 1;
+        c->od->reading_vec = true;
         c->od->open_writer = c;
         // document exists, read vector
         SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteStartDone);

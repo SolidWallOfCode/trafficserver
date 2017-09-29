@@ -220,36 +220,35 @@ struct OpenDirEntry {
   /// Vector for the http document. Each writer maintains a pointer to this vector and writes it down to disk.
   CacheHTTPInfoVector vector;
   CacheKey first_key;         ///< Key for first doc for this object.
-  CacheKey single_doc_key;    // Key for the resident alternate.
-  Dir single_doc_dir;         // Directory for the resident alternate
-  Dir first_dir;              // Dir for the vector. If empty, a new dir is
-                              // inserted, otherwise this dir is overwritten
-  uint16_t num_active;        // num of VCs working with this entry
-  uint16_t max_writers;       // max number of simultaneous writers allowed
-  bool dont_update_directory; // if set, the first_dir is not updated.
-  bool move_resident_alt;     // if set, single_doc_dir is inserted.
-  volatile bool reading_vec;  // An I/O operation is currently active to read the vector.
-  volatile bool writing_vec;  // An I/O operation is currently active to write the vector.
+  CacheKey single_doc_key;    ///< Key for the resident alternate.
+  Dir single_doc_dir;         ///< Directory for the resident alternate
+  /// Dir for the vector. If empty, a new dir is inserted, otherwise this dir is overwritten
+  Dir first_dir;
+  Ptr<IoBufferData> first_buf; ///< First doc (vector) fragment.
+  uint16_t num_active;        ///< num of VCs working with this entry
+  bool dont_update_directory; ///< if set, the first_dir is not updated.
+  bool move_resident_alt;     ///< if set, single_doc_dir is inserted.
+  volatile bool reading_vec;  ///< An I/O operation is currently active to read the vector (first_buf).
+  volatile bool writing_vec;  ///< An I/O operation is currently active to write the vector (first_buf).
 
-  /** Set to a write @c CacheVC that is waiting for response headers to update the altvec.
+  /** Set to a writer @c CacheVC that is waiting for response headers to update the altvec.
 
       If this is set then there is a write @c CacheVC that is active but has not yet been able to
       update the vector for its alternate. Any new reader should block on open if this is set and
       enter itself on the @a _waiting list, making this effectively a write lock on the object.
       This is necessary because we can't reliably do alternate selection in this state. The waiting
-      read @c CacheVC instances are released as soon as the vector is updated, they do not have to
+      reader @c CacheVC instances are released as soon as the vector is updated, they do not have to
       wait until the write @c CacheVC has finished its transaction. In practice this means until the
       server response headers have been received and processed.
   */
   volatile CacheVC *open_writer;
+
   /** A list of @c CacheVC instances that are waiting for the @a open_writer.
    */
   DLL<CacheVC, Link_CacheVC_Active_Link> open_waiting;
 
   /// Link for stripe global hash table.
   LINK(OpenDirEntry, link);
-
-  //  int wait(CacheVC *c, int msec);
 
   /// Get the alternate index for the @a key.
   int index_of(CacheKey const &key);

@@ -840,7 +840,7 @@ Vol::close_write(CacheVC *cont)
 }
 
 // Returns 0 on success or a positive error code on failure
-TS_INLINE int
+inline int
 Vol::open_write(CacheVC *cont)
 {
   Vol *vol       = this;

@@ -341,7 +341,7 @@ HttpCacheSM::open_partial_read(HTTPHdr *client_request_hdr)
 
 Action *
 HttpCacheSM::open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache,
-                        bool retry, bool allow_multiple)
+                        bool retry)
 {
   SET_HANDLER(&HttpCacheSM::state_cache_open_write);
   ink_assert(pending_action == nullptr);
@@ -372,9 +372,7 @@ HttpCacheSM::open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, Cac
   }
 
   Action *action_handle =
-    cacheProcessor.open_write(this, 0, key, master_sm->t_state.cache_control.cluster_cache_local, request,
-                              // INKqa11166
-                              allow_multiple ? (CacheHTTPInfo *)CACHE_ALLOW_MULTIPLE_WRITES : old_info, pin_in_cache);
+    cacheProcessor.open_write(this, 0, key, master_sm->t_state.cache_control.cluster_cache_local, request, old_info, pin_in_cache);
 
   if (action_handle != ACTION_RESULT_DONE) {
     pending_action = action_handle;

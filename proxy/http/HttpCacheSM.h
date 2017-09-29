@@ -74,8 +74,7 @@ public:
   */
   Action *open_partial_read(HTTPHdr *client_request_hdr);
 
-  Action *open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache, bool retry,
-                     bool allow_multiple);
+  Action *open_write(const HttpCacheKey *key, URL *url, HTTPHdr *request, CacheHTTPInfo *old_info, time_t pin_in_cache, bool retry);
 
   CacheVConnection *cache_read_vc;
   CacheVConnection *cache_write_vc;
