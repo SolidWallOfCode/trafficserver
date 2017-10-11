@@ -159,6 +159,25 @@ OpenDirEntry::wait(CacheVC *cont, int msec)
 }
 #endif
 
+Action*
+OpenDirEntry::wait_for_lock(CacheVC *cont)
+{
+  // Do not depend on the lock - the point of this is to be called on lock acquisition failure.
+  EThread *t = this_ethread();
+  Event* evt = EVENT_ALLOC(eventAllocator, t);
+  bool empty_p;
+
+  evt->init(cachevc);
+  empty_p = nullptr == this->lock_waiting.push(evt);
+  if (empty_p) {
+    Event* trigger = t->schedule_in_local(this, 1, CACHE_EVENT_ODE_LOCK_READY);
+    if (! lock_trigger.compare_exchange_strong(nullptr, trigger)) {
+      trigger->cancel(); // lost a race, just cancel because other trigger is just as good.
+    }
+  }
+  return evt;
+}
+
 int
 OpenDirEntry::index_of(CacheKey const &alt_key)
 {

@@ -43,4 +43,31 @@
 #include "P_CacheInternal.h"
 #include "P_CacheHosting.h"
 #include "P_CacheHttp.h"
+
+
+/// The result of an locked operation request.
+/// @internal cancelled operations should be marked 'error' with a code of @c ECACHE_CANCELLED.
+enum class CacheOpResult : uint8_t {
+  DONE, ///< Operation completed.
+  WAIT, ///< Operation deferred.
+  ERROR, ///< Operation failed.
+};
+/// Resulting state of a locked action.
+struct CacheOpState {
+  Action* action; ///< The action for the operation if not completed due to missed lock.
+  CacheActionResult result; ///< Generic result of the request.
+  uint8_t _padding = 0;
+  uint16_t code; ///< Return code. An operation specific value.
+
+  /// Constructor for a WAIT result with an action.
+  /// Normally @a code will not be set.
+  CacheOpState(CacheActionResult r, Action* a, uint16_t c = 0) : action(a), result(r), code(c) {}
+  /// Constructor for results that are not @cWAIT.
+  /// This never has an @a action.
+  /// @c ERROR should always have a @a code. This corresponds to errno.
+  /// @c DONE will have usually not have a code.
+  CacheOpState(CacheActionResult r, uint16_t c = 0) : action(nullptr), result(r), code(c) {}
+};
+
+
 #endif /* _P_CACHE_H */

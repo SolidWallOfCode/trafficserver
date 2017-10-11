@@ -224,12 +224,27 @@ struct OpenDirEntry {
   Dir single_doc_dir;         ///< Directory for the resident alternate
   /// Dir for the vector. If empty, a new dir is inserted, otherwise this dir is overwritten
   Dir first_dir;
-  Ptr<IoBufferData> first_buf; ///< First doc (vector) fragment.
+  Ptr<IOBufferData> first_buf; ///< First doc (vector) fragment.
   uint16_t num_active;        ///< num of VCs working with this entry
   bool dont_update_directory; ///< if set, the first_dir is not updated.
   bool move_resident_alt;     ///< if set, single_doc_dir is inserted.
-  volatile bool reading_vec;  ///< An I/O operation is currently active to read the vector (first_buf).
-  volatile bool writing_vec;  ///< An I/O operation is currently active to write the vector (first_buf).
+
+  /** Lock queue support.
+      If a lock request is made and fails to acquire the lock, an event for the requesting CacheVC can
+      be placed on the @a lock_trigger list safely without the lock. To guarantee a future dispatch
+      there also needs to be a trigger event pending if the queue is not empty. To avoid event build
+      up, such an event is stored in @a lock_trigger. This is made atomic so that a thread without
+      the ODE lock can set it using CAS. The process is the event is scheduled on the local thread
+      and then put in @a lock_trigger. If the CAS fails, the event is cancelled because there is
+      already a trigger event that will run the lock queue. The return value @c push on the queue
+      can be checked for a previously empty queue and the trigger event scheduled only in that case.
+      Technically this would suffice but for now the CAS will be used to verify that.
+   */
+  std::atomic<Event*> lock_trigger; ///< Trigger event for lock queue.
+  AtomicSLL<Event*> lock_waiting; ///< Queue of events for CacheVCs waiting on the lock for this instance.
+
+  bool reading_vec;  ///< An I/O operation is currently active to read the vector (first_buf).
+  bool writing_vec;  ///< An I/O operation is currently active to write the vector (first_buf).
 
   /** Set to a writer @c CacheVC that is waiting for response headers to update the altvec.
 
@@ -241,7 +256,7 @@ struct OpenDirEntry {
       wait until the write @c CacheVC has finished its transaction. In practice this means until the
       server response headers have been received and processed.
   */
-  volatile CacheVC *open_writer;
+  CacheVC * open_writer;
 
   /** A list of @c CacheVC instances that are waiting for the @a open_writer.
    */
@@ -272,6 +287,9 @@ struct OpenDirEntry {
   self &close_writer(CacheKey const &alt_key, CacheVC *vc);
   /// Close out the open writer if it is @a writer
   self &close_open_writer(CacheVC *writer);
+
+  /// Send @c CACHE_EVENT_ODE_LOCK_READY with @a this locked when lock is available.
+  Action* wait_for_lock(CacheVC *cachevc);
 };
 
 struct OpenDir : public Continuation {

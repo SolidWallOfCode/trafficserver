@@ -31,7 +31,7 @@ AM_CPPFLAGS = \
 
 ADD_SRC =
 if BUILD_TESTS
-  ADD_SRC += CacheTest.cc P_CacheTest.h 
+  ADD_SRC += CacheTest.cc P_CacheTest.h
 endif
 
 noinst_LIBRARIES = libinkcache.a
@@ -48,6 +48,7 @@ libinkcache_a_SOURCES = \
   CacheRead.cc \
   CacheVol.cc \
   CacheWrite.cc \
+  CacheStripe.cc \
   I_Cache.h \
   I_CacheDefs.h \
   I_Store.h \

@@ -172,6 +172,12 @@ extern RecRawStatBlock *cache_rsb;
   RecIncrRawStat(cache_rsb, mutex->thread_holding, (int)(x), 1); \
   RecIncrRawStat(vol->cache_vol->vol_rsb, mutex->thread_holding, (int)(x), 1);
 
+inline void CacheIncrementDynStat(Vol* vol, EThread* t, int idx)
+{
+  RecIncrRawStat(cache_rsb, t, idx, 1);
+  RecIncrRawStat(vol->cache_vol->vol_rsb, t, idx, 1);
+}
+
 #define CACHE_DECREMENT_DYN_STAT(x)                               \
   RecIncrRawStat(cache_rsb, mutex->thread_holding, (int)(x), -1); \
   RecIncrRawStat(vol->cache_vol->vol_rsb, mutex->thread_holding, (int)(x), -1);
@@ -847,9 +853,6 @@ Vol::open_write(CacheVC *cont)
   bool agg_error = false;
   if (!cont->f.remove) {
     agg_error = (!cont->f.update && agg_todo_size > cache_config_agg_write_backlog);
-#ifdef CACHE_AGG_FAIL_RATE
-    agg_error = agg_error || ((uint32_t)mutex->thread_holding->generator.random() < (uint32_t)(UINT_MAX * CACHE_AGG_FAIL_RATE));
-#endif
   }
   if (agg_error) {
     CACHE_INCREMENT_DYN_STAT(cache_write_backlog_failure_stat);

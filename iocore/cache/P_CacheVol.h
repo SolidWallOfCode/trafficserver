@@ -24,6 +24,8 @@
 #ifndef _P_CACHE_VOL_H__
 #define _P_CACHE_VOL_H__
 
+#include <atomic>
+
 #define CACHE_BLOCK_SHIFT 9
 #define CACHE_BLOCK_SIZE (1 << CACHE_BLOCK_SHIFT) // 512, smallest sector size
 #define ROUND_TO_STORE_BLOCK(_x) INK_ALIGN((_x), STORE_BLOCK_SIZE)
@@ -121,56 +123,86 @@ struct EvacuationBlock {
 };
 
 struct Vol : public Continuation {
-  char *path;
+
+  static std::atomic<size_t> _last_id; ///< Last ID allocated to a stripe instance.
+
+  int id = _last_id++;
+  ats_scoped_str path;
   ats_scoped_str hash_text;
   CryptoHash hash_id;
-  int fd;
+  int fd = ts::NO_FD;
 
   char *raw_dir;
-  Dir *dir;
+  Dir *dir = nullptr;
   VolHeaderFooter *header;
   VolHeaderFooter *footer;
-  int segments;
-  off_t buckets;
-  off_t recover_pos;
-  off_t prev_recover_pos;
-  off_t scan_pos;
-  off_t skip;  // start of headers
-  off_t start; // start of data
-  off_t len;
-  off_t data_blocks;
-  int hit_evacuate_window;
+  int segments = 0;
+  off_t buckets = 0;
+  off_t recover_pos = 0;
+  off_t prev_recover_pos = 0;
+  off_t scan_pos = 0;
+  off_t skip = 0;  // start of headers
+  off_t start = 0; // start of data
+  off_t len = 0;
+  off_t data_blocks = 0;
+  int hit_evacuate_window = 0;
   AIOCallbackInternal io;
+
+  using LockQueue = Queue<Event>; ///< A queue of events for continuations waiting for the Vol lock.
+  /** Lock data for a single thread.
+      @note This data is local per vol instance and per thread. Therefore it can be updated without
+      the Vol lock. This is particularly important for handling the trigger event. Unlike the
+      CacheVC queued events, this is touched only in the local thread and so can be updated/canceled
+      without locking.
+  */
+  struct LockData {
+    Event* trigger = nullptr; ///< Event if scheduled.
+    LockQueue queue; ///< Queue of CacheVC events to dispatch.
+
+    Event* enqueue(Vol*, EThread*, CacheVC*);
+
+    /// Dispatch current queue.
+    /// Assumes stripe lock is held.
+    void dispatch(Vol*, EThread*);
+    /// Update event trigger state.
+    /// Verifies an event is scheduled on this thread iff the queue is not empty.
+    void update_trigger(Vol*, EThread*);
+  };
+  /// Thread local array of lock waiting events, indexed by @a id.
+  /// Each Vol instance owns one slot in the vector across threads.
+  thread_local static std::vector<LockData> lock_queue;
 
   Queue<CacheVC, Continuation::Link_link> agg;
   Queue<CacheVC, Continuation::Link_link> stat_cache_vcs;
   Queue<CacheVC, Continuation::Link_link> sync;
   char *agg_buffer;
-  int agg_todo_size;
-  int agg_buf_pos;
+  int agg_todo_size = 0;
+  int agg_buf_pos = 0;
 
-  Event *trigger;
+  Event *trigger = nullptr;
 
   OpenDir open_dir;
   RamCache *ram_cache;
-  int evacuate_size;
+  int evacuate_size = 0;
   DLL<EvacuationBlock> *evacuate;
   DLL<EvacuationBlock> lookaside[LOOKASIDE_SIZE];
   CacheVC *doc_evacuator;
 
   VolInitInfo *init_info;
 
-  CacheDisk *disk;
+  CacheDisk *disk = nullptr;
   Cache *cache;
   CacheVol *cache_vol;
-  uint32_t last_sync_serial;
-  uint32_t last_write_serial;
+  uint32_t last_sync_serial = 0;
+  uint32_t last_write_serial = 0;
   uint32_t sector_size;
-  bool recover_wrapped;
-  bool dir_sync_waiting;
-  bool dir_sync_in_progress;
-  bool writing_end_marker;
+  bool recover_wrapped = false;
+  bool dir_sync_waiting = false;
+  bool dir_sync_in_progress = false;
+  bool writing_end_marker = false;
 
+  /// [amc] What the heck are these? Should be culled, I think. Possibly for performance but
+  /// that should be handled by the ODE now.
   CacheKey first_fragment_key;
   int64_t first_fragment_offset;
   Ptr<IOBufferData> first_fragment_data;
@@ -245,34 +277,16 @@ struct Vol : public Continuation {
   int within_hit_evacuate_window(Dir *dir);
   uint32_t round_to_approx_size(uint32_t l);
 
+  // New operation style methods.
+
+  /// Start a write operation for @a cachevc.
+  CacheOpState do_open_write(CacheVC* cachevc);
+
   Vol()
-    : Continuation(new_ProxyMutex()),
-      path(nullptr),
-      fd(-1),
-      dir(0),
-      buckets(0),
-      recover_pos(0),
-      prev_recover_pos(0),
-      scan_pos(0),
-      skip(0),
-      start(0),
-      len(0),
-      data_blocks(0),
-      hit_evacuate_window(0),
-      agg_todo_size(0),
-      agg_buf_pos(0),
-      trigger(0),
-      evacuate_size(0),
-      disk(nullptr),
-      last_sync_serial(0),
-      last_write_serial(0),
-      recover_wrapped(false),
-      dir_sync_waiting(0),
-      dir_sync_in_progress(0),
-      writing_end_marker(0)
+    : Continuation(new_ProxyMutex())
   {
     open_dir.mutex = mutex;
-    agg_buffer     = (char *)ats_memalign(ats_pagesize(), AGG_SIZE);
+    agg_buffer     = static_cast<char*>(ats_memalign(ats_pagesize(), AGG_SIZE));
     memset(agg_buffer, 0, AGG_SIZE);
     SET_HANDLER(&Vol::aggWrite);
   }

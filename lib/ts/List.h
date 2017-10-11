@@ -687,10 +687,10 @@ List<C, A>::reverse()
 //
 
 template <class C, class L = typename C::Link_link> struct AtomicSLL {
-  void
+  C *
   push(C *c)
   {
-    ink_atomiclist_push(&al, c);
+    return static_cast<C*>(ink_atomiclist_push(&al, c));
   }
   C *
   pop()

@@ -1371,11 +1371,12 @@ int
 CacheVC::openWriteInit(int eid, Event *event)
 {
   cancel_trigger();
+
   Debug("amc", "[openWriteInit] vc=%p", this);
   {
-    CACHE_TRY_LOCK(lock, od->mutex, mutex->thread_holding);
+    SCOPED_MUTEX_TRY_LOCK(lock, od->mutex, mutex->thread_holding);
     if (!lock.is_locked()) {
-      trigger = mutex->thread_holding->schedule_in_local(this, HRTIME_MSECONDS(cache_config_mutex_retry_delay), eid);
+      trigger = od->wait_for_lock(this);
       return EVENT_CONT;
     }
 
@@ -1704,30 +1705,36 @@ Lcallreturn:
 }
 #endif
 
-// handle lock failures from main Cache::open_write entry points below
+// Initiate a write operation. Wait here for the stripe lock.
 int
 CacheVC::openWriteStartBegin(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
-  intptr_t err;
   cancel_trigger();
   if (_action.cancelled)
     return free_CacheVC(this);
-  if (((err = vol->open_write_lock(this)) > 0)) {
-    CACHE_INCREMENT_DYN_STAT(base_stat + CACHE_STAT_FAILURE);
+
+  auto r = vol->do_open_write(this);
+  switch (r.result) {
+  case CacheOpResult::ERROR:
+    CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);
+    _action->continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, reinterpret_cast<void*>(-r.code));
     free_CacheVC(this);
-    _action.continuation->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *)-err);
-    return EVENT_DONE;
+    return ACTION_RESULT_DONE;
+  case CacheOpResult::WAIT:
+    trigger = r.action;
+    return &this->_action;
+  case CacheOpResult::DONE:
+    break;
   }
-  if (err < 0)
-    VC_SCHED_LOCK_RETRY();
+  // Invariant: action completed.
+
   if (f.overwrite) {
     SET_HANDLER(&CacheVC::openWriteOverwrite);
-    return openWriteOverwrite(EVENT_IMMEDIATE, nullptr);
-  } else {
-    // write by key
-    SET_HANDLER(&CacheVC::openWriteInit);
-    return callcont(CACHE_EVENT_OPEN_WRITE);
+    return this->openWriteOverwrite(EVENT_IMMEDIATE, nullptr);
   }
+
+  SET_HANDLER(&CacheVC::openWriteInit);
+  return this->callcont(CACHE_EVENT_OPEN_WRITE);
 }
 
 // main entry point for writing of of non-http documents
@@ -1772,30 +1779,9 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheFragType frag_ty
   c->f.sync           = (options & CACHE_WRITE_OPT_SYNC) == CACHE_WRITE_OPT_SYNC;
   c->pin_in_cache     = (uint32_t)apin_in_cache;
 
-  if ((res = c->vol->open_write_lock(c)) > 0) {
-    // document currently being written, abort
-    CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_FAILURE);
-    cont->handleEvent(CACHE_EVENT_OPEN_WRITE_FAILED, (void *)-res);
-    free_CacheVC(c);
-    return ACTION_RESULT_DONE;
-  }
-  if (res < 0) {
-    SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteStartBegin);
-    c->trigger = CONT_SCHED_LOCK_RETRY(c);
-    return &c->_action;
-  }
-  if (!c->f.overwrite) {
-    SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteInit);
-    c->callcont(CACHE_EVENT_OPEN_WRITE);
-    return ACTION_RESULT_DONE;
-    //    return c->do_write_init();
-  } else {
-    SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteOverwrite);
-    if (c->openWriteOverwrite(EVENT_IMMEDIATE, nullptr) == EVENT_DONE)
-      return ACTION_RESULT_DONE;
-    else
-      return &c->_action;
-  }
+  SET_CONTINUATION_HANDLER(c, &CacheVC::openWriteStartBegin);
+  auto r = c->handleEvent(CACHE_EVENT_TRY_LOCKED_OPERATION, nullptr);
+  return EVENT_DONE == r ? ACTION_RESULT_DONE : &c->_action;
 }
 
 int
