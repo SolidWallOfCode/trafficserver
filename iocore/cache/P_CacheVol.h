@@ -192,6 +192,8 @@ struct Vol : public Continuation {
 
   int clear_dir();
 
+  void init_failed();
+
   int init(char *s, off_t blocks, off_t dir_skip, bool clear);
 
   int handle_dir_clear(int event, void *data);

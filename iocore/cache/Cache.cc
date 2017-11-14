@@ -80,6 +80,7 @@ int cache_config_read_while_writer             = 0;
 int cache_config_mutex_retry_delay             = 2;
 int cache_read_while_writer_retry_delay        = 50;
 int cache_config_read_while_writer_max_retries = 10;
+int cache_config_auto_clear_stripe             = 1;
 static int enable_cache_empty_http_doc         = 0;
 /// Fix up a specific known problem with the 4.2.0 release.
 /// Not used for stripes with a cache version later than 4.2.0.
@@ -1248,20 +1249,32 @@ vol_dir_clear(Vol *d)
 int
 Vol::clear_dir()
 {
-  size_t dir_len = vol_dirlen(this);
-  vol_clear_init(this);
+  if (cache_config_auto_clear_stripe) {
+    size_t dir_len = vol_dirlen(this);
+    vol_clear_init(this);
 
-  SET_HANDLER(&Vol::handle_dir_clear);
+    SET_HANDLER(&Vol::handle_dir_clear);
 
-  io.aiocb.aio_fildes = fd;
-  io.aiocb.aio_buf    = raw_dir;
-  io.aiocb.aio_nbytes = dir_len;
-  io.aiocb.aio_offset = skip;
-  io.action           = this;
-  io.thread           = AIO_CALLBACK_THREAD_ANY;
-  io.then             = nullptr;
-  ink_assert(ink_aio_write(&io));
+    io.aiocb.aio_fildes = fd;
+    io.aiocb.aio_buf    = raw_dir;
+    io.aiocb.aio_nbytes = dir_len;
+    io.aiocb.aio_offset = skip;
+    io.action           = this;
+    io.thread           = AIO_CALLBACK_THREAD_ANY;
+    io.then             = nullptr;
+    ink_assert(ink_aio_write(&io));
+  } else {
+    this->init_failed();
+  }
   return 0;
+}
+
+void
+Vol::init_failed()
+{
+  fd = -1; // signal failure.
+  SET_HANDLER(&Vol::dir_init_done);
+  dir_init_done(EVENT_IMMEDIATE, nullptr);
 }
 
 int
@@ -1768,7 +1781,7 @@ Vol::handle_header_read(int event, void *data)
       io.aiocb.aio_offset = skip + vol_dirlen(this);
       ink_assert(ink_aio_read(&io));
     } else {
-      Note("no good directory, clearing '%s'", hash_text.get());
+      Note("no good directory%s '%s'", hash_text.get(), cache_config_auto_clear_stripe ? ", clearing" : "");
       clear_dir();
       delete init_info;
       init_info = nullptr;
@@ -2073,6 +2086,10 @@ Cache::open_done()
     ready = CACHE_INIT_FAILED;
     cacheProcessor.cacheInitialized();
     return 0;
+  }
+
+  if (total_good_nvol < total_nvol) {
+    Fatal("Unable to initialize one or more stripes");
   }
 
   hosttable = new CacheHostTable(this, scheme);
@@ -3266,6 +3283,7 @@ ink_cache_init(ModuleVersion v)
   register_cache_stats(cache_rsb, "proxy.process.cache");
 
   REC_ReadConfigInteger(cacheProcessor.wait_for_cache, "proxy.config.http.wait_for_cache");
+  REC_ReadConfigInteger(cache_config_auto_clear_stripe, "proxy.config.cache.auto_clear_stripe");
 
   Result result = theCacheStore.read_config();
   if (result.failed()) {
