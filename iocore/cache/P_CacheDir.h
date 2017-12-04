@@ -215,6 +215,12 @@ struct FreeDir {
 struct OpenDirEntry {
   typedef OpenDirEntry self; ///< Self reference type.
 
+  enum UpdateStatus {
+    UPDATE_NONE, ///< No update is pending.
+    UPDATE_READER, ///< A reader has locked @a this for a future update.
+    UPDATE_WRITER ///< A writer is actively working on an update.
+  };
+
   Ptr<ProxyMutex> mutex;
 
   /// Vector for the http document. Each writer maintains a pointer to this vector and writes it down to disk.
@@ -231,7 +237,7 @@ struct OpenDirEntry {
 
   /** Lock queue support.
       If a lock request is made and fails to acquire the lock, an event for the requesting CacheVC can
-      be placed on the @a lock_trigger list safely without the lock. To guarantee a future dispatch
+      be placed on the @a lock_waiting list safely without a lock. To guarantee a future dispatch
       there also needs to be a trigger event pending if the queue is not empty. To avoid event build
       up, such an event is stored in @a lock_trigger. This is made atomic so that a thread without
       the ODE lock can set it using CAS. The process is the event is scheduled on the local thread
@@ -244,23 +250,41 @@ struct OpenDirEntry {
   AtomicSLL<Event*> lock_waiting; ///< Queue of events for CacheVCs waiting on the lock for this instance.
 
   bool reading_vec;  ///< An I/O operation is currently active to read the vector (first_buf).
-  bool writing_vec;  ///< An I/O operation is currently active to write the vector (first_buf).
+  bool writing_vec;  ///< An I/O operation  is currently active to write the vector (first_buf).
 
-  /** Set to a writer @c CacheVC that is waiting for response headers to update the altvec.
+  /** Set when an alternate selection fails or a revalidation is needed and therefore an upstream
+      request will be made for this object. This is related strongly to @a open_writer - if this is
+      set then @a open_writer should be eventually set to the CacheVC handling the upstream request.
+      Reading CacheVCs that have not yet selected an alternate should block on this flag. It should
+      never be the case that @a open_writer is not @c nullptr and this is @c false.
 
-      If this is set then there is a write @c CacheVC that is active but has not yet been able to
-      update the vector for its alternate. Any new reader should block on open if this is set and
-      enter itself on the @a _waiting list, making this effectively a write lock on the object.
-      This is necessary because we can't reliably do alternate selection in this state. The waiting
-      reader @c CacheVC instances are released as soon as the vector is updated, they do not have to
-      wait until the write @c CacheVC has finished its transaction. In practice this means until the
-      server response headers have been received and processed.
+      @internal This is roughly equivalent to the previous object write lock, but other CacheVC
+      instances can wait on it explicitly via @a update_wait_list.
   */
-  CacheVC * open_writer;
+  UpdateStatus altvec_update_status = UPDATE_NONE;
+
+  /** Set to a @c CacheVC that is in charge of updating the altvec.
+
+      This is coordinated with @a altvec_update_status. If that is @c READER then this is a reader
+      VC that has locked the altvec for update. If @a altvec_update_status is @c WRITER then
+      this is the writer @c CacheVC that will write the update.
+
+      Any new reader should block on alternate selection if this is set and enter itself on the @a
+      _waiting list, making this effectively a write lock on the object.  This is necessary because
+      we can't reliably do alternate selection in this state. The waiting reader @c CacheVC
+      instances are released as soon as the vector is updated, they do not have to wait until the
+      write @c CacheVC has finished its transaction. In practice this means until the server
+      response headers have been received and processed.
+
+      @internal This needs the reader @c CacheVC to handle the case where that transaction fails for
+      other reasons before the writer fires up. The reader @c CacheVC must be able to detect it
+      was the locker and clean up the lock on fail / close.
+  */
+  CacheVC * altvec_update_vc;
 
   /** A list of @c CacheVC instances that are waiting for the @a open_writer.
    */
-  DLL<CacheVC, Link_CacheVC_Active_Link> open_waiting;
+  DLL<CacheVC, Link_CacheVC_Active_Link> update_wait_list;
 
   /// Link for stripe global hash table.
   LINK(OpenDirEntry, link);
