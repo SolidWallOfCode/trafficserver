@@ -571,3 +571,38 @@ ink_fileperm_parse(const char *perms)
   }
   return -1;
 }
+
+int
+ink_file_bulk_read(char const *path, std::string &content)
+{
+  ats_scoped_fd fd;
+  struct stat file_info;
+  int read_size = 0;
+
+  // Do blocking I/O - assume this is for configuration loading.
+  if ((fd = open(path, O_RDONLY)) < 0) {
+    return errno;
+  }
+
+  if (fstat(fd, &file_info) < 0) {
+    return errno;
+  }
+
+  if (file_info.st_size < 0) {
+    return ENODATA;
+  } else if (file_info.st_size > 0) {
+    content.reserve(file_info.st_size + 1); // c_str() is going to be called, pre-allocate for it.
+    content.resize(file_info.st_size);      // but set string to be actual file size.
+    read_size = read(fd, const_cast<char *>(content.data()), file_info.st_size);
+
+    // Check to make sure that we got the whole file
+    if (read_size < file_info.st_size) {
+      content.resize(0);
+      return errno ? errno : EIO;
+    }
+  } else {
+    content.resize(0);
+  }
+
+  return 0;
+}

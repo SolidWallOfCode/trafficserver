@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <string>
 
 #if HAVE_SYS_STATFS_H
 #include <sys/statfs.h>
@@ -83,6 +84,11 @@ int ink_fputln(FILE *stream, const char *s);
 int ink_file_fd_readline(int fd, int bufsize, char *buf);
 int ink_file_fd_writestring(int fd, const char *buf);
 int ink_filepath_merge(char *buf, int bufsz, const char *rootpath, const char *addpath, int flags = INK_FILEPATH_TRUENAME);
+/** Load the contents of the file @a path into @a content
+
+    @return TS_SUCCESS on success, @a errno on failure.
+*/
+int ink_file_bulk_read(char const *path, std::string &content);
 /**
  Add addpath to the rootpath prepending slash if rootpath
  is not nullptr and doesn't end with the slash already and put the
