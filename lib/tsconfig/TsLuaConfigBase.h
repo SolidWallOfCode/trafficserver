@@ -1,5 +1,7 @@
 /** @file
 
+  Base structures and definitions for TsLuaConfig.
+
   @section license License
 
   Licensed to the Apache Software Foundation (ASF) under one
@@ -19,22 +21,61 @@
   limitations under the License.
  */
 
-/*
- * File:   TSConfigLua.h
- * Author: persia
- *
- * Created on September 21, 2017, 4:04 PM
+#if !defined(TS_LUA_CONFIG_BASE_H)
+#define TS_LUA_CONFIG_BASE_H
+
+#include <tsconfig/Errata.h>
+#include <luajit/src/lua.hpp>
+#include <tsconfig/TsLuaMetaConfig.h>
+
+struct TsConfigDescriptor;
+struct TsConfigObjectDescriptor;
+
+/// Source of the value in the config struct.
+enum class TsLuaConfigSource {
+  NONE,   ///< No source, the value is default constructed.
+  SCHEMA, ///< Value set in schema.
+  CONFIG  ///< Value set in configuration file.
+};
+
+/** Configuration item instance data.
+
+    This is an abstract base class for data about an instance of the value in a configuration
+    struct. Actual instances will be a subclass for a supported configuration item type. This holds
+    data that is per instance and therefore must be dynamically constructed as part of the
+    configuration struct construction. The related description classes in contrast are data that is
+    schema based and therefore can be static and shared among instances of the configuration struct.
+*/
+class TsConfigBase
+{
+public:
+  using Source = TsLuaConfigSource;
+  /// Constructor - need the static descriptor.
+  TsConfigBase(TsConfigDescriptor const &d) : descriptor(d) {}
+  TsConfigDescriptor const &descriptor; ///< Static schema data.
+  Source source = Source::NONE;         ///< Where the instance data came from.
+  virtual ~TsConfigBase() {}
+  /// Load the instance data from the Lua stack.
+  virtual ts::Errata loader(lua_State *s) = 0;
+};
+
+/** Runtime configuration data for a string.
+
  */
+class TsConfigString : public TsConfigBase
+{
+public:
+  TsConfigString(TsConfigDescriptor const &d, std::string &member) : TsConfigBase(d), _mref(member) {}
+  ts::Errata loader(lua_State *s) override;
 
-#ifndef TSCONFIGLUA_H
-#define TSCONFIGLUA_H
+private:
+  std::string &_mref; ///< Member for config data storage.
+};
 
-#include "tsconfig/Errata.h"
-#include <unordered_map>
-#include "luajit/src/lua.hpp"
-#include <iostream>
-#include <ts/string_view.h>
-#include <ts/HashFNV.h>
+/** Runtime configuration data for an object.
+
+ */
+using TsConfigObject = TsConfigBase;
 
 /// Hash functor for @c string_view
 inline size_t
@@ -52,54 +93,11 @@ TsLuaConfigSVHash(ts::string_view const &sv)
     configuration value.
 */
 struct TsConfigDescriptor {
-  /// Type of the configuration value.
-  enum class Type {
-    ARRAY,  ///< A homogenous array of nested values.
-    OBJECT, ///< A set of fields, each a name / value pair.
-    INT,    ///< Integer value.
-    FLOAT,  ///< Floating point value.
-    STRING, ///< String.
-    BOOL,
-    ENUM ///< Enumeration (specialized).
-  };
-  /*  TsConfigDescriptor() : type_name(nullptr),name(nullptr),description(nullptr) {}
-    TsConfigDescriptor(Type typ,std::initializer_list<std::string> str_list): type(typ)
-    {
-        for (auto str :str_list) {
-                  std::cout << str << std::endl;
-              }
-    }
-   * */
+  using Type = TsLuaMetaConfig::ValueType;
   Type type;                   ///< Value type.
   ts::string_view type_name;   ///< Literal type name used in the schema.
   ts::string_view name;        ///< Name of the configuration value.
   ts::string_view description; ///< Description of the  value.
-};
-
-/** Configuration item instance data.
-
-    This is an abstract base class for data about an instance of the value in a configuration
-    struct. Actual instances will be a subclass for a supported configuration item type. This holds
-    data that is per instance and therefore must be dynamically constructed as part of the
-    configuration struct construction. The related description classes in contrast are data that is
-    schema based and therefore can be static and shared among instances of the configuration struct.
-*/
-class TsConfigBase
-{
-public:
-  /// Source of the value in the config struct.
-  enum class Source {
-    NONE,   ///< No source, the value is default constructed.
-    SCHEMA, ///< Value set in schema.
-    CONFIG  ///< Value set in configuration file.
-  };
-  /// Constructor - need the static descriptor.
-  TsConfigBase(TsConfigDescriptor const &d) : descriptor(d) {}
-  TsConfigDescriptor const &descriptor; ///< Static schema data.
-  Source source = Source::NONE;         ///< Where the instance data came from.
-  virtual ~TsConfigBase() {}
-  /// Load the instance data from the Lua stack.
-  virtual ts::Errata loader(lua_State *s) = 0;
 };
 
 class TsConfigInt : public TsConfigBase
@@ -120,21 +118,6 @@ public:
 
 private:
   bool &ref;
-};
-
-class TsConfigString : public TsConfigBase
-{
-public:
-  TsConfigString(TsConfigDescriptor const &d, std::string &str) : TsConfigBase(d), ref(str) {}
-  //    TsConfigString& operator= (const TsConfigString& other)
-  //    {
-  //        ref = other.ref;
-  //        return *this;
-  //    }
-  ts::Errata loader(lua_State *s) override;
-
-private:
-  std::string &ref;
 };
 
 class TsConfigArrayDescriptor : public TsConfigDescriptor
@@ -192,4 +175,4 @@ public:
   }
 };
 
-#endif /* TSCONFIGLUA_H */
+#endif // include guard

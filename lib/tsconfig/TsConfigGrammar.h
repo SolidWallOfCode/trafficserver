@@ -33,7 +33,7 @@
 #pragma once
 /* Enabling traces.  */
 #ifndef YYDEBUG
-# define YYDEBUG 0
+#define YYDEBUG 0
 #endif
 #if YYDEBUG
 extern int tsconfigdebug;
@@ -65,29 +65,28 @@ extern int tsconfigdebug;
     limitations under the License.
  */
 
-
 /* Line 2058 of yacc.c  */
 #line 72 "TsConfigGrammar.h"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
-# define YYTOKENTYPE
-   /* Put the tokens into the symbol table, so that GDB and other debuggers
-      know about them.  */
-   enum yytokentype {
-     STRING = 258,
-     IDENT = 259,
-     INTEGER = 260,
-     LIST_OPEN = 261,
-     LIST_CLOSE = 262,
-     GROUP_OPEN = 263,
-     GROUP_CLOSE = 264,
-     PATH_OPEN = 265,
-     PATH_CLOSE = 266,
-     PATH_SEPARATOR = 267,
-     SEPARATOR = 268,
-     ASSIGN = 269
-   };
+#define YYTOKENTYPE
+/* Put the tokens into the symbol table, so that GDB and other debuggers
+   know about them.  */
+enum yytokentype {
+  STRING         = 258,
+  IDENT          = 259,
+  INTEGER        = 260,
+  LIST_OPEN      = 261,
+  LIST_CLOSE     = 262,
+  GROUP_OPEN     = 263,
+  GROUP_CLOSE    = 264,
+  PATH_OPEN      = 265,
+  PATH_CLOSE     = 266,
+  PATH_SEPARATOR = 267,
+  SEPARATOR      = 268,
+  ASSIGN         = 269
+};
 #endif
 /* Tokens.  */
 #define STRING 258
@@ -103,26 +102,23 @@ extern int tsconfigdebug;
 #define SEPARATOR 268
 #define ASSIGN 269
 
-
-
-#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
+#if !defined YYSTYPE && !defined YYSTYPE_IS_DECLARED
 typedef int YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
-# define yystype YYSTYPE /* obsolescent; will be withdrawn */
-# define YYSTYPE_IS_DECLARED 1
+#define YYSTYPE_IS_TRIVIAL 1
+#define yystype YYSTYPE /* obsolescent; will be withdrawn */
+#define YYSTYPE_IS_DECLARED 1
 #endif
-
 
 #ifdef YYPARSE_PARAM
 #if defined __STDC__ || defined __cplusplus
-int tsconfigparse (void *YYPARSE_PARAM);
+int tsconfigparse(void *YYPARSE_PARAM);
 #else
-int tsconfigparse ();
+int tsconfigparse();
 #endif
 #else /* ! YYPARSE_PARAM */
 #if defined __STDC__ || defined __cplusplus
-int tsconfigparse (yyscan_t lexer, struct TsConfigHandlers* handlers);
+int tsconfigparse(yyscan_t lexer, struct TsConfigHandlers *handlers);
 #else
-int tsconfigparse ();
+int tsconfigparse();
 #endif
 #endif /* ! YYPARSE_PARAM */

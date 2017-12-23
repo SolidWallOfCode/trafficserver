@@ -480,6 +480,12 @@ public:
     }
   };
 
+  /** Create / allocate an @c std::string.
+
+      @note By design this requires explicitly calling a method to avoid inadverent allocations.
+  */
+  std::string make_string() const;
+
   /// Specialized stream operator implementation.
   /// @note Use the standard stream operator unless there is a specific need for this, which is unlikely.
   /// @return The stream @a os.
@@ -956,6 +962,12 @@ inline TextView &
 TextView::trim_if(F const &pred)
 {
   return this->ltrim_if(pred).rtrim_if(pred);
+}
+
+inline std::string
+TextView::make_string() const
+{
+  return {this->data(), this->size()};
 }
 
 inline bool

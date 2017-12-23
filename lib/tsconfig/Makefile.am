@@ -16,9 +16,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-lib_LTLIBRARIES = libtsconfig.la
+lib_LTLIBRARIES = libtsconfig.la libtsluaconfig.la
 check_PROGRAMS = test-tsconfig
+bin_PROGRAMS = ts_lua_config_generator
 libtsconfig_la_LDFLAGS = -version-info @TS_LIBTOOL_VERSION@
+libtsluaconfig_la_LDFLAGS = -version-info @TS_LIBTOOL_VERSION@
 
 AM_CFLAGS += @FLEX_CFLAGS@
 AM_YFLAGS = --yacc -d -p tsconfig
@@ -50,6 +52,17 @@ libtsconfig_la_SOURCES = \
 	TsValue.cc \
 	TsValue.h
 
+libtsluaconfig_la_SOURCES = \
+  Errata.cc \
+  Errata.h \
+  IntrusivePtr.h \
+  NumericType.h \
+  TsErrataUtil.cc \
+  TsErrataUtil.h \
+  TsLuaConfig.h \
+  TsLuaConfig.cc \
+  TsLuaMetaConfig.cc
+
 # Depend on the original grammar files only if we can build them.
 if BUILD_TSCONFIG_GRAMMAR
 libtsconfig_la_SOURCES += TsConfigGrammar.y TsConfigSyntax.l
@@ -66,6 +79,9 @@ endif
 test_tsconfig_SOURCES = test-tsconfig.cc
 
 test_tsconfig_LDADD = libtsconfig.la ../ts/libtsutil.la $(top_builddir)/lib/luajit/src/libluajit.a
+
+ts_lua_config_generator_SOURCES = ts_lua_generator.cc
+ts_lua_config_generator_LDADD = libtsluaconfig.la ../ts/libtsutil.la $(top_builddir)/lib/luajit/src/libluajit.a
 
 # Strip to just the enum in the ts::config namespace so we can use
 # it more easily in C++.

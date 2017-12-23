@@ -1,6 +1,9 @@
+#if !defined TS_BUFFERWRITER_FORMAT_H_
+#define TS_BUFFERWRITER_FORMAT_H_
+
 /** @file
 
-    Implementation of the handler for parsing events.
+    Formatting of basic types for @c BufferWriter
 
     @section license License
 
@@ -21,33 +24,45 @@
     limitations under the License.
  */
 
-#include "TsConfigLua.h"
+#include <ts/BufferWriter.h>
 
-ts::Errata TsConfigInt::loader(lua_State* s)
+namespace ts
 {
-    ts::Errata zret;
-    ref = lua_tonumber(s,-1);
-    return zret;
+inline BufferWriter &
+operator<<(BufferWriter &w, uintmax_t x)
+{
+  char txt[std::numeric_limits<uintmax_t>::digits10 + 1];
+  int n = sizeof(txt);
+  while (x) {
+    txt[--n] = '0' + (x % 10);
+    x /= 10;
+  }
+  if (n == sizeof(txt))
+    txt[--n] = '0';
+  return w.write(txt + n, sizeof(txt) - n);
 }
 
-ts::Errata TsConfigString::loader(lua_State* s)
+inline BufferWriter &
+operator<<(BufferWriter &w, unsigned int x)
 {
-    ts::Errata zret;
-    ref = lua_tostring(s,-1);
-    return zret;
-
+  return w << static_cast<uintmax_t>(x);
 }
 
-ts::Errata TsConfigBool::loader(lua_State* s)
+inline BufferWriter &
+operator<<(BufferWriter &w, intmax_t x)
 {
-    ts::Errata zret;
-    ref = lua_toboolean(s,-1);
-    return zret;
+  if (x < 0) {
+    w << '-';
+    x = -x;
+  }
+  return w << static_cast<uintmax_t>(x);
 }
 
-//template <>
-//ts::Errata TsConfigEnum<Level>::loader(lua_State* s)
-//{
-//    ts::Errata zret;
-//    return zret;
-//}
+inline BufferWriter &
+operator<<(BufferWriter &w, int x)
+{
+  return w << static_cast<intmax_t>(x);
+}
+}
+
+#endif
