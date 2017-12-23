@@ -576,25 +576,6 @@ add_executable(ats
         lib/records/test_RecordsConfig.h
         lib/records/test_RecProcess.i
         lib/records/test_RecTree.cc
-        lib/tsconfig/Errata.cc
-        lib/tsconfig/Errata.h
-        lib/tsconfig/IntrusivePtr.h
-        lib/tsconfig/NumericType.h
-        lib/tsconfig/test-tsconfig.cc
-        lib/tsconfig/TsBuilder.cc
-        lib/tsconfig/TsBuilder.h
-        lib/tsconfig/TsConfigGrammar.c
-        lib/tsconfig/TsConfigGrammar.h
-        lib/tsconfig/TsConfigLexer.h
-        lib/tsconfig/TsConfigLua.cc
-        lib/tsconfig/TsConfigLua.h
-        lib/tsconfig/TsConfigParseEvents.h
-        lib/tsconfig/TsConfigSyntax.c
-        lib/tsconfig/TsConfigTypes.h
-        lib/tsconfig/TsErrataUtil.cc
-        lib/tsconfig/TsErrataUtil.h
-        lib/tsconfig/TsValue.cc
-        lib/tsconfig/TsValue.h
         lib/wccp/wccp-test-router.cc
         lib/wccp/Wccp.h
         lib/wccp/WccpConfig.cc
@@ -1412,6 +1393,26 @@ add_library(libcache SHARED
         iocore/cache/RamCacheLRU.cc
         iocore/cache/Store.cc
 )
+
+add_library(libtsconfig SHARED
+        lib/tsconfig/Errata.cc
+        lib/tsconfig/Errata.h
+        lib/tsconfig/IntrusivePtr.h
+        lib/tsconfig/NumericType.h
+        lib/tsconfig/test-tsconfig.cc
+        lib/tsconfig/TsBuilder.cc
+        lib/tsconfig/TsBuilder.h
+        lib/tsconfig/TsConfigGrammar.c
+        lib/tsconfig/TsConfigGrammar.h
+        lib/tsconfig/TsConfigLexer.h
+        lib/tsconfig/TsConfigParseEvents.h
+        lib/tsconfig/TsConfigSyntax.c
+        lib/tsconfig/TsConfigTypes.h
+        lib/tsconfig/TsErrataUtil.cc
+        lib/tsconfig/TsErrataUtil.h
+        lib/tsconfig/TsValue.cc
+        lib/tsconfig/TsValue.h
+        )
 
 # CacheTool
 add_executable(traffic_cache_tool
