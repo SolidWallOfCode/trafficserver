@@ -281,6 +281,13 @@ struct Vol : public Continuation {
 
   /// Start a write operation for @a cachevc.
   CacheOpState do_open_write(CacheVC* cachevc);
+  /** Try a locking operation.
+
+      This will dispatch a @c CACHE_EVENT_STRIPE_LOCK_READY event to @cachevc.
+      This will be done immediately if the stripe lock is obtained, or later if the
+      lock is missed.
+  */
+  CacheOpState do_with_lock(CacheVC* cachevc);
 
   Vol()
     : Continuation(new_ProxyMutex())

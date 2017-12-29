@@ -213,11 +213,12 @@ struct FreeDir {
 #define dir_set_prev(_e, _o) (_e)->w[2] = (uint16_t)(_o)
 
 struct OpenDirEntry {
-  typedef OpenDirEntry self; ///< Self reference type.
+  typedef OpenDirEntry self_type; ///< Self reference type.
 
   enum UpdateStatus {
     UPDATE_NONE, ///< No update is pending.
-    UPDATE_READER, ///< A reader has locked @a this for a future update.
+    UPDATE_FIRST, ///< Probing cache for first doc.
+    UPDATE_READER, ///< A reader has locked @a this for a future vector (update.
     UPDATE_WRITER ///< A writer is actively working on an update.
   };
 
@@ -286,7 +287,7 @@ struct OpenDirEntry {
    */
   DLL<CacheVC, Link_CacheVC_Active_Link> update_wait_list;
 
-  /// Link for stripe global hash table.
+  /// Link for stripe hash table.
   LINK(OpenDirEntry, link);
 
   /// Get the alternate index for the @a key.

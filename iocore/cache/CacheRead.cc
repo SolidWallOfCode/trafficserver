@@ -54,37 +54,34 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheFragType type, co
       c->od                                   = od;
       c->frag_type                            = type;
       CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
-      SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);
     }
-    if (!c) // got the lock but didn't find it in the open dir entries or the directory
-      goto Lmiss;
-    if (!lock.is_locked()) {
-      CONT_SCHED_LOCK_RETRY(c);
-      return &c->_action;
-    }
-    if (c->od) // if an ODE was found, then there is (or recently was) a writer
-      goto Lwriter;
-    // Otherwise start a local read of the first doc.
-    c->dir            = result;
-    c->last_collision = last_collision;
-    switch (c->do_read_call(&c->key)) {
-    case EVENT_DONE:
-      return ACTION_RESULT_DONE;
-    case EVENT_RETURN:
-      goto Lcallreturn;
-    default:
-      return &c->_action;
-    }
+    // If a CacheVC was created but there wasn't an ODE, force one, because it is required
+    // to have an ODE to do disk I/O. Must do this under stripe lock.
+    if (c != nullptr && nullptr == c->od)
+      c->od = vol->open_entry(key, true);
   }
-Lmiss:
-  CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
-  cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *)-ECACHE_NO_DOC);
-  return ACTION_RESULT_DONE;
-Lwriter:
-  SET_CONTINUATION_HANDLER(c, &CacheVC::openReadFromWriter);
-  if (c->handleEvent(EVENT_IMMEDIATE, nullptr) == EVENT_DONE)
+  // -- STRIPE LOCK DROPPED --
+  if (c == nullptr) { // got the lock but didn't find it in the open dir entries or the directory
+    CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
+    cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<void *>(-ECACHE_NO_DOC));
     return ACTION_RESULT_DONE;
-  return &c->_action;
+  }
+  // Prepare to examine or load the first doc.
+  c->dir            = result;
+  c->last_collision = last_collision;
+  SET_CONTINUATION_HANDLER(c, &CacheVC::stateReadFirstDoc);
+  CacheOpState opr = vol->do_lock_try(c);
+  return (CacheOpResult::WAIT == opr) ? &c->_action : ACTION_RESULT_DONE;
+
+  switch (c->do_read_call(&c->key)) {
+  case EVENT_DONE:
+    return ACTION_RESULT_DONE;
+  case EVENT_RETURN:
+    goto Lcallreturn;
+  default:
+    return &c->_action;
+  }
+
 Lcallreturn:
   if (c->handleEvent(AIO_EVENT_DONE, nullptr) == EVENT_DONE)
     return ACTION_RESULT_DONE;
@@ -169,11 +166,17 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request,
     }
     if (!lock.is_locked()) {
       SET_CONTINUATION_HANDLER(c, &CacheVC::openReadStartHead);
-      CONT_SCHED_LOCK_RETRY(c);
-      return &c->_action;
+      // Set up notification when volume lock is available.
+      if (CacheOpResult::WAIT == vol->do_try_lock(c))
+        return &c->_action;
+      else // got lock on second try, all done.
+        return ACTION_RESULT_DONE;
     }
-    if (!c) // got the lock but key was not found.
-      goto Lmiss;
+    if (!c) { // got the lock but key was not found.
+      CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
+      cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *)-ECACHE_NO_DOC);
+      return ACTION_RESULT_DONE;
+    }
     if (c->od) //
       goto Lwriter;
     // hit
@@ -184,22 +187,14 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheHTTPHdr *request,
     case EVENT_DONE:
       return ACTION_RESULT_DONE;
     case EVENT_RETURN:
-      goto Lcallreturn;
+      return (c->handleEvent(AIO_EVENT_DONE, nullptr) == EVENT_DONE) ? ACTION_RESULT_DONE : &c->_action;
     default:
       return &c->_action;
     }
   }
-Lmiss:
-  CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
-  cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, (void *)-ECACHE_NO_DOC);
-  return ACTION_RESULT_DONE;
 Lwriter:
   SET_CONTINUATION_HANDLER(c, &CacheVC::openReadFromWriter);
   if (c->handleEvent(EVENT_IMMEDIATE, nullptr) == EVENT_DONE)
-    return ACTION_RESULT_DONE;
-  return &c->_action;
-Lcallreturn:
-  if (c->handleEvent(AIO_EVENT_DONE, nullptr) == EVENT_DONE)
     return ACTION_RESULT_DONE;
   return &c->_action;
 }
@@ -919,6 +914,63 @@ Lrestart:
   return openReadStartHead(EVENT_IMMEDIATE, nullptr);
 }
 #endif
+
+// Missed lock on stripe, have to probe again.
+int
+CacheVC::stateProbe(int ecode, Event* event)
+{
+  ink_assert(vol->mutex->thread_holding == this_ethread());
+
+  if (_action.cancelled)
+    return free_CacheVC(this);
+
+  od = vol->open_entry(key, false);
+  if (!od && dir_probe(key, vol, &dir, &last_collision)) {
+    od = vol->open_entry(key, true); // force ODE.
+  }
+
+  if (od) {
+    SET_HANDLER(&self_type::stateReadInit);
+    return this->stateReadInit(ecode, event);
+  }
+  // else it's a complete miss, signal that.
+  this->cont_call_after(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<void *>(-ECACHE_NO_DOC));
+  return ACTION_RESULT_DONE;
+}
+
+int
+CacheVC::stateReadInit(int ecaode, Event* event)
+{
+  if (_action.cancelled)
+    return free_CacheVC(this);
+
+  if (!od->first_buf) {
+    if (UPDATE_NONE == altvec_update_status) {
+      SET_HANDLER(&self_type::stateReadFirstDoc);
+      altvec_update_status = UPDATE_FIRST;
+      altvec_update_vc = this;
+      vol->do_with_lock(this);
+    } else {
+      od->wait_for_update(this); // come back once something happens.
+    }
+  } else {
+    // TODO - something. Have a valid ODE here.
+  }
+  return EVENT_DONE;
+}
+
+int
+CacheVC::stateReadFirstDoc(int ecode, Event* event)
+{
+  ink_assert(vol->mutex->thread_holding == this_ethread());
+
+  this->set_io_not_in_progress();
+
+  // TODO: Need to release ODE items?
+  if (_action.cancelled)
+    return free_CacheVC(this);
+
+}
 
 /*
   This code follows CacheVC::openReadStartEarliest closely,

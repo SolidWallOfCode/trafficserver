@@ -80,7 +80,7 @@ Vol::do_open_write(CacheVC* cachevc)
   if (lock_queue.size() <= _last_id) lock_queue.resize(_last_id+1);
   LockData& ld = lock_queue[id];
 
-  CACHE_TRY_LOCK(lock, cachevc->mutex, t);
+  CACHE_TRY_LOCK(lock, this->mutex, t);
   if (lock.is_locked()) {
     ld.dispatch(this, t);
 
@@ -98,6 +98,25 @@ Vol::do_open_write(CacheVC* cachevc)
     return { CacheOpResult::DONE };
   } else {
     Event* evt = ld.enqueue(this, t, cachevc);
+    return { CacheOpResult::WAIT, evt };
+  }
+}
+
+CacheOpState
+Vol::do_with_lock(CacheVC* cachevc)
+{
+  EThread *t = this_ethread();
+  if (lock_queue.size() <= _last_id) lock_queue.resize(_last_id+1);
+  LockData& ld = lock_queue[id];
+
+  CACHE_TRY_LOCK(lock, this->mutex, t);
+  if (lock.is_locked()) {
+    ld.dispatch(this, t);
+    cachevc->handleEvent(CACHE_EVENT_STRIPE_LOCK_READY, nullptr);
+    return { CacheOpResult::DONE };
+  } else {
+    *cacheVC = new_CacheVC(xx);
+    Event* evt = ld.enqueue(this, t, *cachevc);
     return { CacheOpResult::WAIT, evt };
   }
 }

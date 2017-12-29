@@ -467,12 +467,11 @@ struct CacheVC : public CacheVConnection {
   // is handled locally. This is expected to be by far the common case and is therefore optimized.
   CacheHTTPInfoVector vector;
   CacheHTTPInfo alternate;
-  // In the mixed case, these track where the data is in the ODE.
+  /// In the mixed case, these track where the data is in the ODE.
   CacheHTTPInfoVector::SliceRef slice_ref;
 
-  Ptr<IOBufferData> buf;
-  Ptr<IOBufferData> first_buf;
-  Ptr<IOBufferBlock> blocks; // data available to write
+  Ptr<IOBufferData> buf; ///< Working I/O buffer for current read operation.
+  Ptr<IOBufferBlock> blocks; ///< Working I/O buffers for pending write operation.
   Ptr<IOBufferBlock> writer_buf;
   /// Data transfered directly from writer VC to this (reader) VC because this VC was waiting for the writer.
   IOBufferChain wait_buffer;
