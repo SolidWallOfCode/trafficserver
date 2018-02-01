@@ -678,8 +678,6 @@ UrlRewrite::InsertForwardMapping(mapping_type maptype, url_mapping *mapping, con
 int
 UrlRewrite::BuildTable(const char *path)
 {
-  BUILD_TABLE_INFO bti;
-
   ink_assert(forward_mappings.empty());
   ink_assert(reverse_mappings.empty());
   ink_assert(permanent_redirects.empty());

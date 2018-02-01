@@ -35,7 +35,7 @@
 
 #define modulePrefix "[ReverseProxy]"
 
-static bool remap_parse_config_bti(const char *path, BUILD_TABLE_INFO *bti);
+static bool remap_parse_config_bti(const char *path, RemapTableBuildInfo *bti);
 
 /**
   Returns the length of the URL.
@@ -76,20 +76,20 @@ clear_xstr_array(char *v[], size_t vsize)
   }
 }
 
-BUILD_TABLE_INFO::BUILD_TABLE_INFO()
-  : remap_optflg(0), paramc(0), argc(0), ip_allow_check_enabled_p(true), accept_check_p(true), rules_list(nullptr), rewrite(nullptr)
+RemapTableBuildInfo::RemapTableBuildInfo()
+  : paramc(0), argc(0), ip_allow_check_enabled_p(true), accept_check_p(true), rules_list(nullptr), rewrite(nullptr)
 {
   memset(this->paramv, 0, sizeof(this->paramv));
   memset(this->argv, 0, sizeof(this->argv));
 }
 
-BUILD_TABLE_INFO::~BUILD_TABLE_INFO()
+RemapTableBuildInfo::~RemapTableBuildInfo()
 {
   this->reset();
 }
 
 void
-BUILD_TABLE_INFO::reset()
+RemapTableBuildInfo::reset()
 {
   this->paramc = this->argc = 0;
   clear_xstr_array(this->paramv, sizeof(this->paramv) / sizeof(char *));
@@ -97,7 +97,7 @@ BUILD_TABLE_INFO::reset()
 }
 
 static const char *
-process_filter_opt(url_mapping *mp, const BUILD_TABLE_INFO *bti, char *errStrBuf, int errStrBufSize)
+process_filter_opt(url_mapping *mp, const RemapTableBuildInfo *bti, char *errStrBuf, int errStrBufSize)
 {
   acl_filter_rule *rp, **rpp;
   const char *errStr = nullptr;
@@ -157,7 +157,7 @@ is_inkeylist(const char *key, ...)
 }
 
 static const char *
-parse_define_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_define_directive(const char *directive, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   bool flg;
   acl_filter_rule *rp;
@@ -193,7 +193,7 @@ parse_define_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbu
 }
 
 static const char *
-parse_delete_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_delete_directive(const char *directive, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   if (bti->paramc < 2) {
     snprintf(errbuf, errbufsize, "Directive \"%s\" must have name argument", directive);
@@ -206,7 +206,7 @@ parse_delete_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbu
 }
 
 static const char *
-parse_activate_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_activate_directive(const char *directive, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   acl_filter_rule *rp;
 
@@ -233,7 +233,7 @@ parse_activate_directive(const char *directive, BUILD_TABLE_INFO *bti, char *err
 }
 
 static const char *
-parse_deactivate_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_deactivate_directive(const char *directive, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   acl_filter_rule *rp;
 
@@ -270,12 +270,12 @@ free_directory_list(int n_entries, struct dirent **entrylist)
 }
 
 static const char *
-parse_remap_fragment(const char *path, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_remap_fragment(const char *path, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   // We need to create a new bti so that we don't clobber any state in the parent parse, but we want
   // to keep the ACL rules from the parent because ACLs must be global across the full set of config
   // files.
-  BUILD_TABLE_INFO nbti;
+  RemapTableBuildInfo nbti;
   bool success;
 
   if (access(path, R_OK) == -1) {
@@ -305,7 +305,7 @@ parse_remap_fragment(const char *path, BUILD_TABLE_INFO *bti, char *errbuf, size
 }
 
 static const char *
-parse_include_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+parse_include_directive(const char *directive, RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   if (bti->paramc < 2) {
     snprintf(errbuf, errbufsize, "Directive \"%s\" must have a path argument", directive);
@@ -365,7 +365,7 @@ parse_include_directive(const char *directive, BUILD_TABLE_INFO *bti, char *errb
 
 struct remap_directive {
   const char *name;
-  const char *(*parser)(const char *, BUILD_TABLE_INFO *, char *, size_t);
+  const char *(*parser)(const char *, RemapTableBuildInfo *, char *, size_t);
 };
 
 static const remap_directive directives[] = {
@@ -393,7 +393,7 @@ static const remap_directive directives[] = {
 };
 
 const char *
-remap_parse_directive(BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize)
+remap_parse_directive(RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize)
 {
   const char *directive = nullptr;
 
@@ -1023,7 +1023,7 @@ lFail:
 }
 
 static bool
-remap_parse_config_bti(const char *path, BUILD_TABLE_INFO *bti)
+remap_parse_config_bti(const char *path, RemapTableBuildInfo *bti)
 {
   char errBuf[1024];
   char errStrBuf[1024];
@@ -1441,7 +1441,7 @@ remap_parse_config_bti(const char *path, BUILD_TABLE_INFO *bti)
 bool
 remap_parse_config(const char *path, UrlRewrite *rewrite)
 {
-  BUILD_TABLE_INFO bti;
+  RemapTableBuildInfo bti;
 
   bti.rewrite = rewrite;
   return remap_parse_config_bti(path, &bti);

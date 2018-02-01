@@ -43,11 +43,30 @@ class UrlRewrite;
 #define REMAP_OPTFLG_INVERT 0x80000000u       /* "invert" the rule (for src_ip at least) */
 #define REMAP_OPTFLG_ALL_FILTERS (REMAP_OPTFLG_METHOD | REMAP_OPTFLG_SRC_IP | REMAP_OPTFLG_ACTION | REMAP_OPTFLG_INTERNAL)
 
-struct BUILD_TABLE_INFO {
-  BUILD_TABLE_INFO();
-  ~BUILD_TABLE_INFO();
+/** Configuration load time information for building the remap table.
 
-  unsigned long remap_optflg;
+    This is not a persistent structure, it is used only while the configuration is being loaded.
+*/
+struct RemapTableBuildInfo {
+  RemapTableBuildInfo();
+  ~RemapTableBuildInfo();
+
+  union {
+    uint32_t _all;
+    struct {
+      unsigned int map_with_referrer : 1;
+      unsigned int plugin : 1;
+      unsigned int pparam : 1;
+      unsigned int method : 1;
+      unsigned int src_ip : 1;
+      unsigned int action : 1;
+      unsigned int internal : 1;
+      unsigned int in_ip : 1;
+      unsigned int map_id : 1;
+      unsigned int invert : 1;
+    } flag;
+  } option {0};
+
   int paramc;
   int argc;
   char *paramv[BUILD_TABLE_MAX_ARGS];
@@ -62,11 +81,11 @@ struct BUILD_TABLE_INFO {
   void reset();
 
   // noncopyable
-  BUILD_TABLE_INFO(const BUILD_TABLE_INFO &) = delete;            // disabled
-  BUILD_TABLE_INFO &operator=(const BUILD_TABLE_INFO &) = delete; // disabled
+  RemapTableBuildInfo(const RemapTableBuildInfo &) = delete;            // disabled
+  RemapTableBuildInfo &operator=(const RemapTableBuildInfo &) = delete; // disabled
 };
 
-const char *remap_parse_directive(BUILD_TABLE_INFO *bti, char *errbuf, size_t errbufsize);
+const char *remap_parse_directive(RemapTableBuildInfo *bti, char *errbuf, size_t errbufsize);
 
 const char *remap_validate_filter_args(acl_filter_rule **rule_pp, const char **argv, int argc, char *errStrBuf,
                                        size_t errStrBufSize);
