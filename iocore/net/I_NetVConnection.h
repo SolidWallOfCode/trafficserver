@@ -602,6 +602,9 @@ public:
   /** Set remote sock addr struct. */
   virtual void set_remote_addr() = 0;
 
+  /** Set remote sock addr struct. */
+  virtual void set_remote_addr(const sockaddr *) = 0;
+
   // for InkAPI
   bool
   get_is_internal_request() const
@@ -643,6 +646,103 @@ public:
   // noncopyable
   NetVConnection(const NetVConnection &) = delete;
   NetVConnection &operator=(const NetVConnection &) = delete;
+
+  enum ProxyProtocolVersion_t {
+    PROXY_VERSION_UNDEFINED,
+    PROXY_V1,
+    PROXY_V2,
+  };
+
+  enum ProxyProtocolData_t {
+    PROXY_PROTO_UNDEFINED,
+    PROXY_PROTO_SRC,
+    PROXY_PROTO_DST,
+  };
+
+  int
+  set_proxy_protocol_addr(ProxyProtocolData_t src_or_dst, ts::string_view &ip_port_str)
+  {
+    int ret = -1;
+    if (src_or_dst == PROXY_PROTO_SRC) {
+      ret = ats_ip_pton(ip_port_str, &pp_info.src_addr);
+    } else {
+      ret = ats_ip_pton(ip_port_str, &pp_info.dst_addr);
+    }
+    return ret;
+  }
+
+  void
+  set_proxy_protocol_src_addr(ts::string_view src)
+  {
+    set_proxy_protocol_addr(PROXY_PROTO_SRC, src);
+  }
+
+  void
+  set_proxy_protocol_dst_addr(ts::string_view src)
+  {
+    set_proxy_protocol_addr(PROXY_PROTO_DST, src);
+  }
+
+  void
+  set_proxy_protocol_src_port(uint16_t val)
+  {
+    pp_info.src_port = val;
+  }
+
+  void
+  set_proxy_protocol_dst_port(uint16_t val)
+  {
+    pp_info.dst_port = val;
+  }
+
+  void
+  set_proxy_protocol_version(ProxyProtocolVersion_t ver)
+  {
+    pp_info.proxy_protocol_version = ver;
+  }
+
+  ProxyProtocolVersion_t
+  get_proxy_protocol_version()
+  {
+    return pp_info.proxy_protocol_version;
+  }
+
+  sockaddr const *get_proxy_protocol_addr(ProxyProtocolData_t);
+
+  sockaddr const *
+  get_proxy_protocol_src_addr()
+  {
+    return get_proxy_protocol_addr(PROXY_PROTO_SRC);
+  }
+
+  uint16_t
+  get_proxy_protocol_src_port()
+  {
+    return ats_ip_port_host_order(this->get_proxy_protocol_addr(PROXY_PROTO_SRC));
+  }
+
+  sockaddr const *
+  get_proxy_protocol_dst_addr()
+  {
+    return get_proxy_protocol_addr(PROXY_PROTO_DST);
+  }
+
+  uint16_t
+  get_proxy_protocol_dst_port()
+  {
+    return ats_ip_port_host_order(this->get_proxy_protocol_addr(PROXY_PROTO_DST));
+  };
+
+  typedef struct _ProxyProtocol {
+    ProxyProtocolVersion_t proxy_protocol_version = PROXY_VERSION_UNDEFINED;
+    uint16_t ip_family;
+    IpEndpoint src_addr;
+    uint16_t src_port;
+    IpEndpoint dst_addr;
+    uint16_t dst_port;
+  } ProxyProtocol;
+
+  ProxyProtocol pp_info;
 
 protected:
   IpEndpoint local_addr;

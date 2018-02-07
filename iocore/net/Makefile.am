@@ -46,7 +46,7 @@ test_certlookup_LDADD = \
   @OPENSSL_LIBS@ \
   $(top_builddir)/lib/ts/libtsutil.la \
   $(top_builddir)/iocore/eventsystem/libinkevent.a \
-  $(top_builddir)/proxy/ParentSelectionStrategy.o
+  $(top_builddir)/proxy/ParentSelectionStrategy.o 
 
 test_UDPNet_CPPFLAGS = \
   $(AM_CPPFLAGS) \
@@ -128,6 +128,8 @@ libinknet_a_SOURCES = \
   P_UnixNetVConnection.h \
   P_UnixPollDescriptor.h \
   P_UnixUDPConnection.h \
+  ProxyProtocol.cc \
+  ProxyProtocol.h \
   Socks.cc \
   SNIActionPerformer.cc \
   SSLCertLookup.cc \
