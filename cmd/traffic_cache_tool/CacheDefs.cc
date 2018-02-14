@@ -111,10 +111,10 @@ URLparser::getPort(std::string &fullURL, int &port_ptr, int &port_len)
     url += 9;
 
     TextView hostPort = url.take_prefix_at(':');
-    if (hostPort) // i.e. port is present
+    if (!hostPort.empty()) // i.e. port is present
     {
       TextView port = url.take_prefix_at('/');
-      if (!port) // i.e. backslash is not present, then the rest of the url must be just port
+      if (port.empty()) // i.e. backslash is not present, then the rest of the url must be just port
         port = url;
       if (matcher.portmatch(port.data(), port.size())) {
         TextView text;
@@ -131,5 +131,35 @@ URLparser::getPort(std::string &fullURL, int &port_ptr, int &port_len)
     std::cout << "No scheme provided for: " << fullURL << std::endl;
     return -1;
   }
+}
+
+uint32_t
+Doc::prefix_len()
+{
+  return sizeof(Doc) + hlen;
+}
+
+uint32_t
+Doc::data_len()
+{
+  return len - sizeof(Doc) - hlen;
+}
+
+int
+Doc::single_fragment()
+{
+  return data_len() == total_len;
+}
+
+char *
+Doc::hdr()
+{
+  return reinterpret_cast<char *>(this) + sizeof(Doc);
+}
+
+char *
+Doc::data()
+{
+  return this->hdr() + hlen;
 }
 }
