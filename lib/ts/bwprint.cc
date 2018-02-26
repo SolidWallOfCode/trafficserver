@@ -150,11 +150,8 @@ ts::BWFormat::BWFormat(ts::TextView fmt)
       }
 
       BW_Spec spec{fmt.take_prefix_at(off)};
-      if (spec._name.size() && spec._idx < 0) {
-        auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(spec._name);
-        if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end())
-          gf = spot->second;
-      }
+      if (spec._idx < 0)
+        gf = detail::BW_GlobalTableFind(spec._name);
       _items.emplace_back(spec, gf);
     }
   }
@@ -192,9 +189,6 @@ BW_Formatter_Now(ts::BufferWriter &w, ts::BW_Spec const &spec)
 
 static bool BW_INITIALIZED = []() -> bool {
   ts::detail::BW_FORMAT_GLOBAL_TABLE.emplace("now", &BW_Formatter_Now);
-  std::string text{"now"};
-  if (ts::detail::BW_FORMAT_GLOBAL_TABLE.find(text) == ts::detail::BW_FORMAT_GLOBAL_TABLE.end())
-    throw std::domain_error("Bad table");
   return true;
 }();
 }
