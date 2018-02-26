@@ -55,8 +55,8 @@ libtsutil_la_SOURCES = \
   BaseLogFile.h \
   Bitops.cc \
   Bitops.h \
-  BufferFormat.h \
-  BufferFormat.cc \
+  bwprint.h \
+  bwprint.cc \
   c14_utility.h \
   ConsistentHash.cc \
   ConsistentHash.h \

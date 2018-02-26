@@ -82,8 +82,7 @@ bw_formatter(BufferWriter &w, BW_Spec const &, V const &v)
   return w << v;
 }
 
-template <typename TUPLE>
-using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BW_Spec const &, TUPLE const &args);
+template <typename TUPLE> using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BW_Spec const &, TUPLE const &args);
 
 namespace detail
 {
@@ -117,8 +116,8 @@ namespace detail
   void bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw);
 
   /// Global named argument table.
-  using BW_GlobalSignature = void(*)(BufferWriter&, BW_Spec const&);
-  using BW_GlobalTable = std::unordered_map<string_view, BW_GlobalSignature>;
+  using BW_GlobalSignature = void (*)(BufferWriter &, BW_Spec const &);
+  using BW_GlobalTable     = std::unordered_map<string_view, BW_GlobalSignature>;
   BW_GlobalSignature BUFFER_FORMAT_GLOBAL_TABLE;
 } // detail
 

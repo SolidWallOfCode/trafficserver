@@ -22,7 +22,7 @@
  */
 
 #include "catch.hpp"
-#include <ts/BufferFormat.h>
+#include <ts/bwprint.h>
 
 TEST_CASE("bwprint basics", "[bwprint]")
 {
