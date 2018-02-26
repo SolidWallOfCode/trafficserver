@@ -66,5 +66,13 @@ TEST_CASE("bwprint basics", "[bwprint]")
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
   bw.reduce(0);
   bwprint(bw, "Time is {now}");
-  REQUIRE(bw.view() == "Time is");
+  //  REQUIRE(bw.view() == "Time is");
+}
+
+TEST_CASE("BWFormat", "[bwprint][bwformat]")
+{
+  ts::LocalBufferWriter<256> bw;
+  ts::BWFormat fmt("left >{0:<9}< right >{0:>9}< center >{0:=9}<");
+  bwprint(bw, fmt, 956);
+  REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
 }

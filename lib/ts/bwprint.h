@@ -120,7 +120,37 @@ namespace detail
   using BW_GlobalSignature = void (*)(BufferWriter &, BW_Spec const &);
   using BW_GlobalTable     = std::map<string_view, BW_GlobalSignature>;
   extern BW_GlobalTable BW_FORMAT_GLOBAL_TABLE;
+
+  extern BW_GlobalSignature BW_GlobalTableFind(string_view name);
 } // detail
+
+class BWFormat
+{
+public:
+  BWFormat(TextView fmt);
+  ~BWFormat();
+
+  /** Parsed items from the format string.
+
+      Literals are handled by putting the literal text in the extension field and setting the
+      global formatter @a _gf to a formatter that writes out the extension.
+   */
+  struct Item {
+    BW_Spec _spec; ///< Specification.
+    /// If the spec has a global formatter name, cache it here.
+    mutable detail::BW_GlobalSignature _gf = nullptr;
+
+    Item() : _spec("") {}
+    Item(BW_Spec const &spec, detail::BW_GlobalSignature gf) : _spec(spec), _gf(gf) {}
+  };
+
+  using Items = std::vector<Item>;
+  Items _items;
+
+protected:
+  /// Handles literals by writing the contents of the extension directly to @a w.
+  static void LiteralFormatter(BufferWriter &w, BW_Spec const &spec);
+};
 
 /** BufferWriter print.
 
@@ -157,7 +187,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       BW_Spec spec{fmt.take_prefix_at(off)};
       size_t width = w.remaining();
       if (spec._max >= 0)
-	width = std::min(width, static_cast<size_t>(spec._max));
+        width = std::min(width, static_cast<size_t>(spec._max));
       FixedBufferWriter lw{w.auxBuffer(), width};
 
       if (spec._name.size() == 0)
@@ -165,40 +195,51 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (0 <= spec._idx && spec._idx < N) {
         fa[spec._idx](lw, spec, args);
       } else if (spec._name.size()) {
-	auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(spec._name);
-	if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end()) {
-	  (*(spot->second))(lw, spec);
-	}
+        auto gf = detail::BW_GlobalTableFind(spec._name);
+        if (gf)
+          gf(lw, spec);
       }
       if (lw.size())
-	detail::bw_aligner(spec, w, lw);
+        detail::bw_aligner(spec, w, lw);
       ++arg_idx;
     }
   }
   return 0;
 }
+
+template <typename... Rest>
+int
+bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
+{
+  static constexpr int N = sizeof...(Rest);
+  auto args(std::forward_as_tuple(rest...));
+  auto fa     = detail::bw_formatter_array<decltype(args)>(index_sequence_for<Rest...>{});
+  int arg_idx = 0;
+
+  for (BWFormat::Item const &item : fmt._items) {
+    size_t width = w.remaining();
+    if (item._spec._max >= 0)
+      width = std::min(width, static_cast<size_t>(item._spec._max));
+    FixedBufferWriter lw{w.auxBuffer(), width};
+    if (item._gf)
+      (item._gf)(w, item._spec);
+    else {
+      auto idx = item._spec._idx;
+      if (idx < 0 && item._spec._name.size() == 0)
+        idx = arg_idx;
+      if (0 <= idx && idx < N) {
+        fa[idx](lw, item._spec, args);
+      } else if (item._spec._name.size()) {
+        detail::BW_GlobalSignature gf;
+        if (nullptr != (item._gf = detail::BW_GlobalTableFind(item._spec._name)))
+          (item._gf)(lw, item._spec);
+      }
+    }
+    if (lw.size())
+      detail::bw_aligner(item._spec, w, lw);
+    ++arg_idx;
+  }
+  return 0;
 }
 
-class BWFormat
-{
-public:
-  BWFormat(ts::TextView fmt);
-  ~BWFormat();
-
-protected:
-  enum spec_type { LITERAL, SPEC };
-  struct Item {
-    spec_type type = LITERAL;
-    union Payload {
-      ts::string_view text;
-      ts::BW_Spec spec;
-
-      Payload() : text{} {}
-    } payload;
-    Item(ts::string_view t) : type(LITERAL) { payload.text = t; }
-    Item(ts::BW_Spec const &s) : type(SPEC) { payload.spec = s; }
-  };
-
-  using Items = std::vector<Item>;
-  Items items;
-};
+} // ts

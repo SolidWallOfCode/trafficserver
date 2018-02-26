@@ -131,45 +131,70 @@ ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
   w.fill(size);
 }
 
-BWFormat::BWFormat(ts::TextView fmt)
+ts::BWFormat::BWFormat(ts::TextView fmt)
 {
   while (fmt) {
     ts::TextView lit = fmt.take_prefix_at('{');
     if (lit) {
-      items.emplace_back(lit);
+      BW_Spec spec{""};
+      spec._ext = lit;
+      _items.emplace_back(spec, &LiteralFormatter);
     }
     if (fmt) {
-      ts::TextView spec = fmt.take_prefix_at('}');
-      if (!spec) {
+      detail::BW_GlobalSignature gf = nullptr;
+      // Need to be careful, because an empty format is OK and it's hard to tell if
+      // take_prefix_at failed to find the delimiter or found it as the first byte.
+      TextView::size_type off = fmt.find('}');
+      if (off == TextView::npos) {
         throw std::invalid_argument("Unclosed {");
       }
-      items.emplace_back(ts::BW_Spec(spec));
+
+      BW_Spec spec{fmt.take_prefix_at(off)};
+      if (spec._name.size() && spec._idx < 0) {
+        auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(spec._name);
+        if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end())
+          gf = spot->second;
+      }
+      _items.emplace_back(spec, gf);
     }
   }
 }
 
-BWFormat::~BWFormat()
+ts::BWFormat::~BWFormat()
 {
 }
 
 void
-test(ts::BufferWriter &w)
+ts::BWFormat::LiteralFormatter(BufferWriter &w, BW_Spec const &spec)
 {
-  bwprint(w, "This {} arg", 27);
+  w.write(spec._ext);
 }
 
-namespace {
-  void BW_Formatter_Now(ts::BufferWriter& w, ts::BW_Spec const& spec)
-  {
-    std::time_t t = std::time(nullptr);
-    w.fill(std::strftime(w.auxBuffer(), w.remaining(), "%Y%b%d:%H%M%S", std::localtime(&t)));
+ts::detail::BW_GlobalSignature
+ts::detail::BW_GlobalTableFind(string_view name)
+{
+  if (name.size()) {
+    auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(name);
+    if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end())
+      return spot->second;
   }
+  return nullptr;
+}
 
-  static bool BW_INITIALIZED = []() -> bool {
-    ts::detail::BW_FORMAT_GLOBAL_TABLE.emplace("now", &BW_Formatter_Now);
-    std::string text{"now"};
-    if (ts::detail::BW_FORMAT_GLOBAL_TABLE.find(text) == ts::detail::BW_FORMAT_GLOBAL_TABLE.end())
-      throw std::domain_error("Bad table");
-    return true;
-  }();
+namespace
+{
+void
+BW_Formatter_Now(ts::BufferWriter &w, ts::BW_Spec const &spec)
+{
+  std::time_t t = std::time(nullptr);
+  w.fill(std::strftime(w.auxBuffer(), w.remaining(), "%Y%b%d:%H%M%S", std::localtime(&t)));
+}
+
+static bool BW_INITIALIZED = []() -> bool {
+  ts::detail::BW_FORMAT_GLOBAL_TABLE.emplace("now", &BW_Formatter_Now);
+  std::string text{"now"};
+  if (ts::detail::BW_FORMAT_GLOBAL_TABLE.find(text) == ts::detail::BW_FORMAT_GLOBAL_TABLE.end())
+    throw std::domain_error("Bad table");
+  return true;
+}();
 }
