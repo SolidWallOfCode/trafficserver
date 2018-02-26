@@ -57,7 +57,7 @@ protected:
   Align
   align_of(char c)
   {
-    return '<' == c ? Align::LEFT : '>' == c ? Align::RIGHT : '=' == c ? Align::SIGN : '^' == c ? Align::CENTER : Align::NONE;
+    return '<' == c ? Align::LEFT : '>' == c ? Align::RIGHT : '=' == c ? Align::CENTER : '^' == c ? Align::SIGN : Align::NONE;
   }
   bool
   is_sign(char c)
@@ -66,6 +66,14 @@ protected:
   }
 };
 
+/** Overridable formatting for type @a V.
+
+    If formatting for a type wants to have additional support for the format specifiers, this template should
+    be specialized for that type. Otherwise the base stream operator is invoked.
+
+    The most common use will be to use the extension field of the format specified, which is embedded in
+    the @c BufferFormatSpec. This can provide additional formatting options for more complex types.
+ */
 template <typename V>
 BufferWriter &
 bw_formatter(BufferWriter &w, BufferFormatSpec const &, V const &v)
@@ -80,10 +88,10 @@ namespace detail
 {
   // MSVC will expand the parameter pack inside a lambda but not gcc, so this indirection is required.
 
-  // This selects the @a I th argument in the @a TUPLE arg pack and calls the formatter on it. This
-  // (or the equivalent lambda) is needed because the array of formatters must have a homogenous
-  // signature, not vary per argument. Effectively this indirection erases the type of the specific
-  // argument being formatter.
+  /// This selects the @a I th argument in the @a TUPLE arg pack and calls the formatter on it. This
+  /// (or the equivalent lambda) is needed because the array of formatters must have a homogenous
+  /// signature, not vary per argument. Effectively this indirection erases the type of the specific
+  /// argument being formatter.
   template <typename TUPLE, size_t I>
   BufferWriter &
   bw_formatter_selecter(BufferWriter &w, BufferFormatSpec const &spec, TUPLE const &args)
@@ -91,8 +99,11 @@ namespace detail
     return bw_formatter(w, spec, std::get<I>(args));
   }
 
-  // This exists only to expand the index sequence into an array of formatters for the tuple type @a TUPLE.
-  // Due to langauge limitations it cannot be done directly.
+  /// This exists only to expand the index sequence into an array of formatters for the tuple type
+  /// @a TUPLE.  Due to langauge limitations it cannot be done directly. The formatters can be
+  /// access via standard array access in constrast to templated tuple access. The actual array is
+  /// static and therefor at run time the only operation is loading and return the address of the
+  /// array.
   template <typename TUPLE, size_t... N>
   FormatterSignature<TUPLE> *
   bw_formatter_array(index_sequence<N...>)
@@ -100,8 +111,21 @@ namespace detail
     static FormatterSignature<TUPLE> fa[sizeof...(N)] = {&detail::bw_formatter_selecter<TUPLE, N>...};
     return fa;
   }
+
+  /// Perform alignment adjustments / fill on @a w of the content in @a lw.
+  void bw_aligner(BufferFormatSpec const &spec, BufferWriter &w, BufferWriter &lw);
 } // detail
 
+/** BufferWriter print.
+
+    This prints its arguments to the @c BufferWriter @a w according to the format @a fmt. The format
+    string is based on Python style formating, each argument substitution marked by braces, {}. Each
+    specification has three parts, a @a name, a @a specified, and a @a extention. These are
+    separated by colons. The name should be either omitted or a number, the index of the argument to
+    use. If omitted the place in the format string is used as the argument index. E.g. "{} {} {}",
+    "{} {1} {}", and "{0} {1} {2}" are equivalent. Using an explicit index does not reset the
+    position of subsequent substiations, therefore "{} {0} {}" is equivalent to "{0} {0} {2}".
+ */
 template <typename... Rest>
 int
 bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
@@ -127,37 +151,12 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (spec._name.size() == 0)
         spec._idx = arg_idx;
       if (0 <= spec._idx && spec._idx < N) {
-	size_t width = w.remaining();
-	if (spec._max >= 0) width = std::min(width, static_cast<size_t>(spec._max));
-
-	FixedBufferWriter lw{w.auxBuffer(), width};
+        size_t width = w.remaining();
+        if (spec._max >= 0)
+          width = std::min(width, static_cast<size_t>(spec._max));
+        FixedBufferWriter lw{w.auxBuffer(), width};
         fa[spec._idx](lw, spec, args);
-	int size = static_cast<int>(lw.extent());
-	if (size < spec._min) {
-	  size_t delta = spec._min - size;
-	  switch (spec._align) {
-	  case BufferFormatSpec::Align::NONE:
-	    w.fill(lw.size());
-	    break;
-	  case BufferFormatSpec::Align::LEFT:
-	    w.fill(size);
-	    while (delta--) w.write(spec._fill);
-	    break;
-	  case BufferFormatSpec::Align::RIGHT:
-	    std::memmove(w.auxBuffer()+delta, w.auxBuffer(), size);
-	    while (delta--) w.write(spec._fill);
-	    w.fill(size);
-	    break;
-	  case BufferFormatSpec::Align::CENTER:
-	    w.fill(lw.size());
-	    break;
-	  case BufferFormatSpec::Align::SIGN:
-	    w.fill(lw.size());
-	    break;
-	  }
-	} else {
-	  w.fill(lw.size());
-	}
+        detail::bw_aligner(spec, w, lw);
       }
       ++arg_idx;
     }

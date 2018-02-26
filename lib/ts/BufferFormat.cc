@@ -27,11 +27,11 @@ ts::BufferFormatSpec::BufferFormatSpec(TextView fmt)
         _fill = isdigit(d0) ? d0 - '0' : tolower(d0) - 'a' + 10;
         _fill += (isdigit(d1) ? d1 - '0' : tolower(d1) - 'a' + 10) << 4;
         sz += 4;
-      } else if (Align::NONE != (_align = align_of(*sz))) {
-        ++sz;
       } else if (sz.size() > 1 && Align::NONE != (_align = align_of(sz[1]))) {
         _fill = *sz;
         sz += 2;
+      } else if (Align::NONE != (_align = align_of(*sz))) {
+        ++sz;
       }
       if (!sz)
         return;
@@ -85,6 +85,46 @@ ts::BufferFormatSpec::BufferFormatSpec(TextView fmt)
       }
     }
   }
+}
+void
+ts::detail::bw_aligner(BufferFormatSpec const &spec, BufferWriter &w, BufferWriter &lw)
+{
+  size_t size = lw.size();
+  size_t min;
+  if (spec._min >= 0 && size < (min = static_cast<size_t>(spec._min))) {
+    size_t delta = min - size; // note - size <= extent -> size < min
+    switch (spec._align) {
+    case BufferFormatSpec::Align::NONE:
+      break;
+    case BufferFormatSpec::Align::LEFT:
+      w.fill(size);
+      while (delta--)
+        w.write(spec._fill);
+      size = 0; // cancel additional fill.
+      break;
+    case BufferFormatSpec::Align::RIGHT:
+      std::memmove(w.auxBuffer() + delta, w.auxBuffer(), size);
+      while (delta--)
+        w.write(spec._fill);
+      break;
+    case BufferFormatSpec::Align::CENTER:
+      if (delta > 1) {
+        size_t d2 = delta / 2;
+        std::memmove(w.auxBuffer() + (delta / 2), w.auxBuffer(), size);
+        while (d2--)
+          w.write(spec._fill);
+      }
+      w.fill(size);
+      delta = (delta + 1) / 2;
+      while (delta--)
+        w.write(spec._fill);
+      size = 0; // cancel additional fill.
+      break;
+    case BufferFormatSpec::Align::SIGN:
+      break;
+    }
+  }
+  w.fill(size);
 }
 
 BufferFormat::BufferFormat(ts::TextView fmt)

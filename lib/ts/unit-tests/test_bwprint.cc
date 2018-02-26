@@ -38,6 +38,9 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bwprint(bw, "arg 1 {1} and 2 {2} and 0 {0}", "zero", "one", "two");
   REQUIRE(bw.view() == "arg 1 one and 2 two and 0 zero");
   bw.reduce(0);
+  bwprint(bw, "args {2}{0}{1}", "zero", "one", "two");
+  REQUIRE(bw.view() == "args twozeroone");
+  bw.reduce(0);
   bwprint(bw, "left |{:<10}|", "text");
   REQUIRE(bw.view() == "left |text      |");
   bw.reduce(0);
@@ -46,4 +49,19 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bw.reduce(0);
   bwprint(bw, "right |{:.>10}|", "text");
   REQUIRE(bw.view() == "right |......text|");
+  bw.reduce(0);
+  bwprint(bw, "center |{:.=10}|", "text");
+  REQUIRE(bw.view() == "center |...text...|");
+  bw.reduce(0);
+  bwprint(bw, "center |{:.=11}|", "text");
+  REQUIRE(bw.view() == "center |...text....|");
+  bw.reduce(0);
+  bwprint(bw, "center |{:==10}|", "text");
+  REQUIRE(bw.view() == "center |===text===|");
+  bw.reduce(0);
+  bwprint(bw, "center |{:%3A=10}|", "text");
+  REQUIRE(bw.view() == "center |:::text:::|");
+  bw.reduce(0);
+  bwprint(bw, "left >{0:<9}< right >{0:>9}< center >{0:=9}<", 956);
+  REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
 }
