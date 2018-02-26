@@ -27,14 +27,15 @@
 #include <ts/TextView.h>
 #include <ts/c14_utility.h>
 #include <vector>
+#include <unordered_map>
 
 namespace ts
 {
 /** A parsed version of a format specifier.
  */
-struct BufferFormatSpec {
+struct BW_Spec {
   /// Construct by parsing @a fmt.
-  BufferFormatSpec(TextView fmt);
+  BW_Spec(TextView fmt);
 
   char _fill = ' '; ///< Fill character.
   char _sign = ' '; ///< Numeric sign style, space + -
@@ -72,17 +73,17 @@ protected:
     be specialized for that type. Otherwise the base stream operator is invoked.
 
     The most common use will be to use the extension field of the format specified, which is embedded in
-    the @c BufferFormatSpec. This can provide additional formatting options for more complex types.
+    the @c BW_Spec. This can provide additional formatting options for more complex types.
  */
 template <typename V>
 BufferWriter &
-bw_formatter(BufferWriter &w, BufferFormatSpec const &, V const &v)
+bw_formatter(BufferWriter &w, BW_Spec const &, V const &v)
 {
   return w << v;
 }
 
 template <typename TUPLE>
-using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BufferFormatSpec const &, TUPLE const &args);
+using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BW_Spec const &, TUPLE const &args);
 
 namespace detail
 {
@@ -94,7 +95,7 @@ namespace detail
   /// argument being formatter.
   template <typename TUPLE, size_t I>
   BufferWriter &
-  bw_formatter_selecter(BufferWriter &w, BufferFormatSpec const &spec, TUPLE const &args)
+  bw_formatter_selecter(BufferWriter &w, BW_Spec const &spec, TUPLE const &args)
   {
     return bw_formatter(w, spec, std::get<I>(args));
   }
@@ -113,7 +114,12 @@ namespace detail
   }
 
   /// Perform alignment adjustments / fill on @a w of the content in @a lw.
-  void bw_aligner(BufferFormatSpec const &spec, BufferWriter &w, BufferWriter &lw);
+  void bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw);
+
+  /// Global named argument table.
+  using BW_GlobalSignature = void(*)(BufferWriter&, BW_Spec const&);
+  using BW_GlobalTable = std::unordered_map<string_view, BW_GlobalSignature>;
+  BW_GlobalSignature BUFFER_FORMAT_GLOBAL_TABLE;
 } // detail
 
 /** BufferWriter print.
@@ -147,7 +153,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (off == TextView::npos) {
         throw std::invalid_argument("Unclosed {");
       }
-      BufferFormatSpec spec{fmt.take_prefix_at(off)};
+      BW_Spec spec{fmt.take_prefix_at(off)};
       if (spec._name.size() == 0)
         spec._idx = arg_idx;
       if (0 <= spec._idx && spec._idx < N) {
@@ -165,11 +171,11 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
 }
 }
 
-class BufferFormat
+class BW_
 {
 public:
-  BufferFormat(ts::TextView fmt);
-  ~BufferFormat();
+  BW_(ts::TextView fmt);
+  ~BW_();
 
 protected:
   enum spec_type { LITERAL, SPEC };
@@ -177,12 +183,12 @@ protected:
     spec_type type = LITERAL;
     union Payload {
       ts::string_view text;
-      ts::BufferFormatSpec spec;
+      ts::BW_Spec spec;
 
       Payload() : text{} {}
     } payload;
     Item(ts::string_view t) : type(LITERAL) { payload.text = t; }
-    Item(ts::BufferFormatSpec const &s) : type(SPEC) { payload.spec = s; }
+    Item(ts::BW_Spec const &s) : type(SPEC) { payload.spec = s; }
   };
 
   using Items = std::vector<Item>;

@@ -1,7 +1,7 @@
 #include <ts/BufferFormat.h>
 #include <ctype.h>
 
-ts::BufferFormatSpec::BufferFormatSpec(TextView fmt)
+ts::BW_Spec::BW_Spec(TextView fmt)
 {
   TextView num;
   intmax_t n;
@@ -86,28 +86,29 @@ ts::BufferFormatSpec::BufferFormatSpec(TextView fmt)
     }
   }
 }
+
 void
-ts::detail::bw_aligner(BufferFormatSpec const &spec, BufferWriter &w, BufferWriter &lw)
+ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
 {
   size_t size = lw.size();
   size_t min;
   if (spec._min >= 0 && size < (min = static_cast<size_t>(spec._min))) {
     size_t delta = min - size; // note - size <= extent -> size < min
     switch (spec._align) {
-    case BufferFormatSpec::Align::NONE:
+    case BW_Spec::Align::NONE:
       break;
-    case BufferFormatSpec::Align::LEFT:
+    case BW_Spec::Align::LEFT:
       w.fill(size);
       while (delta--)
         w.write(spec._fill);
       size = 0; // cancel additional fill.
       break;
-    case BufferFormatSpec::Align::RIGHT:
+    case BW_Spec::Align::RIGHT:
       std::memmove(w.auxBuffer() + delta, w.auxBuffer(), size);
       while (delta--)
         w.write(spec._fill);
       break;
-    case BufferFormatSpec::Align::CENTER:
+    case BW_Spec::Align::CENTER:
       if (delta > 1) {
         size_t d2 = delta / 2;
         std::memmove(w.auxBuffer() + (delta / 2), w.auxBuffer(), size);
@@ -120,14 +121,14 @@ ts::detail::bw_aligner(BufferFormatSpec const &spec, BufferWriter &w, BufferWrit
         w.write(spec._fill);
       size = 0; // cancel additional fill.
       break;
-    case BufferFormatSpec::Align::SIGN:
+    case BW_Spec::Align::SIGN:
       break;
     }
   }
   w.fill(size);
 }
 
-BufferFormat::BufferFormat(ts::TextView fmt)
+BW_::BW_(ts::TextView fmt)
 {
   while (fmt) {
     ts::TextView lit = fmt.take_prefix_at('{');
@@ -139,12 +140,12 @@ BufferFormat::BufferFormat(ts::TextView fmt)
       if (!spec) {
         throw std::invalid_argument("Unclosed {");
       }
-      items.emplace_back(ts::BufferFormatSpec(spec));
+      items.emplace_back(ts::BW_Spec(spec));
     }
   }
 }
 
-BufferFormat::~BufferFormat()
+BW_::~BW_()
 {
 }
 
