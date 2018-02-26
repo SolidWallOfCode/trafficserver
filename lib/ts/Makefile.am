@@ -55,6 +55,9 @@ libtsutil_la_SOURCES = \
   BaseLogFile.h \
   Bitops.cc \
   Bitops.h \
+  BufferFormat.h \
+  BufferFormat.cc \
+  c14_utility.h \
   ConsistentHash.cc \
   ConsistentHash.h \
   ContFlags.cc \
@@ -259,6 +262,7 @@ test_tslib_LDADD = libtsutil.la $(top_builddir)/iocore/eventsystem/libinkevent.a
 test_tslib_SOURCES = \
 	unit-tests/unit_test_main.cc \
 	unit-tests/test_BufferWriter.cc \
+	unit-tests/test_bwprint.cc \
 	unit-tests/test_ink_inet.cc \
 	unit-tests/test_IpMap.cc \
 	unit-tests/test_layout.cc \
