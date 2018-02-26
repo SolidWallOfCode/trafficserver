@@ -27,6 +27,7 @@
 #include <ts/TextView.h>
 #include <ts/c14_utility.h>
 #include <vector>
+#include <map>
 #include <unordered_map>
 
 namespace ts
@@ -117,8 +118,8 @@ namespace detail
 
   /// Global named argument table.
   using BW_GlobalSignature = void (*)(BufferWriter &, BW_Spec const &);
-  using BW_GlobalTable     = std::unordered_map<string_view, BW_GlobalSignature>;
-  BW_GlobalSignature BUFFER_FORMAT_GLOBAL_TABLE;
+  using BW_GlobalTable     = std::map<string_view, BW_GlobalSignature>;
+  extern BW_GlobalTable BW_FORMAT_GLOBAL_TABLE;
 } // detail
 
 /** BufferWriter print.
@@ -152,17 +153,25 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (off == TextView::npos) {
         throw std::invalid_argument("Unclosed {");
       }
+
       BW_Spec spec{fmt.take_prefix_at(off)};
+      size_t width = w.remaining();
+      if (spec._max >= 0)
+	width = std::min(width, static_cast<size_t>(spec._max));
+      FixedBufferWriter lw{w.auxBuffer(), width};
+
       if (spec._name.size() == 0)
         spec._idx = arg_idx;
       if (0 <= spec._idx && spec._idx < N) {
-        size_t width = w.remaining();
-        if (spec._max >= 0)
-          width = std::min(width, static_cast<size_t>(spec._max));
-        FixedBufferWriter lw{w.auxBuffer(), width};
         fa[spec._idx](lw, spec, args);
-        detail::bw_aligner(spec, w, lw);
+      } else if (spec._name.size()) {
+	auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(spec._name);
+	if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end()) {
+	  (*(spot->second))(lw, spec);
+	}
       }
+      if (lw.size())
+	detail::bw_aligner(spec, w, lw);
       ++arg_idx;
     }
   }
@@ -170,11 +179,11 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
 }
 }
 
-class BW_
+class BWFormat
 {
 public:
-  BW_(ts::TextView fmt);
-  ~BW_();
+  BWFormat(ts::TextView fmt);
+  ~BWFormat();
 
 protected:
   enum spec_type { LITERAL, SPEC };

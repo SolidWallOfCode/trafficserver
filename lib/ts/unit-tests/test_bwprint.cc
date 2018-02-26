@@ -64,4 +64,7 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bw.reduce(0);
   bwprint(bw, "left >{0:<9}< right >{0:>9}< center >{0:=9}<", 956);
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
+  bw.reduce(0);
+  bwprint(bw, "Time is {now}");
+  REQUIRE(bw.view() == "Time is");
 }
