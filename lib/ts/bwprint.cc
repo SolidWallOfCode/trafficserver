@@ -5,13 +5,39 @@
 ts::detail::BW_GlobalTable ts::detail::BW_FORMAT_GLOBAL_TABLE;
 const ts::BW_Spec ts::BW_Spec::DEFAULT;
 
+// --
+namespace
+{
+inline int
+tvtoi10(ts::TextView src, ts::TextView *out)
+{
+  int zret = 0;
+
+  if (out) {
+    out->clear();
+  }
+  if (src.ltrim_if(&isspace) && src) {
+    const char *start = src.data();
+    const char *limit = start + src.size();
+    while (start < limit && ('0' <= *start && *start <= '9')) {
+      zret = zret * 10 + *start - '0';
+      ++start;
+    }
+    if (out && (start > src.data())) {
+      out->set_view(src.data(), start);
+    }
+  }
+  return zret;
+}
+}
+// --
 ts::BW_Spec::BW_Spec(TextView fmt)
 {
   TextView num;
   intmax_t n;
 
   _name = fmt.take_prefix_at(':');
-  n     = svtoi(_name, &num, 10);
+  n     = tvtoi10(_name, &num);
   if (num)
     _idx = static_cast<decltype(_idx)>(n);
 
@@ -21,13 +47,16 @@ ts::BW_Spec::BW_Spec(TextView fmt)
     if (sz) {
       // fill and alignment
       if ('%' == *sz) {
-        if (sz.size() < 4)
+        if (sz.size() < 4) {
           throw std::invalid_argument("Fill URI encoding without 2 hex characters and align mark");
-        if (Align::NONE == (_align = align_of(sz[3])))
+        }
+        if (Align::NONE == (_align = align_of(sz[3]))) {
           throw std::invalid_argument("Fill URI without alignment mark");
+        }
         char d1 = sz[1], d0 = sz[2];
-        if (!isxdigit(d0) || !isxdigit(d1))
+        if (!isxdigit(d0) || !isxdigit(d1)) {
           throw std::invalid_argument("URI encoding with non-hex characters");
+        }
         _fill = isdigit(d0) ? d0 - '0' : tolower(d0) - 'a' + 10;
         _fill += (isdigit(d1) ? d1 - '0' : tolower(d1) - 'a' + 10) << 4;
         sz += 4;
@@ -56,7 +85,7 @@ ts::BW_Spec::BW_Spec(TextView fmt)
         _fill    = '0';
         ++sz;
       }
-      n = svtoi(sz, &num, 10); // don't get fooled by leading '0'. It's always decimal.
+      n = tvtoi10(sz, &num);
       if (num) {
         _min = static_cast<decltype(_min)>(n);
         sz.remove_prefix(num.size());
