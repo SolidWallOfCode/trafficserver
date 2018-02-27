@@ -3,7 +3,7 @@
 #include <ctime>
 
 ts::detail::BW_GlobalTable ts::detail::BW_FORMAT_GLOBAL_TABLE;
-constexpr ts::BW_Spec ts::BW_Spec::DEFAULT;
+const ts::BW_Spec ts::BW_Spec::DEFAULT;
 
 ts::BW_Spec::BW_Spec(TextView fmt)
 {
@@ -51,12 +51,10 @@ ts::BW_Spec::BW_Spec(TextView fmt)
           return;
       }
       if ('0' == *sz) {
-        if (Align::NONE == _align) {
+        if (Align::NONE == _align)
           _align = Align::SIGN;
-          _fill  = '0';
-        }
+        _fill    = '0';
         ++sz;
-        _min = 0;
       }
       n = svtoi(sz, &num, 10); // don't get fooled by leading '0'. It's always decimal.
       if (num) {
@@ -78,7 +76,8 @@ ts::BW_Spec::BW_Spec(TextView fmt)
       }
       if (is_type(*sz)) {
         _type = *sz;
-        if (!++sz) return;
+        if (!++sz)
+          return;
       }
       if (',' == *sz) {
         n = svtoi(++sz, &num);
@@ -93,7 +92,8 @@ ts::BW_Spec::BW_Spec(TextView fmt)
         // Can only have a type indicator here if there was a max width.
         if (is_type(*sz)) {
           _type = *sz;
-          if (!++sz) return;
+          if (!++sz)
+            return;
         }
       }
     }
@@ -105,11 +105,11 @@ ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
 {
   size_t size = lw.size();
   size_t min;
-  if (spec._min >= 0 && size < (min = static_cast<size_t>(spec._min))) {
+  if (size < (min = static_cast<size_t>(spec._min))) {
     size_t delta = min - size; // note - size <= extent -> size < min
     switch (spec._align) {
     case BW_Spec::Align::NONE: // same as LEFT for output.
-      // fall through
+    // fall through
     case BW_Spec::Align::LEFT:
       w.fill(size);
       while (delta--)
@@ -140,6 +140,128 @@ ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
   }
   w.fill(size);
 }
+
+// Numeric conversions
+namespace ts::detail
+{
+// Conversions from remainder to character, in upper and lower case versions.
+namespace
+{
+  char UPPER_DIGITS[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  char LOWER_DIGITS[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+}
+/// Templated radix based conversions. Only a small number of radix are supported
+/// and providing a template minimizes cut and paste code while also enabling
+/// compiler optimizations (e.g. for power of 2 radix the modulo / divide become
+/// bit operations).
+template <size_t RADIX>
+size_t
+BW_to_radix(uintmax_t n, char *buff, size_t width, char *digits)
+{
+  static_assert(1 < RADIX && RADIX <= 36);
+  char *out = buff + width;
+  if (n) {
+    while (n) {
+      *--out = digits[n % RADIX];
+      n /= RADIX;
+    }
+  } else {
+    *--out = '0';
+  }
+  return (buff + width) - out;
+}
+
+BufferWriter &
+bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool neg_p)
+{
+  size_t n  = 0;
+  int width = static_cast<int>(spec._min); // amount left to fill.
+  string_view prefix;
+  string_view neg;
+  char buff[std::numeric_limits<uintmax_t>::digits + 1];
+
+  if (neg_p)
+    neg = "-"_sv;
+  else if (spec._sign != '-')
+    neg = string_view{&spec._sign, 1};
+  switch (spec._type) {
+  case 'x':
+    if (spec._radix_lead_p)
+      prefix = "0x"_sv;
+    n        = detail::BW_to_radix<16>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    break;
+  case 'X':
+    if (spec._radix_lead_p)
+      prefix = "0X"_sv;
+    n        = detail::BW_to_radix<16>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    break;
+  case 'b':
+    if (spec._radix_lead_p)
+      prefix = "0b"_sv;
+    n        = detail::BW_to_radix<2>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    break;
+  case 'B':
+    if (spec._radix_lead_p)
+      prefix = "0B"_sv;
+    n        = detail::BW_to_radix<2>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    break;
+    break;
+  case 'o':
+    if (spec._radix_lead_p)
+      prefix = "0"_sv;
+    n        = detail::BW_to_radix<8>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    break;
+  default:
+    n = detail::BW_to_radix<10>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    break;
+  }
+  // Clip fill width by stuff that's already committed to be written.
+  width -= static_cast<int>(neg.size());
+  width -= static_cast<int>(prefix.size());
+  width -= static_cast<int>(n);
+  string_view digits{buff + sizeof(buff) - n, n};
+
+  switch (spec._align) {
+  case BW_Spec::Align::LEFT:
+    w.write(neg);
+    w.write(prefix);
+    w.write(digits);
+    while (width-- > 0)
+      w.write(spec._fill);
+    break;
+  case BW_Spec::Align::RIGHT:
+    while (width-- > 0)
+      w.write(spec._fill);
+    w.write(neg);
+    w.write(prefix);
+    w.write(digits);
+    break;
+  case BW_Spec::Align::CENTER:
+    for (int i = width / 2; i > 0; --i)
+      w.write(spec._fill);
+    w.write(neg);
+    w.write(prefix);
+    w.write(digits);
+    for (int i = (width + 1) / 2; i > 0; --i)
+      w.write(spec._fill);
+    break;
+  case BW_Spec::Align::SIGN:
+    w.write(neg);
+    w.write(prefix);
+    while (width-- > 0)
+      w.write(spec._fill);
+    w.write(digits);
+    break;
+  default:
+    w.write(neg);
+    w.write(prefix);
+    w.write(digits);
+    break;
+  }
+  return w;
+}
+
+} // ts::detail
 
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {

@@ -23,6 +23,21 @@
 
 #include "catch.hpp"
 #include <ts/bwprint.h>
+#include <chrono>
+#include <iostream>
+
+TEST_CASE("Buffer Writer << operator", "[bufferwriter][stream]")
+{
+  ts::LocalBufferWriter<50> bw;
+
+  bw << "The" << ' ' << "quick" << ' ' << "brown fox";
+
+  REQUIRE(bw.view() == "The quick brown fox");
+
+  bw.reduce(0);
+  bw << "x=" << bw.capacity();
+  REQUIRE(bw.view() == "x=50");
+}
 
 TEST_CASE("bwprint basics", "[bwprint]")
 {
@@ -64,9 +79,47 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bw.reduce(0);
   bwprint(bw, "left >{0:<9}< right >{0:>9}< center >{0:=9}<", 956);
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
+
+  bw.reduce(0);
+  bwprint(bw, "Format |{:>#010x}|", -956);
+  REQUIRE(bw.view() == "Format |0000-0x3bc|");
+  bw.reduce(0);
+  bwprint(bw, "Format |{:<#010x}|", -956);
+  REQUIRE(bw.view() == "Format |-0x3bc0000|");
+  bw.reduce(0);
+  bwprint(bw, "Format |{:#010x}|", -956);
+  REQUIRE(bw.view() == "Format |-0x00003bc|");
+
   bw.reduce(0);
   bwprint(bw, "Time is {now}");
-  //  REQUIRE(bw.view() == "Time is");
+//  REQUIRE(bw.view() == "Time is");
+
+#if 0
+  auto start = std::chrono::high_resolution_clock::now();
+  for ( int i = 0 ; i < 1000000 ; ++i ) {
+    bw.reduce(0);
+    bwprint(bw, "Format |{:#010x}|", -956);
+  }
+  auto delta = std::chrono::high_resolution_clock::now() - start;
+  std::cout << "BW Timing is " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << std::endl;
+  
+  ts::BWFormat fmt("Format |{:#010x}|");
+  start = std::chrono::high_resolution_clock::now();
+  for ( int i = 0 ; i < 1000000 ; ++i ) {
+    bw.reduce(0);
+    bwprint(bw, fmt, -956);
+  }
+  delta = std::chrono::high_resolution_clock::now() - start;
+  std::cout << "Preformatted Timing is " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << std::endl;
+
+  char buff[256];
+  start = std::chrono::high_resolution_clock::now();
+  for ( int i = 0 ; i < 1000000 ; ++i ) {
+    snprintf(buff, sizeof(buff), "Format |%#0x10|", -956);
+  }
+  delta = std::chrono::high_resolution_clock::now() - start;
+  std::cout << "snprint Timing is " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << std::endl;
+#endif
 }
 
 TEST_CASE("BWFormat", "[bwprint][bwformat]")

@@ -333,19 +333,6 @@ TEST_CASE("Discard Buffer Writer", "[BWD]")
   REQUIRE(scratch[0] == '!');
 }
 
-TEST_CASE("Buffer Writer << operator", "[BW<<]")
-{
-  ts::LocalBufferWriter<50> bw;
-
-  bw << "The" << ' ' << "quick" << ' ' << "brown fox";
-
-  REQUIRE(bw.view() == "The quick brown fox");
-
-  bw.reduce(0);
-  bw << "x=" << bw.capacity();
-  REQUIRE(bw.view() == "x=50");
-}
-
 TEST_CASE("LocalBufferWriter clip and extend")
 {
   ts::LocalBufferWriter<10> bw;

@@ -412,6 +412,19 @@ protected:
   char _arr[N]; ///< output buffer.
 };
 
+// Define stream operators for built in @c write overloads.
+inline BufferWriter &
+operator<<(BufferWriter &b, char c)
+{
+  return b.write(c);
+}
+
+inline BufferWriter &
+operator<<(BufferWriter &b, const string_view &sv)
+{
+  return b.write(sv.data(), sv.size());
+}
+
 } // end namespace ts
 
 #endif // include once
