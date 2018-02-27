@@ -35,6 +35,8 @@ namespace ts
 /** A parsed version of a format specifier.
  */
 struct BW_Spec {
+  /// Constructor a default instance.
+  constexpr BW_Spec() {}
   /// Construct by parsing @a fmt.
   BW_Spec(TextView fmt);
 
@@ -46,8 +48,9 @@ struct BW_Spec {
     RIGHT,                  ///< Right alignment.
     CENTER,                 ///< Center alignment.
     SIGN                    ///< Align plus/minus sign before numeric fill.
-  } _align   = Align::NONE; ///< Output field alignment.
-  char _base = 0;           ///< Print leading base indication.
+  } _align   = Align::LEFT; ///< Output field alignment.
+  char _type = 'g'; ///< Type / radix indicator.
+  bool _radix_lead_p = false;  ///< Print leading radix indication.
   int _min   = -1;          ///< Minimum width.
   int _prec  = -1;          ///< Precision
   int _max   = -1;          ///< Maxium width
@@ -55,6 +58,7 @@ struct BW_Spec {
   string_view _name;        ///< Name of the specification.
   string_view _ext;         ///< Extension if provided.
 
+  static constexpr self_type DEFAULT;
 protected:
   Align
   align_of(char c)
@@ -65,6 +69,11 @@ protected:
   is_sign(char c)
   {
     return '+' == c || '-' == c || ' ' == c;
+  }
+  bool
+  is_type(char c)
+  {
+    return 'x' == c || 'X' == c || 'o' == c || 'b' == c || 'B' == c || 'd' == c;
   }
 };
 
@@ -240,6 +249,94 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
     ++arg_idx;
   }
   return 0;
+}
+
+// Common formatters.
+// Define stream operators for built in @c write overloads.
+inline BufferWriter &
+operator<<(BufferWriter &b, char c)
+{
+  return b.write(c);
+}
+
+inline BufferWriter &
+operator<<(BufferWriter &b, const string_view &sv)
+{
+  return b.write(sv.data(), sv.size());
+}
+
+template <>
+BufferWriter &
+bw_formatter(BufferWriter &w, BW_Spec const & spec, intmax_t i)
+{
+  if (i < 0) {
+    w.write('-');
+    i = -i;
+  } else if ('+' == spec._sign || ' ' == spec._sign) {
+    w.write(spec._sign);
+  }
+  return bw_formatter(w, spec, static_cast<uintmax_t>(i));
+}
+
+inline BufferWriter &
+operator<<(BufferWriter &w, intmax_t i)
+{
+  return bw_formatter(w, BW_Spec::DEFAULT, i);
+}
+
+// Annoying but otherwise ambiguous with char
+inline BufferWriter &
+operator<<(BufferWriter &w, int i)
+{
+  return bw_formatter(w, BW_Spec::DEFAULT, static_cast<intmax_t>(i));
+}
+
+inline BufferWriter &
+operator<<(BufferWriter &w, uintmax_t i)
+{
+  return bw_formatter(w, BW_Spec::DEFAULT, i);
+}
+
+template <>
+BufferWriter &
+bw_formatter(BufferWriter &w, BW_Spec const & spec, uintmax_t i)
+{
+  if (i) {
+    char txt[std::numeric_limits<uintmax_t>::digits10 + 1];
+    int n = sizeof(txt);
+    uintmax_t radix = 10;
+    switch (spec._type) {
+    case 'x':
+    case 'X':
+      radix = 16;
+      if (spec._radix_lead_p) w.write('0').write(spec._type);
+      break;
+    case 'b':
+    case 'B':
+      radix = 2;
+      if (spec.radix_lead_p) w.write('0').write(spec._type);
+      break;
+    case 'o':
+      radix = 8;
+      if (spec.radix_lead_p) w.write('0');
+      break;
+    }
+
+    while (i) {
+      txt[--n] = '0' + i % radix;
+      i /= radix;
+    }
+    return w.write(txt + n, sizeof(txt) - n);
+  } else {
+    return w.write('0');
+  }
+}
+
+// Annoying but otherwise ambiguous.
+inline BufferWriter &
+operator<<(BufferWriter &w, unsigned int i)
+{
+  return w << static_cast<uintmax_t>(i);
 }
 
 } // ts

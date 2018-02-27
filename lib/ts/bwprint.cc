@@ -3,6 +3,7 @@
 #include <ctime>
 
 ts::detail::BW_GlobalTable ts::detail::BW_FORMAT_GLOBAL_TABLE;
+constexpr ts::BW_Spec ts::BW_Spec::DEFAULT;
 
 ts::BW_Spec::BW_Spec(TextView fmt)
 {
@@ -45,7 +46,7 @@ ts::BW_Spec::BW_Spec(TextView fmt)
           return;
       }
       if ('#' == *sz) {
-        _base = 1;
+        _radix_lead_p = true;
         if (!++sz)
           return;
       }
@@ -75,6 +76,10 @@ ts::BW_Spec::BW_Spec(TextView fmt)
           throw std::invalid_argument("Precision mark without precision");
         }
       }
+      if (is_type(*sz)) {
+        _type = *sz;
+        if (!++sz) return;
+      }
       if (',' == *sz) {
         n = svtoi(++sz, &num);
         if (num) {
@@ -84,6 +89,11 @@ ts::BW_Spec::BW_Spec(TextView fmt)
             return;
         } else {
           throw std::invalid_argument("Maximum width mark without width");
+        }
+        // Can only have a type indicator here if there was a max width.
+        if (is_type(*sz)) {
+          _type = *sz;
+          if (!++sz) return;
         }
       }
     }
@@ -98,8 +108,8 @@ ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
   if (spec._min >= 0 && size < (min = static_cast<size_t>(spec._min))) {
     size_t delta = min - size; // note - size <= extent -> size < min
     switch (spec._align) {
-    case BW_Spec::Align::NONE:
-      break;
+    case BW_Spec::Align::NONE: // same as LEFT for output.
+      // fall through
     case BW_Spec::Align::LEFT:
       w.fill(size);
       while (delta--)

@@ -412,66 +412,6 @@ protected:
   char _arr[N]; ///< output buffer.
 };
 
-// Define stream operators for built in @c write overloads.
-
-inline BufferWriter &
-operator<<(BufferWriter &b, char c)
-{
-  return b.write(c);
-}
-
-inline BufferWriter &
-operator<<(BufferWriter &b, const string_view &sv)
-{
-  return b.write(sv);
-}
-
-inline BufferWriter &
-operator<<(BufferWriter &w, intmax_t i)
-{
-  if (i) {
-    char txt[std::numeric_limits<intmax_t>::digits10 + 1];
-    int n = sizeof(txt);
-    while (i) {
-      txt[--n] = '0' + i % 10;
-      i /= 10;
-    }
-    return w.write(txt + n, sizeof(txt) - n);
-  } else {
-    return w.write('0');
-  }
-}
-
-// Annoying but otherwise ambiguous.
-inline BufferWriter &
-operator<<(BufferWriter &w, int i)
-{
-  return w << static_cast<intmax_t>(i);
-}
-
-inline BufferWriter &
-operator<<(BufferWriter &w, uintmax_t i)
-{
-  if (i) {
-    char txt[std::numeric_limits<uintmax_t>::digits10 + 1];
-    int n = sizeof(txt);
-    while (i) {
-      txt[--n] = '0' + i % 10;
-      i /= 10;
-    }
-    return w.write(txt + n, sizeof(txt) - n);
-  } else {
-    return w.write('0');
-  }
-}
-
-// Annoying but otherwise ambiguous.
-inline BufferWriter &
-operator<<(BufferWriter &w, unsigned int i)
-{
-  return w << static_cast<uintmax_t>(i);
-}
-
 } // end namespace ts
 
 #endif // include once
