@@ -21,12 +21,10 @@
     limitations under the License.
  */
 
-#include "BufferWriter.h"
-
 #include "catch.hpp"
-
-#include "string_view.h"
-
+#include <ts/BufferWriter.h>
+#include <ts/bwprint.h>
+#include <ts/string_view.h>
 #include <cstring>
 
 namespace

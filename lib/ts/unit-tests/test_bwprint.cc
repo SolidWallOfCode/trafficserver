@@ -124,11 +124,19 @@ TEST_CASE("bwprint basics", "[bwprint]")
             << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << std::endl;
 #endif
 }
-
 TEST_CASE("BWFormat", "[bwprint][bwformat]")
 {
   ts::LocalBufferWriter<256> bw;
   ts::BWFormat fmt("left >{0:<9}< right >{0:>9}< center >{0:=9}<");
+  ts::string_view text{"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
+
   bwprint(bw, fmt, 956);
-  //  REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
+  REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
+
+  bw.reduce(0);
+  bwprint(bw, "Text: _{0:.10,20}_", text);
+  REQUIRE(bw.view() == "Text: _abcdefghijklmnopqrst_");
+  bw.reduce(0);
+  bwprint(bw, "Text: _{0:-<20.52,20}_", text);
+  REQUIRE(bw.view() == "Text: _QRSTUVWXYZ----------_");
 }

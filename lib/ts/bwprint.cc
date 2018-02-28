@@ -310,6 +310,40 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
 
 } // ts::detail
 
+ts::BufferWriter &
+ts::bw_formatter(BufferWriter &w, BW_Spec const &spec, string_view sv)
+{
+  int width = static_cast<int>(spec._min); // amount left to fill.
+  if (spec._prec > 0)
+    sv.remove_prefix(spec._prec);
+
+  width -= sv.size();
+  switch (spec._align) {
+  case BW_Spec::Align::LEFT:
+  case BW_Spec::Align::SIGN:
+    w.write(sv);
+    while (width-- > 0)
+      w.write(spec._fill);
+    break;
+  case BW_Spec::Align::RIGHT:
+    while (width-- > 0)
+      w.write(spec._fill);
+    w.write(sv);
+    break;
+  case BW_Spec::Align::CENTER:
+    for (int i = width / 2; i > 0; --i)
+      w.write(spec._fill);
+    w.write(sv);
+    for (int i = (width + 1) / 2; i > 0; --i)
+      w.write(spec._fill);
+    break;
+  default:
+    w.write(sv);
+    break;
+  }
+  return w;
+}
+
 /// Preparse format string for later use.
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {

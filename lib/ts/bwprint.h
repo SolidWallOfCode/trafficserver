@@ -82,18 +82,17 @@ protected:
 
 /** Overridable formatting for type @a V.
 
-    If formatting for a type wants to have additional support for the format specifiers, this template should
-    be specialized for that type. Otherwise the base stream operator is invoked.
-
-    The most common use will be to use the extension field of the format specified, which is embedded in
-    the @c BW_Spec. This can provide additional formatting options for more complex types.
+    This is the base output generator for data to a @c BufferWriter. Default stream operators call this with
+    the default format specification (although those can be overloaded specifically for performance).
  */
+#if 0
 template <typename V>
 BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &, V const &v)
+bw_formatter(BufferWriter &w, BW_Spec const &, V &&v)
 {
-  return w << v;
+  return w.write("*UNKNOWN*");
 }
+#endif
 
 template <typename TUPLE> using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BW_Spec const &, TUPLE const &args);
 
@@ -256,35 +255,56 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
   return 0;
 }
 
-// Common formatters.
+// Generically a stream operator is a formatter with the default specification.
+template <typename V>
 BufferWriter &
+operator<<(BufferWriter &w, V &&v)
+{
+  return bw_formatter(w, BW_Spec::DEFAULT, std::forward<V>(v));
+}
+
+// -- Common formatters --
+
+inline BufferWriter &
+bw_formatter(BufferWriter &w, BW_Spec const &, char c)
+{
+  return w.write(c);
+}
+BufferWriter &bw_formatter(BufferWriter &w, BW_Spec const &spec, string_view sv);
+inline BufferWriter &
+bw_formatter(BufferWriter &w, BW_Spec const &spec, const char *v)
+{
+  return bw_formatter(w, spec, string_view(v));
+}
+inline BufferWriter &
+bw_formatter(BufferWriter &w, BW_Spec const &spec, TextView tv)
+{
+  return bw_formatter(w, spec, static_cast<string_view>(tv));
+}
+
+//-- Integral types
+inline BufferWriter &
 bw_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i)
 {
   return detail::bw_integral_formatter(w, spec, i, false);
 }
 
-BufferWriter &
+inline BufferWriter &
 bw_formatter(BufferWriter &w, BW_Spec const &spec, intmax_t i)
 {
   return i < 0 ? detail::bw_integral_formatter(w, spec, -i, true) : detail::bw_integral_formatter(w, spec, i, false);
 }
 
-BufferWriter &
+inline BufferWriter &
 bw_formatter(BufferWriter &w, BW_Spec const &spec, unsigned int i)
 {
   return detail::bw_integral_formatter(w, spec, i, false);
 }
 
-BufferWriter &
+inline BufferWriter &
 bw_formatter(BufferWriter &w, BW_Spec const &spec, int i)
 {
   return i < 0 ? detail::bw_integral_formatter(w, spec, -i, true) : detail::bw_integral_formatter(w, spec, i, false);
-}
-
-inline BufferWriter &
-operator<<(BufferWriter &w, intmax_t i)
-{
-  return bw_formatter(w, BW_Spec::DEFAULT, i);
 }
 
 // Annoying but otherwise ambiguous with char
@@ -292,19 +312,6 @@ inline BufferWriter &
 operator<<(BufferWriter &w, int i)
 {
   return bw_formatter(w, BW_Spec::DEFAULT, static_cast<intmax_t>(i));
-}
-
-inline BufferWriter &
-operator<<(BufferWriter &w, uintmax_t i)
-{
-  return bw_formatter(w, BW_Spec::DEFAULT, i);
-}
-
-// Annoying but otherwise ambiguous.
-inline BufferWriter &
-operator<<(BufferWriter &w, unsigned int i)
-{
-  return bw_formatter(w, BW_Spec::DEFAULT, static_cast<uintmax_t>(i));
 }
 
 } // ts

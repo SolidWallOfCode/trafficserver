@@ -412,17 +412,22 @@ protected:
   char _arr[N]; ///< output buffer.
 };
 
-// Define stream operators for built in @c write overloads.
-inline BufferWriter &
-operator<<(BufferWriter &b, char c)
-{
-  return b.write(c);
-}
-
+/// Stream operators for types supported directly by @c write.
+// Support for other types is in @c bwprint.h
 inline BufferWriter &
 operator<<(BufferWriter &b, const string_view &sv)
 {
   return b.write(sv.data(), sv.size());
+}
+inline BufferWriter &
+operator<<(BufferWriter &w, const char *v)
+{
+  return w.write(v, strlen(v));
+}
+inline BufferWriter &
+operator<<(BufferWriter &w, char c)
+{
+  return w.write(c);
 }
 
 } // end namespace ts
