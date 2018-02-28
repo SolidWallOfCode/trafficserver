@@ -57,7 +57,11 @@ using ts::CacheDirEntry;
 using ts::MemView;
 using ts::Doc;
 
+constexpr int STORE_BLOCK_SIZE           = 8192;
+constexpr int STORE_BLOCK_SHIFT          = 13;
 constexpr int ESTIMATED_OBJECT_SIZE      = 8000;
+constexpr int DEFAULT_HW_SECTOR_SIZE     = 512;
+constexpr int MIN_VOL_SIZE               = 1024 * 1024 * 128;
 constexpr int VOL_HASH_TABLE_SIZE        = 32707;
 int cache_config_min_average_object_size = ESTIMATED_OBJECT_SIZE;
 CacheStoreBlocks Vol_hash_alloc_size(1024);
@@ -90,9 +94,11 @@ struct Span {
   Span(FilePath const &path) : _path(path) {}
   Errata load();
   Errata loadDevice();
-
+  Errata Initialize();
+  Errata create_stripe(int number, off_t size_in_blocks, int scheme);
   /// No allocated stripes on this span.
   bool isEmpty() const;
+  int header_len = 0;
 
   /// Replace all existing stripes with a single unallocated stripe covering the span.
   Errata clear();
@@ -112,6 +118,7 @@ struct Span {
   CacheStoreBlocks _len;         ///< Total length of span.
   CacheStoreBlocks _free_space;  ///< Total size of free stripes.
   ink_device_geometry _geometry; ///< Geometry of span.
+  uint64_t num_usable_blocks;    // number of usable blocks for stripes i.e., after subtracting the skip and the disk header.
   /// Local copy of serialized header data stored on in the span.
   std::unique_ptr<ts::SpanHeader> _header;
   /// Live information about stripes.
@@ -191,8 +198,10 @@ struct Stripe {
   CacheStoreBlocks _meta_pos[2][2];
   /// Directory.
   Chunk _directory;
-  CacheDirEntry const *dir = nullptr;
-  uint16_t *freelist       = nullptr;
+  CacheDirEntry const *dir = nullptr; // the big buffer that will hold the whole directory of stripe header.
+  uint16_t *freelist       = nullptr; // using this freelist instead of the one in StripeMeta.
+                                      // This is because the freelist is not being copied to _metap[2][2] correctly.
+  // need to do something about it .. hmmm :-?
   int dir_freelist_length(int s);
   TS_INLINE CacheDirEntry *dir_segment(int s);
   TS_INLINE CacheDirEntry *vol_dir_segment(int s);
@@ -208,7 +217,20 @@ struct Stripe {
   int dir_bucket_length(CacheDirEntry *b, int s);
   int dir_probe(INK_MD5 *key, CacheDirEntry *result, CacheDirEntry **last_collision);
   bool dir_valid(CacheDirEntry *e);
+  bool validate_sync_serial();
+  Errata updateHeaderFooter();
+  Errata InitializeMeta();
 };
+
+bool
+Stripe::validate_sync_serial()
+{
+  // check if A sync_serials match and A is at least as updated as B
+  return (_meta[0][0].sync_serial == _meta[0][1].sync_serial &&
+          (_meta[0][0].sync_serial >= _meta[1][0].sync_serial ||
+           _meta[1][0].sync_serial != _meta[1][1].sync_serial)) || // OR check if B's sync_serials match
+         (_meta[1][0].sync_serial == _meta[1][1].sync_serial);
+}
 
 Stripe::Chunk::~Chunk()
 {
@@ -247,6 +269,40 @@ Stripe::isFree() const
   return 0 == _vol_idx;
 }
 
+// TODO: Implement the whole logic
+Errata
+Stripe::InitializeMeta()
+{
+  Errata zret;
+  size_t dir_len = this->vol_dirlen();
+  // memset(this->raw_dir, 0, dir_len);
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      _meta[i][j].magic             = StripeMeta::MAGIC;
+      _meta[i][j].version.ink_major = ts::CACHE_DB_MAJOR_VERSION;
+      _meta[i][j].version.ink_minor = ts::CACHE_DB_MINOR_VERSION;
+      _meta[i][j].agg_pos = _meta[i][j].last_write_pos = _meta[i][j].write_pos = this->_start;
+      _meta[i][j].phase = _meta[i][j].cycle = _meta[i][j].sync_serial = _meta[i][j].write_serial = _meta[i][j].dirty = 0;
+      _meta[i][j].create_time = time(nullptr);
+      _meta[i][j].sector_size = DEFAULT_HW_SECTOR_SIZE;
+    }
+  }
+  if (!freelist) // freelist is not allocated yet
+  {
+    freelist = (uint16_t *)malloc(_segments * sizeof(uint16_t)); // segments has already been calculated
+  }
+  if (!dir) // for new spans, this will likely be nullptr as we don't need to read the stripe meta from disk
+  {
+    char *raw_dir = (char *)ats_memalign(ats_pagesize(), this->vol_dirlen());
+    dir           = (CacheDirEntry *)(raw_dir + this->vol_headerlen());
+  }
+  for (int i = 0; i < _segments; i++) {
+    dir_init_segment(i);
+  }
+  // vol_init_dir(d);
+  return zret;
+}
+
 // Need to be bit more robust at some point.
 bool
 Stripe::validateMeta(StripeMeta const *meta)
@@ -277,6 +333,52 @@ Stripe::probeMeta(MemView &mem, StripeMeta const *base_meta)
 #define INK_ALIGN(size, boundary) (((size) + ((boundary)-1)) & ~((boundary)-1))
 
 #define ROUND_TO_STORE_BLOCK(_x) INK_ALIGN((_x), 8192)
+
+Errata
+Stripe::updateHeaderFooter()
+{
+  Errata zret;
+  this->vol_init_data();
+  Bytes footer_offset = Bytes(vol_dirlen() - ROUND_TO_STORE_BLOCK(sizeof(StripeMeta)));
+  _meta_pos[0][0]     = round_down(_start);
+  _meta_pos[0][1]     = round_down(_start + footer_offset);
+  _meta_pos[1][0]     = round_down(this->_start + Bytes(vol_dirlen()));
+  _meta_pos[1][1]     = round_down(this->_start + Bytes(vol_dirlen()) + footer_offset);
+  std::cout << "updating header " << _meta_pos[0][0] << std::endl;
+  std::cout << "updating header " << _meta_pos[0][1] << std::endl;
+  std::cout << "updating header " << _meta_pos[1][0] << std::endl;
+  std::cout << "updating header " << _meta_pos[1][1] << std::endl;
+  InitializeMeta();
+
+  if (!OPEN_RW_FLAG) {
+    zret.push(0, 1, "Writing Not Enabled.. Please use --write to enable writing to disk");
+    return zret;
+  }
+  static const size_t SBSIZE = CacheStoreBlocks::SCALE; // save some typing.
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      char *meta_t = (char *)ats_memalign(ats_pagesize(), this->vol_dirlen());
+      memcpy(meta_t, &_meta[i][j], sizeof(StripeMeta));
+      CacheStoreBlocks hdr_size = round_up(sizeof(StripeMeta));
+      ssize_t n                 = pwrite(_span->_fd, meta_t, hdr_size, _meta_pos[i][j]);
+      if (n < hdr_size) {
+        std::cout << "problem writing to disk: " << strerror(errno) << ":"
+                  << " " << n << std::endl;
+        zret = Errata::Message(0, errno, "Failed to write stripe header ");
+        return zret;
+      }
+    }
+  }
+  /// TODO: check the offsets!!!!!!!!!!!!!
+  // write dir entries in the disk
+  uint64_t offset_dir = _meta_pos[0][0].count() * 8192 + vol_headerlen();
+  pwrite(this->_span->_fd, (char *)dir, vol_dirlen() - vol_headerlen() - ROUND_TO_STORE_BLOCK(sizeof(StripeMeta)), offset_dir);
+
+  offset_dir = _meta_pos[1][0].count() * 8192 + vol_headerlen();
+  pwrite(this->_span->_fd, (char *)dir, vol_dirlen() - vol_headerlen() - ROUND_TO_STORE_BLOCK(sizeof(StripeMeta)), offset_dir);
+
+  return zret;
+}
 
 TS_INLINE int
 Stripe::vol_headerlen()
@@ -319,7 +421,6 @@ Stripe::updateLiveData(enum Copy c)
   //  int64_t n_segments;
 
   _content = _start;
-  this->vol_init_data();
   /*
    * COMMENTING THIS SECTION FOR NOW TO USE THE EXACT LOGIN USED IN ATS TO CALCULATE THE NUMBER OF SEGMENTS AND BUCKETS
   // Past the header is the segment free list heads which if sufficiently long (> ~4K) can take
@@ -599,13 +700,13 @@ void
 Stripe::dir_free_entry(CacheDirEntry *e, int s)
 {
   CacheDirEntry *seg = this->dir_segment(s);
-  unsigned int fo    = this->_meta[0][0].freelist[s];
+  unsigned int fo    = this->freelist[s];
   unsigned int eo    = dir_to_offset(e, seg);
   dir_set_next(e, fo);
   if (fo) {
     dir_set_prev(dir_from_offset(fo, seg), eo);
   }
-  this->_meta[0][0].freelist[s] = eo;
+  this->freelist[s] = eo;
 }
 
 // adds all the directory entries
@@ -613,8 +714,8 @@ Stripe::dir_free_entry(CacheDirEntry *e, int s)
 void
 Stripe::dir_init_segment(int s)
 {
-  this->_meta[0][0].freelist[s] = 0;
-  CacheDirEntry *seg            = this->dir_segment(s);
+  this->freelist[s]  = 0;
+  CacheDirEntry *seg = this->dir_segment(s);
   int l, b;
   memset(seg, 0, SIZEOF_DIR * DIR_DEPTH * this->_buckets);
   for (l = 1; l < DIR_DEPTH; l++) {
@@ -923,7 +1024,6 @@ Stripe::loadMeta()
                            io_align, " is larger than the buffer alignment ", SBSIZE);
 
   _directory._start = pos;
-
   // Header A must be at the start of the stripe block.
   // Todo: really need to check pread() for failure.
   ssize_t headerbyteCount = pread(fd, stripe_buff2, SBSIZE, pos);
@@ -964,18 +1064,19 @@ Stripe::loadMeta()
   } else {
     zret.push(0, 1, "Header A not found");
   }
-
+  pos = _meta_pos[A][FOOT];
   // Technically if Copy A is valid, Copy B is not needed. But at this point it's cheap to retrieve
   // (as the exact offset is computable).
   if (_meta_pos[A][FOOT] > 0) {
     delta = _meta_pos[A][FOOT] - _meta_pos[A][HEAD];
     // Header B should be immediately after Footer A. If at the end of the last read,
     // do another read.
-    if (data.size() < CacheStoreBlocks::SCALE) {
-      pos += round_up(N);
-      n = Bytes(pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos));
-      data.setView(stripe_buff, n);
-    }
+    //    if (data.size() < CacheStoreBlocks::SCALE) {
+    //      pos += round_up(N);
+    //      n = Bytes(pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos));
+    //      data.setView(stripe_buff, n);
+    //    }
+    pos  = this->_start + Bytes(vol_dirlen());
     meta = data.template at_ptr<StripeMeta>(0);
     if (this->validateMeta(meta)) {
       _meta[B][HEAD]     = *meta;
@@ -996,12 +1097,13 @@ Stripe::loadMeta()
   if (_meta_pos[A][FOOT] > 0) {
     if (_meta[A][HEAD].sync_serial == _meta[A][FOOT].sync_serial &&
         (0 == _meta_pos[B][FOOT] || _meta[B][HEAD].sync_serial != _meta[B][FOOT].sync_serial ||
-         _meta[A][HEAD].sync_serial > _meta[B][HEAD].sync_serial)) {
+         _meta[A][HEAD].sync_serial >= _meta[B][HEAD].sync_serial)) {
       this->updateLiveData(A);
     } else if (_meta_pos[B][FOOT] > 0 && _meta[B][HEAD].sync_serial == _meta[B][FOOT].sync_serial) {
       this->updateLiveData(B);
     } else {
-      zret.push(0, 1, "Invalid stripe data - candidates found but sync serial data not valid.");
+      zret.push(0, 1, "Invalid stripe data - candidates found but sync serial data not valid. ", _meta[A][HEAD].sync_serial, ":",
+                _meta[A][FOOT].sync_serial, ":", _meta[B][HEAD].sync_serial, ":", _meta[B][FOOT].sync_serial);
     }
   }
 
@@ -1220,7 +1322,7 @@ public:
   Errata load(FilePath const &spanFile, FilePath const &volumeFile);
   Errata fillEmptySpans();
   Errata fillAllSpans();
-
+  Errata allocateSpan(FilePath const &spanFile);
   void dumpVolumes();
 
 protected:
@@ -1276,6 +1378,30 @@ VolumeAllocator::fillEmptySpans()
   for (auto span : _cache._spans) {
     if (span->isEmpty())
       this->allocateFor(*span);
+  }
+  return zret;
+}
+
+Errata
+VolumeAllocator::allocateSpan(FilePath const &input_file_path)
+{
+  Errata zret;
+  for (auto span : _cache._spans) {
+    if (0 == strcmp(span->_path.path(), input_file_path.path())) {
+      std::cout << "===============================" << std::endl;
+      if (span->_header) {
+        zret.push(0, 1, "Disk already initialized with valid header");
+      } else {
+        this->allocateFor(*span);
+        span->updateHeader();
+        for (auto &strp : span->_stripes) {
+          strp->updateHeaderFooter();
+        }
+      }
+    }
+  }
+  for (auto &_v : _av) {
+    std::cout << _v._size << std::endl;
   }
   return zret;
 }
@@ -1395,6 +1521,7 @@ Cache::loadSpanDirect(FilePath const &path, int vol_idx, Bytes size)
           stripe->_type    = raw.type;
           _volumes[stripe->_vol_idx]._stripes.push_back(stripe);
           _volumes[stripe->_vol_idx]._size += stripe->_len;
+          stripe->vol_init_data();
         } else {
           span->_free_space += stripe->_len;
         }
@@ -1536,7 +1663,9 @@ Cache::dumpSpans(SpanDumpDepth depth)
                             << "\n sector_size: " << stripe->_meta[i][j].sector_size << std::endl;
                 }
               }
-
+              if (!stripe->validate_sync_serial()) {
+                std::cout << "WARNING:::::Validity check failed for sync_serials" << std::endl;
+              }
               stripe->_directory.clear();
             } else {
               std::cout << r;
@@ -1592,6 +1721,53 @@ Cache::~Cache()
     delete span;
 }
 /* --------------------------------------------------------------------------------------- */
+Errata
+Span::Initialize()
+{
+  Errata zret;
+
+  for (auto *strp : _stripes) {
+    std::cout << "strpe start=============" << strp->_start << std::endl;
+  }
+  auto skip = CacheStoreBlocks::SCALE;
+  // successive approximation to calculate start
+  auto start = skip;
+  uint64_t l;
+  for (int i = 0; i < 3; i++) {
+    l = _len - (start - skip);
+    if (l >= MIN_VOL_SIZE) {
+      header_len = sizeof(ts::SpanHeader) + (l / MIN_VOL_SIZE - 1) * sizeof(CacheStripeDescriptor);
+    } else {
+      header_len = sizeof(ts::SpanHeader);
+    }
+    start = skip + header_len;
+  }
+  auto blocks = this->_geometry.totalsz / STORE_BLOCK_SIZE;
+  // num_usable_blocks = ((_len * STORE_BLOCK_SIZE) - (start - skip)) >> STORE_BLOCK_SHIFT;
+  auto sector_size = this->_geometry.blocksz;
+  header_len       = ROUND_TO_STORE_BLOCK(header_len);
+  std::cout << "start " << start << "len " << _len << " header length " << header_len << std::endl;
+  num_usable_blocks = (_len - (start - skip)) >> STORE_BLOCK_SHIFT;
+  return zret;
+}
+
+Errata
+Span::create_stripe(int number, off_t size_in_blocks, int scheme)
+{
+  Errata zret;
+  // initialize span header first
+  ts::SpanHeader sph;
+  sph.magic            = ts::SpanHeader::MAGIC;
+  sph.num_volumes      = 1;
+  sph.num_free         = 1;
+  sph.num_used         = 0;
+  sph.num_diskvol_blks = -1;
+  // sph.num_blocks = 0;
+
+  // initialize stripes
+  return zret;
+}
+
 Errata
 Span::load()
 {
@@ -1713,6 +1889,8 @@ Span::clear()
   int n   = (eff - sizeof(ts::SpanHeader)) / (CacheStripeBlocks::SCALE + sizeof(CacheStripeDescriptor));
   _offset = _base + round_up(sizeof(ts::SpanHeader) + (n - 1) * sizeof(CacheStripeDescriptor));
   stripe  = new Stripe(this, _offset, _len - _offset);
+  stripe->vol_init_data();
+  stripe->InitializeMeta();
   _stripes.push_back(stripe);
   _free_space = stripe->_len;
 
@@ -1738,6 +1916,7 @@ Span::updateHeader()
 
   sd = hdr->stripes;
   for (auto stripe : _stripes) {
+    std::cout << stripe->hashText << std::endl;
     sd->offset               = stripe->_start;
     sd->len                  = stripe->_len;
     sd->vol_idx              = stripe->_vol_idx;
@@ -1782,7 +1961,17 @@ Span::clearPermanently()
         std::cout << " - " << n << " of " << sizeof(zero) << " bytes written";
       std::cout << " - " << text;
     }
+
     std::cout << std::endl;
+    // clear the stripes as well
+    for (auto *strp : _stripes) {
+      strp->loadMeta();
+      std::cout << "Clearing stripe @" << strp->_start << " of length: " << strp->_len << std::endl;
+      n = pwrite(_fd, zero, sizeof(zero), strp->_meta_pos[0][0].count() * 8192);
+      n = pwrite(_fd, zero, sizeof(zero), strp->_meta_pos[0][1].count() * 8192);
+      n = pwrite(_fd, zero, sizeof(zero), strp->_meta_pos[1][0].count() * 8192);
+      n = pwrite(_fd, zero, sizeof(zero), strp->_meta_pos[1][1].count() * 8192);
+    }
   } else {
     std::cout << "Clearing " << _path << " not performed, write not enabled" << std::endl;
   }
@@ -2169,6 +2358,20 @@ Check_Freelist(std::string devicePath)
 }
 
 Errata
+Init_disk(FilePath const &input_file_path)
+{
+  Errata zret;
+  Cache cache;
+  VolumeAllocator va;
+
+  //  OPEN_RW_FLAG = O_RDWR;
+  zret = va.load(SpanFile, VolumeFile);
+  va.allocateSpan(input_file_path);
+
+  return zret;
+}
+
+Errata
 Get_Response(FilePath const &input_file_path)
 {
   // scheme=http user=u password=p host=172.28.56.109 path=somepath query=somequery port=1234
@@ -2266,6 +2469,8 @@ main(int argc, char *argv[])
     .subCommand(std::string("span"), std::string("device path"), [&](int, char *argv[]) { return Clear_Span(inputFile); });
   Commands.add(std::string("retrieve"), std::string(" retrieve the response of the given list of URLs"),
                [&](int, char *argv[]) { return Get_Response(input_url_file); });
+  Commands.add(std::string("init"), std::string(" Initialize Span if the header is invalid"),
+               [&](int, char *argv[]) { return Init_disk(input_url_file); });
   Commands.setArgIndex(optind);
 
   if (help) {

@@ -62,6 +62,7 @@ namespace ts
   } while (0)
 
 constexpr static uint8_t CACHE_DB_MAJOR_VERSION = 24;
+constexpr static uint8_t CACHE_DB_MINOR_VERSION = 1;
 /// Maximum allowed volume index.
 constexpr static int MAX_VOLUME_IDX          = 255;
 constexpr static int ENTRIES_PER_BUCKET      = 4;
