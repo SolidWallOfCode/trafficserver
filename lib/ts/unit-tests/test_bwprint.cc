@@ -43,7 +43,7 @@ TEST_CASE("bwprint basics", "[bwprint]")
 {
   ts::LocalBufferWriter<256> bw;
   auto fmt1{"Some text"_sv};
-#if 1
+
   bwprint(bw, fmt1);
   REQUIRE(bw.view() == fmt1);
   bw.reduce(0);
@@ -93,8 +93,8 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bw.reduce(0);
   bwprint(bw, "Time is {now}");
 //  REQUIRE(bw.view() == "Time is");
-#endif
-#if 1
+
+#if 0
   auto start = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < 1000000; ++i) {
     bw.reduce(0);

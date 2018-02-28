@@ -139,12 +139,18 @@ ts::BW_Spec::BW_Spec(TextView fmt)
   }
 }
 
+/** This performs generic alignment operations.
+
+    If a formatter specialization performs this operation instead, that should result in output that
+    is at least @a spec._min characters wide, which will cause this function to make no further
+    adjustments.
+ */
 void
 ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
 {
   size_t size = lw.size();
-  size_t min;
-  if (size < (min = static_cast<size_t>(spec._min))) {
+  size_t min  = spec._min;
+  if (size < min) {
     size_t delta = min - size; // note - size <= extent -> size < min
     switch (spec._align) {
     case BW_Spec::Align::NONE: // same as LEFT for output.
@@ -260,6 +266,8 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
   width -= static_cast<int>(n);
   string_view digits{buff + sizeof(buff) - n, n};
 
+  // The idea here is the various pieces have all been assembled, the only difference
+  // is the order in which they are written to the output.
   switch (spec._align) {
   case BW_Spec::Align::LEFT:
     w.write(neg);
@@ -302,11 +310,14 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
 
 } // ts::detail
 
+/// Preparse format string for later use.
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {
   while (fmt) {
     ts::TextView lit = fmt.take_prefix_at('{');
     if (lit) {
+      // hack - to represent a literal the actual literal is stored in the extension field and
+      // the @c LiteralFormatter function grabs it from there.
       BW_Spec spec{""};
       spec._ext = lit;
       _items.emplace_back(spec, &LiteralFormatter);
