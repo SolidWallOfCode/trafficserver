@@ -5,11 +5,14 @@
 ts::detail::BW_GlobalTable ts::detail::BW_FORMAT_GLOBAL_TABLE;
 const ts::BW_Spec ts::BW_Spec::DEFAULT;
 
-// --
 namespace
 {
+// Customized version of string to int. Using this instead of the general @c svtoi function
+// made @c bwprint performance test run in < 30% of the time, changing it from about 2.5
+// times slower than snprintf to the same speed. This version handles only positive integers
+// in decimal.
 inline int
-tvtoi10(ts::TextView src, ts::TextView *out)
+tv_to_positive_decimal(ts::TextView src, ts::TextView *out)
 {
   int zret = 0;
 
@@ -30,23 +33,25 @@ tvtoi10(ts::TextView src, ts::TextView *out)
   return zret;
 }
 }
-// --
+
+/// Parse a format specification.
 ts::BW_Spec::BW_Spec(TextView fmt)
 {
   TextView num;
   intmax_t n;
 
   _name = fmt.take_prefix_at(':');
-  n     = tvtoi10(_name, &num);
+  // if it's parsable as a number, treat it as an index.
+  n = tv_to_positive_decimal(_name, &num);
   if (num)
     _idx = static_cast<decltype(_idx)>(n);
 
   if (fmt) {
-    TextView sz = fmt.take_prefix_at(':');
-    _ext        = fmt;
+    TextView sz = fmt.take_prefix_at(':'); // the format specifier.
+    _ext        = fmt;                     // anything past the second ':' is the extension.
     if (sz) {
       // fill and alignment
-      if ('%' == *sz) {
+      if ('%' == *sz) { // enable URI encoding of the fill character so metasyntactic chars can be used if needed.
         if (sz.size() < 4) {
           throw std::invalid_argument("Fill URI encoding without 2 hex characters and align mark");
         }
@@ -74,26 +79,29 @@ ts::BW_Spec::BW_Spec(TextView fmt)
         if (!++sz)
           return;
       }
+      // radix prefix
       if ('#' == *sz) {
         _radix_lead_p = true;
         if (!++sz)
           return;
       }
+      // 0 fill for integers
       if ('0' == *sz) {
         if (Align::NONE == _align)
           _align = Align::SIGN;
         _fill    = '0';
         ++sz;
       }
-      n = tvtoi10(sz, &num);
+      n = tv_to_positive_decimal(sz, &num);
       if (num) {
         _min = static_cast<decltype(_min)>(n);
         sz.remove_prefix(num.size());
         if (!sz)
           return;
       }
+      // precision
       if ('.' == *sz) {
-        n = svtoi(++sz, &num);
+        n = tv_to_positive_decimal(++sz, &num);
         if (num) {
           _prec = static_cast<decltype(_prec)>(n);
           sz.remove_prefix(num.size());
@@ -103,13 +111,15 @@ ts::BW_Spec::BW_Spec(TextView fmt)
           throw std::invalid_argument("Precision mark without precision");
         }
       }
+      // style (type). Hex, octal, etc.
       if (is_type(*sz)) {
         _type = *sz;
         if (!++sz)
           return;
       }
+      // maximum width
       if (',' == *sz) {
-        n = svtoi(++sz, &num);
+        n = tv_to_positive_decimal(++sz, &num);
         if (num) {
           _max = static_cast<decltype(_max)>(n);
           sz.remove_prefix(num.size());
