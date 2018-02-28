@@ -34,12 +34,12 @@ namespace ts
 {
 /** A parsed version of a format specifier.
  */
-struct BW_Spec {
-  using self_type = BW_Spec; ///< Self reference type.
+struct BWFSpec {
+  using self_type = BWFSpec; ///< Self reference type.
   /// Constructor a default instance.
-  constexpr BW_Spec() {}
+  constexpr BWFSpec() {}
   /// Construct by parsing @a fmt.
-  BW_Spec(TextView fmt);
+  BWFSpec(TextView fmt);
 
   char _fill = ' '; ///< Fill character.
   char _sign = '-'; ///< Numeric sign style, space + -
@@ -84,17 +84,17 @@ protected:
 
     This is the base output generator for data to a @c BufferWriter. Default stream operators call this with
     the default format specification (although those can be overloaded specifically for performance).
- */
-#if 0
-template <typename V>
-BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &, V &&v)
-{
-  return w.write("*UNKNOWN*");
-}
-#endif
 
-template <typename TUPLE> using FormatterSignature = BufferWriter &(*)(BufferWriter &w, BW_Spec const &, TUPLE const &args);
+    @code
+      BufferWriter &
+      bwformat(BufferWriter &w, BWFSpec const &, V const &v)
+      {
+        // generate output on @a w
+      }
+    @endcode
+  */
+
+template <typename TUPLE> using BWFArgSelectorSignature = BufferWriter &(*)(BufferWriter &w, BWFSpec const &, TUPLE const &args);
 
 namespace detail
 {
@@ -106,9 +106,9 @@ namespace detail
   /// argument being formatter.
   template <typename TUPLE, size_t I>
   BufferWriter &
-  bw_formatter_selecter(BufferWriter &w, BW_Spec const &spec, TUPLE const &args)
+  bwf_arg_selector(BufferWriter &w, BWFSpec const &spec, TUPLE const &args)
   {
-    return bw_formatter(w, spec, std::get<I>(args));
+    return bwformat(w, spec, std::get<I>(args));
   }
 
   /// This exists only to expand the index sequence into an array of formatters for the tuple type
@@ -117,24 +117,24 @@ namespace detail
   /// static and therefor at run time the only operation is loading and return the address of the
   /// array.
   template <typename TUPLE, size_t... N>
-  FormatterSignature<TUPLE> *
-  bw_formatter_array(index_sequence<N...>)
+  BWFArgSelectorSignature<TUPLE> *
+  bwf_get_arg_selector_array(index_sequence<N...>)
   {
-    static FormatterSignature<TUPLE> fa[sizeof...(N)] = {&detail::bw_formatter_selecter<TUPLE, N>...};
+    static BWFArgSelectorSignature<TUPLE> fa[sizeof...(N)] = {&detail::bwf_arg_selector<TUPLE, N>...};
     return fa;
   }
 
   /// Perform alignment adjustments / fill on @a w of the content in @a lw.
-  void bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw);
+  void bwf_aligner(BWFSpec const &spec, BufferWriter &w, BufferWriter &lw);
 
   /// Global named argument table.
-  using BW_GlobalSignature = void (*)(BufferWriter &, BW_Spec const &);
-  using BW_GlobalTable     = std::map<string_view, BW_GlobalSignature>;
-  extern BW_GlobalTable BW_FORMAT_GLOBAL_TABLE;
-  extern BW_GlobalSignature BW_GlobalTableFind(string_view name);
+  using BWF_GlobalSignature = void (*)(BufferWriter &, BWFSpec const &);
+  using BWF_GlobalTable     = std::map<string_view, BWF_GlobalSignature>;
+  extern BWF_GlobalTable BWF_GLOBAL_TABLE;
+  extern BWF_GlobalSignature BWF_GlobalTableFind(string_view name);
 
   /// Generic integral conversion.
-  BufferWriter &bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t n, bool negative_p);
+  BufferWriter &bwf_integral_formatter(BufferWriter &w, BWFSpec const &spec, uintmax_t n, bool negative_p);
 } // detail
 
 class BWFormat
@@ -149,12 +149,12 @@ public:
       global formatter @a _gf to a formatter that writes out the extension.
    */
   struct Item {
-    BW_Spec _spec; ///< Specification.
+    BWFSpec _spec; ///< Specification.
     /// If the spec has a global formatter name, cache it here.
-    mutable detail::BW_GlobalSignature _gf = nullptr;
+    mutable detail::BWF_GlobalSignature _gf = nullptr;
 
     Item() : _spec("") {}
-    Item(BW_Spec const &spec, detail::BW_GlobalSignature gf) : _spec(spec), _gf(gf) {}
+    Item(BWFSpec const &spec, detail::BWF_GlobalSignature gf) : _spec(spec), _gf(gf) {}
   };
 
   using Items = std::vector<Item>;
@@ -162,7 +162,7 @@ public:
 
 protected:
   /// Handles literals by writing the contents of the extension directly to @a w.
-  static void LiteralFormatter(BufferWriter &w, BW_Spec const &spec);
+  static void LiteralFormatter(BufferWriter &w, BWFSpec const &spec);
 };
 
 /** BufferWriter print.
@@ -181,7 +181,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
 {
   static constexpr int N = sizeof...(Rest);
   auto args(std::forward_as_tuple(rest...));
-  auto fa     = detail::bw_formatter_array<decltype(args)>(index_sequence_for<Rest...>{});
+  auto fa     = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
   int arg_idx = 0;
 
   while (fmt) {
@@ -197,7 +197,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
         throw std::invalid_argument("Unclosed {");
       }
 
-      BW_Spec spec{fmt.take_prefix_at(off)};
+      BWFSpec spec{fmt.take_prefix_at(off)};
       size_t width = w.remaining();
       if (spec._max >= 0)
         width = std::min(width, static_cast<size_t>(spec._max));
@@ -208,12 +208,12 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (0 <= spec._idx && spec._idx < N) {
         fa[spec._idx](lw, spec, args);
       } else if (spec._name.size()) {
-        auto gf = detail::BW_GlobalTableFind(spec._name);
+        auto gf = detail::BWF_GlobalTableFind(spec._name);
         if (gf)
           gf(lw, spec);
       }
       if (lw.size())
-        detail::bw_aligner(spec, w, lw);
+        detail::bwf_aligner(spec, w, lw);
       ++arg_idx;
     }
   }
@@ -226,7 +226,7 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
 {
   static constexpr int N = sizeof...(Rest);
   auto args(std::forward_as_tuple(rest...));
-  auto fa     = detail::bw_formatter_array<decltype(args)>(index_sequence_for<Rest...>{});
+  auto fa     = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
   int arg_idx = 0;
 
   for (BWFormat::Item const &item : fmt._items) {
@@ -243,13 +243,13 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
       if (0 <= idx && idx < N) {
         fa[idx](lw, item._spec, args);
       } else if (item._spec._name.size()) {
-        detail::BW_GlobalSignature gf;
-        if (nullptr != (item._gf = detail::BW_GlobalTableFind(item._spec._name)))
+        detail::BWF_GlobalSignature gf;
+        if (nullptr != (item._gf = detail::BWF_GlobalTableFind(item._spec._name)))
           (item._gf)(lw, item._spec);
       }
     }
     if (lw.size())
-      detail::bw_aligner(item._spec, w, lw);
+      detail::bwf_aligner(item._spec, w, lw);
     ++arg_idx;
   }
   return 0;
@@ -260,58 +260,51 @@ template <typename V>
 BufferWriter &
 operator<<(BufferWriter &w, V &&v)
 {
-  return bw_formatter(w, BW_Spec::DEFAULT, std::forward<V>(v));
+  return bwformat(w, BWFSpec::DEFAULT, std::forward<V>(v));
 }
 
 // -- Common formatters --
 
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &, char c)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &, char c)
 {
   return w.write(c);
 }
-BufferWriter &bw_formatter(BufferWriter &w, BW_Spec const &spec, string_view sv);
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, const char *v)
+BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv);
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, const char *v)
 {
-  return bw_formatter(w, spec, string_view(v));
+  return bwformat(w, spec, string_view(v));
 }
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, TextView tv)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, TextView tv)
 {
-  return bw_formatter(w, spec, static_cast<string_view>(tv));
+  return bwformat(w, spec, static_cast<string_view>(tv));
 }
 
 //-- Integral types
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, uintmax_t i)
 {
-  return detail::bw_integral_formatter(w, spec, i, false);
+  return detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, intmax_t i)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, intmax_t i)
 {
-  return i < 0 ? detail::bw_integral_formatter(w, spec, -i, true) : detail::bw_integral_formatter(w, spec, i, false);
+  return i < 0 ? detail::bwf_integral_formatter(w, spec, -i, true) : detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, unsigned int i)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, unsigned int i)
 {
-  return detail::bw_integral_formatter(w, spec, i, false);
+  return detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter &
-bw_formatter(BufferWriter &w, BW_Spec const &spec, int i)
+inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, int i)
 {
-  return i < 0 ? detail::bw_integral_formatter(w, spec, -i, true) : detail::bw_integral_formatter(w, spec, i, false);
+  return i < 0 ? detail::bwf_integral_formatter(w, spec, -i, true) : detail::bwf_integral_formatter(w, spec, i, false);
 }
 
 // Annoying but otherwise ambiguous with char
 inline BufferWriter &
 operator<<(BufferWriter &w, int i)
 {
-  return bw_formatter(w, BW_Spec::DEFAULT, static_cast<intmax_t>(i));
+  return bwformat(w, BWFSpec::DEFAULT, static_cast<intmax_t>(i));
 }
 
 } // ts

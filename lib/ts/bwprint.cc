@@ -2,8 +2,8 @@
 #include <ctype.h>
 #include <ctime>
 
-ts::detail::BW_GlobalTable ts::detail::BW_FORMAT_GLOBAL_TABLE;
-const ts::BW_Spec ts::BW_Spec::DEFAULT;
+ts::detail::BWF_GlobalTable ts::detail::BWF_GLOBAL_TABLE;
+const ts::BWFSpec ts::BWFSpec::DEFAULT;
 
 namespace
 {
@@ -35,7 +35,7 @@ tv_to_positive_decimal(ts::TextView src, ts::TextView *out)
 }
 
 /// Parse a format specification.
-ts::BW_Spec::BW_Spec(TextView fmt)
+ts::BWFSpec::BWFSpec(TextView fmt)
 {
   TextView num;
   intmax_t n;
@@ -146,27 +146,27 @@ ts::BW_Spec::BW_Spec(TextView fmt)
     adjustments.
  */
 void
-ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
+ts::detail::bwf_aligner(BWFSpec const &spec, BufferWriter &w, BufferWriter &lw)
 {
   size_t size = lw.size();
   size_t min  = spec._min;
   if (size < min) {
     size_t delta = min - size; // note - size <= extent -> size < min
     switch (spec._align) {
-    case BW_Spec::Align::NONE: // same as LEFT for output.
+    case BWFSpec::Align::NONE: // same as LEFT for output.
     // fall through
-    case BW_Spec::Align::LEFT:
+    case BWFSpec::Align::LEFT:
       w.fill(size);
       while (delta--)
         w.write(spec._fill);
       size = 0; // cancel additional fill.
       break;
-    case BW_Spec::Align::RIGHT:
+    case BWFSpec::Align::RIGHT:
       std::memmove(w.auxBuffer() + delta, w.auxBuffer(), size);
       while (delta--)
         w.write(spec._fill);
       break;
-    case BW_Spec::Align::CENTER:
+    case BWFSpec::Align::CENTER:
       if (delta > 1) {
         size_t d2 = delta / 2;
         std::memmove(w.auxBuffer() + (delta / 2), w.auxBuffer(), size);
@@ -179,7 +179,7 @@ ts::detail::bw_aligner(BW_Spec const &spec, BufferWriter &w, BufferWriter &lw)
         w.write(spec._fill);
       size = 0; // cancel additional fill.
       break;
-    case BW_Spec::Align::SIGN:
+    case BWFSpec::Align::SIGN:
       break;
     }
   }
@@ -201,7 +201,7 @@ namespace
 /// bit operations).
 template <size_t RADIX>
 size_t
-BW_to_radix(uintmax_t n, char *buff, size_t width, char *digits)
+bwf_to_radix(uintmax_t n, char *buff, size_t width, char *digits)
 {
   static_assert(1 < RADIX && RADIX <= 36);
   char *out = buff + width;
@@ -217,7 +217,7 @@ BW_to_radix(uintmax_t n, char *buff, size_t width, char *digits)
 }
 
 BufferWriter &
-bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool neg_p)
+bwf_integral_formatter(BufferWriter &w, BWFSpec const &spec, uintmax_t i, bool neg_p)
 {
   size_t n  = 0;
   int width = static_cast<int>(spec._min); // amount left to fill.
@@ -233,31 +233,31 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
   case 'x':
     if (spec._radix_lead_p)
       prefix = "0x"_sv;
-    n        = detail::BW_to_radix<16>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    n        = detail::bwf_to_radix<16>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   case 'X':
     if (spec._radix_lead_p)
       prefix = "0X"_sv;
-    n        = detail::BW_to_radix<16>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    n        = detail::bwf_to_radix<16>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
     break;
   case 'b':
     if (spec._radix_lead_p)
       prefix = "0b"_sv;
-    n        = detail::BW_to_radix<2>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    n        = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   case 'B':
     if (spec._radix_lead_p)
       prefix = "0B"_sv;
-    n        = detail::BW_to_radix<2>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    n        = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
     break;
     break;
   case 'o':
     if (spec._radix_lead_p)
       prefix = "0"_sv;
-    n        = detail::BW_to_radix<8>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    n        = detail::bwf_to_radix<8>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   default:
-    n = detail::BW_to_radix<10>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    n = detail::bwf_to_radix<10>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   }
   // Clip fill width by stuff that's already committed to be written.
@@ -269,21 +269,21 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
   // The idea here is the various pieces have all been assembled, the only difference
   // is the order in which they are written to the output.
   switch (spec._align) {
-  case BW_Spec::Align::LEFT:
+  case BWFSpec::Align::LEFT:
     w.write(neg);
     w.write(prefix);
     w.write(digits);
     while (width-- > 0)
       w.write(spec._fill);
     break;
-  case BW_Spec::Align::RIGHT:
+  case BWFSpec::Align::RIGHT:
     while (width-- > 0)
       w.write(spec._fill);
     w.write(neg);
     w.write(prefix);
     w.write(digits);
     break;
-  case BW_Spec::Align::CENTER:
+  case BWFSpec::Align::CENTER:
     for (int i = width / 2; i > 0; --i)
       w.write(spec._fill);
     w.write(neg);
@@ -292,7 +292,7 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
     for (int i = (width + 1) / 2; i > 0; --i)
       w.write(spec._fill);
     break;
-  case BW_Spec::Align::SIGN:
+  case BWFSpec::Align::SIGN:
     w.write(neg);
     w.write(prefix);
     while (width-- > 0)
@@ -311,7 +311,7 @@ bw_integral_formatter(BufferWriter &w, BW_Spec const &spec, uintmax_t i, bool ne
 } // ts::detail
 
 ts::BufferWriter &
-ts::bw_formatter(BufferWriter &w, BW_Spec const &spec, string_view sv)
+ts::bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv)
 {
   int width = static_cast<int>(spec._min); // amount left to fill.
   if (spec._prec > 0)
@@ -319,18 +319,18 @@ ts::bw_formatter(BufferWriter &w, BW_Spec const &spec, string_view sv)
 
   width -= sv.size();
   switch (spec._align) {
-  case BW_Spec::Align::LEFT:
-  case BW_Spec::Align::SIGN:
+  case BWFSpec::Align::LEFT:
+  case BWFSpec::Align::SIGN:
     w.write(sv);
     while (width-- > 0)
       w.write(spec._fill);
     break;
-  case BW_Spec::Align::RIGHT:
+  case BWFSpec::Align::RIGHT:
     while (width-- > 0)
       w.write(spec._fill);
     w.write(sv);
     break;
-  case BW_Spec::Align::CENTER:
+  case BWFSpec::Align::CENTER:
     for (int i = width / 2; i > 0; --i)
       w.write(spec._fill);
     w.write(sv);
@@ -352,12 +352,12 @@ ts::BWFormat::BWFormat(ts::TextView fmt)
     if (lit) {
       // hack - to represent a literal the actual literal is stored in the extension field and
       // the @c LiteralFormatter function grabs it from there.
-      BW_Spec spec{""};
+      BWFSpec spec{""};
       spec._ext = lit;
       _items.emplace_back(spec, &LiteralFormatter);
     }
     if (fmt) {
-      detail::BW_GlobalSignature gf = nullptr;
+      detail::BWF_GlobalSignature gf = nullptr;
       // Need to be careful, because an empty format is OK and it's hard to tell if
       // take_prefix_at failed to find the delimiter or found it as the first byte.
       TextView::size_type off = fmt.find('}');
@@ -365,9 +365,9 @@ ts::BWFormat::BWFormat(ts::TextView fmt)
         throw std::invalid_argument("Unclosed {");
       }
 
-      BW_Spec spec{fmt.take_prefix_at(off)};
+      BWFSpec spec{fmt.take_prefix_at(off)};
       if (spec._idx < 0)
-        gf = detail::BW_GlobalTableFind(spec._name);
+        gf = detail::BWF_GlobalTableFind(spec._name);
       _items.emplace_back(spec, gf);
     }
   }
@@ -378,17 +378,17 @@ ts::BWFormat::~BWFormat()
 }
 
 void
-ts::BWFormat::LiteralFormatter(BufferWriter &w, BW_Spec const &spec)
+ts::BWFormat::LiteralFormatter(BufferWriter &w, BWFSpec const &spec)
 {
   w.write(spec._ext);
 }
 
-ts::detail::BW_GlobalSignature
-ts::detail::BW_GlobalTableFind(string_view name)
+ts::detail::BWF_GlobalSignature
+ts::detail::BWF_GlobalTableFind(string_view name)
 {
   if (name.size()) {
-    auto spot = detail::BW_FORMAT_GLOBAL_TABLE.find(name);
-    if (spot != detail::BW_FORMAT_GLOBAL_TABLE.end())
+    auto spot = detail::BWF_GLOBAL_TABLE.find(name);
+    if (spot != detail::BWF_GLOBAL_TABLE.end())
       return spot->second;
   }
   return nullptr;
@@ -397,14 +397,14 @@ ts::detail::BW_GlobalTableFind(string_view name)
 namespace
 {
 void
-BW_Formatter_Now(ts::BufferWriter &w, ts::BW_Spec const &spec)
+BWF_Now(ts::BufferWriter &w, ts::BWFSpec const &spec)
 {
   std::time_t t = std::time(nullptr);
   w.fill(std::strftime(w.auxBuffer(), w.remaining(), "%Y%b%d:%H%M%S", std::localtime(&t)));
 }
 
 static bool BW_INITIALIZED = []() -> bool {
-  ts::detail::BW_FORMAT_GLOBAL_TABLE.emplace("now", &BW_Formatter_Now);
+  ts::detail::BWF_GLOBAL_TABLE.emplace("now", &BWF_Now);
   return true;
 }();
 }
