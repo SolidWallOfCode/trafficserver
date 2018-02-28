@@ -131,7 +131,7 @@ namespace detail
   using BWF_GlobalSignature = void (*)(BufferWriter &, BWFSpec const &);
   using BWF_GlobalTable     = std::map<string_view, BWF_GlobalSignature>;
   extern BWF_GlobalTable BWF_GLOBAL_TABLE;
-  extern BWF_GlobalSignature BWF_GlobalTableFind(string_view name);
+  extern BWF_GlobalSignature bwf_global_table_find(string_view name);
 
   /// Generic integral conversion.
   BufferWriter &bwf_integral_formatter(BufferWriter &w, BWFSpec const &spec, uintmax_t n, bool negative_p);
@@ -208,7 +208,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
       if (0 <= spec._idx && spec._idx < N) {
         fa[spec._idx](lw, spec, args);
       } else if (spec._name.size()) {
-        auto gf = detail::BWF_GlobalTableFind(spec._name);
+        auto gf = detail::bwf_global_table_find(spec._name);
         if (gf)
           gf(lw, spec);
       }
@@ -244,7 +244,7 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
         fa[idx](lw, item._spec, args);
       } else if (item._spec._name.size()) {
         detail::BWF_GlobalSignature gf;
-        if (nullptr != (item._gf = detail::BWF_GlobalTableFind(item._spec._name)))
+        if (nullptr != (item._gf = detail::bwf_global_table_find(item._spec._name)))
           (item._gf)(lw, item._spec);
       }
     }

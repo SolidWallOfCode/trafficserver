@@ -367,7 +367,7 @@ ts::BWFormat::BWFormat(ts::TextView fmt)
 
       BWFSpec spec{fmt.take_prefix_at(off)};
       if (spec._idx < 0)
-        gf = detail::BWF_GlobalTableFind(spec._name);
+        gf = detail::bwf_global_table_find(spec._name);
       _items.emplace_back(spec, gf);
     }
   }
@@ -384,7 +384,7 @@ ts::BWFormat::LiteralFormatter(BufferWriter &w, BWFSpec const &spec)
 }
 
 ts::detail::BWF_GlobalSignature
-ts::detail::BWF_GlobalTableFind(string_view name)
+ts::detail::bwf_global_table_find(string_view name)
 {
   if (name.size()) {
     auto spot = detail::BWF_GLOBAL_TABLE.find(name);
