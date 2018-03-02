@@ -19,7 +19,8 @@ tv_to_positive_decimal(ts::TextView src, ts::TextView *out)
   if (out) {
     out->clear();
   }
-  if (src.ltrim_if(&isspace) && src) {
+  src.ltrim_if(&isspace);
+  if (src.size()) {
     const char *start = src.data();
     const char *limit = start + src.size();
     while (start < limit && ('0' <= *start && *start <= '9')) {
@@ -347,61 +348,69 @@ ts::bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv)
 /// Preparse format string for later use.
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {
-  TextView::size_type off;
   BWFSpec lit_spec{BWFSpec::DEFAULT};
 
   while (fmt) {
-    TextView lit;
+    TextView lit_str;
+    TextView spec_str;
+    this->parse(fmt, lit_str, spec_str);
 
-    if (lit) {
-      // hack - to represent a literal the actual literal is stored in the extension field and
-      // the @c LiteralFormatter function grabs it from there.
-      lit_spec._ext = lit;
+    if (lit_str.size()) {
+      lit_spec._ext = lit_str;
       _items.emplace_back(lit_spec, &LiteralFormatter);
     }
-
-    off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
-    if (off == TextView::npos) {
-      lit_spec._ext = fmt;
-      _items.emplace_back(lit_spec, &LiteralFormatter);
-      break;
-    } else if (fmt.size() > off + 1) {
-      char c1 = fmt[off];
-      char c2 = fmt[off + 1];
-      if (c1 == c2) {
-        lit_spec._ext = fmt.take_prefix_at(off + 1);
-        _items.emplace_back(lit_spec, &LiteralFormatter);
-        continue;
-      } else if ('}' == c1) {
-        throw std::invalid_argument("Unopened }");
-      } else {
-        lit_spec._ext = string_view{fmt.data(), off};
-        _items.emplace_back(lit_spec, &LiteralFormatter);
-        fmt.remove_prefix(off + 1);
-      }
-    } else {
-      throw std::invalid_argument("Invalid trailing character");
-    }
-
-    if (fmt.size()) {
+    if (spec_str.size()) {
       detail::BWF_GlobalSignature gf = nullptr;
-      // Need to be careful, because an empty format is OK and it's hard to tell if
-      // take_prefix_at failed to find the delimiter or found it as the first byte.
-      TextView::size_type off = fmt.find('}');
-      if (off == TextView::npos) {
-        throw std::invalid_argument("Unclosed {");
+      BWFSpec parsed_spec{spec_str};
+      if (parsed_spec._idx < 0) {
+        gf = detail::bwf_global_table_find(parsed_spec._name);
       }
-
-      BWFSpec spec{fmt.take_prefix_at(off)};
-      if (spec._idx < 0)
-        gf = detail::bwf_global_table_find(spec._name);
-      _items.emplace_back(spec, gf);
+      _items.emplace_back(parsed_spec, gf);
     }
   }
 }
 
 ts::BWFormat::~BWFormat()
 {
+}
+
+void
+ts::BWFormat::parse(ts::TextView& fmt, TextView& literal, TextView& specifier)
+{
+  TextView::size_type off;
+
+  off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
+  if (off == TextView::npos) {
+    literal = fmt;
+    fmt.remove_prefix(literal.size());
+    return;
+  }
+
+  if (fmt.size() > off + 1) {
+    char c1 = fmt[off];
+    char c2 = fmt[off + 1];
+    if (c1 == c2) {
+      literal = fmt.take_prefix_at(off + 1);
+      return;
+    } else if ('}' == c1) {
+      throw std::invalid_argument("Unopened }");
+    } else {
+      literal = string_view{fmt.data(), off};
+      fmt.remove_prefix(off + 1);
+    }
+  } else {
+    throw std::invalid_argument("Invalid trailing character");
+  }
+
+  if (fmt.size()) {
+    // Need to be careful, because an empty format is OK and it's hard to tell if
+    // take_prefix_at failed to find the delimiter or found it as the first byte.
+    off = fmt.find('}');
+    if (off == TextView::npos) {
+      throw std::invalid_argument("Unclosed {");
+    }
+    specifier = fmt.take_prefix_at(off);
+  }
 }
 
 void

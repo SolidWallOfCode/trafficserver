@@ -144,6 +144,8 @@ public:
   BWFormat(TextView fmt);
   ~BWFormat();
 
+  static void parse(TextView& fmt, TextView& literal, TextView& spec);
+
   /** Parsed items from the format string.
 
       Literals are handled by putting the literal text in the extension field and setting the
