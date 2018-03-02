@@ -35,6 +35,13 @@ tv_to_positive_decimal(ts::TextView src, ts::TextView *out)
 }
 }
 
+void
+ts::detail::BWF_bad_arg_idx(BufferWriter &w, int i, size_t n)
+{
+  static const BWFormat fmt{"{{BAD_ARG_INDEX:{} of {}}}"_sv};
+  bwprint(w, fmt, i, n);
+}
+
 /// Parse a format specification.
 ts::BWFSpec::BWFSpec(TextView fmt)
 {
@@ -349,23 +356,28 @@ ts::bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv)
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {
   BWFSpec lit_spec{BWFSpec::DEFAULT};
+  int arg_idx = 0;
 
   while (fmt) {
     TextView lit_str;
     TextView spec_str;
-    this->parse(fmt, lit_str, spec_str);
+    bool spec_p = this->parse(fmt, lit_str, spec_str);
 
     if (lit_str.size()) {
       lit_spec._ext = lit_str;
       _items.emplace_back(lit_spec, &LiteralFormatter);
     }
-    if (spec_str.size()) {
+    if (spec_p) {
       detail::BWF_GlobalSignature gf = nullptr;
       BWFSpec parsed_spec{spec_str};
+      if (parsed_spec._name.size() == 0) {
+        parsed_spec._idx = arg_idx;
+      }
       if (parsed_spec._idx < 0) {
         gf = detail::bwf_global_table_find(parsed_spec._name);
       }
       _items.emplace_back(parsed_spec, gf);
+      ++arg_idx;
     }
   }
 }
@@ -374,8 +386,8 @@ ts::BWFormat::~BWFormat()
 {
 }
 
-void
-ts::BWFormat::parse(ts::TextView& fmt, TextView& literal, TextView& specifier)
+bool
+ts::BWFormat::parse(ts::TextView &fmt, TextView &literal, TextView &specifier)
 {
   TextView::size_type off;
 
@@ -383,7 +395,7 @@ ts::BWFormat::parse(ts::TextView& fmt, TextView& literal, TextView& specifier)
   if (off == TextView::npos) {
     literal = fmt;
     fmt.remove_prefix(literal.size());
-    return;
+    return false;
   }
 
   if (fmt.size() > off + 1) {
@@ -391,7 +403,7 @@ ts::BWFormat::parse(ts::TextView& fmt, TextView& literal, TextView& specifier)
     char c2 = fmt[off + 1];
     if (c1 == c2) {
       literal = fmt.take_prefix_at(off + 1);
-      return;
+      return false;
     } else if ('}' == c1) {
       throw std::invalid_argument("Unopened }");
     } else {
@@ -410,7 +422,9 @@ ts::BWFormat::parse(ts::TextView& fmt, TextView& literal, TextView& specifier)
       throw std::invalid_argument("Unclosed {");
     }
     specifier = fmt.take_prefix_at(off);
+    return true;
   }
+  return false;
 }
 
 void

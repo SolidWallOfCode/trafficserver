@@ -136,6 +136,7 @@ namespace detail
 
   /// Generic integral conversion.
   BufferWriter &bwf_integral_formatter(BufferWriter &w, BWFSpec const &spec, uintmax_t n, bool negative_p);
+
 } // detail
 
 class BWFormat
@@ -144,7 +145,18 @@ public:
   BWFormat(TextView fmt);
   ~BWFormat();
 
-  static void parse(TextView& fmt, TextView& literal, TextView& spec);
+  /** Parse elements of a format string.
+
+      @param fmt The format string [in|out]
+      @param literal A literal if found
+      @param spec A specifier if found (less enclosing braces)
+      @return @c true if a specifier was found, @c false if not.
+
+      Pull off the next literal and/or specifier from @a fmt. The return value distinguishes
+      the case of no specifier found (@c false) or an empty specifier (@c true).
+
+   */
+  static bool parse(TextView &fmt, TextView &literal, TextView &spec);
 
   /** Parsed items from the format string.
 
@@ -156,7 +168,7 @@ public:
     /// If the spec has a global formatter name, cache it here.
     mutable detail::BWF_GlobalSignature _gf = nullptr;
 
-    Item() : _spec("") {}
+    Item() {}
     Item(BWFSpec const &spec, detail::BWF_GlobalSignature gf) : _spec(spec), _gf(gf) {}
   };
 
@@ -167,6 +179,12 @@ protected:
   /// Handles literals by writing the contents of the extension directly to @a w.
   static void LiteralFormatter(BufferWriter &w, BWFSpec const &spec);
 };
+
+namespace detail
+{
+  /// Internal error / reporting message generators
+  void BWF_bad_arg_idx(BufferWriter &w, int i, size_t n);
+}
 
 /** BufferWriter print.
 
@@ -186,37 +204,17 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
   auto args(std::forward_as_tuple(rest...));
   auto fa     = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
   int arg_idx = 0;
-  TextView::size_type off;
 
   while (fmt.size()) {
-    off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
-    if (off == TextView::npos) {
-      w.write(fmt);
-      break;
-    } else if (fmt.size() > off + 1) {
-      char c1 = fmt[off];
-      char c2 = fmt[off + 1];
-      if (c1 == c2) {
-        w.write(fmt.take_prefix_at(off + 1));
-        continue;
-      } else if ('}' == c1) {
-        throw std::invalid_argument("Unopened }");
-      } else {
-        w.write(fmt.data(), off);
-        fmt.remove_prefix(off + 1);
-      }
-    } else {
-      throw std::invalid_argument("Invalid trailing character");
-    }
-    if (fmt.size()) {
-      // Need to be careful, because an empty format is OK and it's hard to tell if
-      // take_prefix_at failed to find the delimiter or found it as the first byte.
-      off = fmt.find('}');
-      if (off == TextView::npos) {
-        throw std::invalid_argument("Unclosed {");
-      }
+    TextView lit_v;
+    TextView spec_v;
+    bool spec_p = BWFormat::parse(fmt, lit_v, spec_v);
 
-      BWFSpec spec{fmt.take_prefix_at(off)};
+    if (lit_v.size()) {
+      w.write(lit_v);
+    }
+    if (spec_p) {
+      BWFSpec spec{spec_v};
       size_t width = w.remaining();
       if (spec._max >= 0)
         width = std::min(width, static_cast<size_t>(spec._max));
@@ -229,12 +227,15 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
         if (spec._idx < N) {
           fa[spec._idx](lw, spec, args);
         } else {
-          bwprint(lw, "[BAD_ARG_INDEX:{} of {}]", spec._idx, N);
+          detail::BWF_bad_arg_idx(lw, spec._idx, N);
         }
       } else if (spec._name.size()) {
         auto gf = detail::bwf_global_table_find(spec._name);
-        if (gf)
+        if (gf) {
           gf(lw, spec);
+        } else {
+          lw << "{invalid name:" << spec._name << '}';
+        }
       }
       if (lw.size())
         detail::bwf_aligner(spec, w, lw);
@@ -250,8 +251,7 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
 {
   static constexpr int N = sizeof...(Rest);
   auto args(std::forward_as_tuple(rest...));
-  auto fa     = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
-  int arg_idx = 0;
+  auto fa = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
 
   for (BWFormat::Item const &item : fmt._items) {
     size_t width = w.remaining();
@@ -262,19 +262,15 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
       (item._gf)(w, item._spec);
     else {
       auto idx = item._spec._idx;
-      if (idx < 0 && item._spec._name.size() == 0)
-        idx = arg_idx;
       if (0 <= idx && idx < N) {
         fa[idx](lw, item._spec, args);
-      } else if (item._spec._name.size()) {
-        detail::BWF_GlobalSignature gf;
-        if (nullptr != (item._gf = detail::bwf_global_table_find(item._spec._name)))
-          (item._gf)(lw, item._spec);
+      } else if (item._spec._name.size() && (nullptr != (item._gf = detail::bwf_global_table_find(item._spec._name)))) {
+        item._gf(lw, item._spec);
       }
     }
-    if (lw.size())
+    if (lw.size()) {
       detail::bwf_aligner(item._spec, w, lw);
-    ++arg_idx;
+    }
   }
   return 0;
 }

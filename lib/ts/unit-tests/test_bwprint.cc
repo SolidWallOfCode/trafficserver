@@ -91,8 +91,12 @@ TEST_CASE("bwprint basics", "[bwprint]")
   REQUIRE(bw.view() == "Format |-0x00003bc|");
 
   bw.reduce(0);
+  bwprint(bw, "{{BAD_ARG_INDEX:{} of {}}}", 17, 23);
+  REQUIRE(bw.view() == "{BAD_ARG_INDEX:17 of 23}");
+
+  bw.reduce(0);
   bwprint(bw, "Arg {0} Arg {3}", 1, 2);
-  REQUIRE(bw.view() == "Arg 1 Arg [BAD_ARG_INDEX:3 of 2]");
+  REQUIRE(bw.view() == "Arg 1 Arg {BAD_ARG_INDEX:3 of 2}");
 
   bw.reduce(0);
   bwprint(bw, "{{stuff}} Arg {0} Arg {}", 1, 2);
@@ -114,9 +118,11 @@ TEST_CASE("bwprint basics", "[bwprint]")
   bwprint(bw, "Time is {now}");
 //  REQUIRE(bw.view() == "Time is");
 
-#if 1
+#if 0
+  constexpr int N_LOOPS = 1000000;
+
   auto start = std::chrono::high_resolution_clock::now();
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < N_LOOPS; ++i) {
     bw.reduce(0);
     bwprint(bw, "Format |{:#010x}|", -956);
   }
@@ -126,7 +132,7 @@ TEST_CASE("bwprint basics", "[bwprint]")
 
   ts::BWFormat fmt("Format |{:#010x}|");
   start = std::chrono::high_resolution_clock::now();
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < N_LOOPS; ++i) {
     bw.reduce(0);
     bwprint(bw, fmt, -956);
   }
@@ -136,7 +142,7 @@ TEST_CASE("bwprint basics", "[bwprint]")
 
   char buff[256];
   start = std::chrono::high_resolution_clock::now();
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < N_LOOPS; ++i) {
     snprintf(buff, sizeof(buff), "Format |%#0x10|", -956);
   }
   delta = std::chrono::high_resolution_clock::now() - start;
@@ -150,6 +156,12 @@ TEST_CASE("BWFormat", "[bwprint][bwformat]")
   ts::BWFormat fmt("left >{0:<9}< right >{0:>9}< center >{0:=9}<");
   ts::string_view text{"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
+  bw.reduce(0);
+  static const ts::BWFormat bad_arg_fmt{"{{BAD_ARG_INDEX:{} of {}}}"};
+  bwprint(bw, bad_arg_fmt, 17, 23);
+  REQUIRE(bw.view() == "{BAD_ARG_INDEX:17 of 23}");
+
+  bw.reduce(0);
   bwprint(bw, fmt, 956);
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
 
