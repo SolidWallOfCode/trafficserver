@@ -30,6 +30,8 @@
 #include <map>
 #include <unordered_map>
 
+#include <iostream>
+
 namespace ts
 {
 /** A parsed version of a format specifier.
@@ -114,8 +116,7 @@ namespace detail
   /// This exists only to expand the index sequence into an array of formatters for the tuple type
   /// @a TUPLE.  Due to langauge limitations it cannot be done directly. The formatters can be
   /// access via standard array access in constrast to templated tuple access. The actual array is
-  /// static and therefor at run time the only operation is loading and return the address of the
-  /// array.
+  /// static and therefore at run time the only operation is loading the address of the array.
   template <typename TUPLE, size_t... N>
   BWFArgSelectorSignature<TUPLE> *
   bwf_get_arg_selector_array(index_sequence<N...>)
@@ -169,7 +170,7 @@ protected:
 
     This prints its arguments to the @c BufferWriter @a w according to the format @a fmt. The format
     string is based on Python style formating, each argument substitution marked by braces, {}. Each
-    specification has three parts, a @a name, a @a specified, and a @a extention. These are
+    specification has three parts, a @a name, a @a specifier, and an @a extention. These are
     separated by colons. The name should be either omitted or a number, the index of the argument to
     use. If omitted the place in the format string is used as the argument index. E.g. "{} {} {}",
     "{} {1} {}", and "{0} {1} {2}" are equivalent. Using an explicit index does not reset the
@@ -183,16 +184,32 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
   auto args(std::forward_as_tuple(rest...));
   auto fa     = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
   int arg_idx = 0;
+  TextView::size_type off;
 
   while (fmt) {
-    ts::TextView lit = fmt.take_prefix_at('{');
-    if (lit) {
-      w.write(lit);
+    off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
+    if (off == TextView::npos) {
+      w.write(fmt);
+      break;
+    } else if (fmt.size() > off + 1) {
+      char c1 = fmt[off];
+      char c2 = fmt[off + 1];
+      if (c1 == c2) {
+        w.write(fmt.take_prefix_at(off + 1));
+        continue;
+      } else if ('}' == c1) {
+        throw std::invalid_argument("Unopened }");
+      } else {
+        w.write(fmt.data(), off);
+        fmt.remove_prefix(off + 1);
+      }
+    } else {
+      throw std::invalid_argument("Invalid trailing character");
     }
-    if (fmt) {
+    if (fmt.size()) {
       // Need to be careful, because an empty format is OK and it's hard to tell if
       // take_prefix_at failed to find the delimiter or found it as the first byte.
-      TextView::size_type off = fmt.find('}');
+      off = fmt.find('}');
       if (off == TextView::npos) {
         throw std::invalid_argument("Unclosed {");
       }
@@ -203,10 +220,15 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
         width = std::min(width, static_cast<size_t>(spec._max));
       FixedBufferWriter lw{w.auxBuffer(), width};
 
-      if (spec._name.size() == 0)
+      if (spec._name.size() == 0) {
         spec._idx = arg_idx;
-      if (0 <= spec._idx && spec._idx < N) {
-        fa[spec._idx](lw, spec, args);
+      }
+      if (0 <= spec._idx) {
+        if (spec._idx < N) {
+          fa[spec._idx](lw, spec, args);
+        } else {
+          bwprint(lw, "[BAD_ARG_INDEX:{} of {}]", spec._idx, N);
+        }
       } else if (spec._name.size()) {
         auto gf = detail::bwf_global_table_find(spec._name);
         if (gf)
@@ -265,37 +287,44 @@ operator<<(BufferWriter &w, V &&v)
 
 // -- Common formatters --
 
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &, char c)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &, char c)
 {
   return w.write(c);
 }
-BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv);
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, const char *v)
+BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv);
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, const char *v)
 {
   return bwformat(w, spec, string_view(v));
 }
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, TextView tv)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, TextView tv)
 {
   return bwformat(w, spec, static_cast<string_view>(tv));
 }
 
 //-- Integral types
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, uintmax_t i)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, uintmax_t i)
 {
   return detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, intmax_t i)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, intmax_t i)
 {
   return i < 0 ? detail::bwf_integral_formatter(w, spec, -i, true) : detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, unsigned int i)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, unsigned int i)
 {
   return detail::bwf_integral_formatter(w, spec, i, false);
 }
 
-inline BufferWriter & bwformat(BufferWriter &w, BWFSpec const &spec, int i)
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, int i)
 {
   return i < 0 ? detail::bwf_integral_formatter(w, spec, -i, true) : detail::bwf_integral_formatter(w, spec, i, false);
 }

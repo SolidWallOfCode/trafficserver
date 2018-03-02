@@ -91,10 +91,30 @@ TEST_CASE("bwprint basics", "[bwprint]")
   REQUIRE(bw.view() == "Format |-0x00003bc|");
 
   bw.reduce(0);
+  bwprint(bw, "Arg {0} Arg {3}", 1, 2);
+  REQUIRE(bw.view() == "Arg 1 Arg [BAD_ARG_INDEX:3 of 2]");
+
+  bw.reduce(0);
+  bwprint(bw, "{{stuff}} Arg {0} Arg {}", 1, 2);
+  REQUIRE(bw.view() == "{stuff} Arg 1 Arg 2");
+  bw.reduce(0);
+  bwprint(bw, "Arg {0} Arg {} and {{stuff}}", 3, 4);
+  REQUIRE(bw.view() == "Arg 3 Arg 4 and {stuff}");
+  bw.reduce(0);
+  bwprint(bw, "Arg {{{0}}} Arg {} and {{stuff}}", 5, 6);
+  REQUIRE(bw.view() == "Arg {5} Arg 6 and {stuff}");
+  bw.reduce(0);
+  bwprint(bw, "Arg {0} Arg {{}}{{}} {} and {{stuff}}", 7, 8);
+  REQUIRE(bw.view() == "Arg 7 Arg {}{} 8 and {stuff}");
+
+  bw.reduce(0);
+  bwprint(bw, "Arg {0} Arg {{{{}}}} {}", 9, 10);
+  REQUIRE(bw.view() == "Arg 9 Arg {{}} 10");
+  bw.reduce(0);
   bwprint(bw, "Time is {now}");
 //  REQUIRE(bw.view() == "Time is");
 
-#if 0
+#if 1
   auto start = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < 1000000; ++i) {
     bw.reduce(0);

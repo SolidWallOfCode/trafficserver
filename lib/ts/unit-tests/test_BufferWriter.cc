@@ -23,7 +23,6 @@
 
 #include "catch.hpp"
 #include <ts/BufferWriter.h>
-#include <ts/bwprint.h>
 #include <ts/string_view.h>
 #include <cstring>
 
