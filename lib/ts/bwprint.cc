@@ -43,13 +43,13 @@ ts::BWFSpec::BWFSpec(TextView fmt)
   _name = fmt.take_prefix_at(':');
   // if it's parsable as a number, treat it as an index.
   n = tv_to_positive_decimal(_name, &num);
-  if (num)
+  if (num.size())
     _idx = static_cast<decltype(_idx)>(n);
 
-  if (fmt) {
+  if (fmt.size()) {
     TextView sz = fmt.take_prefix_at(':'); // the format specifier.
     _ext        = fmt;                     // anything past the second ':' is the extension.
-    if (sz) {
+    if (sz.size()) {
       // fill and alignment
       if ('%' == *sz) { // enable URI encoding of the fill character so metasyntactic chars can be used if needed.
         if (sz.size() < 4) {
@@ -71,18 +71,18 @@ ts::BWFSpec::BWFSpec(TextView fmt)
       } else if (Align::NONE != (_align = align_of(*sz))) {
         ++sz;
       }
-      if (!sz)
+      if (!sz.size())
         return;
       // sign
       if (is_sign(*sz)) {
         _sign = *sz;
-        if (!++sz)
+        if (!(++sz).size())
           return;
       }
       // radix prefix
       if ('#' == *sz) {
         _radix_lead_p = true;
-        if (!++sz)
+        if (!(++sz).size())
           return;
       }
       // 0 fill for integers
@@ -93,19 +93,19 @@ ts::BWFSpec::BWFSpec(TextView fmt)
         ++sz;
       }
       n = tv_to_positive_decimal(sz, &num);
-      if (num) {
+      if (num.size()) {
         _min = static_cast<decltype(_min)>(n);
         sz.remove_prefix(num.size());
-        if (!sz)
+        if (!sz.size())
           return;
       }
       // precision
       if ('.' == *sz) {
         n = tv_to_positive_decimal(++sz, &num);
-        if (num) {
+        if (num.size()) {
           _prec = static_cast<decltype(_prec)>(n);
           sz.remove_prefix(num.size());
-          if (!sz)
+          if (!sz.size())
             return;
         } else {
           throw std::invalid_argument("Precision mark without precision");
@@ -114,16 +114,16 @@ ts::BWFSpec::BWFSpec(TextView fmt)
       // style (type). Hex, octal, etc.
       if (is_type(*sz)) {
         _type = *sz;
-        if (!++sz)
+        if (!(++sz).size())
           return;
       }
       // maximum width
       if (',' == *sz) {
         n = tv_to_positive_decimal(++sz, &num);
-        if (num) {
+        if (num.size()) {
           _max = static_cast<decltype(_max)>(n);
           sz.remove_prefix(num.size());
-          if (!sz)
+          if (!sz.size())
             return;
         } else {
           throw std::invalid_argument("Maximum width mark without width");
@@ -131,7 +131,7 @@ ts::BWFSpec::BWFSpec(TextView fmt)
         // Can only have a type indicator here if there was a max width.
         if (is_type(*sz)) {
           _type = *sz;
-          if (!++sz)
+          if (!(++sz).size())
             return;
         }
       }
@@ -347,16 +347,43 @@ ts::bwformat(BufferWriter &w, BWFSpec const &spec, string_view sv)
 /// Preparse format string for later use.
 ts::BWFormat::BWFormat(ts::TextView fmt)
 {
+  TextView::size_type off;
+  BWFSpec lit_spec{BWFSpec::DEFAULT};
+
   while (fmt) {
-    ts::TextView lit = fmt.take_prefix_at('{');
+    TextView lit;
+
     if (lit) {
       // hack - to represent a literal the actual literal is stored in the extension field and
       // the @c LiteralFormatter function grabs it from there.
-      BWFSpec spec{""};
-      spec._ext = lit;
-      _items.emplace_back(spec, &LiteralFormatter);
+      lit_spec._ext = lit;
+      _items.emplace_back(lit_spec, &LiteralFormatter);
     }
-    if (fmt) {
+
+    off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
+    if (off == TextView::npos) {
+      lit_spec._ext = fmt;
+      _items.emplace_back(lit_spec, &LiteralFormatter);
+      break;
+    } else if (fmt.size() > off + 1) {
+      char c1 = fmt[off];
+      char c2 = fmt[off + 1];
+      if (c1 == c2) {
+        lit_spec._ext = fmt.take_prefix_at(off + 1);
+        _items.emplace_back(lit_spec, &LiteralFormatter);
+        continue;
+      } else if ('}' == c1) {
+        throw std::invalid_argument("Unopened }");
+      } else {
+        lit_spec._ext = string_view{fmt.data(), off};
+        _items.emplace_back(lit_spec, &LiteralFormatter);
+        fmt.remove_prefix(off + 1);
+      }
+    } else {
+      throw std::invalid_argument("Invalid trailing character");
+    }
+
+    if (fmt.size()) {
       detail::BWF_GlobalSignature gf = nullptr;
       // Need to be careful, because an empty format is OK and it's hard to tell if
       // take_prefix_at failed to find the delimiter or found it as the first byte.

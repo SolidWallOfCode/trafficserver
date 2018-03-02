@@ -186,7 +186,7 @@ bwprint(BufferWriter &w, TextView fmt, Rest const &... rest)
   int arg_idx = 0;
   TextView::size_type off;
 
-  while (fmt) {
+  while (fmt.size()) {
     off = fmt.find_if([](char c) { return '{' == c || '}' == c; });
     if (off == TextView::npos) {
       w.write(fmt);
