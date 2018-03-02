@@ -251,16 +251,16 @@ bwprint(BufferWriter &w, BWFormat const &fmt, Rest const &... rest)
 {
   static constexpr int N = sizeof...(Rest);
   auto args(std::forward_as_tuple(rest...));
-  auto fa = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
+  static auto fa = detail::bwf_get_arg_selector_array<decltype(args)>(index_sequence_for<Rest...>{});
 
   for (BWFormat::Item const &item : fmt._items) {
     size_t width = w.remaining();
     if (item._spec._max >= 0)
       width = std::min(width, static_cast<size_t>(item._spec._max));
     FixedBufferWriter lw{w.auxBuffer(), width};
-    if (item._gf)
-      (item._gf)(w, item._spec);
-    else {
+    if (item._gf) {
+      item._gf(lw, item._spec);
+    } else {
       auto idx = item._spec._idx;
       if (0 <= idx && idx < N) {
         fa[idx](lw, item._spec, args);

@@ -245,24 +245,28 @@ bwf_integral_formatter(BufferWriter &w, BWFSpec const &spec, uintmax_t i, bool n
     n = detail::bwf_to_radix<16>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   case 'X':
-    if (spec._radix_lead_p)
+    if (spec._radix_lead_p) {
       prefix = "0X"_sv;
-    n        = detail::bwf_to_radix<16>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    }
+    n = detail::bwf_to_radix<16>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
     break;
   case 'b':
-    if (spec._radix_lead_p)
+    if (spec._radix_lead_p) {
       prefix = "0b"_sv;
-    n        = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    }
+    n = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   case 'B':
-    if (spec._radix_lead_p)
+    if (spec._radix_lead_p) {
       prefix = "0B"_sv;
-    n        = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
+    }
+    n = detail::bwf_to_radix<2>(i, buff, sizeof(buff), detail::UPPER_DIGITS);
     break;
   case 'o':
-    if (spec._radix_lead_p)
+    if (spec._radix_lead_p) {
       prefix = "0"_sv;
-    n        = detail::bwf_to_radix<8>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
+    }
+    n = detail::bwf_to_radix<8>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
     break;
   default:
     n = detail::bwf_to_radix<10>(i, buff, sizeof(buff), detail::LOWER_DIGITS);
