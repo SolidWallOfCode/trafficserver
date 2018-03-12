@@ -147,16 +147,4 @@ operator<<(ostream &os, const ts::TextView &b)
   }
   return os;
 }
-
-ostream &
-operator<<(ostream &os, const ts::MemView &b)
-{
-  if (os.good()) {
-    ostringstream out;
-    out << b.size() << '@' << hex << b.ptr();
-    os << out.str();
-  }
-  return os;
 }
-
-} // namespace std
