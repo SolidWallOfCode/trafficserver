@@ -22,64 +22,104 @@
 traffic_cache_tool
 ******************
 
+========
 Synopsis
 ========
 
-:program:`traffic_cache_tool` [OPTIONS] SUBCOMMAND [OPTIONS]
+:program:`traffic_cache_tool` [OPTIONS] COMMAND [SUBCOMMAND ...] [OPTIONS]
 
 .. _traffic-cache-tool-commands:
 
+===========
 Description
 ===========
 
-:program:`traffic_cache_tool` is designed to interact with the |TS| cache both for inspection and modification.
-
-:program:`traffic_cache_tool alloc`
-    Perform cache storage allocation operations.
-:program:`traffic_cache_tool list`
-   Display information about the cache.
-
-Options
-=======
+:program:`traffic_cache_tool` is designed to interact with the |TS| cache both for inspection and
+modification. It uses a nested command keyword style for specifying operations. There are some
+global options that apply to all commands. These should be specified before any command. These can
+be abbreviated to any unique initial substring (e.g. "--sp" for "--span").
 
 .. program:: traffic_cache_tool
 
-.. option:: --span
+.. option:: --help
 
-    Specify the span (storage) to operate one. This can be a device, a cache directory, or a configuration file in the format of :file:`storage.config`. In the latter case all devices listed in the configuration file become active.
+   Prints a brief usage message along with the current command hierarchy.
 
-.. option:: --volume
+.. option:: --spans
 
-    Specify the volume configuration file in the format of :file:`volume.config`. This is important primarily for allocation operations where having the volume configuration is needed in order to properly allocate storage in spans to specific volumes.
+    Specify the span (storage) configuration. This can be a device, a cache directory, or a
+    configuration file in the formof :file:`storage.config`. In the latter case all devices listed
+    in the configuration file become active.
+
+.. option:: --volumes
+
+    Specify the volume configuration file in the format of :file:`volume.config`. This is important
+    primarily for allocation operations where having the volume configuration is needed in order to
+    properly allocate storage in spans to specific volumes.
 
 .. option:: --write
 
-   Enable writing to storage devices. If this flag is not present then no operation will write to any storage device. This makes "dry run" the default and actual changes require specifying this flag.
+   Enable writing to storage devices. If this flag is not present then all storage will be opened
+   read only and no operation will write to any storage device. This makes "dry run" the default and
+   actual changes require specifying this flag.
 
-Subcommands
+.. option:: --aos
+
+   Specific the average object size in bytes. This is used in various computations. It is identical
+   to :ts:cv:`proxy.config.cache.min_average_object_size`.
+
+===========
+Commands
 ===========
 
-traffic_cache_tool alloc
-------------------------
-.. program:: traffic_cache_tool alloc
-.. option:: free
+``list``
+   Search the spans for stripe data and display it. This is potentially slow as large sections of
+   the disk may need to be read to find the stripe headers.
 
-   Allocate space on all spans that are empty. Requires a volume confiuration file to be specified.
+   ``stripes``
+      Print internal stripe metadata.
 
-traffic_cache_tool list
------------------------
-.. program:: traffic_cache_tool list
-.. option:: stripes
+``clear``
+   Clear spans by writing updated span headers.
 
-   Search the spans for stripe data and display it. This is potentially slow as large sections of the disk may need to be read to find the stripe headers.
+``dir_check``
+   Perform diagnostics on the stripe directories.
 
+   ``full``
+      Full check of the directories.
+
+   ``freelist``
+      Validate the directory free lists.
+
+   ``bucket_chain``
+      Validate the bucket chains in the directories.
+
+``volumes``
+   Compute storage allocation to stripes based on the volume configuration and print it.
+
+``alloc``
+   Allocate storage to stripes, updating the span and stripe headers.
+
+   ``free``
+      Allocate only free (unused) storage to volumes, updating span and stripe headers as needed.
+
+
+========
 Examples
 ========
 
-List the basic span data.
+List the basic span data.::
 
-    $ traffic_cache_tool list
+    traffic_cache_tool --spans=/usr/local/etc/trafficserver/storage.config list
 
+Allocate unused storage space.::
+
+   traffic_cache_tool \
+      --spans=/usr/local/etc/trafficserver/storage.config \
+      --volumes=/usr/local/etc/trafficserver/volume.config \
+      alloc free
+
+========
 See also
 ========
 
