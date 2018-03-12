@@ -274,7 +274,6 @@ Errata
 Stripe::InitializeMeta()
 {
   Errata zret;
-  size_t dir_len = this->vol_dirlen();
   // memset(this->raw_dir, 0, dir_len);
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {
@@ -354,7 +353,6 @@ Stripe::updateHeaderFooter()
     zret.push(0, 1, "Writing Not Enabled.. Please use --write to enable writing to disk");
     return zret;
   }
-  static const size_t SBSIZE = CacheStoreBlocks::SCALE; // save some typing.
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {
       char *meta_t = (char *)ats_memalign(ats_pagesize(), this->vol_dirlen());
@@ -561,7 +559,7 @@ Stripe::dir_probe(INK_MD5 *key, CacheDirEntry *result, CacheDirEntry **last_coll
   int bucket  = key->slice32(1) % this->_buckets;
 
   CacheDirEntry *seg = this->dir_segment(segment);
-  CacheDirEntry *e = nullptr, *p = nullptr, *collision = nullptr;
+  CacheDirEntry *e = nullptr;
   e                  = dir_bucket(bucket, seg);
   char *stripe_buff2 = (char *)malloc(dir_approx_size(e));
   Doc *doc           = nullptr;
@@ -579,7 +577,6 @@ Stripe::dir_probe(INK_MD5 *key, CacheDirEntry *result, CacheDirEntry **last_coll
           // continue;
         }
       }
-      p = e;
       e = next_dir(e, seg);
 
     } while (e);
@@ -597,6 +594,7 @@ Stripe::dir_probe(INK_MD5 *key, CacheDirEntry *result, CacheDirEntry **last_coll
   } else {
     std::cout << "Not found in the Cache" << std::endl;
   }
+  return 0; // Why does this have a non-void return?
 }
 
 CacheDirEntry *
@@ -638,6 +636,7 @@ Stripe::walk_all_buckets()
   }
 }
 
+#if 0
 int
 Stripe::dir_bucket_length(CacheDirEntry *b, int s)
 {
@@ -657,6 +656,7 @@ Stripe::dir_bucket_length(CacheDirEntry *b, int s)
   }
   return i;
 }
+#endif
 
 bool
 Stripe::walk_bucket_chain(int s)
@@ -740,6 +740,7 @@ Stripe::loadDir()
 // Cache Directory
 //
 
+#if 0
 // return value 1 means no loop
 // zero indicates loop
 int
@@ -770,10 +771,11 @@ dir_bucket_loop_check(CacheDirEntry *start_dir, CacheDirEntry *seg)
   }
   return 1;
 }
+#endif
 
 // break the infinite loop in directory entries
 // Note : abuse of the token bit in dir entries
-
+#if 0
 int
 Stripe::dir_bucket_loop_fix(CacheDirEntry *start_dir, int s)
 {
@@ -785,6 +787,7 @@ Stripe::dir_bucket_loop_fix(CacheDirEntry *start_dir, int s)
   }
   return 0;
 }
+#endif
 
 int
 Stripe::dir_freelist_length(int s)
@@ -808,7 +811,6 @@ Stripe::check_loop(int s)
 {
   // look for loop in the segment
   // rewrite the freelist if loop is present
-  int free           = 0;
   CacheDirEntry *seg = this->dir_segment(s);
   CacheDirEntry *e   = dir_from_offset(this->freelist[s], seg);
   std::bitset<65536> f_bitset;
@@ -860,7 +862,6 @@ Stripe::dir_check()
   std::cout << "  Segments:  " << _segments << std::endl;
   std::cout << "  Buckets per segment:  " << _buckets << std::endl;
   std::cout << "  Entries:  " << _segments * _buckets * DIR_DEPTH << std::endl;
-  int fd = _span->_fd;
   for (int s = 0; s < _segments; s++) {
     CacheDirEntry *seg     = this->dir_segment(s);
     int seg_chain_max      = 0;
@@ -1721,6 +1722,7 @@ Cache::~Cache()
     delete span;
 }
 /* --------------------------------------------------------------------------------------- */
+#if 0
 Errata
 Span::Initialize()
 {
@@ -1742,15 +1744,15 @@ Span::Initialize()
     }
     start = skip + header_len;
   }
-  auto blocks = this->_geometry.totalsz / STORE_BLOCK_SIZE;
   // num_usable_blocks = ((_len * STORE_BLOCK_SIZE) - (start - skip)) >> STORE_BLOCK_SHIFT;
-  auto sector_size = this->_geometry.blocksz;
   header_len       = ROUND_TO_STORE_BLOCK(header_len);
   std::cout << "start " << start << "len " << _len << " header length " << header_len << std::endl;
   num_usable_blocks = (_len - (start - skip)) >> STORE_BLOCK_SHIFT;
   return zret;
 }
+#endif
 
+#if 0
 Errata
 Span::create_stripe(int number, off_t size_in_blocks, int scheme)
 {
@@ -1767,6 +1769,7 @@ Span::create_stripe(int number, off_t size_in_blocks, int scheme)
   // initialize stripes
   return zret;
 }
+#endif
 
 Errata
 Span::load()
@@ -2346,9 +2349,11 @@ Check_Freelist(std::string devicePath)
         for (auto strp : sp->_stripes) {
           strp->loadMeta();
           strp->loadDir();
+          /* what is this trying to do?
           for (int s = 0; s < strp->_segments; s++) {
             int freelist = strp->dir_freelist_length(s);
           }
+         */
         }
         break;
       }
