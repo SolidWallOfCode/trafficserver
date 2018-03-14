@@ -54,7 +54,7 @@ using ts::CacheStripeDescriptor;
 using ts::Errata;
 using ts::FilePath;
 using ts::CacheDirEntry;
-using ts::MemView;
+using ts::MemSpan;
 using ts::Doc;
 
 constexpr int STORE_BLOCK_SIZE           = 8192;
@@ -137,12 +137,12 @@ struct Stripe {
     Bytes _skip;  ///< # of bytes not valid at the start of the first block.
     Bytes _clip;  ///< # of bytes not valid at the end of the last block.
 
-    typedef std::vector<MemView> Chain;
+    typedef std::vector<MemSpan> Chain;
     Chain _chain; ///< Chain of blocks.
 
     ~Chunk();
 
-    void append(MemView m);
+    void append(MemSpan m);
     void clear();
   };
 
@@ -160,7 +160,7 @@ struct Stripe {
 
       @return @c true if @a mem has valid data, @c false otherwise.
   */
-  bool probeMeta(MemView &mem, StripeMeta const *meta = nullptr);
+  bool probeMeta(MemSpan &mem, StripeMeta const *meta = nullptr);
 
   /// Check a buffer for being valid stripe metadata.
   /// @return @c true if valid, @c false otherwise.
@@ -237,7 +237,7 @@ Stripe::Chunk::~Chunk()
   this->clear();
 }
 void
-Stripe::Chunk::append(MemView m)
+Stripe::Chunk::append(MemSpan m)
 {
   _chain.push_back(m);
 }
@@ -245,7 +245,7 @@ void
 Stripe::Chunk::clear()
 {
   for (auto &m : _chain)
-    free(const_cast<void *>(m.ptr()));
+    free(const_cast<void *>(m.data()));
   _chain.clear();
 }
 
@@ -313,10 +313,10 @@ Stripe::validateMeta(StripeMeta const *meta)
 }
 
 bool
-Stripe::probeMeta(MemView &mem, StripeMeta const *base_meta)
+Stripe::probeMeta(MemSpan &mem, StripeMeta const *base_meta)
 {
   while (mem.size() >= sizeof(StripeMeta)) {
-    StripeMeta const *meta = mem.template at_ptr<StripeMeta>(0);
+    StripeMeta const *meta = mem.ptr<StripeMeta>(0);
     if (this->validateMeta(meta) && (base_meta == nullptr ||               // no base version to check against.
                                      (meta->version == base_meta->version) // need more checks here I think.
                                      )) {
@@ -1007,7 +1007,7 @@ Stripe::loadMeta()
   int fd = _span->_fd;
   Bytes n;
   bool found;
-  MemView data; // The current view of the read buffer.
+  MemSpan data; // The current view of the read buffer.
   Bytes delta;
   Bytes pos = _start;
   // Avoid searching the entire span, because some of it must be content. Assume that AOS is more than 160
@@ -1029,11 +1029,11 @@ Stripe::loadMeta()
   // Todo: really need to check pread() for failure.
   ssize_t headerbyteCount = pread(fd, stripe_buff2, SBSIZE, pos);
   n.assign(headerbyteCount);
-  data.setView(stripe_buff2, n);
-  meta = data.template at_ptr<StripeMeta>(0);
+  data.assign(stripe_buff2, n);
+  meta = data.ptr<StripeMeta>(0);
   // TODO:: We need to read more data at this point  to populate dir
   if (this->validateMeta(meta)) {
-    delta              = Bytes(data.template at_ptr<char>(0) - stripe_buff2);
+    delta              = Bytes(data.ptr<char>(0) - stripe_buff2);
     _meta[A][HEAD]     = *meta;
     _meta_pos[A][HEAD] = round_down(pos + Bytes(delta));
     pos += round_up(SBSIZE);
@@ -1044,10 +1044,10 @@ Stripe::loadMeta()
       char *buff = static_cast<char *>(ats_memalign(io_align, N));
       bulk_buff.reset(buff);
       n.assign(pread(fd, buff, N, pos));
-      data.setView(buff, n);
+      data.assign(buff, n);
       found = this->probeMeta(data, &_meta[A][HEAD]);
       if (found) {
-        ptrdiff_t diff     = data.template at_ptr<char>(0) - buff;
+        ptrdiff_t diff     = data.ptr<char>(0) - buff;
         _meta[A][FOOT]     = data.template at<StripeMeta>(0);
         _meta_pos[A][FOOT] = round_down(pos + Bytes(diff));
         // don't bother attaching block if the footer is at the start
@@ -1075,10 +1075,10 @@ Stripe::loadMeta()
     //    if (data.size() < CacheStoreBlocks::SCALE) {
     //      pos += round_up(N);
     //      n = Bytes(pread(fd, stripe_buff, CacheStoreBlocks::SCALE, pos));
-    //      data.setView(stripe_buff, n);
+    //      data.assign(stripe_buff, n);
     //    }
     pos  = this->_start + Bytes(vol_dirlen());
-    meta = data.template at_ptr<StripeMeta>(0);
+    meta = data.ptr<StripeMeta>(0);
     if (this->validateMeta(meta)) {
       _meta[B][HEAD]     = *meta;
       _meta_pos[B][HEAD] = round_down(pos);
@@ -1086,8 +1086,8 @@ Stripe::loadMeta()
       // Footer B must be at the same relative offset to Header B as Footer A -> Header A.
       pos += delta;
       n = Bytes(pread(fd, stripe_buff, ts::CacheStoreBlocks::SCALE, pos));
-      data.setView(stripe_buff, n);
-      meta = data.template at_ptr<StripeMeta>(0);
+      data.assign(stripe_buff, n);
+      meta = data.ptr<StripeMeta>(0);
       if (this->validateMeta(meta)) {
         _meta[B][FOOT]     = *meta;
         _meta_pos[B][FOOT] = round_down(pos);
@@ -1109,8 +1109,8 @@ Stripe::loadMeta()
   }
 
   n.assign(headerbyteCount);
-  data.setView(stripe_buff2, n);
-  meta = data.template at_ptr<StripeMeta>(0);
+  data.assign(stripe_buff2, n);
+  meta = data.ptr<StripeMeta>(0);
   // copy freelist
   freelist = (uint16_t *)malloc(_segments * sizeof(uint16_t));
   for (int i    = 0; i < _segments; i++)
@@ -2277,7 +2277,7 @@ Find_Stripe(FilePath const &input_file_path)
       ctx.finalize(hashT);
       Stripe *stripe_ = cache.key_to_stripe(&hashT, host->url.data(), host->url.size());
       printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(),
-             ink_code_to_hex_str(hashStr, (unsigned char *)&hashT), stripe_->hashText.data());
+             hashT.toHexStr(hashStr), stripe_->hashText.data());
     }
   }
 
@@ -2407,7 +2407,7 @@ Get_Response(FilePath const &input_file_path)
       ctx.finalize(hashT);
       Stripe *stripe_ = cache.key_to_stripe(&hashT, host->url.data(), host->url.size());
       printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(),
-             ink_code_to_hex_str(hashStr, (unsigned char *)&hashT), stripe_->hashText.data());
+             hashT.toHexStr(hashStr), stripe_->hashText.data());
       CacheDirEntry *dir_result = nullptr;
       stripe_->loadMeta();
       stripe_->loadDir();
