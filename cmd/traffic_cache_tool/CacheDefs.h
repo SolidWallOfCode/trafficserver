@@ -41,7 +41,8 @@ struct bytes {
 };
 }
 
-using namespace ApacheTrafficServer;
+using ts::round_down;
+using ts::round_up;
 
 namespace ts
 {
