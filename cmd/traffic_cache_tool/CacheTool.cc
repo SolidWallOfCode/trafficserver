@@ -559,7 +559,7 @@ Stripe::dir_probe(INK_MD5 *key, CacheDirEntry *result, CacheDirEntry **last_coll
   int bucket  = key->slice32(1) % this->_buckets;
 
   CacheDirEntry *seg = this->dir_segment(segment);
-  CacheDirEntry *e = nullptr;
+  CacheDirEntry *e   = nullptr;
   e                  = dir_bucket(bucket, seg);
   char *stripe_buff2 = (char *)malloc(dir_approx_size(e));
   Doc *doc           = nullptr;
