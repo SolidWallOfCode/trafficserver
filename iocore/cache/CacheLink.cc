@@ -85,7 +85,7 @@ Cache::deref(Continuation *cont, const CacheKey *key, CacheFragType type, const 
   Vol *vol = key_to_vol(key, hostname, host_len);
   Dir result;
   Dir *last_collision = nullptr;
-  CacheVC *c = nullptr;
+  CacheVC *c          = nullptr;
   {
     MUTEX_TRY_LOCK(lock, vol->mutex, cont->mutex->thread_holding);
     if (lock.is_locked()) {

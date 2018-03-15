@@ -1653,7 +1653,7 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheFragType frag_ty
   c->vio.op    = VIO::WRITE;
   c->base_stat = cache_write_active_stat;
   c->vol       = key_to_vol(key, hostname, host_len);
-  Vol *vol = c->vol;
+  Vol *vol     = c->vol;
   CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
   c->first_key = c->key = *key;
   c->frag_type          = frag_type;
@@ -1730,8 +1730,8 @@ Cache::open_write(Continuation *cont, const CacheKey *key, CacheHTTPInfo *info, 
   c->earliest_key = c->key;
   c->frag_type    = CACHE_FRAG_TYPE_HTTP;
   c->vol          = key_to_vol(key, hostname, host_len);
-  Vol *vol = c->vol;
-  c->info  = info;
+  Vol *vol        = c->vol;
+  c->info         = info;
   if (c->info && (uintptr_t)info != CACHE_ALLOW_MULTIPLE_WRITES) {
     /*
        Update has the following code paths :

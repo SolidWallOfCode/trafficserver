@@ -33,7 +33,6 @@
 #include <tsconfig/Errata.h>
 #include <ts/TextView.h>
 
-
 namespace tag
 {
 struct bytes {

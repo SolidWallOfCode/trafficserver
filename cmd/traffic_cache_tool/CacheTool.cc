@@ -315,7 +315,7 @@ Stripe::validateMeta(StripeMeta const *meta)
 bool
 Stripe::probeMeta(MemSpan &mem, StripeMeta const *base_meta)
 {
-  while (mem.size() >= sizeof(StripeMeta)) {
+  while (mem.usize() >= sizeof(StripeMeta)) {
     StripeMeta const *meta = mem.ptr<StripeMeta>(0);
     if (this->validateMeta(meta) && (base_meta == nullptr ||               // no base version to check against.
                                      (meta->version == base_meta->version) // need more checks here I think.
@@ -2276,8 +2276,8 @@ Find_Stripe(FilePath const &input_file_path)
       ctx.update(&host->port, sizeof(host->port));
       ctx.finalize(hashT);
       Stripe *stripe_ = cache.key_to_stripe(&hashT, host->url.data(), host->url.size());
-      printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(),
-             hashT.toHexStr(hashStr), stripe_->hashText.data());
+      printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(), hashT.toHexStr(hashStr),
+             stripe_->hashText.data());
     }
   }
 
@@ -2406,8 +2406,8 @@ Get_Response(FilePath const &input_file_path)
       ctx.update(&host->port, sizeof(host->port));
       ctx.finalize(hashT);
       Stripe *stripe_ = cache.key_to_stripe(&hashT, host->url.data(), host->url.size());
-      printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(),
-             hashT.toHexStr(hashStr), stripe_->hashText.data());
+      printf("hash of %.*s is %s: Stripe  %s \n", (int)host->url.size(), host->url.data(), hashT.toHexStr(hashStr),
+             stripe_->hashText.data());
       CacheDirEntry *dir_result = nullptr;
       stripe_->loadMeta();
       stripe_->loadDir();

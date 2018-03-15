@@ -29,7 +29,7 @@ traffic_cache_tool_LDADD = \
 	$(top_builddir)/lib/ts/.libs/ink_error.o \
 	$(top_builddir)/lib/ts/.libs/ink_string.o \
 	$(top_builddir)/lib/ts/.libs/ink_assert.o \
-	$(top_builddir)/lib/ts/.libs/CryptoHash.o \
+	$(top_builddir)/lib/ts/.libs/BufferWriterFormat.o \
 	$(top_builddir)/lib/tsconfig/.libs/Errata.o \
 	$(top_builddir)/lib/ts/.libs/Regex.o \
 	@OPENSSL_LIBS@ @LIBPCRE@
