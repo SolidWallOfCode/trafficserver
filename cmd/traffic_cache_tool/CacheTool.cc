@@ -251,16 +251,8 @@ Stripe::Chunk::clear()
 
 Stripe::Stripe(Span *span, Bytes start, CacheStoreBlocks len) : _span(span), _start(start), _len(len)
 {
-  const char *diskPath        = span->_path.path();
-  const size_t hash_seed_size = strlen(diskPath);
-  const size_t hash_text_size = hash_seed_size + 32;
-  char *hash_text             = static_cast<char *>(ats_malloc(hash_text_size));
-  strncpy(hash_text, diskPath, hash_text_size);
-  snprintf(hash_text + hash_seed_size, (hash_text_size - hash_seed_size), " %" PRIu64 ":%" PRIu64 "", (uint64_t)_start,
-           (uint64_t)_len.count());
-  printf("hash id of stripe is hash of %s\n", hash_text);
-  ink_code_md5((unsigned char *)hash_text, strlen(hash_text), (unsigned char *)&hash_id);
-  hashText.assign(hash_text, strlen(hash_text));
+  ts::bwprint(hashText, "{} {}:{}", span->_path.path(), _start, _len.count());
+  printf("hash id of stripe is hash of %.*s\n", static_cast<int>(hashText.size()), hashText.data());
 }
 
 bool
