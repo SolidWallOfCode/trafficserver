@@ -62,7 +62,10 @@ bwformat(BufferWriter &w, BWFSpec const &spec, TSServerSessionSharingMatchType t
 inline BufferWriter &
 bwformat(BufferWriter &w, BWFSpec const &spec, IpEndpoint const &addr)
 {
-  ats_ip_nptop(&addr.sa, w.auxBuffer(), w.remaining());
+  if (spec._ext.size() && 'p' == spec._ext.front())
+    ats_ip_ntop(&addr.sa, w.auxBuffer(), w.remaining());
+  else
+    ats_ip_nptop(&addr.sa, w.auxBuffer(), w.remaining());
   w.fill(strlen(w.auxBuffer()));
   return w;
 }
@@ -119,13 +122,13 @@ public:
    * @param match_type Session matching type.
    * @return Number of connections
    */
-  Group *get(const IpEndpoint &addr, const CryptoHash &hostname_hash, TSServerSessionSharingMatchType match_type);
+  static Group *get(const IpEndpoint &addr, const CryptoHash &hostname_hash, TSServerSessionSharingMatchType match_type);
 
   /**
    * dump to JSON for stat page.
-   * @return JSON string for _hostCount
+   * @return string containing a JSON encoding of the table.
    */
-  std::string dumpToJSON();
+  static std::string to_json_string();
 
 protected:
   /// Types and methods for the hash table.
@@ -166,39 +169,38 @@ protected:
 
   /// Get the implementation instance.
   /// @note This is done purely to provide subclasses to reuse methods in this class.
-  virtual Imp &instance();
+  Imp &instance();
 };
 
-OutboundConnTracker::Imp::Imp()
+inline OutboundConnTracker::Imp::Imp()
 {
   ink_mutex_init(&_mutex);
 };
 
-OutboundConnTracker::Imp &
+inline OutboundConnTracker::Imp &
 OutboundConnTracker::instance()
 {
   return _imp;
 }
 
-OutboundConnTracker::Group *
+inline OutboundConnTracker::Group *
 OutboundConnTracker::get(IpEndpoint const &addr, CryptoHash const &fqdn_hash, TSServerSessionSharingMatchType match_type)
 {
   if (TS_SERVER_SESSION_SHARING_MATCH_NONE == match_type) {
     return 0; // We can never match a node if match type is NONE
   }
 
-  Imp &imp = this->instance();
   Group::Key key{addr, fqdn_hash, match_type};
-  ink_scoped_mutex_lock lock(imp._mutex);
-  auto loc = imp._table.find(key);
+  ink_scoped_mutex_lock lock(_imp._mutex);
+  auto loc = _imp._table.find(key);
   if (!loc.isValid()) {
     Group *g = new Group(key);
-    imp._table.insert(g);
+    _imp._table.insert(g);
   }
   return loc;
 }
 
-bool
+inline bool
 OutboundConnTracker::Group::equal(const Key &lhs, const Key &rhs)
 {
   TSServerSessionSharingMatchType mt = lhs._match_type;
@@ -207,7 +209,7 @@ OutboundConnTracker::Group::equal(const Key &lhs, const Key &rhs)
 
   if (is_debug_tag_set("conn_count")) {
     ts::LocalBufferWriter<2 * INET6_ADDRSTRLEN + 2 * CRYPTO_HEX_SIZE + 256> bw;
-    bw.print("Comparing {}:{}:{} to {}:{}:{} -> {}", lhs._fqdn_hash, lhs._addr, lhs._match_type, rhs._fqdn_hash, rhs._addr,
+    bw.print("Comparing {}:{::p}:{} to {}:{::p}:{} -> {}", lhs._fqdn_hash, lhs._addr, lhs._match_type, rhs._fqdn_hash, rhs._addr,
              rhs._match_type, zret ? "match" : "fail");
     Debug("conn_count", "%.*s", static_cast<int>(bw.size()), bw.data());
   }
@@ -215,7 +217,7 @@ OutboundConnTracker::Group::equal(const Key &lhs, const Key &rhs)
   return zret;
 }
 
-uint64_t
+inline uint64_t
 OutboundConnTracker::Group::hash(const Key &key)
 {
   switch (key._match_type) {
@@ -230,11 +232,13 @@ OutboundConnTracker::Group::hash(const Key &key)
   }
 }
 
-OutboundConnTracker::Group::Group(const Key &key) : _fqdn_hash(key._fqdn_hash), _match_type(key._match_type)
+inline OutboundConnTracker::Group::Group(const Key &key) : _fqdn_hash(key._fqdn_hash), _match_type(key._match_type)
 {
   ats_ip_copy(_addr, &key._addr);
   _key._match_type = _match_type; // make sure this gets updated.
 }
+
+Action *register_ShowConnectionCount(Continuation *, HTTPHdr *);
 
 #if 0
 
@@ -379,7 +383,5 @@ private:
     oss << '\"' << key << "\": \"" << value << '"';
   }
 };
-
-Action *register_ShowConnectionCount(Continuation *, HTTPHdr *);
 
 #endif

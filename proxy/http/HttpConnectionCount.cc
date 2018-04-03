@@ -1,6 +1,6 @@
 /** @file
 
-  A brief file description
+  Outbound connection tracking support.
 
   @section license License
 
@@ -24,39 +24,43 @@
 #include "HttpConnectionCount.h"
 
 OutboundConnTracker::Imp OutboundConnTracker::_imp;
-OutboundConnTracker::Imp OutboundConnQueue::_imp;
 
 std::string
-OutboundConnTracker::dumpToJSON()
+OutboundConnTracker::to_json_string()
 {
-  Vec<ConnAddr> keys;
-  ink_mutex_acquire(&_mutex);
-  _hostCount.get_keys(keys);
-  std::ostringstream oss;
-  oss << '{';
-  appendJSONPair(oss, "connectionCountSize", keys.n);
-  oss << ", \"connectionCountList\": [";
-  for (size_t i = 0; i < keys.n; i++) {
-    oss << '{';
-
-    appendJSONPair(oss, "ip", keys[i].getIpStr());
-    oss << ',';
-
-    appendJSONPair(oss, "port", keys[i]._addr.host_order_port());
-    oss << ',';
-
-    appendJSONPair(oss, "hostname_hash", keys[i].getHostnameHashStr());
-    oss << ',';
-
-    appendJSONPair(oss, "connection_count", _hostCount.get(keys[i]));
-    oss << "}";
-
-    if (i < keys.n - 1)
-      oss << ',';
+  std::string text;
+  size_t extent = 0;
+  static const ts::BWFormat header_fmt{"{{\"connectionCountSize\": {}, \"connectionCountList\": ["};
+  static const ts::BWFormat item_fmt{"{{\"ip\": \"{}\", \"port\": {}, \"hostname_hash\": \"{}\", \"type\": {}, \"count\": {}}},"};
+  static const ts::string_view trailer{"]}}"};
+  std::vector<Group const *> groups;
+  {
+    ink_scoped_mutex_lock lock(_imp._mutex);
+    auto n = _imp._table.count();
+    groups.reserve(n);
+    for (Group const &g : _imp._table) {
+      groups.push_back(&g);
+    }
   }
-  ink_mutex_release(&_mutex);
-  oss << "]}";
-  return oss.str();
+
+  extent += trailer.size();
+  extent += ts::LocalBufferWriter<0>().print(header_fmt, groups.size()).extent();
+  for (auto g : groups) {
+    extent += ts::LocalBufferWriter<0>()
+                .print(item_fmt, g->_addr, g->_addr.host_order_port(), g->_fqdn_hash, g->_match_type, g->_count.load())
+                .extent();
+  }
+  text.resize(extent);
+  ts::FixedBufferWriter w(const_cast<char *>(text.data()), text.size());
+  w.print(header_fmt, groups.size());
+  for (auto g : groups) {
+    w.print(item_fmt, g->_addr, g->_addr.host_order_port(), g->_fqdn_hash, g->_match_type, g->_count.load());
+  }
+  if (groups.size() > 0 && w.remaining()) {
+    w.auxBuffer()[-1] = ' '; // convert trailing comma to space.
+  }
+  w.write(trailer);
+  return text;
 }
 
 struct ShowConnectionCount : public ShowCont {
@@ -64,7 +68,7 @@ struct ShowConnectionCount : public ShowCont {
   int
   showHandler(int event, Event *e)
   {
-    CHECK_SHOW(show(OutboundConnTracker::getInstance()->dumpToJSON().c_str()));
+    CHECK_SHOW(show(OutboundConnTracker::to_json_string().c_str()));
     return completeJson(event, e);
   }
 };

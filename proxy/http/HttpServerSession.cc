@@ -72,18 +72,6 @@ HttpServerSession::new_connection(NetVConnection *new_vc)
   magic = HTTP_SS_MAGIC_ALIVE;
   HTTP_SUM_GLOBAL_DYN_STAT(http_current_server_connections_stat, 1); // Update the true global stat
   HTTP_INCREMENT_DYN_STAT(http_total_server_connections_stat);
-  // Check to see if we are limiting the number of connections
-  // per host
-  if (enable_origin_connection_limiting == true) {
-    if (connection_count == nullptr) {
-      connection_count = OutboundConnTracker::getInstance();
-    }
-    connection_count->incrementCount(get_server_ip(), hostname_hash, sharing_match);
-    ip_port_text_buffer addrbuf;
-    Debug("http_ss", "[%" PRId64 "] new connection, ip: %s, count: %u", con_id,
-          ats_ip_nptop(&get_server_ip().sa, addrbuf, sizeof(addrbuf)),
-          connection_count->getCount(get_server_ip(), hostname_hash, sharing_match));
-  }
 #ifdef LAZY_BUF_ALLOC
   read_buffer = new_empty_MIOBuffer(HTTP_SERVER_RESP_HDR_BUFFER_INDEX);
 #else
@@ -94,6 +82,18 @@ HttpServerSession::new_connection(NetVConnection *new_vc)
   state = HSS_INIT;
 
   new_vc->set_tcp_congestion_control(SERVER_SIDE);
+}
+
+void
+HttpServerSession::enable_outbound_connection_tracking(TSServerSessionSharingMatchType type)
+{
+  conn_track_group = OutboundConnTracker::get(get_server_ip(), hostname_hash, sharing_match);
+  if (is_debug_tag_set("http_ss")) {
+    auto n = conn_track_group->_count++;
+    ts::LocalBufferWriter<256> w;
+    w.print("[{}] new connection, ip: {::p}, count: {}", con_id, get_server_ip(), n);
+    Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
+  }
 }
 
 VIO *
@@ -129,16 +129,16 @@ HttpServerSession::do_io_close(int alerrno)
 
   // Check to see if we are limiting the number of connections
   // per host
-  if (enable_origin_connection_limiting == true) {
-    if (connection_count->getCount(get_server_ip(), hostname_hash, sharing_match) >= 0) {
-      connection_count->incrementCount(get_server_ip(), hostname_hash, sharing_match, -1);
-      ip_port_text_buffer addrbuf;
-      Debug("http_ss", "[%" PRId64 "] connection closed, ip: %s, count: %u", con_id,
-            ats_ip_nptop(&get_server_ip().sa, addrbuf, sizeof(addrbuf)),
-            connection_count->getCount(get_server_ip(), hostname_hash, sharing_match));
+  if (conn_track_group) {
+    if (conn_track_group->_count >= 0) {
+      auto n = (conn_track_group->_count)--;
+      ts::LocalBufferWriter<256> w;
+      w.print("[{}] connection close ip: {::p} count: {}", get_server_ip(), n);
+      Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
     } else {
-      Error("[%" PRId64 "] number of connections should be greater than or equal to zero: %u", con_id,
-            connection_count->getCount(get_server_ip(), hostname_hash, sharing_match));
+      // A bit dubious, as there's no guarantee it's still negative, but even that would be interesting to know.
+      Error("[http_ss] [%" PRId64 "] number of connections should be greater than or equal to zero: %u", con_id,
+            conn_track_group->_count.load());
     }
   }
 
