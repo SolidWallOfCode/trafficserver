@@ -23,11 +23,11 @@
 
 #include "HttpConnectionCount.h"
 
-ConnectionCount ConnectionCount::_connectionCount;
+OutboundConnTracker OutboundConnTracker::_connectionCount;
 ConnectionCountQueue ConnectionCountQueue::_connectionCount;
 
 std::string
-ConnectionCount::dumpToJSON()
+OutboundConnTracker::dumpToJSON()
 {
   Vec<ConnAddr> keys;
   ink_mutex_acquire(&_mutex);
@@ -64,7 +64,7 @@ struct ShowConnectionCount : public ShowCont {
   int
   showHandler(int event, Event *e)
   {
-    CHECK_SHOW(show(ConnectionCount::getInstance()->dumpToJSON().c_str()));
+    CHECK_SHOW(show(OutboundConnTracker::getInstance()->dumpToJSON().c_str()));
     return completeJson(event, e);
   }
 };

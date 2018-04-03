@@ -169,7 +169,7 @@ public:
   // Keep track of connection limiting and a pointer to the
   // singleton that keeps track of the connection counts.
   bool enable_origin_connection_limiting;
-  ConnectionCount *connection_count;
+  OutboundConnTracker *connection_count;
 
   // The ServerSession owns the following buffer which use
   //   for parsing the headers.  The server session needs to

@@ -4868,7 +4868,7 @@ HttpSM::do_http_server_open(bool raw)
   // Check to see if we have reached the max number of connections on this
   // host.
   if (t_state.txn_conf->origin_max_connections > 0) {
-    ConnectionCount *connections = ConnectionCount::getInstance();
+    OutboundConnTracker *connections = OutboundConnTracker::getInstance();
 
     CryptoHash hostname_hash;
     CryptoContext().hash_immediate(hostname_hash, static_cast<const void *>(t_state.current.server->name),

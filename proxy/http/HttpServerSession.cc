@@ -76,7 +76,7 @@ HttpServerSession::new_connection(NetVConnection *new_vc)
   // per host
   if (enable_origin_connection_limiting == true) {
     if (connection_count == nullptr) {
-      connection_count = ConnectionCount::getInstance();
+      connection_count = OutboundConnTracker::getInstance();
     }
     connection_count->incrementCount(get_server_ip(), hostname_hash, sharing_match);
     ip_port_text_buffer addrbuf;
