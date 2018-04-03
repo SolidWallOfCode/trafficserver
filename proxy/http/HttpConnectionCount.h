@@ -37,6 +37,36 @@
 #include "HttpProxyAPIEnums.h"
 #include "Show.h"
 
+namespace ts
+{
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, TSServerSessionSharingMatchType type)
+{
+  static const string_view name[] = {"None"_sv, "Both"_sv, "IP Address"_sv, "Host Name"_sv};
+  switch (spec._type) {
+  case 'd':
+  case 'x':
+  case 'X':
+  case 'o':
+  case 'b':
+  case 'B':
+    bwformat(w, spec, static_cast<unsigned int>(type));
+    break;
+  default:
+    bwformat(w, spec, name[type]);
+    break;
+  }
+  return w;
+}
+
+inline BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, IpEndpoint const &addr)
+{
+  ats_ip_nptop(&addr.sa, w.auxBuffer(), w.remaining());
+  w.fill(strlen(w.auxBuffer()));
+  return w;
+}
+} // ts
 
 /**
  * Singleton class to keep track of the number of outbound connnections.
@@ -44,8 +74,10 @@
  * Outbound connections are divided in to equivalence classes (called "groups" here) based on the
  * session matching setting. A count is stored for each group.
  */
-class OutboundConnTracker {
+class OutboundConnTracker
+{
   using self_type = OutboundConnTracker;
+
 public:
   // Non-copyable.
   OutboundConnTracker(const self_type &) = delete;
@@ -60,21 +92,24 @@ public:
       TSServerSessionSharingMatchType _match_type;
     };
 
-    IpEndpoint _addr; ///< Remote address & port.
-    CryptoHash _fqdn_hash; ///< Hash of the host name.
+    using Ticker = std::chrono::high_resolution_clock::rep; ///< Raw type used to track HR ticks.
+
+    IpEndpoint _addr;                            ///< Remote address & port.
+    CryptoHash _fqdn_hash;                       ///< Hash of the host name.
     TSServerSessionSharingMatchType _match_type; ///< Outbound session matching type.
-    std::atomic<int> _count; ///< Number of outbound connections.
-    std::atomic<std::chrono::high_resolution_clock::rep> _last_alert; ///< Absolute time of the last alert.
-    std::atomic<int> _blocked; ///< Number of outbound connections blocked since last alert.
-    LINK(Count, _link); ///< Intrusive hash table support.
-    Key _key; ///< Pre-constructed key for performance on lookup.
+    std::atomic<int> _count;                     ///< Number of outbound connections.
+    std::atomic<Ticker> _last_alert;             ///< Absolute time of the last alert.
+    std::atomic<int> _blocked;                   ///< Number of outbound connections blocked since last alert.
+    std::atomic<int> _queued;                    ///< # of connections queued, waiting for a connection.
+    LINK(Group, _link);                          ///< Intrusive hash table support.
+    Key _key = {_addr, _fqdn_hash, _match_type}; ///< Pre-constructed key for performance on lookup.
 
     /// Constructor.
-    Group(Key const& key);
+    Group(Key const &key);
     /// Key equality checker.
-    static bool equal(Key const& lhs, Key const& rhs);
+    static bool equal(Key const &lhs, Key const &rhs);
     /// Hashing function.
-    static uint64_t hash(Key const&);
+    static uint64_t hash(Key const &);
   };
 
   /**
@@ -84,8 +119,7 @@ public:
    * @param match_type Session matching type.
    * @return Number of connections
    */
-  Group *
-  get(const IpEndpoint &addr, const CryptoHash &hostname_hash, TSServerSessionSharingMatchType match_type);
+  Group *get(const IpEndpoint &addr, const CryptoHash &hostname_hash, TSServerSessionSharingMatchType match_type);
 
   /**
    * dump to JSON for stat page.
@@ -96,14 +130,26 @@ public:
 protected:
   /// Types and methods for the hash table.
   struct HashDescriptor {
-    using ID = uint64_t;
-    using Key = Group::Key const&;
-    using Value = Group;
+    using ID       = uint64_t;
+    using Key      = Group::Key const &;
+    using Value    = Group;
     using ListHead = DList(Value, _link);
 
-    static ID hash(Key key) { return Group::hash(key); }
-    static Key key(Value* v) { return v->key(); }
-    static bool equal(Key lhs, Key rhs) { return Group::equal(lhs, rhs); }
+    static ID
+    hash(Key key)
+    {
+      return Group::hash(key);
+    }
+    static Key
+    key(Value *v)
+    {
+      return v->_key;
+    }
+    static bool
+    equal(Key lhs, Key rhs)
+    {
+      return Group::equal(lhs, rhs);
+    }
   };
 
   /// Container type for the connection groups.
@@ -111,69 +157,83 @@ protected:
 
   /// Internal implementation class instance.
   struct Imp {
+    Imp();
+
     HashTable _table; ///< Hash table of upstream groups.
+    ink_mutex _mutex; ///< Lock for insert & find.
   };
   static Imp _imp;
 
-  Imp& instance();
+  /// Get the implementation instance.
+  /// @note This is done purely to provide subclasses to reuse methods in this class.
+  virtual Imp &instance();
 };
 
-OutboundConnTracker::Imp&
-        OutboundConnTracker::instance() { return _imp; }
+OutboundConnTracker::Imp::Imp()
+{
+  ink_mutex_init(&_mutex);
+};
 
-OutboundConnTracker::Group*
-OutboundConnTracker::get(IpEndpoint const& addr, CryptoHash const& fqdn_hash, TSServerSessionSharingMatchType match_type)
+OutboundConnTracker::Imp &
+OutboundConnTracker::instance()
+{
+  return _imp;
+}
+
+OutboundConnTracker::Group *
+OutboundConnTracker::get(IpEndpoint const &addr, CryptoHash const &fqdn_hash, TSServerSessionSharingMatchType match_type)
 {
   if (TS_SERVER_SESSION_SHARING_MATCH_NONE == match_type) {
     return 0; // We can never match a node if match type is NONE
   }
 
-  ink_scoped_mutex_lock lock(_mutex);
-  auto loc this->instance()._table.find(Group::Key{addr, fqdn_hash, match_type});
+  Imp &imp = this->instance();
+  Group::Key key{addr, fqdn_hash, match_type};
+  ink_scoped_mutex_lock lock(imp._mutex);
+  auto loc = imp._table.find(key);
   if (!loc.isValid()) {
-    Group* g = new Group(key);
-    this->instance()._table.insert(g);
+    Group *g = new Group(key);
+    imp._table.insert(g);
   }
   return loc;
 }
 
-bool OutboundConnTracker::Group::equal(const Key &lhs,
-                                       const Key &rhs) {
+bool
+OutboundConnTracker::Group::equal(const Key &lhs, const Key &rhs)
+{
   TSServerSessionSharingMatchType mt = lhs._match_type;
-  bool zret = mt == rhs._match_type &&
-          (mt == TS_SERVER_SESSION_SHARING_MATCH_IP || lhs._fqdn_hash == rhs._fqdn_hash) &&
-          (mt == TS_SERVER_SESSION_SHARING_MATCH_HOST || ats_ip_addr_port_eq(&lhs._addr.sa, &rhs._addr.sa));
+  bool zret = mt == rhs._match_type && (mt == TS_SERVER_SESSION_SHARING_MATCH_IP || lhs._fqdn_hash == rhs._fqdn_hash) &&
+              (mt == TS_SERVER_SESSION_SHARING_MATCH_HOST || ats_ip_addr_port_eq(&lhs._addr.sa, &rhs._addr.sa));
 
   if (is_debug_tag_set("conn_count")) {
-    char addrbuf1[INET6_ADDRSTRLEN];
-    char addrbuf2[INET6_ADDRSTRLEN];
-    char crypto_hashbuf1[CRYPTO_HEX_SIZE];
-    char crypto_hashbuf2[CRYPTO_HEX_SIZE];
-    lhs.fqdn_hash.toHexStr(crypto_hashbuf1);
-    rhs.fqdn_hash.toHexStr(crypto_hashbuf2);
-    Debug("conn_count", "Comparing hostname hash %s dest %s match method %d to hostname hash %s dest %s match method %d result %s",
-          crypto_hashbuf1, ats_ip_nptop(&lhs._addr.sa, addrbuf1, sizeof(addrbuf1)), lhs._match_type, crypto_hashbuf2,
-          ats_ip_nptop(&rhs._addr.sa, addrbuf2, sizeof(addrbuf2)), rhs._match_type, zret ? "match" : "fail");
+    ts::LocalBufferWriter<2 * INET6_ADDRSTRLEN + 2 * CRYPTO_HEX_SIZE + 256> bw;
+    bw.print("Comparing {}:{}:{} to {}:{}:{} -> {}", lhs._fqdn_hash, lhs._addr, lhs._match_type, rhs._fqdn_hash, rhs._addr,
+             rhs._match_type, zret ? "match" : "fail");
+    Debug("conn_count", "%.*s", static_cast<int>(bw.size()), bw.data());
   }
 
   return zret;
 }
 
-uint64_t OutboundConnTracker::Group::hash(const Key & key) {
-  switch (key.match_type) {
-    case TS_SERVER_SESSION_SHARING_MATCH_IP :
-      return ats_ip_port_hash(&key.addr.sa);
-    case TS_SERVER_SESSION_SHARING_MATCH_HOST :
-      return key.fqdn_hash.fold();
-    case TS_SERVER_SESSION_SHARING_MATCH_BOTH :
-      return ats_ip_port_hash(&key.addr.sa) ^ key.fqdn_hash.fold();
-    default:
-      return 0;
+uint64_t
+OutboundConnTracker::Group::hash(const Key &key)
+{
+  switch (key._match_type) {
+  case TS_SERVER_SESSION_SHARING_MATCH_IP:
+    return ats_ip_port_hash(&key._addr.sa);
+  case TS_SERVER_SESSION_SHARING_MATCH_HOST:
+    return key._fqdn_hash.fold();
+  case TS_SERVER_SESSION_SHARING_MATCH_BOTH:
+    return ats_ip_port_hash(&key._addr.sa) ^ key._fqdn_hash.fold();
+  default:
+    return 0;
   }
 }
 
-OutboundConnTracker::Group::Group(const Key &key) : _fqdn_hash(key._fqdn_hash), _match_type(key._match_type), _key(key) {
+OutboundConnTracker::Group::Group(const Key &key) : _fqdn_hash(key._fqdn_hash), _match_type(key._match_type)
+{
   ats_ip_copy(_addr, &key._addr);
+  _key._match_type = _match_type; // make sure this gets updated.
 }
 
 #if 0
@@ -318,23 +378,6 @@ private:
   {
     oss << '\"' << key << "\": \"" << value << '"';
   }
-};
-
-class ConnectionCountQueue : public OutboundConnTracker
-{
-public:
-  /**
-   * Static method to get the instance of the class
-   * @return Returns a pointer to the instance of the class
-   */
-  static ConnectionCountQueue *
-  getInstance()
-  {
-    return &_connectionCount;
-  }
-
-private:
-  static ConnectionCountQueue _connectionCount;
 };
 
 Action *register_ShowConnectionCount(Continuation *, HTTPHdr *);

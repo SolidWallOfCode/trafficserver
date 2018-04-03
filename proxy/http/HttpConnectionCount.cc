@@ -23,8 +23,8 @@
 
 #include "HttpConnectionCount.h"
 
-OutboundConnTracker OutboundConnTracker::_connectionCount;
-ConnectionCountQueue ConnectionCountQueue::_connectionCount;
+OutboundConnTracker::Imp OutboundConnTracker::_imp;
+OutboundConnTracker::Imp OutboundConnQueue::_imp;
 
 std::string
 OutboundConnTracker::dumpToJSON()
