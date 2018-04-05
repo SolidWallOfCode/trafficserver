@@ -117,31 +117,35 @@ HttpServerSession::do_io_shutdown(ShutdownHowTo_t howto)
 void
 HttpServerSession::do_io_close(int alerrno)
 {
+  ts::LocalBufferWriter<256> w;
+  bool debug_p = is_debug_tag_set("http_ss");
+
   if (state == HSS_ACTIVE) {
     HTTP_DECREMENT_DYN_STAT(http_current_server_transactions_stat);
     this->server_trans_stat--;
   }
 
-  Debug("http_ss", "[%" PRId64 "] session closing, netvc %p", con_id, server_vc);
+  if (debug_p)
+    w.print("[{}] session close: nevtc {:x}", con_id, server_vc);
 
   HTTP_SUM_GLOBAL_DYN_STAT(http_current_server_connections_stat, -1); // Make sure to work on the global stat
   HTTP_SUM_DYN_STAT(http_transactions_per_server_con, transact_count);
 
-  // Check to see if we are limiting the number of connections
-  // per host
+  // Update upstream connection tracking data if present.
   if (conn_track_group) {
     if (conn_track_group->_count >= 0) {
       auto n = (conn_track_group->_count)--;
-      ts::LocalBufferWriter<256> w;
-      w.print("[{}] connection close ({},{},{:s}) count {}", conn_track_group->_addr, conn_track_group->_fqdn_hash,
-              conn_track_group->_match_type, n);
-      Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
+      if (debug_p)
+        w.print(" conn track group ({},{},{:s}) count {}", conn_track_group->_addr, conn_track_group->_fqdn_hash,
+                conn_track_group->_match_type, n);
     } else {
       // A bit dubious, as there's no guarantee it's still negative, but even that would be interesting to know.
       Error("[http_ss] [%" PRId64 "] number of connections should be greater than or equal to zero: %u", con_id,
             conn_track_group->_count.load());
     }
   }
+  if (debug_p)
+    Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
 
   if (server_vc) {
     server_vc->do_io_close(alerrno);

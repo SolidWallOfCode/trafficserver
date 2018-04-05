@@ -919,13 +919,7 @@ public:
       arena.reset();
       unmapped_url.clear();
       hostdb_entry.clear();
-
-      // Clean up connection tracking info if any.
-      if (conn_tracker_info) {
-        if (outbound_request_reserved)
-          --(conn_tracker_info->_count);
-        if (outbound_request_queued) --(conn_tracker_info)->_queued);
-      }
+      clear_conn_tracking();
 
       delete[] ranges;
       ranges      = nullptr;
@@ -956,6 +950,18 @@ public:
         internal_msg_buffer = nullptr;
       }
       internal_msg_buffer_size = 0;
+    }
+
+    void
+    clear_conn_tracking()
+    {
+      if (conn_tracker_info) {
+        if (outbound_request_reserved)
+          --(conn_tracker_info->_count);
+        if (outbound_request_queued)
+          --(conn_tracker_info->_queued);
+        outbound_request_reserved = outbound_request_queued = false;
+      }
     }
   }; // End of State struct.
 

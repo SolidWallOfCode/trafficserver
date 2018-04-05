@@ -179,13 +179,16 @@ OutboundConnTracker::get(IpEndpoint const &addr, CryptoHash const &fqdn_hash, TS
   }
 
   Group::Key key{addr, fqdn_hash, match_type};
+  Group *g = nullptr;
   ink_scoped_mutex_lock lock(_imp._mutex);
   auto loc = _imp._table.find(key);
-  if (!loc.isValid()) {
-    Group *g = new Group(key);
+  if (loc.isValid()) {
+    g = loc;
+  } else {
+    g = new Group(key);
     _imp._table.insert(g);
   }
-  return loc;
+  return g;
 }
 
 inline bool

@@ -1768,6 +1768,9 @@ HttpSM::state_http_server_open(int event, void *data)
     // save the errno from the connect fail for future use (passed as negative value, flip back)
     t_state.current.server->set_connect_fail(event == NET_EVENT_OPEN_FAILED ? -reinterpret_cast<intptr_t>(data) : ECONNABORTED);
 
+    // Clean up any reserved slots for outbound connection tracking.
+    t_state.clear_conn_tracking();
+
     /* If we get this error, then we simply can't bind to the 4-tuple to make the connection.  There's no hope of
        retries succeeding in the near future. The best option is to just shut down the connection without further
        comment. The only known cause for this is outbound transparency combined with use client target address / source
@@ -4653,10 +4656,6 @@ HttpSM::send_origin_throttled_response()
 void
 HttpSM::do_http_server_open(bool raw)
 {
-  int ip_family = t_state.current.server->dst_addr.sa.sa_family;
-  auto fam_name = ats_ip_family_name(ip_family);
-  SMDebug("http_track", "entered inside do_http_server_open ][%.*s]", static_cast<int>(fam_name.size()), fam_name.data());
-
   // Make sure we are on the "right" thread
   if (ua_txn) {
     if ((pending_action = ua_txn->adjust_thread(this, EVENT_INTERVAL, nullptr))) {
@@ -4668,13 +4667,8 @@ HttpSM::do_http_server_open(bool raw)
 
   // Clean up connection tracking info if any. This is best on retry so that the selected group
   // is consistent with the actual upstream.
-  if (t_state.conn_tracker_info) {
-    if (t_state.outbound_request_reserved)
-      --(t_state.conn_tracker_info->_count);
-    if (t_state.outbound_request_queued) --(t_state.conn_tracker_info)->_queued);
-    t_state.conn_tracker_info       = nullptr;
-    t_state.outbound_request_queued = t_state.outbound_request_reserved = false;
-  }
+  t_state.clear_conn_tracking();
+  t_state.conn_tracker_info = nullptr;
 
   // ua_entry can be null if a scheduled update is also a reverse proxy
   // request. Added REVPROXY to the assert below, and then changed checks
@@ -4690,9 +4684,9 @@ HttpSM::do_http_server_open(bool raw)
     ink_assert(t_state.current.server->dst_addr.port() != 0); // verify the plugin set it to something.
   }
 
-  char addrbuf[INET6_ADDRPORTSTRLEN];
-  SMDebug("http", "[%" PRId64 "] open connection to %s: %s", sm_id, t_state.current.server->name,
-          ats_ip_nptop(&t_state.current.server->dst_addr.sa, addrbuf, sizeof(addrbuf)));
+  ts::LocalBufferWriter<128> w;
+  w.print("[{}] open connection to '{}' {}", sm_id, t_state.current.server->name, t_state.current.server->dst_addr);
+  SMDebug("http_track", "%.*s", static_cast<int>(w.size()), w.data());
 
   if (plugin_tunnel) {
     PluginVCCore *t           = plugin_tunnel;
@@ -4918,19 +4912,19 @@ HttpSM::do_http_server_open(bool raw)
       ink_assert(pending_action == nullptr);
 
       // if we were previously queued, or the queue is disabled-- just reschedule
-      if (t_state.origin_request_queued || t_state.txn_conf->origin_max_connections_queue < 0) {
+      if (t_state.outbound_request_queued || t_state.txn_conf->origin_max_connections_queue < 0) {
         pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
         return;
       } else if (t_state.txn_conf->origin_max_connections_queue > 0) { // If we have a queue, lets see if there is a slot
         auto wcount = ++(t_state.conn_tracker_info->_queued);
         // if there is space in the queue
         if (wcount < t_state.txn_conf->origin_max_connections_queue) {
-          t_state.origin_request_queued = true;
-          Debug("http", "[%" PRId64 "] queued for this host: %s", sm_id,
-                ats_ip_ntop(&t_state.current.server->dst_addr.sa, addrbuf, sizeof(addrbuf)));
+          t_state.outbound_request_queued = true;
+          w.reduce(0).print("[{}] queued for {}", sm_id, t_state.current.server->dst_addr);
+          Debug("http", "%.*s", static_cast<int>(w.size()), w.data());
           pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
-        } else {              // the queue is full
-          --(group->_queued); // didn't queue, drop reservation.
+        } else {                                  // the queue is full
+          --(t_state.conn_tracker_info->_queued); // didn't queue, drop reservation.
           HTTP_INCREMENT_DYN_STAT(http_origin_connections_throttled_stat);
           send_origin_throttled_response();
         }
@@ -4952,12 +4946,12 @@ HttpSM::do_http_server_open(bool raw)
                      t_state.txn_conf->sock_option_flag_out, t_state.txn_conf->sock_packet_mark_out,
                      t_state.txn_conf->sock_packet_tos_out);
 
-  opt.ip_family = ip_family;
+  opt.ip_family = t_state.current.server->dst_addr.sa.sa_family;
 
   if (ua_txn) {
     opt.local_port = ua_txn->get_outbound_port();
 
-    const IpAddr &outbound_ip = AF_INET6 == ip_family ? ua_txn->get_outbound_ip6() : ua_txn->get_outbound_ip4();
+    const IpAddr &outbound_ip = AF_INET6 == opt.ip_family ? ua_txn->get_outbound_ip6() : ua_txn->get_outbound_ip4();
     if (outbound_ip.isValid()) {
       opt.addr_binding = NetVCOptions::INTF_ADDR;
       opt.local_ip     = outbound_ip;
@@ -5378,11 +5372,10 @@ HttpSM::handle_post_failure()
 void
 HttpSM::handle_http_server_open()
 {
-  // if we were a queued request, we need to decrement the queue size-- as we got a connection
-  if (t_state.origin_request_queued) {
+  // The request is now not queued. This is important if the request will ever retry, the t_state is re-used
+  if (t_state.outbound_request_queued) {
     --(t_state.conn_tracker_info->_queued);
-    // The request is now not queued. This is important if the request will ever retry, the t_state is re-used
-    t_state.origin_request_queued = false;
+    t_state.outbound_request_queued = false;
   }
 
   // [bwyatt] applying per-transaction OS netVC options here
