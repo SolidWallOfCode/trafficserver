@@ -1740,21 +1740,10 @@ HttpSM::state_http_server_open(int event, void *data)
     // the max and or min number of connections per host.  Set
     // is_outbound_connection_limiting_enabled to true in the server session so it will increment
     // and decrement the connection count.
-    if (t_state.txn_conf->origin_max_connections > 0 || t_state.http_config_param->origin_min_keep_alive_connections > 0) {
-      // ugly - if match is NONE then outbound connection tracking is de facto disabled because there
-      // are no common sessions to count. Try to back up to find a more general match until we get
-      // to a hardwired value that's not NONE.
-      TSServerSessionSharingMatchType mt =
-        static_cast<TSServerSessionSharingMatchType>(t_state.txn_conf->server_session_sharing_match);
-      if (TS_SERVER_SESSION_SHARING_MATCH_NONE == mt) {
-        mt = static_cast<TSServerSessionSharingMatchType>(t_state.http_config_param->oride.server_session_sharing_match);
-        if (TS_SERVER_SESSION_SHARING_MATCH_NONE == mt) {
-          // Really? Every single session is private?
-          mt = TS_SERVER_SESSION_SHARING_MATCH_BOTH; // so use this, least worst choice.
-        }
-      }
+    if (t_state.conn_tracker_info) {
       SMDebug("http_ss", "[%" PRId64 "] max number of connections: %" PRIu64, sm_id, t_state.txn_conf->origin_max_connections);
-      session->enable_outbound_connection_tracking(mt);
+      session->enable_outbound_connection_tracking(t_state.conn_tracker_info);
+      t_state.outbound_request_reserved = false; // session will handle cleanup of this.
     }
 
     attach_server_session(session);
@@ -4677,6 +4666,16 @@ HttpSM::do_http_server_open(bool raw)
   pending_action = nullptr;
   ink_assert(server_entry == nullptr);
 
+  // Clean up connection tracking info if any. This is best on retry so that the selected group
+  // is consistent with the actual upstream.
+  if (t_state.conn_tracker_info) {
+    if (t_state.outbound_request_reserved)
+      --(t_state.conn_tracker_info->_count);
+    if (t_state.outbound_request_queued) --(t_state.conn_tracker_info)->_queued);
+    t_state.conn_tracker_info       = nullptr;
+    t_state.outbound_request_queued = t_state.outbound_request_reserved = false;
+  }
+
   // ua_entry can be null if a scheduled update is also a reverse proxy
   // request. Added REVPROXY to the assert below, and then changed checks
   // to be based on ua_txn != NULL instead of req_flavor value.
@@ -4877,24 +4876,45 @@ HttpSM::do_http_server_open(bool raw)
       return;
     }
   }
-  // Check to see if we have reached the max number of connections on this
-  // host.
-  if (t_state.txn_conf->origin_max_connections > 0) {
+
+  // See if the outbound connection tracker data is needed. If so, get it here for consistency.
+  if (t_state.txn_conf->origin_max_connections > 0 || t_state.http_config_param->origin_min_keep_alive_connections > 0) {
     CryptoHash hostname_hash;
     CryptoContext().hash_immediate(hostname_hash, static_cast<const void *>(t_state.current.server->name),
                                    static_cast<int>(strlen(t_state.current.server->name)));
 
-    auto group =
-      OutboundConnTracker::get(t_state.current.server->dst_addr, hostname_hash,
-                               static_cast<TSServerSessionSharingMatchType>(t_state.txn_conf->server_session_sharing_match));
-    auto ccount = group->_count.load(); // cache instaneous value.
+    // ugly - if match is NONE then outbound connection tracking is de facto disabled because there
+    // are no common sessions to count. Try to back up to find a more general match until we get
+    // to a hardwired value that's not NONE.
+    TSServerSessionSharingMatchType mt =
+      static_cast<TSServerSessionSharingMatchType>(t_state.txn_conf->server_session_sharing_match);
+    if (TS_SERVER_SESSION_SHARING_MATCH_NONE == mt) {
+      mt = static_cast<TSServerSessionSharingMatchType>(t_state.http_config_param->oride.server_session_sharing_match);
+      if (TS_SERVER_SESSION_SHARING_MATCH_NONE == mt) {
+        // Really? Every single session is private?
+        mt = TS_SERVER_SESSION_SHARING_MATCH_BOTH; // so use this, least worst choice.
+      }
+    }
+
+    t_state.conn_tracker_info = OutboundConnTracker::get(t_state.current.server->dst_addr, hostname_hash, mt);
+  }
+
+  // Check to see if we have reached the max number of connections on this upstream host.
+  if (t_state.txn_conf->origin_max_connections > 0) {
+    auto ccount = ++(t_state.conn_tracker_info->_count); // cache instantaneous value plus reservation for this.
+    t_state.outbound_request_reserved = true;
     if (ccount >= t_state.txn_conf->origin_max_connections) {
-      ip_port_text_buffer addrbuf;
-      ats_ip_nptop(&t_state.current.server->dst_addr.sa, addrbuf, sizeof(addrbuf));
-      SMDebug("http", "[%" PRId64 "] too many connections (%d) for this host (%" PRId64 "): %s", sm_id, ccount,
-              t_state.txn_conf->origin_max_connections, addrbuf);
-      Warning("[%" PRId64 "] too many connections (%d) for this host (%" PRId64 "): %s", sm_id, ccount,
-              t_state.txn_conf->origin_max_connections, addrbuf);
+      --(t_state.conn_tracker_info->_count); // cancel our reservation
+      t_state.outbound_request_reserved = false;
+      if (t_state.conn_tracker_info->should_alert()) {
+        ts::LocalBufferWriter<256> w;                                   // enough space for the message.
+        auto blocked = t_state.conn_tracker_info->_blocked.exchange(0); // clear and log.
+        w.print("[{}] too many connections: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
+                t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr, t_state.conn_tracker_info->_fqdn_hash,
+                t_state.conn_tracker_info->_match_type, blocked, t_state.current.server->dst_addr);
+        SMDebug("http", "%.*s", static_cast<int>(w.size()), w.data());
+        Warning("%.*s", static_cast<int>(w.size()), w.data());
+      }
       ink_assert(pending_action == nullptr);
 
       // if we were previously queued, or the queue is disabled-- just reschedule
@@ -4902,7 +4922,7 @@ HttpSM::do_http_server_open(bool raw)
         pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
         return;
       } else if (t_state.txn_conf->origin_max_connections_queue > 0) { // If we have a queue, lets see if there is a slot
-        auto wcount = ++(group->_queued);
+        auto wcount = ++(t_state.conn_tracker_info->_queued);
         // if there is space in the queue
         if (wcount < t_state.txn_conf->origin_max_connections_queue) {
           t_state.origin_request_queued = true;
@@ -5360,13 +5380,7 @@ HttpSM::handle_http_server_open()
 {
   // if we were a queued request, we need to decrement the queue size-- as we got a connection
   if (t_state.origin_request_queued) {
-    CryptoHash hostname_hash;
-    CryptoContext().hash_immediate(hostname_hash, static_cast<const void *>(t_state.current.server->name),
-                                   strlen(t_state.current.server->name));
-    auto group =
-      OutboundConnTracker::get(t_state.current.server->dst_addr, hostname_hash,
-                               static_cast<TSServerSessionSharingMatchType>(t_state.txn_conf->server_session_sharing_match));
-    --(group->_queued);
+    --(t_state.conn_tracker_info->_queued);
     // The request is now not queued. This is important if the request will ever retry, the t_state is re-used
     t_state.origin_request_queued = false;
   }

@@ -43,30 +43,11 @@ inline BufferWriter &
 bwformat(BufferWriter &w, BWFSpec const &spec, TSServerSessionSharingMatchType type)
 {
   static const string_view name[] = {"None"_sv, "Both"_sv, "IP Address"_sv, "Host Name"_sv};
-  switch (spec._type) {
-  case 'd':
-  case 'x':
-  case 'X':
-  case 'o':
-  case 'b':
-  case 'B':
+  if (spec.has_numeric_type()) {
     bwformat(w, spec, static_cast<unsigned int>(type));
-    break;
-  default:
+  } else {
     bwformat(w, spec, name[type]);
-    break;
   }
-  return w;
-}
-
-inline BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, IpEndpoint const &addr)
-{
-  if (spec._ext.size() && 'p' == spec._ext.front())
-    ats_ip_ntop(&addr.sa, w.auxBuffer(), w.remaining());
-  else
-    ats_ip_nptop(&addr.sa, w.auxBuffer(), w.remaining());
-  w.fill(strlen(w.auxBuffer()));
   return w;
 }
 } // ts
@@ -95,7 +76,9 @@ public:
       TSServerSessionSharingMatchType _match_type;
     };
 
-    using Ticker = std::chrono::high_resolution_clock::rep; ///< Raw type used to track HR ticks.
+    using Time   = std::chrono::high_resolution_clock::time_point;
+    using Ticker = Time::rep; ///< Raw type used to track HR ticks.
+    static constexpr std::chrono::seconds ALERT_DELAY{60};
 
     IpEndpoint _addr;                            ///< Remote address & port.
     CryptoHash _fqdn_hash;                       ///< Hash of the host name.
@@ -113,6 +96,11 @@ public:
     static bool equal(Key const &lhs, Key const &rhs);
     /// Hashing function.
     static uint64_t hash(Key const &);
+    /// Generate alert message.
+    /// This is a modifying call - internal state will be updated to prevent too frequent alerts.
+    /// @param w A @c BufferWriter on which to write the output.
+    /// @return @c true if an alert was generated, @c false otherwise.
+    bool should_alert();
   };
 
   /**

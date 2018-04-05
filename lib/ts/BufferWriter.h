@@ -198,6 +198,7 @@ public:
 class FixedBufferWriter : public BufferWriter
 {
   using super_type = BufferWriter;
+  using self_type  = FixedBufferWriter;
 
 public:
   /** Construct a buffer writer on a fixed @a buffer of size @a capacity.
@@ -320,12 +321,13 @@ public:
   /// Reduce extent to @a n.
   /// If @a n is less than the capacity the error condition, if any, is cleared.
   /// This can be used to clear the output by calling @c reduce(0)
-  void
+  self_type &
   reduce(size_t n)
   {
     ink_assert(n <= _attempted);
 
     _attempted = n;
+    return *this;
   }
 
   /// Provide a string_view of all successfully written characters.

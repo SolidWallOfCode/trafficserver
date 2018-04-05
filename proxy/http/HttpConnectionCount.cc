@@ -25,13 +25,27 @@
 
 OutboundConnTracker::Imp OutboundConnTracker::_imp;
 
+bool
+OutboundConnTracker::Group::should_alert()
+{
+  bool zret = false;
+  // This is a bit clunky because the goal is to store just the tick count as an atomic.
+  Ticker last_tick{_last_alert};
+  Time last{Time::duration{last_tick}};
+  Time now = std::chrono::high_resolution_clock::now();
+  if (last + ALERT_DELAY <= now) {
+    zret = _last_alert.compare_exchange_strong(last_tick, now.time_since_epoch().count());
+  }
+  return zret;
+}
+
 std::string
 OutboundConnTracker::to_json_string()
 {
   std::string text;
   size_t extent = 0;
-  static const ts::BWFormat header_fmt{"{{\"connectionCountSize\": {}, \"connectionCountList\": ["};
-  static const ts::BWFormat item_fmt{"{{\"ip\": \"{}\", \"port\": {}, \"hostname_hash\": \"{}\", \"type\": {}, \"count\": {}}},"};
+  static const ts::BWFormat header_fmt{R"({{"connectionCountSize": {}, "connectionCountList": [)"};
+  static const ts::BWFormat item_fmt{R"({{"ip": "{}", "port": {}, "hostname_hash": "{}", "type": {}, "count": {}}},)"};
   static const ts::string_view trailer{"]}}"};
   std::vector<Group const *> groups;
   {

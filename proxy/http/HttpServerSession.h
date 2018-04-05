@@ -78,9 +78,12 @@ public:
 
   /** Enable tracking the number of outbound session.
    *
-   * @param type The matching type. Must not be @c TS_SERVER_SESSION_SHARING_MATCH_NONE.
+   * @param group The connection tracking group.
+   *
+   * The @a group must have already incremented the connection count. It will be cleaned up when the
+   * session terminates.
    */
-  void enable_outbound_connection_tracking(TSServerSessionSharingMatchType type);
+  void enable_outbound_connection_tracking(OutboundConnTracker::Group *group);
 
   void
   reset_read_buffer(void)

@@ -85,13 +85,13 @@ HttpServerSession::new_connection(NetVConnection *new_vc)
 }
 
 void
-HttpServerSession::enable_outbound_connection_tracking(TSServerSessionSharingMatchType type)
+HttpServerSession::enable_outbound_connection_tracking(OutboundConnTracker::Group *group)
 {
-  conn_track_group = OutboundConnTracker::get(get_server_ip(), hostname_hash, sharing_match);
+  conn_track_group = group;
   if (is_debug_tag_set("http_ss")) {
-    auto n = conn_track_group->_count++;
     ts::LocalBufferWriter<256> w;
-    w.print("[{}] new connection, ip: {::p}, count: {}", con_id, get_server_ip(), n);
+    w.print("[{}] new connection, ip: {}, group ({},{},{:s}), count: {}", con_id, get_server_ip(), group->_addr, group->_fqdn_hash,
+            group->_match_type, group->_count.load());
     Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
   }
 }
@@ -133,7 +133,8 @@ HttpServerSession::do_io_close(int alerrno)
     if (conn_track_group->_count >= 0) {
       auto n = (conn_track_group->_count)--;
       ts::LocalBufferWriter<256> w;
-      w.print("[{}] connection close ip: {::p} count: {}", get_server_ip(), n);
+      w.print("[{}] connection close ({},{},{:s}) count {}", conn_track_group->_addr, conn_track_group->_fqdn_hash,
+              conn_track_group->_match_type, n);
       Debug("http_ss", "%.*s", static_cast<int>(w.size()), w.data());
     } else {
       // A bit dubious, as there's no guarantee it's still negative, but even that would be interesting to know.

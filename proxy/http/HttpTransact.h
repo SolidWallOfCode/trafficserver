@@ -78,6 +78,8 @@ struct HttpConfigParams;
 class HttpSM;
 
 #include "ts/InkErrno.h"
+#include "HttpConnectionCount.h"
+
 #define UNKNOWN_INTERNAL_ERROR (INK_START_ERRNO - 1)
 
 enum ViaStringIndex_t {
@@ -705,11 +707,12 @@ public:
     CacheLookupInfo cache_info;
     DNSLookupInfo dns_info;
     RedirectInfo redirect_info;
-    unsigned int updated_server_version   = HostDBApplicationInfo::HTTP_VERSION_UNDEFINED;
-    bool force_dns                        = false;
-    MgmtByte cache_open_write_fail_action = 0;
-    bool is_revalidation_necessary        = false; // Added to check if revalidation is necessary - YTS Team, yamsat
-    bool request_will_not_selfloop        = false; // To determine if process done - YTS Team, yamsat
+    OutboundConnTracker::Group *conn_tracker_info = nullptr;
+    unsigned int updated_server_version           = HostDBApplicationInfo::HTTP_VERSION_UNDEFINED;
+    bool force_dns                                = false;
+    MgmtByte cache_open_write_fail_action         = 0;
+    bool is_revalidation_necessary                = false; // Added to check if revalidation is necessary - YTS Team, yamsat
+    bool request_will_not_selfloop                = false; // To determine if process done - YTS Team, yamsat
     ConnectionAttributes client_info;
     ConnectionAttributes parent_info;
     ConnectionAttributes server_info;
@@ -755,8 +758,10 @@ public:
     bool is_websocket        = false;
     bool did_upgrade_succeed = false;
 
-    // Some queue info
-    bool origin_request_queued = false;
+    // Track if this SM has reserved (incremented) the outbound connection tracking data.
+    // see conn_track_info
+    bool outbound_request_reserved = false;
+    bool outbound_request_queued   = false;
 
     char *internal_msg_buffer                       = nullptr; // out
     char *internal_msg_buffer_type                  = nullptr; // out
@@ -914,6 +919,13 @@ public:
       arena.reset();
       unmapped_url.clear();
       hostdb_entry.clear();
+
+      // Clean up connection tracking info if any.
+      if (conn_tracker_info) {
+        if (outbound_request_reserved)
+          --(conn_tracker_info->_count);
+        if (outbound_request_queued) --(conn_tracker_info)->_queued);
+      }
 
       delete[] ranges;
       ranges      = nullptr;

@@ -29,6 +29,7 @@
 #include "ts/ink_assert.h"
 #include <fstream>
 #include <ts/TextView.h>
+#include <ts/BufferWriter.h>
 
 IpAddr const IpAddr::INVALID;
 
@@ -44,6 +45,8 @@ const ts::string_view IP_PROTO_TAG_HTTP_0_9("http/0.9"_sv);
 const ts::string_view IP_PROTO_TAG_HTTP_1_0("http/1.0"_sv);
 const ts::string_view IP_PROTO_TAG_HTTP_1_1("http/1.1"_sv);
 const ts::string_view IP_PROTO_TAG_HTTP_2_0("h2"_sv); // HTTP/2 over TLS
+
+const ts::string_view UNIX_PROTO_TAG("unix"_sv); // UNIX domain socket (file system)
 
 uint32_t
 ink_inet_addr(const char *s)
@@ -141,7 +144,18 @@ ats_ip_ntop(const struct sockaddr *addr, char *dst, size_t size)
 ts::string_view
 ats_ip_family_name(int family)
 {
-  return AF_INET == family ? IP_PROTO_TAG_IPV4 : AF_INET6 == family ? IP_PROTO_TAG_IPV6 : "Unspec"_sv;
+  switch (family) {
+  case AF_INET:
+    return IP_PROTO_TAG_IPV4;
+  case AF_INET6:
+    return IP_PROTO_TAG_IPV6;
+  case AF_UNIX:
+    return UNIX_PROTO_TAG;
+  case AF_UNSPEC:
+    return "unspec"_sv;
+  default:
+    return "unknown"_sv;
+  }
 }
 
 const char *
@@ -586,3 +600,56 @@ ats_tcp_somaxconn()
 
   return value;
 }
+
+namespace ts
+{
+BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, sockaddr const *addr)
+{
+  bool port_p   = true;
+  bool addr_p   = true;
+  bool family_p = false;
+  if (spec._ext.size()) {
+    port_p   = spec._ext.find('p') != spec._ext.npos;
+    addr_p   = spec._ext.find('a') != spec._ext.npos;
+    family_p = spec._ext.find('f') != spec._ext.npos;
+  }
+  if (addr_p) {
+    bool bracket_p = false;
+    ip_text_buffer b;
+    switch (addr->sa_family) {
+    case AF_INET:
+      inet_ntop(AF_INET, &ats_ip4_addr_cast(addr), b, sizeof(b));
+      break;
+    case AF_INET6:
+      if (port_p) {
+        w.write('[');
+        bracket_p = true; // take a note - put in the trailing bracket.
+      }
+      inet_ntop(AF_INET6, &ats_ip6_addr_cast(addr), b, sizeof(b));
+      break;
+    default:
+      FixedBufferWriter(b, sizeof(b)).print("*Not IP address [{}]*\0"_sv, addr->sa_family);
+      break;
+    }
+    w.write(b, strlen(b));
+    if (bracket_p)
+      w.write(']');
+    if (port_p)
+      w.write(':');
+  }
+  if (port_p) {
+    bwformat(w, spec, static_cast<uintmax_t>(ats_ip_port_host_order(addr)));
+  }
+  if (family_p) {
+    if (addr_p || port_p)
+      w.write(' ');
+    if (spec.has_numeric_type()) {
+      bwformat(w, spec, static_cast<uintmax_t>(addr->sa_family));
+    } else {
+      bwformat(w, spec, ats_ip_family_name(addr->sa_family));
+    }
+  }
+  return w;
+}
+} // ts
