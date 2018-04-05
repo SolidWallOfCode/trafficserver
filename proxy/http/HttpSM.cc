@@ -1743,7 +1743,7 @@ HttpSM::state_http_server_open(int event, void *data)
     if (t_state.conn_tracker_info) {
       SMDebug("http_ss", "[%" PRId64 "] max number of connections: %" PRIu64, sm_id, t_state.txn_conf->origin_max_connections);
       session->enable_outbound_connection_tracking(t_state.conn_tracker_info);
-      t_state.outbound_request_reserved = false; // session will handle cleanup of this.
+      t_state.outbound_conn_reserved = false; // session will handle cleanup of this.
     }
 
     attach_server_session(session);
@@ -4684,7 +4684,7 @@ HttpSM::do_http_server_open(bool raw)
     ink_assert(t_state.current.server->dst_addr.port() != 0); // verify the plugin set it to something.
   }
 
-  ts::LocalBufferWriter<128> w;
+  ts::LocalBufferWriter<256> w;
   w.print("[{}] open connection to '{}' {}", sm_id, t_state.current.server->name, t_state.current.server->dst_addr);
   SMDebug("http_track", "%.*s", static_cast<int>(w.size()), w.data());
 
@@ -4895,31 +4895,32 @@ HttpSM::do_http_server_open(bool raw)
 
   // Check to see if we have reached the max number of connections on this upstream host.
   if (t_state.txn_conf->origin_max_connections > 0) {
-    auto ccount = ++(t_state.conn_tracker_info->_count); // cache instantaneous value plus reservation for this.
-    t_state.outbound_request_reserved = true;
-    if (ccount >= t_state.txn_conf->origin_max_connections) {
+    auto ccount                    = ++(t_state.conn_tracker_info->_count); // cache instantaneous value plus reservation for this.
+    t_state.outbound_conn_reserved = true;
+    if (ccount > t_state.txn_conf->origin_max_connections) {
       --(t_state.conn_tracker_info->_count); // cancel our reservation
-      t_state.outbound_request_reserved = false;
+      t_state.outbound_conn_reserved = false;
+      ++(t_state.conn_tracker_info->_blocked);
       if (t_state.conn_tracker_info->should_alert()) {
-        ts::LocalBufferWriter<256> w;                                   // enough space for the message.
         auto blocked = t_state.conn_tracker_info->_blocked.exchange(0); // clear and log.
-        w.print("[{}] too many connections: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
-                t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr, t_state.conn_tracker_info->_fqdn_hash,
-                t_state.conn_tracker_info->_match_type, blocked, t_state.current.server->dst_addr);
+        w.reduce(0).print("[{}] too many connections: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
+                          t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr,
+                          t_state.conn_tracker_info->_fqdn_hash, t_state.conn_tracker_info->_match_type, blocked,
+                          t_state.current.server->dst_addr);
         SMDebug("http", "%.*s", static_cast<int>(w.size()), w.data());
         Warning("%.*s", static_cast<int>(w.size()), w.data());
       }
       ink_assert(pending_action == nullptr);
 
       // if we were previously queued, or the queue is disabled-- just reschedule
-      if (t_state.outbound_request_queued || t_state.txn_conf->origin_max_connections_queue < 0) {
+      if (t_state.outbound_conn_queued || t_state.txn_conf->origin_max_connections_queue < 0) {
         pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
         return;
       } else if (t_state.txn_conf->origin_max_connections_queue > 0) { // If we have a queue, lets see if there is a slot
         auto wcount = ++(t_state.conn_tracker_info->_queued);
         // if there is space in the queue
         if (wcount < t_state.txn_conf->origin_max_connections_queue) {
-          t_state.outbound_request_queued = true;
+          t_state.outbound_conn_queued = true;
           w.reduce(0).print("[{}] queued for {}", sm_id, t_state.current.server->dst_addr);
           Debug("http", "%.*s", static_cast<int>(w.size()), w.data());
           pending_action = eventProcessor.schedule_in(this, HRTIME_MSECONDS(100));
@@ -4936,8 +4937,7 @@ HttpSM::do_http_server_open(bool raw)
     }
   }
 
-  // We did not manage to get an existing session
-  //  and need to open a new connection
+  // We did not manage to get an existing session and need to open a new connection
   Action *connect_action_handle;
 
   NetVCOptions opt;
@@ -5373,9 +5373,9 @@ void
 HttpSM::handle_http_server_open()
 {
   // The request is now not queued. This is important if the request will ever retry, the t_state is re-used
-  if (t_state.outbound_request_queued) {
+  if (t_state.outbound_conn_queued) {
     --(t_state.conn_tracker_info->_queued);
-    t_state.outbound_request_queued = false;
+    t_state.outbound_conn_queued = false;
   }
 
   // [bwyatt] applying per-transaction OS netVC options here

@@ -760,8 +760,8 @@ public:
 
     // Track if this SM has reserved (incremented) the outbound connection tracking data.
     // see conn_track_info
-    bool outbound_request_reserved = false;
-    bool outbound_request_queued   = false;
+    bool outbound_conn_reserved = false;
+    bool outbound_conn_queued   = false;
 
     char *internal_msg_buffer                       = nullptr; // out
     char *internal_msg_buffer_type                  = nullptr; // out
@@ -956,11 +956,11 @@ public:
     clear_conn_tracking()
     {
       if (conn_tracker_info) {
-        if (outbound_request_reserved)
+        if (outbound_conn_reserved)
           --(conn_tracker_info->_count);
-        if (outbound_request_queued)
+        if (outbound_conn_queued)
           --(conn_tracker_info->_queued);
-        outbound_request_reserved = outbound_request_queued = false;
+        outbound_conn_reserved = outbound_conn_queued = false;
       }
     }
   }; // End of State struct.
