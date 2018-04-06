@@ -36,6 +36,7 @@
 #include <ts/CryptoHash.h>
 #include "HttpProxyAPIEnums.h"
 #include "Show.h"
+#include "Show.h"
 
 namespace ts
 {
@@ -83,10 +84,10 @@ public:
     IpEndpoint _addr;                            ///< Remote address & port.
     CryptoHash _fqdn_hash;                       ///< Hash of the host name.
     TSServerSessionSharingMatchType _match_type; ///< Outbound session matching type.
-    std::atomic<int> _count;                     ///< Number of outbound connections.
-    std::atomic<Ticker> _last_alert;             ///< Absolute time of the last alert.
-    std::atomic<int> _blocked;                   ///< Number of outbound connections blocked since last alert.
-    std::atomic<int> _queued;                    ///< # of connections queued, waiting for a connection.
+    std::atomic<int> _count{0};                     ///< Number of outbound connections.
+    std::atomic<Ticker> _last_alert{0};             ///< Absolute time of the last alert.
+    std::atomic<int> _blocked{0};                   ///< Number of outbound connections blocked since last alert.
+    std::atomic<int> _queued{0};                    ///< # of connections queued, waiting for a connection.
     LINK(Group, _link);                          ///< Intrusive hash table support.
     Key _key = {_addr, _fqdn_hash, _match_type}; ///< Pre-constructed key for performance on lookup.
 

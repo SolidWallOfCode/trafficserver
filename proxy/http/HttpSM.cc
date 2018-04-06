@@ -4901,15 +4901,16 @@ HttpSM::do_http_server_open(bool raw)
       --(t_state.conn_tracker_info->_count); // cancel our reservation
       t_state.outbound_conn_reserved = false;
       ++(t_state.conn_tracker_info->_blocked);
-      if (t_state.conn_tracker_info->should_alert()) {
-        auto blocked = t_state.conn_tracker_info->_blocked.exchange(0); // clear and log.
-        w.reduce(0).print("[{}] too many connections: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
-                          t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr,
-                          t_state.conn_tracker_info->_fqdn_hash, t_state.conn_tracker_info->_match_type, blocked,
-                          t_state.current.server->dst_addr);
-        SMDebug("http", "%.*s", static_cast<int>(w.size()), w.data());
+      bool alert_p = t_state.conn_tracker_info->should_alert();
+      auto blocked = alert_p ? t_state.conn_tracker_info->_blocked.exchange(0) : t_state.conn_tracker_info->_blocked.load();
+
+      w.reduce(0).print("[{}] too many connections: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
+                        t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr,
+                        t_state.conn_tracker_info->_fqdn_hash, t_state.conn_tracker_info->_match_type, blocked,
+                        t_state.current.server->dst_addr);
+      SMDebug("http", "%.*s", static_cast<int>(w.size()), w.data());
+      if (alert_p)
         Warning("%.*s", static_cast<int>(w.size()), w.data());
-      }
       ink_assert(pending_action == nullptr);
 
       // if we were previously queued, or the queue is disabled-- just reschedule
@@ -4934,6 +4935,14 @@ HttpSM::do_http_server_open(bool raw)
         send_origin_throttled_response();
       }
       return;
+    } else if (t_state.conn_tracker_info->_blocked > 0 && t_state.conn_tracker_info->should_alert()) {
+      auto blocked = t_state.conn_tracker_info->_blocked.exchange(0);
+      w.reduce(0).print("[{}] upstream unblocked: count {} limit {} group ({},{},{:s}) blocked {} upstream {}", sm_id, ccount,
+                        t_state.txn_conf->origin_max_connections, t_state.conn_tracker_info->_addr,
+                        t_state.conn_tracker_info->_fqdn_hash, t_state.conn_tracker_info->_match_type, blocked,
+                        t_state.current.server->dst_addr);
+      SMDebug("http", "%.*s", static_cast<int>(w.size()), w.data());
+      Note("%.*s", static_cast<int>(w.size()), w.data());
     }
   }
 
