@@ -125,6 +125,10 @@ test_MIOBufferWriter_CPPFLAGS = $(AM_CPPFLAGS)\
 test_MIOBufferWriter_SOURCES = \
 	unit-tests/test_MIOBufferWriter.cc
 
+test_MIOBufferWriter_CPPFLAGS = $(test_CPP_FLAGS)
+test_MIOBufferWriter_LDFLAGS = $(test_LD_FLAGS)
+test_MIOBufferWriter_LDADD = $(test_LD_ADD)
+
 include $(top_srcdir)/build/tidy.mk
 
 clang-tidy-local: $(DIST_SOURCES)
