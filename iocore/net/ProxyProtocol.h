@@ -33,10 +33,11 @@
 #include "I_VConnection.h"
 #include "I_NetVConnection.h"
 #include "I_IOBuffer.h"
+#include <ts/TextView.h>
 
 // http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt
 
-extern bool proxy_protov1_parse(NetVConnection *, char *);
+extern bool proxy_protov1_parse(NetVConnection *, ts::TextView hdr);
 extern bool ssl_has_proxy_v1(NetVConnection *, char *, int64_t *);
 extern bool http_has_proxy_v1(IOBufferReader *, NetVConnection *);
 

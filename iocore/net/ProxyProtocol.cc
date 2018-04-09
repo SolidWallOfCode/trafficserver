@@ -52,14 +52,12 @@ bool
 http_has_proxy_v1(IOBufferReader *reader, NetVConnection *netvc)
 {
   char buf[PROXY_V1_CONNECTION_HEADER_LEN_MAX + 1];
-  char *end;
-  ptrdiff_t nbytes;
+  ts::TextView tv;
 
-  end    = reader->memcpy(buf, sizeof(buf), 0 /* offset */);
-  nbytes = end - buf;
+  tv.set_view(buf, reader->memcpy(buf, sizeof(buf), 0));
 
   // Client must send at least 15 bytes to get a reasonable match.
-  if (nbytes < (long)PROXY_V1_CONNECTION_HEADER_LEN_MIN) {
+  if (tv.size() < PROXY_V1_CONNECTION_HEADER_LEN_MIN) {
     return false;
   }
 
@@ -67,83 +65,94 @@ http_has_proxy_v1(IOBufferReader *reader, NetVConnection *netvc)
     return false;
   }
 
-  int64_t nl;
-  nl = reader->memchr('\n', strlen(buf), 0);
-
-  char local_buf[PROXY_V1_CONNECTION_HEADER_LEN_MAX + 1];
-  reader->read(local_buf, nl + 1);
+  // Find the terminating LF, which should already be in the buffer.
+  ts::TextView::size_type pos = tv.find('\n');
+  if (pos == tv.npos) { // not found, it's not a proxy protocol header.
+    return false;
+  }
+  reader->consume(pos+1); // clear out the header.
 
   // Now that we know we have a valid PROXY V1 preface, let's parse the
   // remainder of the header
 
-  return (proxy_protov1_parse(netvc, local_buf));
+  return proxy_protov1_parse(netvc, tv);
 }
 
 bool
-proxy_protov1_parse(NetVConnection *netvc, char *buf)
+proxy_protov1_parse(NetVConnection *netvc, ts::TextView hdr)
 {
-  std::string src_addr_port;
-  std::string dst_addr_port;
+  static const ts::string_view PREFACE{PROXY_V1_CONNECTION_PREFACE, PROXY_V1_CONNECTION_PREFACE_LEN};
+  IpEndpoint src_addr;
+  IpEndpoint dst_addr;
+  ts::TextView token, rest;
+  in_port_t port;
 
-  char *pch;
-  int cnt = 0;
-  pch     = strtok(buf, " \n\r");
-  while (pch != NULL) {
-    switch (cnt) {
-    // The header should begin with the PROXY preface
-    case 0:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = PREFACE", cnt, pch);
-      break;
+  // All the cases are special and sequence, might as well unroll them.
 
-    // After the PROXY preface, exactly one space followed by the INET protocol family
-    // - TCP4, TCP6 or UNKNOWN
-    case 1:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = INET Protocol", cnt, pch);
-      break;
-
-    // Next up is exactly one space and the layer 3 source address
-    // - 255.255.255.255 or ffff:f...f:ffff ffff:f...f:fff
-    case 2:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = Source Address", cnt, pch);
-      src_addr_port.assign(pch);
-      break;
-
-    // Next is exactly one space followed by the layer3 destination address
-    // - 255.255.255.255 or ffff:f...f:ffff ffff:f...f:fff
-    case 3:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = Destination Address", cnt, pch);
-      dst_addr_port.assign(pch);
-      break;
-
-    // Next is exactly one space followed by TCP source port represented as a
-    //   decimal number in the range of [0..65535] inclusive.
-    case 4:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = Source Port", cnt, pch);
-      src_addr_port = src_addr_port + ":" + pch;
-      netvc->set_proxy_protocol_src_addr(ts::string_view(src_addr_port));
-      break;
-
-    // Next is exactly one space followed by TCP destination port represented as a
-    //   decimal number in the range of [0..65535] inclusive.
-    case 5:
-      Debug("proxyprotocol_v1", "proto_has_proxy_v1: token[%d]:[%s] = Destination Port", cnt, pch);
-      dst_addr_port = dst_addr_port + ":" + pch;
-      netvc->set_proxy_protocol_dst_addr(ts::string_view(dst_addr_port));
-      break;
-    }
-    // if we have our all of our fields, set version as a flag, we are done here
-    //  otherwise increment our field counter and tok another field
-    //  cnt shoud never get greater than 5, but just in case...
-    if (cnt >= 5) {
-      netvc->set_proxy_protocol_version(NetVConnection::PROXY_V1);
-      return true;
-    } else {
-      ++cnt;
-      pch = strtok(NULL, " \n\r");
-    }
+  // The header should begin with the PROXY preface
+  token = hdr.split_prefix_at(' ');
+  if (0 == token.size() || token != PREFACE) {
+    return false;
   }
-  // If we failed to parse all of the fields, we have incomplete data.  The
-  // spec does not allow for incomplete data, so don't se the flag so the data
-  // is deemed not valid.
-  return false;
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = PREFACE", static_cast<int>(token.size()), token.data());
+
+  // The INET protocol family - TCP4, TCP6 or UNKNOWN
+  token = hdr.split_prefix_at(' ');
+  if (0 == token.size()) {
+    return false;
+  }
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = INET Family", static_cast<int>(token.size()), token.data());
+
+  // Next up is the layer 3 source address
+  // - 255.255.255.255 or ffff:f...f:ffff ffff:f...f:fff
+  token = hdr.split_prefix_at(' ');
+  if (0 == token.size()) {
+    return false;
+  }
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = Source Address", static_cast<int>(token.size()), token.data());
+  if (0 != ats_ip_pton(token, &src_addr.sa)) {
+    return false;
+  }
+
+  // Next is the layer3 destination address
+  // - 255.255.255.255 or ffff:f...f:ffff ffff:f...f:fff
+  token = hdr.split_prefix_at(' ');
+  if (0 == token.size()) {
+    return false;
+  }
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = Destination Address", static_cast<int>(token.size()), token.data());
+  if (0 != ats_ip_pton(token, &dst_addr.sa)) {
+    return false;
+  }
+
+  // Next is the TCP source port represented as a decimal number in the range of [0..65535] inclusive.
+  token = hdr.split_prefix_at(' ');
+  if (0 == token.size()) {
+    return false;
+  }
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = Source Port", static_cast<int>(token.size()), token.data());
+  if (0 == (port = ts::svtoi(token, &rest)) || port >= (1<<16) || rest.size()) {
+    return false;
+  }
+  src_addr.port() = htons(port);
+  
+  // Next is the TCP destination port represented as a decimal number in the range of [0..65535] inclusive.
+  // Final trailer is CR LF so split at CR.
+  token = hdr.split_prefix_at('\r');
+  if (0 == token.size()) {
+    return false;
+  }
+  Debug("proxyprotocol_v1", "proto_has_proxy_v1: [%.*s] = Destination Port", static_cast<int>(token.size()), token.data());
+  if (0 == (port = ts::svtoi(token, &rest)) || port >= (1<<16) || rest.size()) {
+    return false;
+  }
+  dst_addr.port() = htons(port);
+  // Is this check useful? This doesn't get called unless the LF was found.
+  if (hdr.size() == 0 || '\n' != hdr.front()) {
+    return false;
+  }
+
+  netvc->set_proxy_protocol_version(NetVConnection::PROXY_V1);
+
+  return true;
 }
