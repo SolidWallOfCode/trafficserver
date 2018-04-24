@@ -33,162 +33,19 @@ namespace ts
  */
 namespace
 {
-  std::deque<Errata::Sink::Handle> Sink_List;
+  std::vector<Errata::Sink::Handle> Sink_List;
 }
 
-std::string const Errata::DEFAULT_GLUE("\n");
+string_view const Errata::DEFAULT_GLUE{"\n", 1};
 Errata::Message const Errata::NIL_MESSAGE;
-Errata::Code Errata::Message::Default_Code                               = 0;
-Errata::Message::SuccessTest const Errata::Message::DEFAULT_SUCCESS_TEST = &Errata::Message::isCodeZero;
-Errata::Message::SuccessTest Errata::Message::Success_Test               = Errata::Message::DEFAULT_SUCCESS_TEST;
-
-bool
-Errata::Message::isCodeZero(Message const &msg)
-{
-  return msg.m_code == 0;
-}
-
-void
-Errata::Data::push(Message const &msg)
-{
-  m_items.push_back(msg);
-}
-
-void
-Errata::Data::push(Message && msg) {
-  m_items.push_back(std::move(msg));
-}
-
-Errata::Message const&
-Errata::Data::top() const {
-  return m_items.size() ? m_items.back() : NIL_MESSAGE ;
-}
-
-inline Errata::Errata(ImpPtr const &ptr) : m_data(ptr)
-{
-}
-
-Errata::Data::~Data()
-{
-  if (m_log_on_delete) {
-    Errata tmp(this); // because client API requires a wrapper.
-    for ( auto& f : Sink_List ) { (*f)(tmp);
-}
-    tmp.m_data.release(); // don't delete this again.
-  }
-}
-
-Errata::Errata(self const& that)
-  : m_data(that.m_data) {
-}
-
-Errata::Errata(self && that)
-  : m_data(that.m_data) {
-}
-
-Errata::Errata(std::string const &text)
-{
-  this->push(text);
-}
-
-Errata::Errata(Id id, std::string const &text)
-{
-  this->push(id, text);
-}
 
 Errata::~Errata()
 {
-}
-
-/*  This forces the errata to have a data object that only it references.
-    If we're sharing the data, clone. If there's no data, allocate.
-    This is used just before a write operation to have copy on write semantics.
- */
-Errata::Data *
-Errata::pre_write()
-{
-  if (m_data) {
-    if (m_data.useCount() > 1) {
-      m_data = new Data(*m_data); // clone current data
+  if (_data && _data->_log_on_delete) {
+    for (auto &f : Sink_List) {
+      (*f)(*this);
     }
-  } else { // create new data
-    m_data = new Data;
   }
-  return m_data.get();
-}
-
-// Just create an instance if needed.
-Errata::Data const*
-Errata::instance() {
-  if (!m_data) { m_data = new Data;
-}
-  return m_data.get();
-}
-
-Errata &
-Errata::push(Message const &msg)
-{
-  this->pre_write()->push(msg);
-  return *this;
-}
-
-Errata&
-Errata::push(Message && msg) {
-  this->pre_write()->push(std::move(msg));
-  return *this;
-}
-
-Errata &
-Errata::operator=(self const &that)
-{
-  m_data = that.m_data;
-  return *this;
-}
-
-Errata &
-Errata::operator=(Message const &msg)
-{
-  // Avoid copy on write in the case where we discard.
-  if (!m_data || m_data.useCount() > 1) {
-    this->clear();
-    this->push(msg);
-  } else {
-    m_data->m_items.clear();
-    m_data->push(msg);
-  }
-  return *this;
-}
-
-Errata&
-Errata::operator = (self && that) {
-  m_data = that.m_data;
-  return *this;
-}
-
-Errata &
-Errata::pull(self &that)
-{
-  if (that.m_data) {
-    this->pre_write();
-    m_data->m_items.insert(m_data->m_items.end(), that.m_data->m_items.begin(), that.m_data->m_items.end());
-    that.m_data->m_items.clear();
-  }
-  return *this;
-}
-
-void
-Errata::pop()
-{
-  if (m_data && m_data->size()) {
-    this->pre_write()->m_items.pop_front();
-  }
-  return;
-}
-
-void
-Errata::clear()
-{
-  m_data.reset(nullptr);
 }
 
 /*  We want to allow iteration on empty / nil containers because that's very
@@ -206,25 +63,26 @@ static Errata::Container NIL_CONTAINER;
 Errata::iterator
 Errata::begin()
 {
-  return m_data ? m_data->m_items.rbegin() : NIL_CONTAINER.rbegin();
+  return _data ? _data->_items.rbegin() : NIL_CONTAINER.rbegin();
 }
 
 Errata::const_iterator
 Errata::begin() const
 {
-  return m_data ? static_cast<Data const &>(*m_data).m_items.rbegin() : static_cast<Container const &>(NIL_CONTAINER).rbegin();
+  return _data ? static_cast<Data const &>(*_data)._items.rbegin() : static_cast<Container const &>(NIL_CONTAINER).rbegin();
 }
 
 Errata::iterator
 Errata::end()
 {
-  return m_data ? m_data->m_items.rend() : NIL_CONTAINER.rend();
+  return (_data ? _data->_items : NIL_CONTAINER).rend();
 }
 
 Errata::const_iterator
 Errata::end() const
 {
-  return m_data ? static_cast<Data const &>(*m_data).m_items.rend() : static_cast<Container const &>(NIL_CONTAINER).rend();
+  Errata::Container::const_reverse_iterator zret{(_data ? _data->_items : NIL_CONTAINER).rend()};
+  return zret;
 }
 
 void
@@ -233,47 +91,45 @@ Errata::registerSink(Sink::Handle const &s)
   Sink_List.push_back(s);
 }
 
-std::ostream&
-Errata::write(
-  std::ostream& out,
-  int offset,
-  int indent,
-  int shift,
-  char const* lead
-) const {
-
-  for ( auto m : *this ) {
-    if ((offset + indent) > 0) {
-      out << std::setw(indent + offset) << std::setfill(' ')
-          << ((indent > 0 && lead) ? lead : " ");
+std::ostream &
+Errata::write(std::ostream &out) const
+{
+  string_view lead;
+  for (auto &m : *this) {
+    out << lead << " [" << static_cast<int>(m._level) << "]: " << m._text << std::endl;
+    if (0 == lead.size()) {
+      lead = "  "_sv;
     }
-
-    out << m.m_id << " [" << m.m_code << "]: " << m.m_text
-        << std::endl
-      ;
-    if (m.getErrata().size()) {
-      m.getErrata().write(out, offset, indent+shift, shift, lead);
-}
-
   }
   return out;
 }
 
-size_t
-Errata::write(char *buff, size_t n, int offset, int indent, int shift, char const *lead) const
+BufferWriter&
+bwformat(BufferWriter& bw, BWFSpec const& spec, Errata::Severity level)
 {
-  std::ostringstream out;
-  std::string text;
-  this->write(out, offset, indent, shift, lead);
-  text = out.str();
-  memcpy(buff, text.data(), std::min(n, text.size()));
-  return text.size();
+  static constexpr string_view name[] = {
+          "DIAG", "DEBUG", "INFO", "NOTE", "WARNING", "ERROR", "FATAL", "ALERT", "EMERGENCY"
+  };
+  return bwformat(bw, spec, name[static_cast<int>(level)]);
+}
+
+BufferWriter&
+bwformat(BufferWriter& bw, BWFSpec const& spec, Errata const& errata)
+{
+  string_view lead;
+  for (auto &m : errata) {
+    bw.print("{}[{}] {}\n", lead, m._level, m._text);
+    if (0 == lead.size()) {
+      lead = "  "_sv;
+    }
+  }
+  return bw;
 }
 
 std::ostream &
 operator<<(std::ostream &os, Errata const &err)
 {
-  return err.write(os, 0, 0, 2, "> ");
+  return err.write(os);
 }
 
 } // namespace ts

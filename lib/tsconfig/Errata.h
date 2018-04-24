@@ -1,6 +1,3 @@
-#if !defined TS_ERRATA_HEADER
-#define TS_ERRATA_HEADER
-
 /** @file
     Stacking error message handling.
 
@@ -11,23 +8,22 @@
     functions to pass back local messages which can be easily
     augmented as the error travels up the stack frame.
 
-    This could be done with exceptions but
-    - That is more effort to implemention
-    - Generally more expensive.
+    This aims to improve over exceptions by being lower cost and not requiring callers to handle the messages.
+    On the other hand, the messages could be used just as easily with exceptions.
 
     Each message on a stack contains text and a numeric identifier.
     The identifier value zero is reserved for messages that are not
     errors so that information can be passed back even in the success
     case.
 
-    The implementation takes the position that success is fast and
-    failure is expensive. Therefore it is optimized for the success
-    path, imposing very little overhead. On the other hand, if an
+    The implementation takes the position that success must be fast and
+    failure is expensive. Therefore Errata is optimized for the success
+    path, imposing very little overhead in that case. On the other hand, if an
     error occurs and is handled, that is generally so expensive that
-    optimizations are pointless (although, of course, one should not
+    optimizations are pointless (although, of course, code should not
     be gratuitiously expensive).
 
-    The library also provides the @c Rv ("return value") template to
+    The library provides the @c Rv ("return value") template to
     make returning values and status easier. This template allows a
     function to return a value and status pair with minimal changes.
     The pair acts like the value type in most situations, while
@@ -65,17 +61,31 @@
     limitations under the License.
  */
 
-# include <memory>
-# include <string>
-# include <iosfwd>
-# include <sstream>
-# include <deque>
-# include <ts/string_view.h>
-# include "NumericType.h"
-# include "IntrusivePtr.h"
+#pragma once
+
+#include <memory>
+#include <vector>
+#include <ts/string_view.h>
+#include <ts/MemArena.h>
+#include <ts/BufferWriter.h>
+#include <tsconfig/NumericType.h>
+#include "IntrusivePtr.h"
 
 namespace ts
 {
+/// Severity levels for Errata.
+enum Severity {
+  LVL_DIAG, ///< Diagnostic only. DL_Diag
+  LVL_DEBUG, ///< Debugging. DL_Debug
+  LVL_INFO, ///< Informative. DL_Status
+  LVL_NOTE, ///< Note. DL_Note
+  LVL_WARNING, ///< Warning. DL_Warning
+  LVL_ERROR, ///< Error. DL_Error
+  LVL_FATAL, ///< Fatal. DL_Fatal
+  LVL_ALERT, ///< Alert. DL_Alert
+  LVL_EMERGENCY, ///< Emergency. DL_Emergency.
+};
+
 /** Class to hold a stack of error messages (the "errata").
     This is a smart handle class, which wraps the actual data
     and can therefore be treated a value type with cheap copy
@@ -86,157 +96,77 @@ class Errata
 protected:
   /// Implementation class.
   struct Data;
-  /// Handle for implementation class instance.
-  typedef IntrusivePtr<Data> ImpPtr;
+
+  using self_type   = Errata;          ///< Self reference type.
+  using string_view = ts::string_view; // use this to adjust for C++11 vs. C++17.
 
 public:
-  typedef Errata self; /// Self reference type.
+  using Severity = ts::Severity; ///< Import for associated classes.
 
-  /// Message ID.
-  typedef NumericType<unsigned int, struct MsgIdTag> Id;
+  /// Severity used if not specified.
+  static constexpr Severity DEFAULT_SEVERITY{Severity::LVL_DIAG};
+  /// Severity level at which the instance is a failure of some sort.
+  static constexpr Severity SERIOUS_SEVERITY{Severity::LVL_WARNING};
 
-  /* Tag / level / code severity.
-     This is intended for clients to use to provide additional
-     classification of a message. A severity code, as for syslog,
-     is a common use.
+  struct Message; // Forward declaration.
 
-  */
-  typedef NumericType<unsigned int, struct CodeTag> Code;
-  struct Message;
-
-  typedef std::deque<Message> Container; ///< Storage type for messages.
-  // We iterate backwards to look like a stack.
-  //    typedef Container::reverse_iterator iterator; ///< Message iteration.
-  /// Message const iteration.
-  //    typedef Container::const_reverse_iterator const_iterator;
-  /// Reverse message iteration.
-  //    typedef Container::iterator reverse_iterator;
-  /// Reverse constant message iteration.
-  //    typedef Container::const_iterator const_reverse_iterator;
+  /// Storage type for list of messages.
+  /// Internally the vector is accessed backwards, in order to make it LIFO.
+  using Container = std::vector<Message>;
 
   /// Default constructor - empty errata, very fast.
   Errata();
-  /// Copy constructor, very fast.
-  Errata(self const &that ///< Object to copy
-         );
-  /// Construct from string.
-  /// Message Id and Code are default.
-  explicit Errata(std::string const &text ///< Finalized message text.
-                  );
-  /// Construct with @a id and @a text.
-  /// Code is default.
-  Errata(Id id,                  ///< Message id.
-         std::string const &text ///< Message text.
-         );
-  /// Construct with @a id, @a code, and @a text.
-  Errata(Id id,                  ///< Message text.
-         Code code,              ///< Message code.
-         std::string const &text ///< Message text.
-         );
-  /** Construct from a message instance.
-      This is equivalent to default constructing an @c errata and then
-      invoking @c push with an argument of @a msg.
-  */
-  Errata(Message const &msg ///< Message to push
-         );
+  Errata(self_type const &that) = delete;                          // no copying.
+  Errata(self_type &&that) = default;                                        ///< Move constructor.
+  self_type &operator=(self_type const &that) = delete;            // no assignemnt.
+  self_type &operator                         =(self_type &&that); // Move assignment.
+  ~Errata();                                                       ///< Destructor.
 
-    /// Move constructor.
-    Errata(self && that);
-    /// Move constructor from @c Message.
-    Errata(Message && msg);
+  /** Add a new message to the top of stack with default severity and @a text.
+   * @param level Severity of the message.
+   * @param text Text of the message.
+   * @return *this
+   */
+  self_type &msg(string_view text);
 
-    /// destructor
-    ~Errata();
+  /** Add a new message to the top of stack with severity @a level and @a text.
+   * @param level Severity of the message.
+   * @param text Text of the message.
+   * @return *this
+   */
+  self_type &msg(Severity level, string_view text);
 
-  /// Self assignment.
-  /// @return A reference to this object.
-  self &operator=(const self &that ///< Source instance.
-                  );
-
-    /// Move assignment.
-    self& operator = (self && that);
-
-    /** Assign message.
-        All other messages are discarded.
-        @return A reference to this object.
-    */
-    self& operator = (
-      Message const& msg ///< Source message.
-    );
-
-  /** Push @a text as a message.
-      The message is constructed from just the @a text.
-      It becomes the top message.
+  /** Push a constructed @c Message.
+      The @c Message is set to have the @a id and @a code. The other arguments are converted
+      to strings and concatenated to form the messsage text.
       @return A reference to this object.
   */
-  self &push(std::string const &text);
-  /** Push @a text as a message with message @a id.
-      The message is constructed from @a text and @a id.
-      It becomes the top message.
+  template <typename... Args> self_type &msg(Severity level, string_view fmt, Args &&... args);
+
+  /** Push a constructed @c Message.
+      The @c Message is set to have the @a id and @a code. The other arguments are converted
+      to strings and concatenated to form the messsage text.
       @return A reference to this object.
   */
-  self &push(Id id, std::string const &text);
-  /** Push @a text as a message with message @a id and @a code.
-      The message is constructed from @a text and @a id.
-      It becomes the top message.
-      @return A reference to this object.
-  */
-  self &push(Id id, Code code, std::string const &text);
-  /** Push @a test a message with an ID of 0 and an error code.
+  template <typename... Args> self_type &msg(Severity level, string_view fmt, std::tuple<Args &&...> &args);
 
-	@return @a *this
-     */
-    self& push(Code code, ts::string_view text);
-    /** Push a message.
-        @a msg becomes the top message.
-        @return A reference to this object.
-    */
-    self& push(Message const& msg);
-    self& push(Message && msg);
-
-    /** Push a constructed @c Message.
-	The @c Message is set to have the @a id and @a code. The other arguments are converted
-	to strings and concatenated to form the messsage text.
-	@return A reference to this object.
-    */
-    template < typename ... Args >
-      self& push(Id id, Code code, Args const& ... args);
-
-  /** Push a nested status.
-      @a err becomes the top item.
-      @return A reference to this object.
-  */
-  self &push(self const &err);
-
-  /** Access top message.
+  /** Access last message.
       @return If the errata is empty, a default constructed message
       otherwise the most recent message.
    */
-  Message const &top() const;
-
-  /** Move messages from @a that to @c this errata.
-      Messages from @a that are put on the top of the
-      stack in @c this and removed from @a that.
-  */
-  self &pull(self &that);
-
-  /// Remove last message.
-  void pop();
+  Message const &front() const;
 
   /// Remove all messages.
-  void clear();
+  self_type &clear();
 
   /** Inhibit logging.
-      @note This only affects @c this as a top level @c errata.
-      It has no effect on this @c this being logged as a nested
-      @c errata.
   */
-  self &doNotLog();
+  self_type &disable_logging();
 
-  friend std::ostream &operator<<(std::ostream &, self const &);
+  friend std::ostream &operator<<(std::ostream &, self_type const &);
 
   /// Default glue value (a newline) for text rendering.
-  static std::string const DEFAULT_GLUE;
+  static string_view const DEFAULT_GLUE;
 
   /** Test status.
 
@@ -246,7 +176,7 @@ public:
       @return @c true if no messages or last message has a zero
       message ID, @c false otherwise.
    */
-  operator bool() const;
+  explicit operator bool() const;
 
   /** Test errata for no failure condition.
 
@@ -255,7 +185,7 @@ public:
       @return @c true if no messages or last message has a zero
       message ID, @c false otherwise.
    */
-  bool isOK() const;
+  bool is_ok() const;
 
   /// Number of messages in the errata.
   size_t size() const;
@@ -291,11 +221,12 @@ public:
       to preserve arbitrary data for the sink or retain a handle to the
       sink for runtime modifications.
    */
-  class Sink : public IntrusivePtrCounter
+  class Sink
   {
+    using self_type = Sink;
+
   public:
-    typedef Sink self;                 ///< Self reference type.
-    typedef IntrusivePtr<self> Handle; ///< Handle type.
+    using Handle = std::shared_ptr<self_type>; ///< Handle type.
 
     /// Handle an abandoned errata.
     virtual void operator()(Errata const &) const = 0;
@@ -307,7 +238,7 @@ public:
   static void registerSink(Sink::Handle const &s);
 
   /// Register a function as a sink.
-  typedef void (*SinkHandlerFunction)(Errata const &);
+  using SinkHandlerFunction = void (*)(Errata const &);
 
     // Wrapper class to support registering functions as sinks.
     struct SinkFunctionWrapper : public Sink {
@@ -326,44 +257,14 @@ public:
   }
 
   /** Simple formatted output.
-
-      Each message is written to a line. All lines are indented with
-      whitespace @a offset characters. Lines are indented an
-      additional @a indent. This value is increased by @a shift for
-      each level of nesting of an @c Errata. if @a lead is not @c
-      NULL the indentation is overwritten by @a lead if @a indent is
-      non-zero. It acts as a "continuation" marker for nested
-      @c Errata.
-
    */
-  std::ostream &write(std::ostream &out, ///< Output stream.
-                      int offset,        ///< Lead white space for every line.
-                      int indent,        ///< Additional indention per line for messages.
-                      int shift,         ///< Additional @a indent for nested @c Errata.
-                      char const *lead   ///< Leading text for nested @c Errata.
-                      ) const;
-  /// Simple formatted output to fixed sized buffer.
-  /// @return Number of characters written to @a buffer.
-  size_t write(char *buffer,    ///< Output buffer.
-               size_t n,        ///< Buffer size.
-               int offset,      ///< Lead white space for every line.
-               int indent,      ///< Additional indention per line for messages.
-               int shift,       ///< Additional @a indent for nested @c Errata.
-               char const *lead ///< Leading text for nested @c Errata.
-               ) const;
+  std::ostream &write(std::ostream &out) const;
 
 protected:
-  /// Construct from implementation pointer.
-  /// Used internally by nested classes.
-  Errata(ImpPtr const &ptr);
   /// Implementation instance.
-  ImpPtr m_data;
-
-    /// Return the implementation instance, allocating and unsharing as needed.
-    Data* pre_write();
-    /// Force and return an implementation instance.
-    /// Does not follow copy on write.
-    Data const* instance();
+  std::unique_ptr<Data> _data;
+  /// Force data existence.
+  Data *data();
 
   /// Used for returns when no data is present.
   static Message const NIL_MESSAGE;
@@ -376,123 +277,48 @@ extern std::ostream &operator<<(std::ostream &os, Errata const &stat);
 
 /// Storage for a single message.
 struct Errata::Message {
-  typedef Message self; ///< Self reference type.
+  using self_type   = Message;          ///< Self reference type.
+  using Severity    = Errata::Severity; ///< Message severity level.
+  using string_view = ts::string_view;
 
   /// Default constructor.
   /// The message has Id = 0, default code,  and empty text.
   Message();
 
-  /// Construct from text.
-  /// Id is zero and Code is default.
-  Message(std::string const &text ///< Finalized message text.
-          );
-
-  /// Construct with @a id and @a text.
-  /// Code is default.
-  Message(Id id,                  ///< ID of message in table.
-          std::string const &text ///< Final text for message.
-          );
-
-  /// Construct with @a id, @a code, and @a text.
-  Message(Id id,                  ///< Message Id.
-          Code code,              ///< Message Code.
-          std::string const &text ///< Final text for message.
-          );
-
-  /// Construct with an @a id, @a code, and a @a message.
-  /// The message contents are created by converting the variable arguments
-  /// to strings using the stream operator and concatenated in order.
-  template < typename ... Args>
-    Message(
-	    Id id, ///< Message Id.
-	    Code code, ///< Message Code.
-	    Args const& ... text
-	    );
+  /** Construct with severity @a level and @a text.
+   *
+   * @param level Severity level.
+   * @param text Message content.
+   */
+  Message(Severity level, string_view text);
 
   /// Reset to the message to default state.
-  self &clear();
+  self_type &clear();
 
-  /// Set the message Id.
-  self &set(Id id ///< New message Id.
-            );
-
-  /// Set the code.
-  self &set(Code code ///< New code for message.
-            );
-
-  /// Set the text.
-  self &set(std::string const &text ///< New message text.
-            );
-
-  /// Set the text.
-  self &set(char const *text ///< New message text.
-            );
-
-  /// Set the errata.
-  self &set(Errata const &err ///< Errata to store.
-            );
+  /// Get the severity.
+  Severity severity() const;
 
   /// Get the text of the message.
-  std::string const &text() const;
+  string_view text() const;
 
-  /// Get the code.
-  Code getCode() const;
-  /// Get the nested status.
-  /// @return A status object, which is not @c NULL if there is a
-  /// nested status stored in this item.
-  Errata getErrata() const;
+  /// Set the text of the message.
+  self_type &assign(string_view text);
 
-  /** The default message code.
+  /// Set the severity @a level
+  self_type &assign(Severity level);
 
-      This value is used as the Code value for constructing and
-      clearing messages. It can be changed to control the value
-      used for empty messages.
-  */
-  static Code Default_Code;
-
-  /// Type for overriding success message test.
-  typedef bool (*SuccessTest)(Message const &m);
-
-  /** Success message test.
-
-      When a message is tested for being "successful", this
-      function is called. It may be overridden by a client.
-      The initial value is @c DEFAULT_SUCCESS_TEST.
-
-      @note This is only called when there are Messages in the
-      Errata. An empty Errata (@c NULL or empty stack) is always
-      a success. Only the @c top Message is checked.
-
-      @return @c true if the message indicates success,
-      @c false otherwise.
-  */
-  static SuccessTest Success_Test;
-
-  /// Indicate success if the message code is zero.
-  /// @note Used as the default success test.
-  static bool isCodeZero(Message const &m);
-
-  static SuccessTest const DEFAULT_SUCCESS_TEST;
-
-  template < typename ... Args> static std::string stringify(Args const& ... items);
-
-  Id m_id; ///< Message ID.
-  Code m_code; ///< Message code.
-  std::string m_text; ///< Final text.
-  Errata m_errata;    ///< Nested errata.
+  Severity _level{Errata::DEFAULT_SEVERITY}; ///< Message code.
+  string_view _text;                         ///< Final text.
 };
 
 /** This is the implementation class for Errata.
 
     It holds the actual messages and is treated as a passive data
     object with nice constructors.
-
-    We implement reference counting semantics by hand for two
-    reasons. One is that we need to do some specialized things, but
-    mainly because the client can't see this class so we can't
 */
-struct Errata::Data : public IntrusivePtrCounter {
-  typedef Data self; ///< Self reference type.
+struct Errata::Data {
+  using self_type = Data; ///< Self reference type.
+  using Severity  = Errata::Severity;
 
   //! Default constructor.
   Data();
@@ -500,66 +326,60 @@ struct Errata::Data : public IntrusivePtrCounter {
   /// Destructor, to do logging.
   ~Data();
 
-  //! Number of messages.
-  size_t size() const;
-
-  /// Get the top message on the stack.
-  Message const &top() const;
-
-  /// Put a message on top of the stack.
-  void push(Message const& msg);
-  void push(Message && msg);
-
+  /// The message stack.
+  Container _items;
+  /// Message text storage.
+  MemArena _arena{512}; // start with 512 bytes of string storage.
+  /// The effective severity of the message stack.
+  Severity _level{Errata::DEFAULT_SEVERITY};
   /// Log this when it is deleted.
-  mutable bool m_log_on_delete;
-
-  //! The message stack.
-  Container m_items;
+  mutable bool _log_on_delete{true};
 };
 
 /// Forward iterator for @c Messages in an @c Errata.
 class Errata::iterator : public Errata::Container::reverse_iterator
 {
+  using self_type  = iterator; ///< Self-reference type.
+  using super_type = Errata::Container::reverse_iterator;
+
 public:
-  typedef iterator self;                             ///< Self reference type.
-  typedef Errata::Container::reverse_iterator super; ///< Parent type.
-  iterator();                                        ///< Default constructor.
+  iterator(); ///< Default constructor.
   /// Copy constructor.
-  iterator(self const &that ///< Source instance.
+  iterator(self_type const &that ///< Source instance.
            );
   /// Construct from super class.
-  iterator(super const &that ///< Source instance.
+  iterator(super_type const &that ///< Source instance.
            );
   /// Assignment.
-  self &operator=(self const &that);
+  self_type &operator=(self_type const &that);
   /// Assignment from super class.
-  self &operator=(super const &that);
+  self_type &operator=(super_type const &that);
   /// Prefix increment.
-  self &operator++();
+  self_type &operator++();
   /// Prefix decrement.
-  self &operator--();
+  self_type &operator--();
 };
 
 /// Forward constant iterator for @c Messages in an @c Errata.
 class Errata::const_iterator : public Errata::Container::const_reverse_iterator
 {
+  using self_type  = const_iterator;                            ///< Self reference type.
+  using super_type = Errata::Container::const_reverse_iterator; ///< Parent type.
 public:
-  typedef const_iterator self;                             ///< Self reference type.
-  typedef Errata::Container::const_reverse_iterator super; ///< Parent type.
-  const_iterator();                                        ///< Default constructor.
+  const_iterator(); ///< Default constructor.
   /// Copy constructor.
-  const_iterator(self const &that ///< Source instance.
+  const_iterator(self_type const &that ///< Source instance.
                  );
-  const_iterator(super const &that ///< Source instance.
+  const_iterator(super_type const &that ///< Source instance.
                  );
   /// Assignment.
-  self &operator=(self const &that);
+  self_type &operator=(self_type const &that);
   /// Assignment from super class.
-  self &operator=(super const &that);
+  self_type &operator=(super_type const &that);
   /// Prefix increment.
-  self &operator++();
+  self_type &operator++();
   /// Prefix decrement.
-  self &operator--();
+  self_type &operator--();
 };
 
 /** Helper class for @c Rv.
@@ -572,13 +392,14 @@ struct RvBase {
   /** Default constructor. */
   RvBase();
 
-  /** Construct with specific status.
+  /**
+   * Construct with existing @c Errata.
+   * @param s Errata for result.
    */
-  RvBase(Errata const &s ///< Status to copy
-         );
+  RvBase(Errata &&s);
 
   //! Test the return value for success.
-  bool isOK() const;
+  bool is_ok() const;
 
   /** Clear any stacked errors.
       This is useful during shutdown, to silence irrelevant errors caused
@@ -587,7 +408,7 @@ struct RvBase {
   void clear();
 
   /// Inhibit logging of the errata.
-  void doNotLog();
+  void disable_logging();
 };
 
 /** Return type for returning a value and status (errata).  In
@@ -600,11 +421,11 @@ struct RvBase {
     asynchronously.
  */
 template <typename R> struct Rv : public RvBase {
-  typedef Rv self;      ///< Standard self reference type.
-  typedef RvBase super; ///< Standard super class reference type.
-  typedef R Result;     ///< Type of result value.
+  using self_type  = Rv;     ///< Standard self reference type.
+  using super_type = RvBase; ///< Standard super class reference type.
+  using Result     = R;      ///< Type of result value.
 
-  Result _result; ///< The actual result of the function.
+  Result _result{}; ///< The actual result of the function.
 
   /** Default constructor.
       The default constructor for @a R is used.
@@ -612,24 +433,49 @@ template <typename R> struct Rv : public RvBase {
   */
   Rv();
 
-  /** Standard (success) constructor.
-
-      This copies the result and sets the status to SUCCESS.
-
-      @note Not @c explicit so that clients can return just a result
-       and have it be marked as SUCCESS.
+  /** Construct with copy of @a result and empty Errata.
+   *
+   * Construct with a specified @a result and a default (successful) @c Errata.
+   * @param result Return value / result.
    */
-  Rv(Result const &r ///< The function result
-     );
+  Rv(Result const &result);
 
-  /** Construct from a result and a pre-existing status object.
+  /** Construct with move of @a result and empty Errata.
+   *
+   * @param result The return / result value.
+    */
+  Rv(Result &&result);
 
-      @internal No constructor from just an Errata to avoid
-      potential ambiguity with constructing from result type.
+  /** Construct with copy of @a result and move of @a errata.
+   *
+   * Construct with a specified @a result and a default (successful) @c Errata.
+   * @param result Return value / result.
+   * @param errata Status to move.
    */
-  Rv(Result const &r, ///< The function result
-     Errata const &s  ///< A pre-existing status object
-     );
+  Rv(Result const &result, Errata &&errata);
+
+  /** Construct with move of @a result and move of @a errata.
+   *
+   * @param result The return / result value.
+   * @param errata Status to move.
+    */
+  Rv(Result &&result, Errata &&errata);
+
+  /** Push a message in to the result.
+   *
+   * @param level Severity of the message.
+   * @param text Text of the message.
+   * @return @a *this
+   */
+  self_type &msg(Severity level, string_view text);
+
+  /** Push a message in to the result.
+   *
+   * @param level Severity of the message.
+   * @param text Text of the message.
+   * @return @a *this
+   */
+  template <typename... Args> self_type &msg(Severity level, string_view fmt, Args &&... args);
 
   /** User conversion to the result type.
 
@@ -667,13 +513,6 @@ template <typename R> struct Rv : public RvBase {
     return _result;
   }
 
-  /** Add the status from another instance to this one.
-      @return A reference to @c this object.
-  */
-  template <typename U>
-  self &push(Rv<U> const &that ///< Source of status messages
-             );
-
   /** Set the result.
 
       This differs from assignment of the function result in that the
@@ -681,15 +520,26 @@ template <typename R> struct Rv : public RvBase {
       result. This makes it useful for assigning a result local
       variable and then returning.
 
+   * @param result Value to move.
+   * @return @a this
+
       @code
-      Rv<int> zret;
-      int value;
-      // ... complex computation, result in value
-      return zret.set(value);
+      Rv<int> func(...) {
+        Rv<int> zret;
+        int value;
+        // ... complex computation, result in value
+        return zret.set(value);
+      }
       @endcode
   */
-  self &set(Result const &r ///< Result to store
-            );
+  self_type &set(Result const &result);
+
+  /** Move the @a result to @a this.
+   *
+   * @param result Value to move.
+   * @return @a this,
+   */
+  self_type &set(Result &&result);
 
   /** Return the result.
       @return A reference to the result value in this object.
@@ -711,12 +561,12 @@ template <typename R> struct Rv : public RvBase {
   */
   Errata const &errata() const;
 
-  /// Directly set the errata
-  self &operator=(Errata const &status ///< Errata to assign.
-                  );
-
-  /// Push a message on to the status.
-  self &push(Errata::Message const &msg);
+  /** Directly set the @c Errata with @a status.
+   *
+   * @param status Errata to move in to this instance.
+   * @return *this
+   */
+  self_type &operator=(Errata &&status);
 };
 
 /** Combine a function result and status in to an @c Rv.
@@ -725,291 +575,326 @@ template <typename R> struct Rv : public RvBase {
  */
 template <typename R>
 Rv<R>
-MakeRv(R const &r,     ///< The function result
-       Errata const &s ///< The pre-existing status object
+MakeRv(R const &r,      ///< The function result
+       Errata &&erratum ///< The pre-existing status object
        )
 {
-  return Rv<R>(r, s);
+  return Rv<R>(r, erratum);
+}
+
+template <typename R>
+Rv<R>
+MakeRv(R &&r,           ///< The function result
+       Errata &&erratum ///< The pre-existing status object
+       )
+{
+  return Rv<R>(r, erratum);
 }
 /* ----------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------- */
 // Inline methods.
-inline Errata::Message::Message() : m_id(0), m_code(Default_Code)
+
+// Errata::Message
+inline Errata::Message::Message()
 {
 }
-inline Errata::Message::Message(std::string const &text) : m_id(0), m_code(Default_Code), m_text(text)
+
+inline Errata::Message::Message(Severity level, string_view text) : _level(level), _text(text)
 {
 }
-inline Errata::Message::Message(Id id, std::string const &text) : m_id(id), m_code(Default_Code), m_text(text)
+
+inline Errata::Message &
+Errata::Message::clear()
 {
-}
-inline Errata::Message::Message(Id id, Code code, std::string const &text) : m_id(id), m_code(code), m_text(text)
-{
-}
-inline Errata::Message& Errata::Message::clear() {
-  m_id = 0;
-  m_code = Default_Code;
-  m_text.erase();
-  m_errata.clear();
+  _level = Errata::DEFAULT_SEVERITY;
+  _text  = string_view{};
   return *this;
 }
 
-inline std::string const &
+inline ts::string_view
 Errata::Message::text() const
 {
-  return m_text;
+  return _text;
 }
-inline Errata::Code
-Errata::Message::getCode() const
+
+inline Errata::Severity
+Errata::Message::severity() const
 {
-  return m_code;
-}
-inline Errata
-Errata::Message::getErrata() const
-{
-  return m_errata;
+  return _level;
 }
 
 inline Errata::Message &
-Errata::Message::set(Id id)
+Errata::Message::assign(string_view text)
 {
-  m_id = id;
-  return *this;
-}
-inline Errata::Message &
-Errata::Message::set(Code code)
-{
-  m_code = code;
-  return *this;
-}
-inline Errata::Message &
-Errata::Message::set(std::string const &text)
-{
-  m_text = text;
-  return *this;
-}
-inline Errata::Message &
-Errata::Message::set(char const *text)
-{
-  m_text = text;
-  return *this;
-}
-inline Errata::Message &
-Errata::Message::set(Errata const &err)
-{
-  m_errata = err;
-  m_errata.doNotLog();
+  _text = text;
   return *this;
 }
 
-template < typename ... Args>
-std::string Errata::Message::stringify(Args const& ... items)
+inline Errata::Message &
+Errata::Message::assign(Severity level)
 {
-  std::ostringstream s;
-  (void)(int[]){0, ( (s << items) , 0 ) ... };
-  return s.str();
+  _level = level;
+  return *this;
 }
 
-inline Errata::Errata() {}
-inline Errata::Errata(Id id, Code code, std::string const& text) {
-  this->push(Message(id, code, text));
-}
-inline Errata::Errata(Message const &msg)
+// Errata
+
+inline Errata::Errata()
 {
-  this->push(msg);
 }
-inline Errata::Errata(Message && msg) {
-  this->push(std::move(msg));
+
+inline Errata::Data *
+Errata::data()
+{
+  if (!_data) {
+    _data.reset(new Data);
+  }
+  return _data.get();
 }
 
 inline Errata::operator bool() const
 {
-  return this->isOK();
+  return this->is_ok();
 }
 
 inline size_t
 Errata::size() const
 {
-  return m_data ? m_data->m_items.size() : 0;
+  return _data ? _data->_items.size() : 0;
 }
 
 inline bool
-Errata::isOK() const
+Errata::is_ok() const
 {
-  return 0 == m_data || 0 == m_data->size() || Message::Success_Test(this->top());
+  return 0 == _data || 0 == _data->_items.size() || _data->_level < SERIOUS_SEVERITY;
 }
 
 inline Errata &
-Errata::push(std::string const &text)
+Errata::msg(string_view text)
 {
-  this->push(Message(text));
+  this->msg(DEFAULT_SEVERITY, text);
   return *this;
 }
 
 inline Errata &
-Errata::push(Id id, std::string const &text)
+Errata::msg(Severity level, ts::string_view text)
 {
-  this->push(Message(id, text));
+  MemSpan span{this->data()->_arena.alloc(text.size())};
+  memcpy(span.data(), text.data(), text.size());
+  _data->_items.emplace_back(level, string_view(span.begin(), span.size()));
+  _data->_level = std::max(_data->_level, level);
   return *this;
 }
 
-inline Errata &
-Errata::push(Id id, Code code, std::string const &text)
-{
-  this->push(Message(id, code, text));
-  return *this;
+template <typename... Args>
+Errata &
+Errata::msg(Severity level, string_view fmt, Args &&... args) {
+  return this->msg(level, fmt, std::forward_as_tuple(args));
 }
-inline Errata &
-Errata::push(Code code, ts::string_view text)
+
+template <typename... Args>
+Errata &
+Errata::msg(Severity level, string_view fmt, std::tuple<Args &&...> &args)
 {
-  this->push(Message(code, text));
+  MemSpan span{this->data()->_arena.remnant()};
+  FixedBufferWriter bw{span.data(), span.size()};
+  bw.print(fmt, args);
+  if (bw.error()) {
+    span = _data->_arena.alloc(bw.extent());
+    FixedBufferWriter(span.data(), span.size()).print(fmt, args);
+  }
+  this->data()->_items.emplace_back(level, string_view(span.begin(), span.size()));
+  _data->_level = std::max(_data->_level, level);
   return *this;
 }
 
 inline Errata::Message const &
-Errata::top() const
+Errata::front() const
 {
-  return m_data ? m_data->top() : NIL_MESSAGE;
+  return _data && _data->_items.size() ? _data->_items.front() : NIL_MESSAGE;
 }
+
 inline Errata &
-Errata::doNotLog()
+Errata::disable_logging()
 {
-  this->instance()->m_log_on_delete = false;
+  this->data()->_log_on_delete = false;
   return *this;
 }
 
-inline Errata::Data::Data() : m_log_on_delete(true)
+Errata&
+Errata::clear()
+{
+  _data.reset(nullptr);
+  return *this;
+}
+
+// Data
+
+inline Errata::Data::Data()
 {
 }
-inline size_t
-Errata::Data::size() const
-{
-  return m_items.size();
-}
+
+// Errata iterators
 
 inline Errata::iterator::iterator()
 {
 }
-inline Errata::iterator::iterator(self const &that) : super(that)
+
+inline Errata::iterator::iterator(self_type const &that) : super_type(that)
 {
 }
-inline Errata::iterator::iterator(super const &that) : super(that)
+
+inline Errata::iterator::iterator(super_type const &that) : super_type(that)
 {
 }
+
 inline Errata::iterator &
-Errata::iterator::operator=(self const &that)
+Errata::iterator::operator=(self_type const &that)
 {
-  this->super::operator=(that);
+  this->super_type::operator=(that);
   return *this;
 }
+
 inline Errata::iterator &
-Errata::iterator::operator=(super const &that)
+Errata::iterator::operator=(super_type const &that)
 {
-  this->super::operator=(that);
+  this->super_type::operator=(that);
   return *this;
 }
+
 inline Errata::iterator &Errata::iterator::operator++()
 {
-  this->super::operator++();
+  this->super_type::operator++();
   return *this;
 }
+
 inline Errata::iterator &Errata::iterator::operator--()
 {
-  this->super::operator--();
+  this->super_type::operator--();
   return *this;
 }
 
 inline Errata::const_iterator::const_iterator()
 {
 }
-inline Errata::const_iterator::const_iterator(self const &that) : super(that)
+
+inline Errata::const_iterator::const_iterator(self_type const &that) : super_type(that)
 {
 }
-inline Errata::const_iterator::const_iterator(super const &that) : super(that)
+
+inline Errata::const_iterator::const_iterator(super_type const &that) : super_type(that)
 {
 }
+
 inline Errata::const_iterator &
-Errata::const_iterator::operator=(self const &that)
+Errata::const_iterator::operator=(self_type const &that)
 {
-  super::operator=(that);
+  super_type::operator=(that);
   return *this;
 }
+
 inline Errata::const_iterator &
-Errata::const_iterator::operator=(super const &that)
+Errata::const_iterator::operator=(super_type const &that)
 {
-  super::operator=(that);
+  super_type::operator=(that);
   return *this;
 }
+
 inline Errata::const_iterator &Errata::const_iterator::operator++()
 {
-  this->super::operator++();
+  this->super_type::operator++();
   return *this;
 }
+
 inline Errata::const_iterator &Errata::const_iterator::operator--()
 {
-  this->super::operator--();
+  this->super_type::operator--();
   return *this;
 }
+
+// RvBase
 
 inline RvBase::RvBase()
 {
 }
-inline RvBase::RvBase(Errata const &errata) : _errata(errata)
+
+inline RvBase::RvBase(Errata &&errata) : _errata(std::forward<Errata>(errata))
 {
 }
+
 inline bool
-RvBase::isOK() const
+RvBase::is_ok() const
 {
-  return _errata;
+  return _errata.is_ok();
 }
+
 inline void
 RvBase::clear()
 {
   _errata.clear();
 }
+
 inline void
-RvBase::doNotLog()
+RvBase::disable_logging()
 {
-  _errata.doNotLog();
+  _errata.disable_logging();
 }
 
-template <typename T> Rv<T>::Rv() : _result()
+// Rv<T>
+
+template <typename T> Rv<T>::Rv()
 {
 }
+
 template <typename T> Rv<T>::Rv(Result const &r) : _result(r)
 {
 }
-template <typename T> Rv<T>::Rv(Result const &r, Errata const &errata) : super(errata), _result(r)
+
+template <typename T> Rv<T>::Rv(Result &&r) : _result(std::forward(r))
 {
 }
+
+template <typename T> Rv<T>::Rv(Result const &r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(r)
+{
+}
+
+template <typename T> Rv<T>::Rv(Result &&r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(std::forward<T>(r))
+{
+}
+
 template <typename T> Rv<T>::operator Result const &() const
 {
   return _result;
 }
+
 template <typename T>
 T const &
 Rv<T>::result() const
 {
   return _result;
 }
+
 template <typename T>
 T &
 Rv<T>::result()
 {
   return _result;
 }
+
 template <typename T>
 Errata const &
 Rv<T>::errata() const
 {
   return _errata;
 }
+
 template <typename T>
 Errata &
 Rv<T>::errata()
 {
   return _errata;
 }
+
 template <typename T>
 Rv<T> &
 Rv<T>::set(Result const &r)
@@ -1017,30 +902,41 @@ Rv<T>::set(Result const &r)
   _result = r;
   return *this;
 }
-template <typename T>
-Rv<T> &
-Rv<T>::operator=(Errata const &errata)
-{
-  _errata = errata;
-  return *this;
-}
-template <typename T>
-Rv<T> &
-Rv<T>::push(Errata::Message const &msg)
-{
-  _errata.push(msg);
-  return *this;
-}
-template <typename T>
-template <typename U>
-Rv<T> &
-Rv<T>::push(Rv<U> const &that)
-{
-  _errata.push(that.errata());
-  return *this;
-}
-/* ----------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------- */
-} // namespace ts
 
-#endif // TS_ERRATA_HEADER
+template <typename T>
+Rv<T> &
+Rv<T>::set(Result &&r)
+{
+  _result = std::forward(r);
+  return *this;
+}
+
+template <typename T>
+Rv<T> &
+Rv<T>::operator=(Errata &&errata)
+{
+  _errata = std::forward<Errata>(errata);
+  return *this;
+}
+
+template <typename T>
+Rv<T> &
+Rv<T>::msg(Severity level, string_view text)
+{
+  _errata.msg(level, text);
+  return *this;
+}
+template <typename R>
+template <typename... Args>
+Rv<R> &
+Rv<R>::msg(Severity level, string_view fmt, Args &&... args)
+{
+  _errata.msg(level, fmt, std::forward_as_tuple(args...));
+}
+
+BufferWriter&
+bwformat(BufferWriter& w, BWFSpec const& spec, Errata::Severity);
+
+BufferWriter&
+bwformat(BufferWriter& w, BWFSpec const& spec, Errata);
+} // namespace ts

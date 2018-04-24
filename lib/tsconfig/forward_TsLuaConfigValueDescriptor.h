@@ -26,6 +26,6 @@
 
 struct TsLuaConfigValueDescriptor;
 using TsLuaConfigStringDescriptor = TsLuaConfigValueDescriptor;
-template < typename V > class TsLuaConfigObjectDescriptor;
+template <typename V> class TsLuaConfigObjectDescriptor;
 
 #endif // include guard

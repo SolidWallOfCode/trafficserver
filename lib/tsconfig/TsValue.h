@@ -161,9 +161,8 @@ namespace config
         - EOP: No more path elements were found. Do not continue parsing.
         - ERROR: A syntax error was encountered. See the errata for detail. Do not continue parsing.
     */
-    Rv<Result> parse(
-      ConstBuffer* cbuff = nullptr ///< [out] Parsed path element.
-    );
+      Rv<Result> parse(ConstBuffer *cbuff = nullptr ///< [out] Parsed path element.
+                       );
 
       /// Check if input is available.
       bool hasInput() const;
@@ -624,14 +623,28 @@ namespace config
     detail::ValueItem const *item() const;
   };
 
-// Inline methods.
-namespace detail {
-  inline bool ValueTable::operator ! () const { return ! _ptr; }
-  inline ValueTable::operator PseudoBool::Type () const { return _ptr ? PseudoBool::TRUE : PseudoBool::FALSE; }
-  inline size_t ValueTable::size() const { return _ptr ? _ptr->_values.size() : 0; }
-  inline Generation ValueTable::generation() const { return _ptr ? _ptr->_generation : Generation(0); }
-  inline ValueItem const& ValueTable::operator [] (ValueIndex idx) const { return const_cast<self*>(this)->operator [] (idx); }
-  inline ValueTable& ValueTable::reset() { _ptr = nullptr; return *this; }
+  // Inline methods.
+  namespace detail
+  {
+    inline bool ValueTable::operator!() const { return !_ptr; }
+    inline ValueTable::operator PseudoBool::Type() const { return _ptr ? PseudoBool::TRUE : PseudoBool::FALSE; }
+    inline size_t
+    ValueTable::size() const
+    {
+      return _ptr ? _ptr->_values.size() : 0;
+    }
+    inline Generation
+    ValueTable::generation() const
+    {
+      return _ptr ? _ptr->_generation : Generation(0);
+    }
+    inline ValueItem const &ValueTable::operator[](ValueIndex idx) const { return const_cast<self *>(this)->operator[](idx); }
+    inline ValueTable &
+    ValueTable::reset()
+    {
+      _ptr = nullptr;
+      return *this;
+    }
 
     inline ValueItem::ValueItem() : _type(VoidValue), _local_index(0), _srcLine(0), _srcColumn(0) {}
     inline ValueItem::ValueItem(ValueType type) : _type(type), _local_index(0), _srcLine(0), _srcColumn(0) {}
@@ -686,54 +699,122 @@ namespace detail {
     return item ? item->_local_index : 0;
   }
 
-inline bool Value::isLiteral() const { return 0 != (detail::IS_LITERAL & detail::Type_Property[this->getType()]); }
-inline bool Value::isContainer() const { return 0 != (detail::IS_CONTAINER & detail::Type_Property[this->getType()]); }
-inline Value Value::getParent() const { return this->hasValue() ? Value(_config, _config._table[_vidx]._parent) : Value(); }
-inline bool Value::isRoot() const { return this->hasValue() && _vidx == 0; }
-inline Value& Value::reset() { _config = Configuration(); _vidx = detail::NULL_VALUE_INDEX; return *this; }
-inline detail::ValueItem* Value::item() { return this->hasValue() ? &(_config._table[_vidx]) : nullptr; }
-inline detail::ValueItem const* Value::item() const { return const_cast<self*>(this)->item(); }
-inline Value Value::operator [] (char const* name) const { return (*this)[ConstBuffer(name, strlen(name))]; }
-inline size_t Value::childCount() const {
-  detail::ValueItem const* item = this->item();
-  return item ? item->_children.size() : 0;
-}
-inline Value Value::find(char const* path) { return this->find(ConstBuffer(path, strlen(path))); }
-inline int Value::getSourceLine() const {
-  detail::ValueItem const* item = this->item();
-  return item ? item->_srcLine : 0;
-}
-inline int Value::getSourceColumn() const {
-  detail::ValueItem const* item = this->item();
-  return item ? item->_srcColumn : 0;
-}
-inline Value& Value::setSourceLine(int line) {
-  detail::ValueItem* item = this->item();
-  if (item) item->_srcLine = line;
-  return *this;
-}
-inline Value& Value::setSourceColumn(int col) {
-  detail::ValueItem* item = this->item();
-  if (item) item->_srcColumn = col;
-  return *this;
-}
-inline Value& Value::setSource(int line, int col) {
-  detail::ValueItem* item = this->item();
-  if (item) {
-    item->_srcLine = line;
-    item->_srcColumn = col;
+  inline bool
+  Value::isLiteral() const
+  {
+    return 0 != (detail::IS_LITERAL & detail::Type_Property[this->getType()]);
   }
-  return *this;
-}
+  inline bool
+  Value::isContainer() const
+  {
+    return 0 != (detail::IS_CONTAINER & detail::Type_Property[this->getType()]);
+  }
+  inline Value
+  Value::getParent() const
+  {
+    return this->hasValue() ? Value(_config, _config._table[_vidx]._parent) : Value();
+  }
+  inline bool
+  Value::isRoot() const
+  {
+    return this->hasValue() && _vidx == 0;
+  }
+  inline Value &
+  Value::reset()
+  {
+    _config = Configuration();
+    _vidx   = detail::NULL_VALUE_INDEX;
+    return *this;
+  }
+  inline detail::ValueItem *
+  Value::item()
+  {
+    return this->hasValue() ? &(_config._table[_vidx]) : nullptr;
+  }
+  inline detail::ValueItem const *
+  Value::item() const
+  {
+    return const_cast<self *>(this)->item();
+  }
+  inline Value Value::operator[](char const *name) const { return (*this)[ConstBuffer(name, strlen(name))]; }
+  inline size_t
+  Value::childCount() const
+  {
+    detail::ValueItem const *item = this->item();
+    return item ? item->_children.size() : 0;
+  }
+  inline Value
+  Value::find(char const *path)
+  {
+    return this->find(ConstBuffer(path, strlen(path)));
+  }
+  inline int
+  Value::getSourceLine() const
+  {
+    detail::ValueItem const *item = this->item();
+    return item ? item->_srcLine : 0;
+  }
+  inline int
+  Value::getSourceColumn() const
+  {
+    detail::ValueItem const *item = this->item();
+    return item ? item->_srcColumn : 0;
+  }
+  inline Value &
+  Value::setSourceLine(int line)
+  {
+    detail::ValueItem *item = this->item();
+    if (item)
+      item->_srcLine = line;
+    return *this;
+  }
+  inline Value &
+  Value::setSourceColumn(int col)
+  {
+    detail::ValueItem *item = this->item();
+    if (item)
+      item->_srcColumn = col;
+    return *this;
+  }
+  inline Value &
+  Value::setSource(int line, int col)
+  {
+    detail::ValueItem *item = this->item();
+    if (item) {
+      item->_srcLine   = line;
+      item->_srcColumn = col;
+    }
+    return *this;
+  }
 
   inline Path::ImplType::ImplType() {}
 
-inline Path::Path() { }
-inline Path::ImplType* Path::instance() { if (!_ptr) _ptr = new ImplType; return _ptr.get(); }
-inline Path& Path::append(ConstBuffer const& tag) { this->instance()->_elements.push_back(tag); return *this; }
-inline Path& Path::append(size_t index) { this->instance()->_elements.push_back(ConstBuffer(nullptr, index)); return *this; }
-inline size_t Path::count() const { return _ptr ? _ptr->_elements.size() : 0; }
-inline ConstBuffer const& Path::operator [] (size_t idx) const { return _ptr ? _ptr->_elements[idx] : detail::NULL_CONST_BUFFER; }
+  inline Path::Path() {}
+  inline Path::ImplType *
+  Path::instance()
+  {
+    if (!_ptr)
+      _ptr = new ImplType;
+    return _ptr.get();
+  }
+  inline Path &
+  Path::append(ConstBuffer const &tag)
+  {
+    this->instance()->_elements.push_back(tag);
+    return *this;
+  }
+  inline Path &
+  Path::append(size_t index)
+  {
+    this->instance()->_elements.push_back(ConstBuffer(nullptr, index));
+    return *this;
+  }
+  inline size_t
+  Path::count() const
+  {
+    return _ptr ? _ptr->_elements.size() : 0;
+  }
+  inline ConstBuffer const &Path::operator[](size_t idx) const { return _ptr ? _ptr->_elements[idx] : detail::NULL_CONST_BUFFER; }
 
   inline Path::Parser::Parser() {}
   inline Path::Parser::Parser(ConstBuffer const &text) : _input(text), _c(text._ptr) {}

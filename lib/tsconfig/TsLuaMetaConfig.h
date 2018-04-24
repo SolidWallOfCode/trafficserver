@@ -50,7 +50,8 @@ public:
   class SchemaData : public TsLuaConfigValueData
   {
     using super_type = TsLuaConfigValueData;
-    using self_type = SchemaData;
+    using self_type  = SchemaData;
+
   public:
     using value_type = std::unique_ptr<SchemaValue>;
 
@@ -67,6 +68,7 @@ public:
   class SchemaValue
   {
     using self_type = SchemaValue;
+
   public:
     SchemaValue();
 
@@ -90,7 +92,7 @@ public:
 
   class MetaSchemaDescriptor;
 
-    // Metaschema class, a specialized schema.
+  // Metaschema class, a specialized schema.
   class MetaSchemaValue : public SchemaValue
   {
   public:
