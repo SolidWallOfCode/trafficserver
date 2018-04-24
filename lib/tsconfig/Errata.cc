@@ -33,35 +33,26 @@ namespace ts
  */
 namespace
 {
-  std::deque<Errata::Sink::Handle> Sink_List;
+  std::vector<Errata::Sink::Handle> Sink_List;
 }
 
-std::string const Errata::DEFAULT_GLUE("\n");
+string_view const Errata::DEFAULT_GLUE{"\n", 1};
 Errata::Message const Errata::NIL_MESSAGE;
-Errata::Code Errata::Message::Default_Code                               = 0;
-Errata::Message::SuccessTest const Errata::Message::DEFAULT_SUCCESS_TEST = &Errata::Message::isCodeZero;
-Errata::Message::SuccessTest Errata::Message::Success_Test               = Errata::Message::DEFAULT_SUCCESS_TEST;
-
-bool
-Errata::Message::isCodeZero(Message const &msg)
-{
-  return msg.m_code == 0;
-}
 
 void
 Errata::Data::push(Message const &msg)
 {
-  m_items.push_back(msg);
+  _items.push_back(msg);
 }
 
 void
 Errata::Data::push(Message && msg) {
-  m_items.push_back(std::move(msg));
+  _items.push_back(std::move(msg));
 }
 
 Errata::Message const&
 Errata::Data::top() const {
-  return m_items.size() ? m_items.back() : NIL_MESSAGE ;
+  return _items.size() ? _items.back() : NIL_MESSAGE ;
 }
 
 inline Errata::Errata(ImpPtr const &ptr) : m_data(ptr)
@@ -73,17 +64,9 @@ Errata::Data::~Data()
   if (m_log_on_delete) {
     Errata tmp(this); // because client API requires a wrapper.
     for ( auto& f : Sink_List ) { (*f)(tmp);
-}
+    }
     tmp.m_data.release(); // don't delete this again.
   }
-}
-
-Errata::Errata(self const& that)
-  : m_data(that.m_data) {
-}
-
-Errata::Errata(self && that)
-  : m_data(that.m_data) {
 }
 
 Errata::Errata(std::string const &text)
@@ -212,7 +195,7 @@ Errata::begin()
 Errata::const_iterator
 Errata::begin() const
 {
-  return m_data ? static_cast<Data const &>(*m_data).m_items.rbegin() : static_cast<Container const &>(NIL_CONTAINER).rbegin();
+  return m_data ? static_cast<Data const &>(*m_data)._items.rbegin() : static_cast<Container const &>(NIL_CONTAINER).rbegin();
 }
 
 Errata::iterator
@@ -224,7 +207,7 @@ Errata::end()
 Errata::const_iterator
 Errata::end() const
 {
-  return m_data ? static_cast<Data const &>(*m_data).m_items.rend() : static_cast<Container const &>(NIL_CONTAINER).rend();
+  return m_data ? static_cast<Data const &>(*m_data)._items.rend() : static_cast<Container const &>(NIL_CONTAINER).rend();
 }
 
 void
