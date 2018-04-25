@@ -1292,6 +1292,8 @@ add_library(libtsutil SHARED
         lib/ts/MatcherUtils.cc
         lib/ts/MatcherUtils.h
         lib/ts/MemSpan.h
+        lib/ts/MemArena.h
+        lib/ts/MemArena.cc
         lib/ts/mkdfa.c
         lib/ts/MMH.cc
         lib/ts/MMH.h
