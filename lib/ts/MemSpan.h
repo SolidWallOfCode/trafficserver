@@ -136,22 +136,27 @@ public:
   /// @name Accessors.
   //@{
   /// Pointer to the first byte in the span.
-  void *begin() const;
+  char* begin();
+  const char* begin() const;
 
   /// Pointer to first byte not in the span.
-  void *end() const;
+  char *end();
+  const char *end() const;
 
   /// Number of bytes in the span.
   constexpr ptrdiff_t size() const;
   /// Number of bytes in the span (unsigned).
   constexpr size_t usize() const;
 
-  /// Memory pointer.
-  /// @note This is equivalent to @c begin currently but it's probably good to have separation.
-  constexpr void *data() const;
+  /// Pointer to memory in the span.
+  void* data();
+
+  /// Pointer to memory in the span.
+  constexpr const void *data() const;
 
   /// Memory pointer, one past the last element of the span.
-  void *data_end() const;
+  void * data_end();
+  constexpr const void *data_end() const;
 
   /// @return the @a V value at index @a n.
   template <typename V> V at(ptrdiff_t n) const;
@@ -389,25 +394,49 @@ MemSpan::operator+=(ptrdiff_t n)
   return *this;
 }
 
-inline void *
+inline char *
+MemSpan::begin()
+{
+  return static_cast<char*>(_data);
+}
+
+inline const char *
 MemSpan::begin() const
+{
+  return static_cast<const char*>(_data);
+}
+
+inline void *
+MemSpan::data()
 {
   return _data;
 }
 
-inline constexpr void *
+inline constexpr const void *
 MemSpan::data() const
 {
   return _data;
 }
 
-inline void *
-MemSpan::end() const
+inline char *
+MemSpan::end()
 {
   return static_cast<char *>(_data) + _size;
 }
 
+inline const char *
+MemSpan::end() const
+{
+  return static_cast<const char *>(_data) + _size;
+}
+
 inline void *
+MemSpan::data_end()
+{
+  return static_cast<char *>(_data) + _size;
+}
+
+inline constexpr const void *
 MemSpan::data_end() const
 {
   return static_cast<char *>(_data) + _size;
