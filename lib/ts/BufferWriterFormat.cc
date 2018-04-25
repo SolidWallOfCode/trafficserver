@@ -627,7 +627,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, MemSpan const &span)
       w.write('0');
       w.write(digits[33]);
     }
-    bw_fmt::Hex_Dump(w, string_view{static_cast<char *>(span.data()), span.usize()}, digits);
+    bw_fmt::Hex_Dump(w, string_view{span.begin(), span.usize()}, digits);
   } else {
     w.print(default_fmt, span.size(), span.data());
   }
