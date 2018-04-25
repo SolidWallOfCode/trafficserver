@@ -62,7 +62,8 @@ TsLuaConfig::load(const char *path)
 }
 
 ts::Errata
-TsLuaConfigObjectData::load(lua_State* L) {
+TsLuaConfigObjectData::load(lua_State *L)
+{
   ts::Errata zret;
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {

@@ -526,7 +526,7 @@ template <typename T>
 void
 IntrusivePtr<T>::set(T *obj)
 {
-  m_obj = obj;    /* update to new object */
+  m_obj = obj;          /* update to new object */
   if (nullptr != m_obj) /* if a real object, bump the ref count */
     ++(*(this->getCounter()));
 }

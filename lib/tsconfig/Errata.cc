@@ -46,13 +46,15 @@ Errata::Data::push(Message const &msg)
 }
 
 void
-Errata::Data::push(Message && msg) {
+Errata::Data::push(Message &&msg)
+{
   _items.push_back(std::move(msg));
 }
 
-Errata::Message const&
-Errata::Data::top() const {
-  return _items.size() ? _items.back() : NIL_MESSAGE ;
+Errata::Message const &
+Errata::Data::top() const
+{
+  return _items.size() ? _items.back() : NIL_MESSAGE;
 }
 
 inline Errata::Errata(ImpPtr const &ptr) : m_data(ptr)
@@ -63,7 +65,8 @@ Errata::Data::~Data()
 {
   if (m_log_on_delete) {
     Errata tmp(this); // because client API requires a wrapper.
-    for ( auto& f : Sink_List ) { (*f)(tmp);
+    for (auto &f : Sink_List) {
+      (*f)(tmp);
     }
     tmp.m_data.release(); // don't delete this again.
   }
@@ -101,10 +104,12 @@ Errata::pre_write()
 }
 
 // Just create an instance if needed.
-Errata::Data const*
-Errata::instance() {
-  if (!m_data) { m_data = new Data;
-}
+Errata::Data const *
+Errata::instance()
+{
+  if (!m_data) {
+    m_data = new Data;
+  }
   return m_data.get();
 }
 
@@ -115,8 +120,9 @@ Errata::push(Message const &msg)
   return *this;
 }
 
-Errata&
-Errata::push(Message && msg) {
+Errata &
+Errata::push(Message &&msg)
+{
   this->pre_write()->push(std::move(msg));
   return *this;
 }
@@ -142,8 +148,9 @@ Errata::operator=(Message const &msg)
   return *this;
 }
 
-Errata&
-Errata::operator = (self && that) {
+Errata &
+Errata::operator=(self &&that)
+{
   m_data = that.m_data;
   return *this;
 }
@@ -216,28 +223,18 @@ Errata::registerSink(Sink::Handle const &s)
   Sink_List.push_back(s);
 }
 
-std::ostream&
-Errata::write(
-  std::ostream& out,
-  int offset,
-  int indent,
-  int shift,
-  char const* lead
-) const {
-
-  for ( auto m : *this ) {
+std::ostream &
+Errata::write(std::ostream &out, int offset, int indent, int shift, char const *lead) const
+{
+  for (auto m : *this) {
     if ((offset + indent) > 0) {
-      out << std::setw(indent + offset) << std::setfill(' ')
-          << ((indent > 0 && lead) ? lead : " ");
+      out << std::setw(indent + offset) << std::setfill(' ') << ((indent > 0 && lead) ? lead : " ");
     }
 
-    out << m.m_id << " [" << m.m_code << "]: " << m.m_text
-        << std::endl
-      ;
+    out << m.m_id << " [" << m.m_code << "]: " << m.m_text << std::endl;
     if (m.getErrata().size()) {
-      m.getErrata().write(out, offset, indent+shift, shift, lead);
-}
-
+      m.getErrata().write(out, offset, indent + shift, shift, lead);
+    }
   }
   return out;
 }

@@ -103,14 +103,14 @@ private:
  */
 class TsLuaConfigObjectValue
 {
- protected:
+protected:
   friend class TsLuaConfigObjectData;
 
   /** Create a value instance  in the object table indexed by @a name.
 
       @return Pointer to a data instance suitable for interacting with the new value for the @a name.
   */
-  virtual TsLuaConfigValueData* make(ts::string_view name) = 0;
+  virtual TsLuaConfigValueData *make(ts::string_view name) = 0;
 
   virtual ~TsLuaConfigObjectValue() {} /// force virtual.
 
@@ -130,11 +130,11 @@ class TsLuaConfigObjectValue
 
     @a D is the descriptor (static data) support class for the schema instance.
  */
-template <typename T, typename D>
-class TsLuaConfigObjectType : public TsLuaConfigObjectValue
+template <typename T, typename D> class TsLuaConfigObjectType : public TsLuaConfigObjectValue
 {
-  using self_type = TsLuaConfigObjectType;
+  using self_type  = TsLuaConfigObjectType;
   using super_type = TsLuaConfigObjectValue;
+
 public:
   /// The underlying schema type to be store in the properties of this object.
   /// @note For C++ implementation reasons, this can be a @c unique_ptr to the actual value type.
@@ -146,8 +146,8 @@ public:
     /// Initialize the data element to reference the value and descriptor elements.
     value_type() : DATA(_value, DESCRIPTOR) {}
     V _value; ///< The schema value.
-    T DATA; ///< Dynamic data helper.
-    static D const& DESCRIPTOR;
+    T DATA;   ///< Dynamic data helper.
+    static D const &DESCRIPTOR;
   };
 
   /// The container type.
@@ -161,29 +161,54 @@ public:
   // to be of the schema type. This is perferred to maintaining dual tables of
   // the schema values and the helper meta data.
 
-  class iterator {
+  class iterator
+  {
     using self_type = iterator;
+
   public:
     using value_type = V;
 
     iterator();
-    value_type& operator*() { return _i->_value; }
-    value_type* operator->() { return &_i->_value; }
+    value_type &operator*() { return _i->_value; }
+    value_type *operator->() { return &_i->_value; }
 
-    bool operator == (self_type const& that) { return *this == that; }
-    bool operator != (self_type const& that) { return *this != that; }
+    bool
+    operator==(self_type const &that)
+    {
+      return *this == that;
+    }
+    bool
+    operator!=(self_type const &that)
+    {
+      return *this != that;
+    }
+
   protected:
     iterator(typename Container::iterator &&i) : _i(std::move(i)) {}
 
     typename Container::iterator _i;
   };
 
-  iterator begin() { return { _map.begin() }; }
-  iterator end() { return { _map.end() }; }
-  iterator find(ts::string_view name) { return {_map.find(name)}; }
+  iterator
+  begin()
+  {
+    return {_map.begin()};
+  }
+  iterator
+  end()
+  {
+    return {_map.end()};
+  }
+  iterator
+  find(ts::string_view name)
+  {
+    return {_map.find(name)};
+  }
 
 protected:
-  TsLuaConfigValueData* make(ts::string_view name) override {
+  TsLuaConfigValueData *
+  make(ts::string_view name) override
+  {
     return &((_map.emplace(std::make_pair(name, value_type())).first)->second.DATA);
   }
 
@@ -191,9 +216,11 @@ protected:
   Container _map;
 };
 
-class TsLuaConfigObjectData : public TsLuaConfigValueData {
+class TsLuaConfigObjectData : public TsLuaConfigValueData
+{
   using super_type = TsLuaConfigValueData;
-  using self_type = TsLuaConfigObjectData;
+  using self_type  = TsLuaConfigObjectData;
+
 public:
   TsLuaConfigObjectData(TsLuaConfigObjectValue &v, TsLuaConfigValueDescriptor const &d) : super_type(d), _value(v) {}
 

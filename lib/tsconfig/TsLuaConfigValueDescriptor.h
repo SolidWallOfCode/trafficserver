@@ -50,20 +50,20 @@ struct TsLuaConfigValueDescriptor {
   ts::string_view description; ///< Description of the  value.
 };
 
-template < typename V >
-class TsLuaConfigObjectDescriptor : public TsLuaConfigValueDescriptor {
+template <typename V> class TsLuaConfigObjectDescriptor : public TsLuaConfigValueDescriptor
+{
   using super_type = TsLuaConfigValueDescriptor;
-  using self_type = TsLuaConfigObjectDescriptor;
+  using self_type  = TsLuaConfigObjectDescriptor;
 
 public:
   using PropertyPtr = TsLuaConfigValueData V::*;
   using PropertyMap = std::unordered_map<ts::string_view, PropertyPtr>;
-  using Property = typename PropertyMap::value_type;
+  using Property    = typename PropertyMap::value_type;
 
- TsLuaConfigObjectDescriptor(ts::string_view name, ts::string_view description, std::initializer_list<Property> properties)
-   : super_type{TsLuaMetaConfig::ValueType::OBJECT, "object", name, description},
-    _properties(properties)
-      {}
+  TsLuaConfigObjectDescriptor(ts::string_view name, ts::string_view description, std::initializer_list<Property> properties)
+    : super_type{TsLuaMetaConfig::ValueType::OBJECT, "object", name, description}, _properties(properties)
+  {
+  }
 
   PropertyMap _properties;
 };

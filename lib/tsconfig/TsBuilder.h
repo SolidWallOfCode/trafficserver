@@ -95,10 +95,10 @@ namespace config
     self &init();
   };
 
-inline Builder::Handler::Handler() : _ptr(nullptr), _method(nullptr) { }
-inline Builder::Builder() { this->init(); }
-inline Builder::Builder(Configuration const& config) : _config(config) { this->init(); }
-
-}} // namespace ts::config
+  inline Builder::Handler::Handler() : _ptr(nullptr), _method(nullptr) {}
+  inline Builder::Builder() { this->init(); }
+  inline Builder::Builder(Configuration const &config) : _config(config) { this->init(); }
+}
+} // namespace ts::config
 
 #endif // TS_CONFIG_BUILDER_HEADER
