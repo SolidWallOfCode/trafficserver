@@ -101,6 +101,8 @@ protected:
   using string_view = ts::string_view; // use this to adjust for C++11 vs. C++17.
 
 public:
+  using Severity = ts::Severity; ///< Import for associated classes.
+
   /// Severity used if not specified.
   static constexpr Severity DEFAULT_SEVERITY{Severity::DIAG};
   /// Severity level at which the instance is a failure of some sort.
@@ -119,6 +121,13 @@ public:
   self_type &operator=(self_type const &that) = delete;            // no assignemnt.
   self_type &operator                         =(self_type &&that); // Move assignment.
   ~Errata();                                                       ///< Destructor.
+
+  /** Add a new message to the top of stack with default severity and @a text.
+   * @param level Severity of the message.
+   * @param text Text of the message.
+   * @return *this
+   */
+  self_type &msg(string_view text);
 
   /** Add a new message to the top of stack with severity @a level and @a text.
    * @param level Severity of the message.
@@ -255,30 +264,8 @@ public:
   }
 
   /** Simple formatted output.
-
-      Each message is written to a line. All lines are indented with
-      whitespace @a offset characters. Lines are indented an
-      additional @a indent. This value is increased by @a shift for
-      each level of nesting of an @c Errata. if @a lead is not @c
-      NULL the indentation is overwritten by @a lead if @a indent is
-      non-zero. It acts as a "continuation" marker for nested
-      @c Errata.
-
    */
-  std::ostream &write(std::ostream &out, ///< Output stream.
-                      int offset,        ///< Lead white space for every line.
-                      int indent,        ///< Additional indention per line for messages.
-                      int shift,         ///< Additional @a indent for nested @c Errata.
-                      char const *lead   ///< Leading text for nested @c Errata.
-                      ) const;
-  /// Simple formatted output to fixed sized buffer.
-  /// @return Number of characters written to @a buffer.
-  size_t write(ts::BufferWriter &bw,
-               int offset,      ///< Lead white space for every line.
-               int indent,      ///< Additional indention per line for messages.
-               int shift,       ///< Additional @a indent for nested @c Errata.
-               string_view lead ///< Leading text for nested @c Errata.
-               ) const;
+  std::ostream &write(std::ostream &out) const;
 
 protected:
   /// Implementation instance.
@@ -348,6 +335,8 @@ struct Errata::Data {
 
   /// The message stack.
   Container _items;
+  /// Message text storage.
+  MemArena _arena{512}; // start with 512 bytes of string storage.
   /// The effective severity of the message stack.
   Severity _level{Errata::DEFAULT_SEVERITY};
   /// Log this when it is deleted.
@@ -697,7 +686,9 @@ Errata::msg(string_view text)
 inline Errata &
 Errata::msg(Severity level, ts::string_view text)
 {
-  this->data()->_items.emplace_back(level, text);
+  MemSpan span{this->data()->_arena.alloc(text.size())};
+  memcpy(span.data(), text.data(), text.size());
+  _data->_items.emplace_back(level, string_view(span.begin(), span.size()));
   _data->_level = std::max(_data->_level, level);
   return *this;
 }
@@ -706,7 +697,14 @@ template <typename... Args>
 Errata &
 Errata::msg(Severity level, string_view fmt, std::tuple<Args &&...> &args)
 {
-  this->data()->_items.emplace_back(level, text, args);
+  MemSpan span{this->data()->_arena.remnant()};
+  FixedBufferWriter bw{span.data(), span.size()};
+  bw.print(fmt, args);
+  if (bw.error()) {
+    span = _data->_arena.alloc(bw.extent());
+    FixedBufferWriter(span.data(), span.size()).print(fmt, args);
+  }
+  this->data()->_items.emplace_back(level, string_view(span.begin(), span.size()));
   _data->_level = std::max(_data->_level, level);
   return *this;
 }
@@ -714,13 +712,20 @@ Errata::msg(Severity level, string_view fmt, std::tuple<Args &&...> &args)
 inline Errata::Message const &
 Errata::front() const
 {
-  return _data && _data->_items.size() ? _data->_items->front() : NIL_MESSAGE;
+  return _data && _data->_items.size() ? _data->_items.front() : NIL_MESSAGE;
 }
 
 inline Errata &
 Errata::disable_logging()
 {
   this->data()->_log_on_delete = false;
+  return *this;
+}
+
+Errata&
+Errata::clear()
+{
+  _data.reset(nullptr);
   return *this;
 }
 
@@ -814,7 +819,7 @@ inline RvBase::RvBase()
 {
 }
 
-inline RvBase::RvBase(Errata &&errata) : _errata(std::forward(errata))
+inline RvBase::RvBase(Errata &&errata) : _errata(std::forward<Errata>(errata))
 {
 }
 
@@ -850,11 +855,11 @@ template <typename T> Rv<T>::Rv(Result &&r) : _result(std::forward(r))
 {
 }
 
-template <typename T> Rv<T>::Rv(Result const &r, Errata &&errata) : super_type(std::forward(errata)), _result(r)
+template <typename T> Rv<T>::Rv(Result const &r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(r)
 {
 }
 
-template <typename T> Rv<T>::Rv(Result &&r, Errata &&errata) : super_type(std::forward(errata)), _result(std::forward(r))
+template <typename T> Rv<T>::Rv(Result &&r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(std::forward<T>(r))
 {
 }
 
@@ -911,7 +916,7 @@ template <typename T>
 Rv<T> &
 Rv<T>::operator=(Errata &&errata)
 {
-  _errata = std::forward(errata);
+  _errata = std::forward<Errata>(errata);
   return *this;
 }
 
@@ -922,13 +927,17 @@ Rv<T>::msg(Severity level, string_view text)
   _errata.msg(level, text);
   return *this;
 }
-
-template <typename T, typename... Args>
-Rv<T> &
-Rv<T>::msg(Severity level, string_view fmt, Args &&... args)
+template <typename R>
+template <typename... Args>
+Rv<R> &
+Rv<R>::msg(Severity level, string_view fmt, Args &&... args)
 {
-  _errata.msg(level, fmt, std::forward_as_tuple<Args...>(args...));
+  _errata.msg(level, fmt, std::forward_as_tuple(args...));
 }
-/* ----------------------------------------------------------------------- */
-/* ----------------------------------------------------------------------- */
+
+BufferWriter&
+bwformat(BufferWriter& w, BWFSpec const& spec, Errata::Severity);
+
+BufferWriter&
+bwformat(BufferWriter& w, BWFSpec const& spec, Errata);
 } // namespace ts
