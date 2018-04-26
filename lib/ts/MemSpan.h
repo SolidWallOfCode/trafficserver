@@ -29,6 +29,7 @@
 #include <iosfwd>
 #include <iostream>
 #include <cstddef>
+#include <ts/string_view.h>
 
 /// Apache Traffic Server commons.
 namespace ts
@@ -263,6 +264,12 @@ public:
    * @return @c *this
    */
   self_type &remove_suffix(ptrdiff_t n);
+
+  /** Return a view of the memory.
+   *
+   * @return A @c string_view covering the span contents.
+   */
+  string_view view() const;
 
   /// Internal utility for computing the difference of two void pointers.
   /// @return the byte (char) difference between the pointers, @a lhs - @a rhs
@@ -592,6 +599,11 @@ MemSpan::find_if(F const &pred)
     if (pred(*p))
       return p;
   return nullptr;
+}
+
+inline string_view
+MemSpan::view() const {
+  return {static_cast<const char*>(_data), static_cast<size_t>(size())};
 }
 
 } // namespace ts
