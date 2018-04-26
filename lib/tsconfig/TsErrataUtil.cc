@@ -31,6 +31,7 @@
 #include "ts/ink_string.h"
 #include "ts/ink_defs.h"
 
+#if 0
 namespace ts
 {
 namespace msg
@@ -195,3 +196,5 @@ namespace msg
   // ------------------------------------------------------
 }
 } // namespace ts::msg
+
+#endif

@@ -21,8 +21,7 @@
     limitations under the License.
 */
 
-#if !defined(TS_CONFIG_LEXER_HEADER)
-#define TS_CONFIG_LEXER_HEADER
+#pragma once
 
 struct TsConfigHandlers; // forward declare.
 
@@ -57,4 +56,3 @@ extern int tsconfig_parse_buffer(struct TsConfigHandlers *handlers, ///< Syntax 
 }
 #endif
 
-#endif // TS_CONFIG_LEXER_HEADER

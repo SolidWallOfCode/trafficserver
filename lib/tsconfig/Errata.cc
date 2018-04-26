@@ -85,6 +85,19 @@ Errata::end() const
   return zret;
 }
 
+Errata&
+Errata::copy_from(const self_type &that) {
+  auto n = that.size();
+  if (n) {
+    n += this->data()->_items.size();
+    _data->_items.reserve(n);
+    for (auto const& m: that) {
+      _data->_items.emplace_back(m._level, _data->dup(m._text));
+    }
+  }
+  return *this;
+}
+
 void
 Errata::registerSink(Sink::Handle const &s)
 {

@@ -68,18 +68,19 @@ TsLuaConfigObjectData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    return ts::Errata::Message{ts::msg::WARN, "Schema load failed - not an OBJECT [table]"};
-  }
-  // Walk the table.
-  lua_pushnil(L);
-  while (lua_next(L, -2)) {
-    if (lua_isstring(L, -2)) {
-      ts::string_view name = lua_tostring(L, -2);
-      _value._names.emplace_back(std::string{name.data(), name.size()});
-      name = _value._names.back(); // update to memory that will stay around.
-      _value.make(name)->load(L);
+    zret.msg(ts::LVL_FATAL, "Schema load failed - not an OBJECT [table]");
+  } else {
+    // Walk the table.
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+      if (lua_isstring(L, -2)) {
+        ts::string_view name = lua_tostring(L, -2);
+        _value._names.emplace_back(std::string{name.data(), name.size()});
+        name = _value._names.back(); // update to memory that will stay around.
+        _value.make(name)->load(L);
+      }
+      lua_pop(L, 1); // drop value, keep name for iteration.
     }
-    lua_pop(L, 1); // drop value, keep name for iteration.
   }
   return zret;
 }
