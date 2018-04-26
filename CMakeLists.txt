@@ -1416,10 +1416,11 @@ add_library(libtsconfig SHARED
         lib/tsconfig/TsValue.h
         )
 
-add_executable(ts_lua_config_generator
+add_executable(ts_lua_generator
 	lib/tsconfig/ts_lua_generator.cc
 	lib/tsconfig/TsLuaMetaConfig.cc
 	lib/tsconfig/TsLuaConfig.cc
+        lib/tsconfig/TsLuaConfigValueDescriptor.h
 )
 
 # CacheTool

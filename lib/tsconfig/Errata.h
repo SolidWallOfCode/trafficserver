@@ -74,16 +74,16 @@
 namespace ts
 {
 /// Severity levels for Errata.
-enum class Severity {
-  DIAG,      ///< Diagnostic only. DL_Diag
-  DEBUG,     ///< Debugging. DL_Debug
-  INFO,      ///< Informative. DL_Status
-  NOTE,      ///< Note. DL_Note
-  WARNING,   ///< Warning. DL_Warning
-  ERROR,     ///< Error. DL_Error
-  FATAL,     ///< Fatal. DL_Fatal
-  ALERT,     ///< Alert. DL_Alert
-  EMERGENCY, ///< Emergency. DL_Emergency.
+enum Severity {
+  LVL_DIAG, ///< Diagnostic only. DL_Diag
+  LVL_DEBUG, ///< Debugging. DL_Debug
+  LVL_INFO, ///< Informative. DL_Status
+  LVL_NOTE, ///< Note. DL_Note
+  LVL_WARNING, ///< Warning. DL_Warning
+  LVL_ERROR, ///< Error. DL_Error
+  LVL_FATAL, ///< Fatal. DL_Fatal
+  LVL_ALERT, ///< Alert. DL_Alert
+  LVL_EMERGENCY, ///< Emergency. DL_Emergency.
 };
 
 /** Class to hold a stack of error messages (the "errata").
@@ -104,9 +104,9 @@ public:
   using Severity = ts::Severity; ///< Import for associated classes.
 
   /// Severity used if not specified.
-  static constexpr Severity DEFAULT_SEVERITY{Severity::DIAG};
+  static constexpr Severity DEFAULT_SEVERITY{Severity::LVL_DIAG};
   /// Severity level at which the instance is a failure of some sort.
-  static constexpr Severity SERIOUS_SEVERITY{Severity::WARNING};
+  static constexpr Severity SERIOUS_SEVERITY{Severity::LVL_WARNING};
 
   struct Message; // Forward declaration.
 
@@ -117,7 +117,7 @@ public:
   /// Default constructor - empty errata, very fast.
   Errata();
   Errata(self_type const &that) = delete;                          // no copying.
-  Errata(self_type &&that);                                        ///< Move constructor.
+  Errata(self_type &&that) = default;                                        ///< Move constructor.
   self_type &operator=(self_type const &that) = delete;            // no assignemnt.
   self_type &operator                         =(self_type &&that); // Move assignment.
   ~Errata();                                                       ///< Destructor.
@@ -155,9 +155,6 @@ public:
       otherwise the most recent message.
    */
   Message const &front() const;
-
-  /// Remove last (most recently added) message.
-  self_type &drop();
 
   /// Remove all messages.
   self_type &clear();
@@ -691,6 +688,12 @@ Errata::msg(Severity level, ts::string_view text)
   _data->_items.emplace_back(level, string_view(span.begin(), span.size()));
   _data->_level = std::max(_data->_level, level);
   return *this;
+}
+
+template <typename... Args>
+Errata &
+Errata::msg(Severity level, string_view fmt, Args &&... args) {
+  return this->msg(level, fmt, std::forward_as_tuple(args));
 }
 
 template <typename... Args>
