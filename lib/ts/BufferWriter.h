@@ -190,14 +190,14 @@ public:
   /** Print overload to take arguments as a tuple instead of explicitly.
       This is useful for forwarding variable arguments from other functions / methods.
   */
-  template <typename... Args> BufferWriter &printv(TextView fmt, std::tuple<Args...> &&args);
+  template <typename... Args> BufferWriter &printv(TextView fmt, std::tuple<Args...> const&args);
 
   /// Print using a preparsed @a fmt.
   template <typename... Args> BufferWriter &print(BWFormat const &fmt, Args &&... args);
   /** Print overload to take arguments as a tuple instead of explicitly.
       This is useful for forwarding variable arguments from other functions / methods.
   */
-  template <typename... Args> BufferWriter &printv(BWFormat const &fmt, std::tuple<Args...> &&args);
+  template <typename... Args> BufferWriter &printv(BWFormat const &fmt, std::tuple<Args...> const&args);
 
   /// Output the buffer contents to the @a stream.
   /// @return The destination stream.
@@ -231,6 +231,8 @@ public:
   FixedBufferWriter(FixedBufferWriter &&) = default;
   /// Move assignment.
   FixedBufferWriter &operator=(FixedBufferWriter &&) = default;
+
+  FixedBufferWriter(MemSpan &span) : _buf(span.begin()), _capacity(static_cast<size_t>(span.size())) {}
 
   /// Write a single character @a c to the buffer.
   FixedBufferWriter &
@@ -600,7 +602,7 @@ BufferWriter::print(TextView fmt, Args &&... args)
 
 template <typename... Args>
 BufferWriter &
-BufferWriter::printv(TextView fmt, std::tuple<Args...> &&args)
+BufferWriter::printv(TextView fmt, std::tuple<Args...> const&args)
 {
   static constexpr int N = sizeof...(Args); // used as loop limit
   static const auto fa   = bw_fmt::Get_Arg_Formatter_Array<decltype(args)>(std::index_sequence_for<Args...>{});
@@ -660,7 +662,7 @@ BufferWriter::print(BWFormat const &fmt, Args &&... args)
 
 template <typename... Args>
 BufferWriter &
-BufferWriter::printv(BWFormat const &fmt, std::tuple<Args...> &&args)
+BufferWriter::printv(BWFormat const &fmt, std::tuple<Args...> const&args)
 {
   static constexpr int N = sizeof...(Args);
   static const auto fa   = bw_fmt::Get_Arg_Formatter_Array<decltype(args)>(std::index_sequence_for<Args...>{});
@@ -806,14 +808,13 @@ operator<<(BufferWriter &w, V &&v)
  */
 template <typename... Args>
 std::string &
-bwprintv(std::string &s, ts::TextView fmt, std::tuple<Args...> &&args)
+bwprintv(std::string &s, ts::TextView fmt, std::tuple<Args...> const&args)
 {
-  using ArgTuple = std::tuple<Args...>; // needed for std::forward
   auto len       = s.size();            // remember initial size
-  size_t n       = ts::FixedBufferWriter(const_cast<char *>(s.data()), s.size()).printv(fmt, std::forward<ArgTuple>(args)).extent();
+  size_t n       = ts::FixedBufferWriter(const_cast<char *>(s.data()), s.size()).printv(fmt, std::move(args)).extent();
   s.resize(n);   // always need to resize - if shorter, must clip pre-existing text.
   if (n > len) { // dropped data, try again.
-    ts::FixedBufferWriter(const_cast<char *>(s.data()), s.size()).printv(fmt, std::forward<ArgTuple>(args));
+    ts::FixedBufferWriter(const_cast<char *>(s.data()), s.size()).printv(fmt, std::move(args));
   }
   return s;
 }
