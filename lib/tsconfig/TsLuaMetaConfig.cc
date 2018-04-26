@@ -137,22 +137,23 @@ TsLuaMetaConfig::SchemaData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    return ts::Errata::Message{ts::msg::WARN, "Schema load failed - not an OBJECT [table]"};
-  }
-  // Walk the table.
-  lua_pushnil(L);
-  while (lua_next(L, -2)) {
-    if (lua_isstring(L, -2)) {
-      ts::string_view name = lua_tostring(L, -2);
-      auto d               = static_cast<SchemaDescriptor const &>(descriptor);
-      auto spot            = d._properties.find(name);
-      if (spot != d._properties.end()) {
-        // This is wrong - need to accumulate erratum, not replace.
-        zret = (_value.*(spot->second)).load(L);
-      } else {
+    zret.msg(ts::LVL_FATAL, "Schema load failed - not an OBJECT [table]");
+  } else {
+    // Walk the table.
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+      if (lua_isstring(L, -2)) {
+        ts::string_view name = lua_tostring(L, -2);
+        auto d = static_cast<SchemaDescriptor const &>(descriptor);
+        auto spot = d._properties.find(name);
+        if (spot != d._properties.end()) {
+          // This is wrong - need to accumulate erratum, not replace.
+          zret = (_value.*(spot->second)).load(L);
+        } else {
+        }
       }
+      lua_pop(L, 1); // drop value, keep name for iteration.
     }
-    lua_pop(L, 1); // drop value, keep name for iteration.
   }
   return zret;
 }
@@ -168,22 +169,23 @@ TsLuaMetaConfig::MetaSchemaData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    return ts::Errata::Message{ts::msg::WARN, "MetaSchema load failed - not an OBJECT [table]"};
-  }
-  // Walk the table.
-  lua_pushnil(L);
-  while (lua_next(L, -2)) {
-    if (lua_isstring(L, -2)) {
-      ts::string_view name = lua_tostring(L, -2);
-      auto d               = static_cast<MetaSchemaDescriptor const &>(descriptor);
-      auto spot            = d._properties.find(name);
-      if (spot != d._properties.end()) {
-        // This is wrong - need to accumulate erratum, not replace.
-        zret = (_value.*(spot->second)).load(L);
-      } else {
+    zret.msg(ts::LVL_FATAL, "MetaSchema load failed - not an OBJECT [table]");
+  } else {
+    // Walk the table.
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+      if (lua_isstring(L, -2)) {
+        ts::string_view name = lua_tostring(L, -2);
+        auto d = static_cast<MetaSchemaDescriptor const &>(descriptor);
+        auto spot = d._properties.find(name);
+        if (spot != d._properties.end()) {
+          // This is wrong - need to accumulate erratum, not replace.
+          zret = (_value.*(spot->second)).load(L);
+        } else {
+        }
       }
+      lua_pop(L, 1); // drop value, keep name for iteration.
     }
-    lua_pop(L, 1); // drop value, keep name for iteration.
   }
   return zret;
 }

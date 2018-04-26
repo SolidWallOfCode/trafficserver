@@ -34,6 +34,9 @@
 #define _fileno fileno
 #endif
 
+#undef assert
+#include <assert.h>
+
 // ---------------------------------------------------------------------------
 namespace ts
 {
@@ -107,13 +110,13 @@ namespace config
           }
           zret = n; // mark for return to caller.
         } else {
-          msg::log(zret.errata(), msg::WARN, "Add child failed because parent is not a container.");
+          zret.msg(LVL_WARNING, "Add child failed because parent is not a container.");
         }
       } else {
-        msg::logf(zret.errata(), msg::WARN, "Add child failed because parent index (%ul) is out of range (%ul).", pidx.raw(), n);
+        zret.msg(LVL_WARNING, "Add child failed because parent index (%ul) is out of range (%ul).", pidx.raw(), n);
       }
     } else {
-      msg::log(zret.errata(), msg::WARN, "Add child failed because the configuration is null.");
+      zret.msg(LVL_WARNING, "Add child failed because the configuration is null.");
     }
     return zret;
   }
@@ -208,10 +211,10 @@ namespace config
   {
     Rv<Value> zret;
     Rv<detail::ValueIndex> vr = _config._table.make(this->_vidx, type, name);
-    if (vr.isOK()) {
+    if (vr.is_ok()) {
       zret = Value(_config, vr.result());
     } else {
-      zret.errata() = vr.errata();
+      zret.errata().copy_from(vr.errata());
     }
     return zret;
   }
@@ -232,7 +235,7 @@ namespace config
   Value::makeString(ConstBuffer const &text, ConstBuffer const &name)
   {
     Rv<Value> zret = this->makeChild(StringValue, name);
-    if (zret.isOK()) {
+    if (zret.is_ok()) {
       zret.result().setText(text);
     }
     return zret;
@@ -242,7 +245,7 @@ namespace config
   Value::makeInteger(ConstBuffer const &text, ConstBuffer const &name)
   {
     Rv<Value> zret = this->makeChild(IntegerValue, name);
-    if (zret.isOK()) {
+    if (zret.is_ok()) {
       zret.result().setText(text);
     }
     return zret;
@@ -252,7 +255,7 @@ namespace config
   Value::makePath(Path const &path, ConstBuffer const &name)
   {
     Rv<Value> zret = this->makeChild(PathValue, name);
-    if (zret.isOK()) {
+    if (zret.is_ok()) {
       _config._table[zret.result()._vidx]._path = path;
     }
     return zret;
@@ -314,7 +317,7 @@ namespace config
       }
 
       if (C_INVALID == cb) {
-        msg::logf(zret, msg::WARN, "Invalid character '%c' [%u] in path.", *_c, *_c);
+        zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in path.", *_c, *_c);
       } else {
         switch (state) {
         case S_INIT:
@@ -327,15 +330,15 @@ namespace config
             state = S_TAG;
             break;
           case C_DASH:
-            msg::logf(zret, msg::WARN, "Dash not allowed as leading character for tag.");
+            zret.msg(LVL_WARNING, "Dash not allowed as leading character for tag.");
             final = true;
             break;
           case C_DOT:
-            msg::logf(zret, msg::WARN, "Separator without preceding element.");
+            zret.msg(LVL_WARNING, "Separator without preceding element.");
             final = true;
             break;
           default:
-            msg::logf(zret, msg::WARN, "Internal error: unexpected character %u in INIT state.", *_c);
+            zret.msg(LVL_WARNING, "Internal error: unexpected character %u in INIT state.", *_c);
             final = true;
             break;
           }
@@ -346,7 +349,7 @@ namespace config
           } else if (C_DOT == cb) {
             final = true;
           } else {
-            msg::logf(zret, msg::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -358,7 +361,7 @@ namespace config
           } else if (C_DOT == cb) {
             final = true;
           } else { // should never happen, but be safe.
-            msg::logf(zret, msg::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -366,10 +369,10 @@ namespace config
           if (C_IDENT == cb || C_DIGIT == cb) {
             state = S_TAG;
           } else if (C_DOT == cb) {
-            msg::log(zret, msg::WARN, "Trailing dash not allowed in tag element.");
+            zret.msg(LVL_WARNING, "Trailing dash not allowed in tag element.");
             final = true;
           } else if (C_DASH != cb) { // should never happen, but be safe.
-            msg::logf(zret, msg::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -377,7 +380,7 @@ namespace config
       }
       ++_c;
     }
-    if (!zret.isOK()) {
+    if (!zret.is_ok()) {
       zret = ERROR;
       if (cbuff) {
         cbuff->set(_c - 1, 1);
@@ -403,7 +406,7 @@ namespace config
       }
     } else if (S_DASH == state) {
       zret = ERROR;
-      msg::log(zret, msg::WARN, "Trailing dash not allowed in tag element.");
+      zret.msg(LVL_WARNING, "Trailing dash not allowed in tag element.");
       if (cbuff) {
         cbuff->set(start, _c - start);
       }
@@ -437,18 +440,18 @@ namespace config
             memset(buffer._ptr + n, 0, 2); // required by FLEX
             zret = Builder(zret.result()).build(buffer);
           } else {
-            msg::logf_errno(zret, msg::WARN, "failed to read %" PRIu64 " bytes from configuration file '%s'", info.st_size, path);
+            zret.msg(LVL_WARNING, "failed to read %" PRIu64 " bytes from configuration file '%s'", info.st_size, path);
           }
         } else {
-          msg::logf_errno(zret, msg::WARN, "failed to allocate buffer for configuration file '%s' - needed %" PRIu64 " bytes.",
+          zret.msg(LVL_WARNING, "failed to allocate buffer for configuration file '%s' - needed %" PRIu64 " bytes.",
                           path, info.st_size);
         }
       } else {
-        msg::logf_errno(zret, msg::WARN, "failed to determine file information on '%s'", path);
+        zret.msg(LVL_WARNING, "failed to determine file information on '%s'", path);
       }
       fclose(in);
     } else {
-      msg::logf_errno(zret, msg::WARN, "failed to open configuration file '%s'", path);
+      zret.msg(LVL_WARNING, "failed to open configuration file '%s'", path);
     }
     return zret;
   }

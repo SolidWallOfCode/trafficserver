@@ -95,7 +95,7 @@ main(int argc, char **argv)
         }
         msg << "\n    --" << item.name << ": " << txt;
       }
-      zret.push(ts::msg::FATAL, msg.view());
+      zret.msg(ts::LVL_FATAL, msg.view());
       break;
     }
     case OPT_OUT:
@@ -105,18 +105,18 @@ main(int argc, char **argv)
       hdr_file_path = optarg;
       break;
     case '?':
-      zret.push(ts::msg::WARN, "Usage:");
+      zret.msg(ts::LVL_WARNING, "Usage:");
       break;
     }
   }
 
   if (argc != optind + 1) {
     msg << "Needed " << optind << " args, have " << argc - 1 << " debug " << UINT64_MAX;
-    zret.push(ts::msg::FATAL, msg.view());
+    zret.msg(ts::LVL_FATAL, msg.view());
   }
 
-  if (!zret.isOK()) {
-    zret.write(std::cout, 0, 0, 2, " ");
+  if (!zret.is_ok()) {
+    zret.write(std::cout);
     return 1;
   }
 

@@ -119,7 +119,7 @@ public:
   Errata(self_type const &that) = delete;                          // no copying.
   Errata(self_type &&that) = default;                                        ///< Move constructor.
   self_type &operator=(self_type const &that) = delete;            // no assignemnt.
-  self_type &operator                         =(self_type &&that); // Move assignment.
+  self_type &operator                         =(self_type &&that) = default; // Move assignment.
   ~Errata();                                                       ///< Destructor.
 
   /** Add a new message to the top of stack with default severity and @a text.
@@ -148,7 +148,7 @@ public:
       to strings and concatenated to form the messsage text.
       @return A reference to this object.
   */
-  template <typename... Args> self_type &msg(Severity level, string_view fmt, std::tuple<Args &&...> &args);
+  template <typename... Args> self_type &msgv(Severity level, string_view fmt, std::tuple<Args...> const&args);
 
   /** Access last message.
       @return If the errata is empty, a default constructed message
@@ -189,6 +189,13 @@ public:
 
   /// Number of messages in the errata.
   size_t size() const;
+
+  /** Copy messages from @a that to @a this.
+   *
+   * @param that Source object from which to copy.
+   * @return @a *this
+   */
+  self_type & copy_from(self_type const& that);
 
   /*  Forward declares.
       We have to make our own iterators as the least bad option. The problem
@@ -323,8 +330,12 @@ struct Errata::Data {
   //! Default constructor.
   Data();
 
-  /// Destructor, to do logging.
-  ~Data();
+  /** Duplicate @a src in this arena.
+   *
+   * @param src Source data.
+   * @return View of copy in this arean.
+   */
+  string_view dup(string_view src);
 
   /// The message stack.
   Container _items;
@@ -440,23 +451,22 @@ template <typename R> struct Rv : public RvBase {
    */
   Rv(Result const &result);
 
+  /** Construct with copy of @a result and move @a errata.
+   *
+   * Construct with a specified @a result and a default (successful) @c Errata.
+   * @param result Return value / result.
+   */
+  Rv(Result const &result, Errata && errata);
+
   /** Construct with move of @a result and empty Errata.
    *
    * @param result The return / result value.
     */
   Rv(Result &&result);
 
-  /** Construct with copy of @a result and move of @a errata.
+  /** Construct with result and move of @a errata.
    *
-   * Construct with a specified @a result and a default (successful) @c Errata.
-   * @param result Return value / result.
-   * @param errata Status to move.
-   */
-  Rv(Result const &result, Errata &&errata);
-
-  /** Construct with move of @a result and move of @a errata.
-   *
-   * @param result The return / result value.
+   * @param result The return / result value to assign.
    * @param errata Status to move.
     */
   Rv(Result &&result, Errata &&errata);
@@ -574,21 +584,12 @@ template <typename R> struct Rv : public RvBase {
     and result independently.
  */
 template <typename R>
-Rv<R>
-MakeRv(R const &r,      ///< The function result
+Rv<typename std::remove_reference<R>::type>
+MakeRv(R && r,      ///< The function result
        Errata &&erratum ///< The pre-existing status object
        )
 {
-  return Rv<R>(r, erratum);
-}
-
-template <typename R>
-Rv<R>
-MakeRv(R &&r,           ///< The function result
-       Errata &&erratum ///< The pre-existing status object
-       )
-{
-  return Rv<R>(r, erratum);
+  return Rv<typename std::remove_reference<R>::type>(std::forward<R>(r), std::move(erratum));
 }
 /* ----------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------- */
@@ -689,19 +690,18 @@ Errata::msg(Severity level, ts::string_view text)
 template <typename... Args>
 Errata &
 Errata::msg(Severity level, string_view fmt, Args &&... args) {
-  return this->msg(level, fmt, std::forward_as_tuple(args));
+  return this->msgv(level, fmt, std::forward_as_tuple(args...));
 }
 
 template <typename... Args>
 Errata &
-Errata::msg(Severity level, string_view fmt, std::tuple<Args &&...> &args)
+Errata::msgv(Severity level, string_view fmt, std::tuple<Args...> const&args)
 {
   MemSpan span{this->data()->_arena.remnant()};
-  FixedBufferWriter bw{span.data(), span.size()};
-  bw.print(fmt, args);
-  if (bw.error()) {
+  FixedBufferWriter bw{span};
+  if (bw.printv(fmt, args).error()) {
     span = _data->_arena.alloc(bw.extent());
-    FixedBufferWriter(span.data(), span.size()).print(fmt, args);
+    FixedBufferWriter{span}.printv(fmt, args);
   }
   this->data()->_items.emplace_back(level, string_view(span.begin(), span.size()));
   _data->_level = std::max(_data->_level, level);
@@ -721,7 +721,7 @@ Errata::disable_logging()
   return *this;
 }
 
-Errata&
+inline Errata&
 Errata::clear()
 {
   _data.reset(nullptr);
@@ -732,6 +732,12 @@ Errata::clear()
 
 inline Errata::Data::Data()
 {
+}
+
+inline string_view Errata::Data::dup(string_view src) {
+  auto mem = this->_arena.alloc(src.size());
+  memcpy(mem.data(), src.data(), mem.size());
+  return {mem.begin(), static_cast<size_t >(mem.size())};
 }
 
 // Errata iterators
@@ -818,7 +824,7 @@ inline RvBase::RvBase()
 {
 }
 
-inline RvBase::RvBase(Errata &&errata) : _errata(std::forward<Errata>(errata))
+inline RvBase::RvBase(Errata &&errata) : _errata(std::move(errata))
 {
 }
 
@@ -850,15 +856,15 @@ template <typename T> Rv<T>::Rv(Result const &r) : _result(r)
 {
 }
 
-template <typename T> Rv<T>::Rv(Result &&r) : _result(std::forward(r))
+template <typename T> Rv<T>::Rv(Result const &r, Errata && errata) : super_type(std::move(errata)), _result(r)
 {
 }
 
-template <typename T> Rv<T>::Rv(Result const &r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(r)
+template <typename R> Rv<R>::Rv(R &&r) : _result(std::forward<R>(r))
 {
 }
 
-template <typename T> Rv<T>::Rv(Result &&r, Errata &&errata) : super_type(std::forward<Errata>(errata)), _result(std::forward<T>(r))
+template <typename R> Rv<R>::Rv(R &&r, Errata &&errata) : super_type(std::move(errata)), _result(std::forward<R>(r))
 {
 }
 
@@ -903,11 +909,11 @@ Rv<T>::set(Result const &r)
   return *this;
 }
 
-template <typename T>
-Rv<T> &
-Rv<T>::set(Result &&r)
+template <typename R>
+Rv<R> &
+Rv<R>::set(R &&r)
 {
-  _result = std::forward(r);
+  _result = std::forward<R>(r);
   return *this;
 }
 
@@ -915,7 +921,7 @@ template <typename T>
 Rv<T> &
 Rv<T>::operator=(Errata &&errata)
 {
-  _errata = std::forward<Errata>(errata);
+  _errata = std::move(errata);
   return *this;
 }
 
@@ -926,17 +932,19 @@ Rv<T>::msg(Severity level, string_view text)
   _errata.msg(level, text);
   return *this;
 }
+
 template <typename R>
 template <typename... Args>
 Rv<R> &
 Rv<R>::msg(Severity level, string_view fmt, Args &&... args)
 {
-  _errata.msg(level, fmt, std::forward_as_tuple(args...));
+  _errata.msgv(level, fmt, std::forward_as_tuple(args...));
+  return *this;
 }
 
 BufferWriter&
-bwformat(BufferWriter& w, BWFSpec const& spec, Errata::Severity);
+bwformat(BufferWriter& w, BWFSpec const& spec, Severity);
 
 BufferWriter&
-bwformat(BufferWriter& w, BWFSpec const& spec, Errata);
+bwformat(BufferWriter& w, BWFSpec const& spec, Errata const&);
 } // namespace ts

@@ -22,7 +22,6 @@
  */
 
 #include "TsBuilder.h"
-#include "TsErrataUtil.h"
 #include "TsConfigLexer.h"
 #include "TsConfigGrammar.hpp"
 #include <cstdlib>
@@ -104,19 +103,20 @@ namespace config
   void
   Builder::dispatch(void *data, Token *token)
   {
+    Errata log;
     if (data) {
       Handler *handler = reinterpret_cast<Handler *>(data);
       if (handler->_ptr) {
         if (handler->_method) {
           ((handler->_ptr)->*(handler->_method))(*token);
         } else {
-          msg::logf(msg::WARN, PRE "Unable to dispatch event - no method.");
+          log.msg(LVL_WARNING, PRE "Unable to dispatch event - no method.");
         }
       } else {
-        msg::logf(msg::WARN, PRE "Unable to dispatch event - no builder.");
+        log.msg(LVL_WARNING, PRE "Unable to dispatch event - no builder.");
       }
     } else {
-      msg::logf(msg::WARN, PRE "Unable to dispatch event - no handler.");
+      log.msg(LVL_WARNING, PRE "Unable to dispatch event - no handler.");
     }
   }
 
@@ -129,7 +129,7 @@ namespace config
   int
   Builder::syntaxError(char const *text)
   {
-    msg::logf(_errata, msg::WARN, "Syntax error '%s' near line %d, column %d.", text, tsconfiglex_current_line(),
+    _errata.msg(LVL_WARNING, "Syntax error '{}' near line {}, column {}.", text, tsconfiglex_current_line(),
               tsconfiglex_current_col());
     return 0;
   }
@@ -140,7 +140,7 @@ namespace config
     _v = _config.getRoot(); // seed current value.
     _errata.clear();        // no errors yet.
     tsconfig_parse_buffer(&_handlers, buffer._ptr, buffer._size);
-    return MakeRv(_config, _errata);
+    return MakeRv(_config, std::move(_errata));
   }
 
   void
@@ -206,7 +206,7 @@ namespace config
   Builder::pathClose(Token const &)
   {
     Rv<Value> cv = _v.makePath(_path, _name);
-    if (cv.isOK()) {
+    if (cv.is_ok()) {
       cv.result().setText(_extent).setSource(_loc._line, _loc._col);
       // Terminate path. This will overwrite trailing whitespace or
       // the closing angle bracket, both of which are expendable.
@@ -239,10 +239,11 @@ namespace config
       text._ptr[text._size] = 0; // OK because we have the trailing quote.
       cv                    = _v.makeString(text, _name);
     } else {
-      msg::logf(_errata, msg::WARN, PRE "Unexpected literal type %d.", token._type);
+      cv.msg(LVL_WARNING, PRE "Unexpected literal type %d.", token._type);
     }
-    if (!cv.isOK()) {
-      _errata.pull(cv.errata());
+    // if there was an error, add it in to the overall error list.
+    if (!cv.is_ok()) {
+      _errata.copy_from(cv.errata());
     }
     if (cv.result()) {
       cv.result().setSource(token._loc._line, token._loc._col);
