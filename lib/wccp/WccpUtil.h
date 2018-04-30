@@ -23,18 +23,13 @@
 #pragma once
 
 #include <vector>
+#include <tsconfig/Errata.h>
 
 namespace wccp
 {
 /// @name Message severity levels.
 //@{
-extern ts::Errata::Code LVL_FATAL; ///< Fatal, cannot continue.
-extern ts::Errata::Code LVL_WARN;  ///< Significant, function degraded.
-extern ts::Errata::Code LVL_INFO;  ///< Interesting, not necessarily a problem.
-extern ts::Errata::Code LVL_DEBUG; ///< Debugging information.
-extern ts::Errata::Code LVL_TMP;   ///< For temporary debugging only.
-                                   // Handy so that temporary debugging messages can be located by grep.
-                                   //@}
+using Severity = ts::Severity;
 
 /** Logging / reporting support.
     We build on top of @c Errata but we want to be able to prevent
@@ -48,22 +43,20 @@ extern ts::Errata::Code LVL_TMP;   ///< For temporary debugging only.
 /// Report literal string to an Errata.
 /// @return @a err.
 ts::Errata &log(ts::Errata &err,       ///< Target errata.
-                ts::Errata::Id id,     ///< Message ID.
-                ts::Errata::Code code, ///< Severity level.
+                ts::Errata::Severity code, ///< Severity level.
                 char const *text       ///< Message text.
 );
 /// Report literal string to an Errata.
 /// Use message ID 0.
 /// @return @a err.
 ts::Errata &log(ts::Errata &err,       ///< Target errata.
-                ts::Errata::Code code, ///< Severity level.
+                ts::Errata::Severity code, ///< Severity level.
                 char const *text       ///< Message text.
 );
 /// printf style log to Errata.
 /// @return @a err.
 ts::Errata &logf(ts::Errata &err,       ///< Target errata.
-                 ts::Errata::Id id,     ///< Message ID.
-                 ts::Errata::Code code, ///< Severity level.
+                 ts::Errata::Severity code, ///< Severity level.
                  char const *format,    ///< Format string.
                  ...                    ///< Format string parameters.
 );
@@ -71,20 +64,20 @@ ts::Errata &logf(ts::Errata &err,       ///< Target errata.
 /// The message id is set to zero.
 /// @return @a err.
 ts::Errata &logf(ts::Errata &err,       ///< Target errata.
-                 ts::Errata::Code code, ///< Severity level.
+                 ts::Errata::Severity code, ///< Severity level.
                  char const *format,    ///< Format string.
                  ...                    ///< Format string parameters.
 );
 /// Return an Errata populated with a literal string.
 /// Use message ID 0.
 /// @return @a err.
-ts::Errata log(ts::Errata::Code code, ///< Severity level.
+ts::Errata log(ts::Errata::Severity code, ///< Severity level.
                char const *text       ///< Message text.
 );
 /// Return an Errata populated with a printf styleformatted string.
 /// Use message ID 0.
 /// @return @a err.
-ts::Errata logf(ts::Errata::Code code, ///< Severity level.
+ts::Errata logf(ts::Errata::Severity code, ///< Severity level.
                 char const *format,    ///< Message text.
                 ...);
 /** Return an Errata based on @c errno.
@@ -92,14 +85,14 @@ ts::Errata logf(ts::Errata::Code code, ///< Severity level.
     value of @c errno. This is modeled on @c perror. Message ID 0 is used.
     @return @a err.
  */
-ts::Errata log_errno(ts::Errata::Code code, ///< Severity level.
+ts::Errata log_errno(ts::Errata::Severity code, ///< Severity level.
                      char const *text       ///< Message text.
 );
 /** Return an @c Errata based on @c errno.
     @c errno and the corresponding system error string are appended to
     the results from the @a format and following arguments.
  */
-ts::Errata logf_errno(ts::Errata::Code code, ///< Severity code.
+ts::Errata logf_errno(ts::Errata::Severity code, ///< Severity code.
                       char const *format,    ///< Format string.
                       ...                    ///< Arguments for @a format.
 );

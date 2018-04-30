@@ -26,6 +26,7 @@
 #include <iostream>
 #include <errno.h>
 #include <stdlib.h>
+#include <tsconfig/Errata.h>
 
 using ts::config::Configuration;
 using ts::config::Value;
@@ -49,6 +50,8 @@ operator<<(ostream &s, ts::ConstBuffer const &b)
 namespace
 {
 using namespace wccp;
+using ts::Errata;
+using ts::Severity;
 
 // Scratch global list of seed router addresses.
 // Yeah, not thread safe, but it's just during configuration load.
@@ -95,17 +98,6 @@ CfgString ASSIGN_OPTS[] = {{"hash", false}, {"mask", false}};
 
 CfgString HASH_OPTS[] = {{"src_ip", false}, {"dst_ip", false}, {"src_port", false}, {"dst_port", false}};
 
-ts::Errata::Code
-code_max(ts::Errata const &err)
-{
-  ts::Errata::Code zret            = std::numeric_limits<ts::Errata::Code::raw_type>::min();
-  ts::Errata::const_iterator spot  = err.begin();
-  ts::Errata::const_iterator limit = err.end();
-  for (; spot != limit; ++spot)
-    zret = std::max(zret, spot->getCode());
-  return zret;
-}
-
 struct ValueNamePrinter {
   Value const &_v;
   ValueNamePrinter(Value const &v) : _v(v) {}
@@ -123,214 +115,214 @@ operator<<(std::ostream &out, ValueNamePrinter const &v)
 }
 
 #if 0 /* silence -Wunused-function */
-ts::Errata::Message File_Syntax_Error(int line, const char* text) {
+Errata& File_Syntax_Error(int line, const char* text) {
   std::ostringstream out;
   out << "Service configuration error. Line "
       << line
       << ": " << text
     ;
-  return ts::Errata::Message(1, LVL_FATAL, out.str());
+  return erratum.msg(1, LVL_FATAL, out.str());
 }
 
-ts::Errata::Message File_Read_Error(const char* text) {
+Errata& File_Read_Error(const char* text) {
   std::ostringstream out;
   out << "Failed to parse configuration file."
       << ": " << text
     ;
-  return ts::Errata::Message(2, LVL_FATAL, out.str());
+  return erratum.msg(2, LVL_FATAL, out.str());
 }
 #endif
 
-ts::Errata::Message
-Unable_To_Create_Service_Group(int line)
+Errata&
+Unable_To_Create_Service_Group(Errata& errata, int line)
 {
   std::ostringstream out;
   out << "Unable to create service group at line " << line << " because of configuration errors.";
-  return ts::Errata::Message(23, LVL_FATAL, out.str());
+  return errata.msg(Severity::FATAL, out.str());
 }
 
-ts::Errata::Message
-Services_Not_Found()
+Errata&
+Services_Not_Found(Errata &erratum)
 {
-  return ts::Errata::Message(3, LVL_INFO, "No services found in configuration.");
+  return erratum.msg(Severity::INFO, "No services found in configuration.");
 }
 
-ts::Errata::Message
-Services_Not_A_Sequence()
+Errata&
+Services_Not_A_Sequence(Errata& erratum)
 {
-  return ts::Errata::Message(4, LVL_INFO, "The 'services' setting was not a list nor array.");
+  return erratum.msg(Severity::INFO, "The 'services' setting was not a list nor array.");
 }
 
-ts::Errata::Message
-Service_Not_A_Group(int line)
+Errata&
+Service_Not_A_Group(Errata& erratum, int line)
 {
   std::ostringstream out;
   out << "'" << SVC_NAME << "' must be a group at line " << line << ".";
-  return ts::Errata::Message(5, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Service_Type_Defaulted(wccp::ServiceGroup::Type type, int line)
+Errata&
+Service_Type_Defaulted(Errata& erratum, wccp::ServiceGroup::Type type, int line)
 {
   std::ostringstream out;
   out << "'type' not found in " << SVC_NAME << " at line " << line << "' -- defaulting to "
       << (type == wccp::ServiceGroup::STANDARD ? "STANDARD" : "DYNAMIC");
-  return ts::Errata::Message(6, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Service_Type_Invalid(ts::ConstBuffer const &text, int line)
+Errata&
+Service_Type_Invalid(Errata& erratum, ts::ConstBuffer const &text, int line)
 {
   std::ostringstream out;
-  out << "Service type '" << text << "' at line " << line << " invalid. Must be \"STANDARD\" or \"DYNAMIC\"";
-  return ts::Errata::Message(7, LVL_WARN, out.str());
+  out << "Service type '" << text << "' at line " << line << R"( invalid. Must be "STANDARD" or "DYNAMIC")";
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Prop_Not_Found(const char *prop_name, char const *group_name, int line)
+Errata&
+Prop_Not_Found(Errata& erratum, const char *prop_name, char const *group_name, int line)
 {
   std::ostringstream out;
   out << "Required '" << prop_name << "' property not found in '" << group_name << "' at line " << line << ".";
-  return ts::Errata::Message(8, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Prop_Invalid_Type(Value const &prop_cfg, ts::config::ValueType expected)
+Errata&
+Prop_Invalid_Type(Errata& erratum, Value const &prop_cfg, ts::config::ValueType expected)
 {
   std::ostringstream out;
   out << "'" << prop_cfg.getName() << "' at line " << prop_cfg.getSourceLine() << " is of type '" << prop_cfg.getType()
       << "' instead of required type '" << expected << "'.";
-  return ts::Errata::Message(9, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Prop_List_Invalid_Type(Value const &elt_cfg, ///< List element.
+Errata&
+Prop_List_Invalid_Type(Errata& erratum, Value const &elt_cfg, ///< List element.
                        ts::config::ValueType expected)
 {
   std::ostringstream out;
   out << "Element " << ValueNamePrinter(elt_cfg) << " at line " << elt_cfg.getSourceLine() << " in the aggregate property '"
       << elt_cfg.getParent().getName() << "' is of type '" << elt_cfg.getType() << "' instead of required type '" << expected
       << "'.";
-  return ts::Errata::Message(9, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Svc_Prop_Out_Of_Range(const char *name, Value const &elt_cfg, int v, int min, int max)
+Errata&
+Svc_Prop_Out_Of_Range(Errata& erratum, const char *name, Value const &elt_cfg, int v, int min, int max)
 {
   std::ostringstream out;
   out << "Service property '" << name << "' at line " << elt_cfg.getSourceLine() << " has a value " << v
       << " that is not in the allowed range of " << min << ".." << max << ".";
-  return ts::Errata::Message(10, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Svc_Prop_Ignored(const char *name, int line)
+Errata&
+Svc_Prop_Ignored(Errata& erratum, const char *name, int line)
 {
   std::ostringstream out;
   out << "Service property '" << name << "' at line " << line << " ignored because the service is of type standard.";
-  return ts::Errata::Message(11, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
 #if 0 /* silence -Wunused-function */
-ts::Errata::Message Svc_Flags_No_Hash_Set(int line) {
+Errata& Svc_Flags_No_Hash_Set(Errata& erratum, int line) {
   std::ostringstream out;
   out << "Service flags have no hash set at line " << line
     ;
-  return ts::Errata::Message(12, LVL_WARN, out.str());
+  return erratum.msg(LVL_WARN, out.str());
 }
 
-ts::Errata::Message Svc_Flags_Ignored(int line) {
+Errata& Svc_Flags_Ignored(Errata& erratum, int line) {
   std::ostringstream out;
   out << "Invalid service flags at line  " << line
       << " ignored."
     ;
-  return ts::Errata::Message(13, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 #endif
 
-ts::Errata::Message
-Svc_Ports_Too_Many(int line, int n)
+Errata&
+Svc_Ports_Too_Many(Errata& erratum, int line, int n)
 {
   std::ostringstream out;
   out << "Excess ports ignored at line " << line << ". " << n << " ports specified, only" << wccp::ServiceGroup::N_PORTS
       << " supported.";
-  return ts::Errata::Message(14, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Svc_Ports_Malformed(int line)
+Errata&
+Svc_Ports_Malformed(Errata& erratum, int line)
 {
   std::ostringstream out;
   out << "Port value ignored (not a number) at line " << line << ".";
-  return ts::Errata::Message(15, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Svc_Ports_None_Valid(int line)
+Errata&
+Svc_Ports_None_Valid(Errata& erratum, int line)
 {
   std::ostringstream out;
   out << "A '" << SVC_PROP_PORTS << "' property was found at line " << line << " but none of the ports were valid.";
-  return ts::Errata::Message(17, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Svc_Ports_Not_Found(int line)
+Errata&
+Svc_Ports_Not_Found(Errata& erratum, int line)
 {
   std::ostringstream out;
   out << "Ports not found in service at line " << line << ". Ports must be defined for a dynamic service.";
-  return ts::Errata::Message(18, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Svc_Prop_Ignored_In_Standard(const char *name, int line)
+Errata&
+Svc_Prop_Ignored_In_Standard(Errata& erratum, const char *name, int line)
 {
   std::ostringstream out;
   out << "Service property '" << name << "' at line " << line << " ignored because the service is of type STANDARD.";
-  return ts::Errata::Message(19, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Security_Opt_Invalid(ts::ConstBuffer const &text, int line)
+Errata&
+Security_Opt_Invalid(Errata& erratum, ts::ConstBuffer const &text, int line)
 {
   std::ostringstream out;
   out << "Security option '" << text << "' at line " << line << " is invalid. It must be 'none' or 'md5'.";
-  return ts::Errata::Message(20, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Value_Malformed(const char *name, char const *text, int line)
+Errata&
+Value_Malformed(Errata& erratum, const char *name, char const *text, int line)
 {
   std::ostringstream out;
   out << "'" << name << "' value '" << text << "' malformed at line " << line << ".";
-  return ts::Errata::Message(21, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-No_Valid_Routers(int line)
+Errata&
+No_Valid_Routers(Errata& erratum, int line)
 {
   std::ostringstream out;
   out << "No valid IP address for routers found for Service Group at line " << line << ".";
-  return ts::Errata::Message(22, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
-ts::Errata::Message
-Ignored_Option_Value(ts::ConstBuffer const &text, ts::ConstBuffer const &name, int line)
+Errata&
+Ignored_Option_Value(Errata& erratum, ts::ConstBuffer const &text, ts::ConstBuffer const &name, int line)
 {
   std::ostringstream out;
   out << "Value '" << text << "' at line " << line << " was ignored because it is not a valid option for '" << name << "'.";
-  return ts::Errata::Message(24, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Ignored_Opt_Errors(const char *name, int line)
+ts::Errata&
+Ignored_Opt_Errors(ts::Errata &errata, const char *name, int line)
 {
   std::ostringstream out;
   out << "Errors in  '" << name << "' at line " << line << " were ignored.";
-  return ts::Errata::Message(28, LVL_INFO, out.str());
+  return errata.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-List_Valid_Opts(ts::ConstBuffer const &name, int line, CfgString *values, size_t n)
+Errata&
+List_Valid_Opts(Errata& erratum, ts::ConstBuffer const &name, int line, CfgString *values, size_t n)
 {
   std::ostringstream out;
   out << "Valid values for the '" << name << "' property at line " << line << " are: ";
@@ -338,16 +330,16 @@ List_Valid_Opts(ts::ConstBuffer const &name, int line, CfgString *values, size_t
   for (size_t i = 1; i < n; ++i)
     out << ", \"" << values[i].m_text << '"';
   out << '.';
-  return ts::Errata::Message(29, LVL_INFO, out.str());
+  return erratum.msg(Severity::INFO, out.str());
 }
 
-ts::Errata::Message
-Port_Type_Invalid(ts::ConstBuffer const &text, int line)
+Errata&
+Port_Type_Invalid(Errata& erratum, ts::ConstBuffer const &text, int line)
 {
   std::ostringstream out;
   out << "Value '" << text << "' at line " << line << "for property '" << SVC_PROP_PORT_TYPE
       << "' is invalid. It must be 'src' or 'dst'.";
-  return ts::Errata::Message(30, LVL_WARN, out.str());
+  return erratum.msg(Severity::WARN, out.str());
 }
 
 } // namespace
@@ -394,17 +386,17 @@ load_option_set(Value const &setting, CfgString *opts, size_t count)
           }
         }
         if (spot >= limit) {
-          zret.push(Ignored_Option_Value(text, name, item.getSourceLine()));
+          Ignored_Option_Value(zret, text, name, item.getSourceLine());
           list_opts = true;
         }
       } else {
-        zret.push(Prop_Invalid_Type(setting, ts::config::StringValue));
+        Prop_Invalid_Type(zret, setting, ts::config::StringValue);
       }
     }
     if (list_opts)
-      zret.push(List_Valid_Opts(name, src_line, opts, count));
+      List_Valid_Opts(zret, name, src_line, opts, count);
   } else {
-    zret.push(Prop_Invalid_Type(setting, ts::config::ListValue));
+    Prop_Invalid_Type(zret, setting, ts::config::ListValue);
   }
   return zret;
 }
@@ -436,22 +428,22 @@ load_security(Value const &setting ///< Security setting.
             if (ts::config::StringValue == key.getType()) {
               zret = key.getText();
             } else {
-              zret.push(Prop_Invalid_Type(key, ts::config::StringValue));
+              Prop_Invalid_Type(zret, key, ts::config::StringValue);
             }
           } else {
-            zret.push(Prop_Not_Found(SECURITY_PROP_KEY, SVC_PROP_SECURITY, src_line));
+            Prop_Not_Found(zret, SECURITY_PROP_KEY, SVC_PROP_SECURITY, src_line);
           }
         } else {
-          zret.push(Security_Opt_Invalid(text, opt.getSourceLine()));
+          Security_Opt_Invalid(zret, text, opt.getSourceLine());
         }
       } else {
-        zret.push(Prop_Invalid_Type(opt, ts::config::StringValue));
+        Prop_Invalid_Type(zret, opt, ts::config::StringValue);
       }
     } else {
-      zret.push(Prop_Not_Found(SECURITY_PROP_OPTION, SVC_PROP_SECURITY, src_line));
+      Prop_Not_Found(zret, SECURITY_PROP_OPTION, SVC_PROP_SECURITY, src_line);
     }
   } else {
-    zret.push(Prop_Invalid_Type(setting, ts::config::GroupValue));
+    Prop_Invalid_Type(zret, setting, ts::config::GroupValue);
   }
   return zret;
 }
@@ -497,22 +489,22 @@ CacheImpl::loadServicesFromFile(const char *path)
   Value prop;                    // scratch var.
 
   ts::Rv<Configuration> cv = Configuration::loadFromPath(path);
-  if (!cv.isOK())
+  if (!cv.is_ok())
     return cv.errata();
 
   ts::config::Configuration cfg = cv.result();
   Value svc_list                = cfg.find("services");
   // No point in going on from here.
   if (!svc_list)
-    return Services_Not_Found();
+    return Services_Not_Found(zret);
 
   if (!svc_list.isContainer())
-    return Services_Not_A_Sequence();
+    return Services_Not_A_Sequence(zret);
 
   // Check for global (default) security setting.
   if ((prop = cfg[SVC_PROP_SECURITY]).hasValue()) {
     ts::Rv<ts::ConstBuffer> rv = load_security(prop);
-    if (rv.isOK())
+    if (rv.is_ok())
       this->useMD5Security(rv);
     else
       zret.pull(rv.errata());
@@ -618,7 +610,7 @@ CacheImpl::loadServicesFromFile(const char *path)
       if (f) {
         svc_info.enableFlags(f);
         if (!status)
-          zret.push(Ignored_Opt_Errors(SVC_PROP_PRIMARY_HASH, src_line).set(status));
+          Ignored_Opt_Errors(zret, SVC_PROP_PRIMARY_HASH, src_line).copy_from(status);
       } else {
         zret.push(List_Valid_Opts(prop.getName(), src_line, HASH_OPTS, N_OPTS(HASH_OPTS)).set(status));
       }
@@ -636,7 +628,7 @@ CacheImpl::loadServicesFromFile(const char *path)
       if (f)
         svc_info.enableFlags(f);
       if (!status)
-        zret.push(Ignored_Opt_Errors(SVC_PROP_ALT_HASH, src_line).set(status));
+        Ignored_Opt_Errors(zret, SVC_PROP_ALT_HASH, src_line).copy_from(status);
     }
 
     if ((prop = svc_cfg[SVC_PROP_PORT_TYPE]).hasValue()) {
@@ -699,7 +691,7 @@ CacheImpl::loadServicesFromFile(const char *path)
     // Security option for this service group.
     if ((prop = svc_cfg[SVC_PROP_SECURITY]).hasValue()) {
       ts::Rv<ts::ConstBuffer> security = load_security(prop);
-      if (security.isOK()) {
+      if (security.is_ok()) {
         use_group_local_security = true;
         if (security.result()._ptr) {
           md5_key        = security.result()._ptr;
@@ -708,7 +700,7 @@ CacheImpl::loadServicesFromFile(const char *path)
           security_style = SECURITY_NONE;
         }
       }
-      zret.pull(security.errata());
+      zret.copy_from(security.errata());
     }
 
     // Get any group specific routers.
@@ -716,16 +708,14 @@ CacheImpl::loadServicesFromFile(const char *path)
     if ((prop = svc_cfg[SVC_PROP_ROUTERS]).hasValue()) {
       ts::Errata status = load_routers(prop, routers);
       if (!status)
-        zret.push(ts::Errata::Message(23, LVL_INFO, "Router specification invalid.").set(status));
+        zret.msg(Severity::INFO, "Router specification invalid.").set(status));
     }
     if (!routers.size() && !Seed_Router.size())
       zret.push(No_Valid_Routers(svc_line));
 
     // See if can proceed with service group creation.
-    ts::Errata::Code code = code_max(zret);
-    if (code >= LVL_WARN) {
-      zret = Unable_To_Create_Service_Group(svc_line).set(zret);
-      return zret;
+    if (zret.severity()>= Severity::WARN) {
+      return std::move(Unable_To_Create_Service_Group(zret, svc_line));
     }
 
     // Properties after this are optional so we can proceed if they fail.
@@ -759,10 +749,11 @@ CacheImpl::loadServicesFromFile(const char *path)
       bool l2           = FORWARD_OPTS[1].m_found;
       if (gre || l2) {
         svc.m_packet_forward = gre ? l2 ? ServiceGroup::GRE_OR_L2 : ServiceGroup::GRE : ServiceGroup::L2;
-        if (!status.isOK())
-          zret.push(Ignored_Opt_Errors(SVC_PROP_FORWARD, prop.getSourceLine()).set(status));
+        if (!status.is_ok()) {
+          Ignored_Opt_Errors(zret, SVC_PROP_FORWARD, prop.getSourceLine()).copy_from(status);
+        }
       } else {
-        zret.push(ts::Errata::Message(26, LVL_INFO, "Defaulting to GRE forwarding.").set(status));
+        zret.msg(Severity::INFO, "Defaulting to GRE forwarding.").copy_from(status));
       }
     }
 
@@ -773,10 +764,11 @@ CacheImpl::loadServicesFromFile(const char *path)
       bool l2           = RETURN_OPTS[1].m_found;
       if (gre || l2) {
         svc.m_packet_return = gre ? l2 ? ServiceGroup::GRE_OR_L2 : ServiceGroup::GRE : ServiceGroup::L2;
-        if (!status.isOK())
-          zret.push(Ignored_Opt_Errors(SVC_PROP_RETURN, prop.getSourceLine()).set(status));
+        if (!status.is_ok()) {
+          Ignored_Opt_Errors(zret, SVC_PROP_RETURN, prop.getSourceLine()).copy_from(status));
+        }
       } else {
-        zret.push(ts::Errata::Message(26, LVL_INFO, "Defaulting to GRE return.").set(status));
+        zret.msg(Severity::INFO, "Defaulting to GRE return.").copy_from(status);
       }
     }
 
@@ -787,10 +779,10 @@ CacheImpl::loadServicesFromFile(const char *path)
       bool mask         = ASSIGN_OPTS[1].m_found;
       if (hash || mask) {
         svc.m_cache_assign = hash ? mask ? ServiceGroup::HASH_OR_MASK : ServiceGroup::HASH_ONLY : ServiceGroup::MASK_ONLY;
-        if (!status.isOK())
-          zret.push(Ignored_Opt_Errors(SVC_PROP_ASSIGN, prop.getSourceLine()).set(status));
+        if (!status.is_ok())
+          Ignored_Opt_Errors(zret, SVC_PROP_ASSIGN, prop.getSourceLine()).copy_from(status));
       } else {
-        status.push(ts::Errata::Message(26, LVL_INFO, "Defaulting to hash assignment only."));
+        status.push(ts::Errata::Message(26, Severity::INFO, "Defaulting to hash assignment only."));
         zret.push(List_Valid_Opts(prop.getName(), src_line, ASSIGN_OPTS, N_OPTS(ASSIGN_OPTS)).set(status));
       }
     }

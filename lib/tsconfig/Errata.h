@@ -74,16 +74,16 @@
 namespace ts
 {
 /// Severity levels for Errata.
-enum Severity {
-  LVL_DIAG, ///< Diagnostic only. DL_Diag
-  LVL_DEBUG, ///< Debugging. DL_Debug
-  LVL_INFO, ///< Informative. DL_Status
-  LVL_NOTE, ///< Note. DL_Note
-  LVL_WARNING, ///< Warning. DL_Warning
-  LVL_ERROR, ///< Error. DL_Error
-  LVL_FATAL, ///< Fatal. DL_Fatal
-  LVL_ALERT, ///< Alert. DL_Alert
-  LVL_EMERGENCY, ///< Emergency. DL_Emergency.
+enum class Severity {
+  DIAG, ///< Diagnostic only. DL_Diag
+  DBG, ///< Debugging. DL_Debug ('DEBUG' is a macro)
+  INFO, ///< Informative. DL_Status
+  NOTE, ///< Note. DL_Note
+  WARN, ///< Warning. DL_Warning
+  ERROR, ///< Error. DL_Error
+  FATAL, ///< Fatal. DL_Fatal
+  ALERT, ///< Alert. DL_Alert
+  EMERGENCY, ///< Emergency. DL_Emergency.
 };
 
 /** Class to hold a stack of error messages (the "errata").
@@ -104,9 +104,9 @@ public:
   using Severity = ts::Severity; ///< Import for associated classes.
 
   /// Severity used if not specified.
-  static constexpr Severity DEFAULT_SEVERITY{Severity::LVL_DIAG};
+  static constexpr Severity DEFAULT_SEVERITY{Severity::DIAG};
   /// Severity level at which the instance is a failure of some sort.
-  static constexpr Severity SERIOUS_SEVERITY{Severity::LVL_WARNING};
+  static constexpr Severity SERIOUS_SEVERITY{Severity::WARN};
 
   struct Message; // Forward declaration.
 
@@ -186,6 +186,12 @@ public:
       message ID, @c false otherwise.
    */
   bool is_ok() const;
+
+  /** Get the maximum severity of the messages in the erratum.
+   *
+   * @return Max severity for all messages.
+   */
+  Severity severity() const;
 
   /// Number of messages in the errata.
   size_t size() const;
@@ -566,6 +572,12 @@ template <typename R> struct Rv : public RvBase {
   */
   Errata &errata();
 
+  /** Get the internal @c Errata.
+   *
+   * @return Reference to internal @c Errata.
+   */
+  operator Errata& ();
+
   /** Return the status.
       @return A reference to the @c errata in this object.
   */
@@ -657,6 +669,8 @@ inline Errata::operator bool() const
 {
   return this->is_ok();
 }
+
+inline Severity Errata::severity() const { return _data ? DEFAULT_SEVERITY : _data->_level; }
 
 inline size_t
 Errata::size() const
@@ -901,6 +915,8 @@ Rv<T>::errata()
   return _errata;
 }
 
+template < typename T > Rv<T>::operator Errata&() { return _errata; }
+
 template <typename T>
 Rv<T> &
 Rv<T>::set(Result const &r)
@@ -947,4 +963,5 @@ bwformat(BufferWriter& w, BWFSpec const& spec, Severity);
 
 BufferWriter&
 bwformat(BufferWriter& w, BWFSpec const& spec, Errata const&);
+
 } // namespace ts

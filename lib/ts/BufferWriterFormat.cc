@@ -758,8 +758,12 @@ namespace
 void
 BWF_Timestamp(ts::BufferWriter &w, ts::BWFSpec const &spec)
 {
+  // Unfortunately need to write to a temporary buffer or the sizing isn't correct if @a w is clipped
+  // because @c strftime returns 0 if the buffer isn't large enough.
+  char buff[32];
   std::time_t t = std::time(nullptr);
-  w.fill(std::strftime(w.auxBuffer(), w.remaining(), "%Y %b %d %H:%M:%S", std::localtime(&t)));
+  auto n = strftime(buff, sizeof(buff), "%Y %b %d %H:%M:%S", std::localtime(&t));
+  w.write(ts::string_view{buff, n});
 }
 
 void
@@ -788,7 +792,7 @@ BWF_ThreadName(ts::BufferWriter &w, ts::BWFSpec const &spec)
 #else
   char name[32]; // manual says at least 16, bump that up a bit.
   pthread_getname_np(pthread_self(), name, sizeof(name));
-  bwformat(w, spec, ts::string_view(name));
+  bwformat(w, spec, ts::string_view{name});
 #endif
 }
 

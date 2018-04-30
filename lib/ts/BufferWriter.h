@@ -728,9 +728,14 @@ bwformat(BufferWriter &w, BWFSpec const &spec, const char *v)
 }
 
 inline BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, TextView const &tv)
+bwformat(BufferWriter &w, BWFSpec const &spec, TextView tv)
 {
   return bwformat(w, spec, static_cast<string_view>(tv));
+}
+
+inline BufferWriter&
+bwformat(BufferWriter &w, BWFSpec const& spec, std::string const& s) {
+  return bwformat(w, spec, string_view{s});
 }
 
 template <typename F>

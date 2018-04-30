@@ -1427,6 +1427,7 @@ add_executable(ts_lua_generator
 	lib/tsconfig/TsLuaMetaConfig.cc
 	lib/tsconfig/TsLuaConfig.cc
         lib/tsconfig/TsLuaConfigValueDescriptor.h
+        lib/tsconfig/TsLuaConfigValueData.h
 )
 
 # CacheTool

@@ -110,13 +110,13 @@ namespace config
           }
           zret = n; // mark for return to caller.
         } else {
-          zret.msg(LVL_WARNING, "Add child failed because parent is not a container.");
+          zret.msg(Severity::WARN, "Add child failed because parent is not a container.");
         }
       } else {
-        zret.msg(LVL_WARNING, "Add child failed because parent index (%ul) is out of range (%ul).", pidx.raw(), n);
+        zret.msg(Severity::WARN, "Add child failed because parent index (%ul) is out of range (%ul).", pidx.raw(), n);
       }
     } else {
-      zret.msg(LVL_WARNING, "Add child failed because the configuration is null.");
+      zret.msg(Severity::WARN, "Add child failed because the configuration is null.");
     }
     return zret;
   }
@@ -317,7 +317,7 @@ namespace config
       }
 
       if (C_INVALID == cb) {
-        zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in path.", *_c, *_c);
+        zret.msg(Severity::WARN, "Invalid character '%c' [%u] in path.", *_c, *_c);
       } else {
         switch (state) {
         case S_INIT:
@@ -330,15 +330,15 @@ namespace config
             state = S_TAG;
             break;
           case C_DASH:
-            zret.msg(LVL_WARNING, "Dash not allowed as leading character for tag.");
+            zret.msg(Severity::WARN, "Dash not allowed as leading character for tag.");
             final = true;
             break;
           case C_DOT:
-            zret.msg(LVL_WARNING, "Separator without preceding element.");
+            zret.msg(Severity::WARN, "Separator without preceding element.");
             final = true;
             break;
           default:
-            zret.msg(LVL_WARNING, "Internal error: unexpected character %u in INIT state.", *_c);
+            zret.msg(Severity::WARN, "Internal error: unexpected character %u in INIT state.", *_c);
             final = true;
             break;
           }
@@ -349,7 +349,7 @@ namespace config
           } else if (C_DOT == cb) {
             final = true;
           } else {
-            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(Severity::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -361,7 +361,7 @@ namespace config
           } else if (C_DOT == cb) {
             final = true;
           } else { // should never happen, but be safe.
-            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(Severity::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -369,10 +369,10 @@ namespace config
           if (C_IDENT == cb || C_DIGIT == cb) {
             state = S_TAG;
           } else if (C_DOT == cb) {
-            zret.msg(LVL_WARNING, "Trailing dash not allowed in tag element.");
+            zret.msg(Severity::WARN, "Trailing dash not allowed in tag element.");
             final = true;
           } else if (C_DASH != cb) { // should never happen, but be safe.
-            zret.msg(LVL_WARNING, "Invalid character '%c' [%u] in index element.", *_c, *_c);
+            zret.msg(Severity::WARN, "Invalid character '%c' [%u] in index element.", *_c, *_c);
             final = true;
           }
           break;
@@ -406,7 +406,7 @@ namespace config
       }
     } else if (S_DASH == state) {
       zret = ERROR;
-      zret.msg(LVL_WARNING, "Trailing dash not allowed in tag element.");
+      zret.msg(Severity::WARN, "Trailing dash not allowed in tag element.");
       if (cbuff) {
         cbuff->set(start, _c - start);
       }
@@ -440,18 +440,18 @@ namespace config
             memset(buffer._ptr + n, 0, 2); // required by FLEX
             zret = Builder(zret.result()).build(buffer);
           } else {
-            zret.msg(LVL_WARNING, "failed to read %" PRIu64 " bytes from configuration file '%s'", info.st_size, path);
+            zret.msg(Severity::WARN, "failed to read %" PRIu64 " bytes from configuration file '%s'", info.st_size, path);
           }
         } else {
-          zret.msg(LVL_WARNING, "failed to allocate buffer for configuration file '%s' - needed %" PRIu64 " bytes.",
+          zret.msg(Severity::WARN, "failed to allocate buffer for configuration file '%s' - needed %" PRIu64 " bytes.",
                           path, info.st_size);
         }
       } else {
-        zret.msg(LVL_WARNING, "failed to determine file information on '%s'", path);
+        zret.msg(Severity::WARN, "failed to determine file information on '%s'", path);
       }
       fclose(in);
     } else {
-      zret.msg(LVL_WARNING, "failed to open configuration file '%s'", path);
+      zret.msg(Severity::WARN, "failed to open configuration file '%s'", path);
     }
     return zret;
   }

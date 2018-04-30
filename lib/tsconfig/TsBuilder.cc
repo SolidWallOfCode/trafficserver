@@ -110,13 +110,13 @@ namespace config
         if (handler->_method) {
           ((handler->_ptr)->*(handler->_method))(*token);
         } else {
-          log.msg(LVL_WARNING, PRE "Unable to dispatch event - no method.");
+          log.msg(Severity::WARN, PRE "Unable to dispatch event - no method.");
         }
       } else {
-        log.msg(LVL_WARNING, PRE "Unable to dispatch event - no builder.");
+        log.msg(Severity::WARN, PRE "Unable to dispatch event - no builder.");
       }
     } else {
-      log.msg(LVL_WARNING, PRE "Unable to dispatch event - no handler.");
+      log.msg(Severity::WARN, PRE "Unable to dispatch event - no handler.");
     }
   }
 
@@ -129,7 +129,7 @@ namespace config
   int
   Builder::syntaxError(char const *text)
   {
-    _errata.msg(LVL_WARNING, "Syntax error '{}' near line {}, column {}.", text, tsconfiglex_current_line(),
+    _errata.msg(Severity::WARN, "Syntax error '{}' near line {}, column {}.", text, tsconfiglex_current_line(),
               tsconfiglex_current_col());
     return 0;
   }
@@ -239,7 +239,7 @@ namespace config
       text._ptr[text._size] = 0; // OK because we have the trailing quote.
       cv                    = _v.makeString(text, _name);
     } else {
-      cv.msg(LVL_WARNING, PRE "Unexpected literal type %d.", token._type);
+      cv.msg(Severity::WARN, PRE "Unexpected literal type %d.", token._type);
     }
     // if there was an error, add it in to the overall error list.
     if (!cv.is_ok()) {

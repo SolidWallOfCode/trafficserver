@@ -68,7 +68,7 @@ TsLuaConfigObjectData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    zret.msg(ts::LVL_FATAL, "Schema load failed - not an OBJECT [table]");
+    zret.msg(ts::Severity::FATAL, "Schema load failed - not an OBJECT [table]");
   } else {
     // Walk the table.
     lua_pushnil(L);
