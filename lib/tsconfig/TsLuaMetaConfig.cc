@@ -56,7 +56,7 @@ class TsLuaMetaConfig::MetaSchemaDescriptor : public SchemaDescriptor
 public:
   MetaSchemaDescriptor()
   {
-    _properties.emplace(std::make_pair(value_type::P_SCHEMA_DESCRIPTOR.name, reinterpret_cast<MPtr>(&value_type::p_schema)));
+    _properties.emplace(std::make_pair(value_type::P_SCHEMA_DESCRIPTOR.name, reinterpret_cast<MPtr>(&value_type::P_SCHEMA_DATA)));
   }
 };
 
@@ -137,7 +137,7 @@ TsLuaMetaConfig::SchemaData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    zret.msg(ts::LVL_FATAL, "Schema load failed - not an OBJECT [table]");
+    zret.msg(ts::Severity::FATAL, "Schema load failed - not an OBJECT [table]");
   } else {
     // Walk the table.
     lua_pushnil(L);
@@ -169,7 +169,7 @@ TsLuaMetaConfig::MetaSchemaData::load(lua_State *L)
   lua_getfield(L, -1, descriptor.name.data());
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
-    zret.msg(ts::LVL_FATAL, "MetaSchema load failed - not an OBJECT [table]");
+    zret.msg(ts::Severity::FATAL, "MetaSchema load failed - not an OBJECT [table]");
   } else {
     // Walk the table.
     lua_pushnil(L);

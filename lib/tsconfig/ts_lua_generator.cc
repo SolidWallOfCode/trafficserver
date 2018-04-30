@@ -61,6 +61,9 @@ const std::map<int, ts::string_view> OPT_DESCRIPTIONS = {{OPT_HELP, "Print the u
                                                          {OPT_HDR, "Generated header file."}};
 }
 
+using ts::Severity;
+using ts::bwprint;
+
 int
 main(int argc, char **argv)
 {
@@ -75,6 +78,7 @@ main(int argc, char **argv)
   int idx;
   ts::LocalBufferWriter<1024> msg;
   TsLuaMetaConfig config;
+  std::string text_out;
 
   std::string schema_file_path;
   std::string hdr_file_path;
@@ -82,6 +86,7 @@ main(int argc, char **argv)
 
   while (-1 != (idx = getopt_long_only(argc, argv, "", OPTIONS, &idx))) {
     switch (idx) {
+    case '?':
     case OPT_HELP: {
       auto cmd = ts::TextView(argv[0], strlen(argv[0])).take_suffix_at('/');
       msg << cmd << " [options] schema-file";
@@ -95,7 +100,7 @@ main(int argc, char **argv)
         }
         msg << "\n    --" << item.name << ": " << txt;
       }
-      zret.msg(ts::LVL_FATAL, msg.view());
+      zret.msg(Severity::INFO, msg.view());
       break;
     }
     case OPT_OUT:
@@ -104,19 +109,17 @@ main(int argc, char **argv)
     case OPT_HDR:
       hdr_file_path = optarg;
       break;
-    case '?':
-      zret.msg(ts::LVL_WARNING, "Usage:");
-      break;
     }
   }
 
-  if (argc != optind + 1) {
-    msg << "Needed " << optind << " args, have " << argc - 1 << " debug " << UINT64_MAX;
-    zret.msg(ts::LVL_FATAL, msg.view());
+  if (zret.size()) {
+    std::cout << bwprint(text_out, "{}", zret);
+    return 0;
   }
 
-  if (!zret.is_ok()) {
-    zret.write(std::cout);
+  if (argc != optind + 1) {
+    zret.msg(Severity ::FATAL, "Needed {} arguments, only {} provided", optind, argc-1);
+    std::cout << bwprint(text_out, "{}", zret);
     return 1;
   }
 
@@ -142,13 +145,13 @@ main(int argc, char **argv)
 
   std::cout << "Loading config " << schema_file_path << " generating " << out_file_path << " and " << hdr_file_path << std::endl;
 
-  config.load("lua-config-meta-schema.lua");
+  zret = config.load("lua-config-meta-schema.lua");
 
-  time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); // because ctime() requires *time_t.
-  std::string guard{ts::TextView(hdr_file_path).take_suffix_at('/').make_string()};
-  std::transform(guard.begin(), guard.end(), guard.begin(), [](char c) { return isalpha(c) ? std::toupper(c) : '_'; });
-  hdr_file << "#if !defined(" << guard << ")" << std::endl << "#define " << guard << std::endl;
-  hdr_file << "// This file was generated from " << schema_file_path << " at " << std::ctime(&now) << std::endl;
+  bwprint(text_out, "#pragma once\n// File generated from {} at {timestamp}\n\n", schema_file_path);
+  hdr_file << text_out;
+
+  // Start generating.
+  bwprint(text_out, "class {}\n{{\n}}", config.meta_schema._class);
 
   return 0;
 }
