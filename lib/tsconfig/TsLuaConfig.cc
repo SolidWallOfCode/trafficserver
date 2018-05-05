@@ -34,7 +34,12 @@ ts::Errata
 TsLuaConfigStringData::load(lua_State *L)
 {
   ts::Errata zret;
-
+  if (lua_isstring(L, -1)) {
+    _value = lua_tostring(L, -1);
+  } else {
+    zret.msg(ts::Severity::WARN, "Type {} instead of expected {} for {}", luaL_typename(L, -1), descriptor.type_name,
+             descriptor.name);
+  }
   return zret;
 }
 
