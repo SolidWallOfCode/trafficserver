@@ -151,7 +151,7 @@ main(int argc, char **argv)
   hdr_file << text_out;
 
   // Start generating.
-  bwprint(text_out, "class {}\n{{\n}}", config.meta_schema._class);
-
+  bwprint(text_out, "class {}\n{{\n}};\n", config.meta_schema._class);
+  out_file << text_out;
   return 0;
 }
