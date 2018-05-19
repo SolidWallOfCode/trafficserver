@@ -38,7 +38,10 @@ AM_CPPFLAGS += \
 
 libmgmt_c_la_SOURCES = \
 	RecordsConfig.cc \
-	RecordsConfig.h
+	RecordsConfig.h \
+	DerivativeMetrics.cc \
+	DerivativeMetrics.h
+
 
 libmgmt_COMMON = \
 	BaseManager.cc \
@@ -63,6 +66,8 @@ libmgmt_lm_la_SOURCES = \
 	LocalManager.h \
 	Rollback.cc \
 	Rollback.h \
+	DerivativeMetrics.cc \
+	DerivativeMetrics.h \
 	WebMgmtUtils.cc \
 	WebMgmtUtils.h
 
