@@ -79,12 +79,13 @@ DerivativeMetrics::DerivativeMetrics()
 {
   // Add all the sum derived metrics to LibRecords
   for (auto &&[derived_metric, type, metric_parts] : sum_metrics) {
+    (void)metric_parts; // because C++17 is broken and doesn't support ignoring a tuple member.
     switch (type) {
     case RECD_INT:
-      RecRegisterStatInt(RECT_PROCESS, derived_metric, static_cast<RecInt>(0), RECP_NON_PERSISTENT);
+      RecRegisterStatInt(RECT_PROCESS, derived_metric.data(), static_cast<RecInt>(0), RECP_NON_PERSISTENT);
       break;
     case RECD_COUNTER:
-      RecRegisterStatCounter(RECT_PROCESS, derived_metric, static_cast<RecCounter>(0), RECP_NON_PERSISTENT);
+      RecRegisterStatCounter(RECT_PROCESS, derived_metric.data(), static_cast<RecCounter>(0), RECP_NON_PERSISTENT);
       break;
     default:
       ink_release_assert(!"Unsupported metric type");
@@ -107,11 +108,11 @@ DerivativeMetrics::Update()
     for (auto &&metric : metric_parts) {
       switch (type) {
       case RECD_INT:
-        error = RecGetRecordInt(metric, &int_val);
+        error = RecGetRecordInt(metric.data(), &int_val);
         sum.rec_int += int_val;
         break;
       case RECD_COUNTER:
-        error = RecGetRecordCounter(metric, &counter_val);
+        error = RecGetRecordCounter(metric.data(), &counter_val);
         sum.rec_counter += counter_val;
         break;
       default:
@@ -124,7 +125,7 @@ DerivativeMetrics::Update()
     }
 
     if (!error) {
-      RecSetRecord(RECT_NULL, derived_metric, type, &sum, nullptr, REC_SOURCE_EXPLICIT);
+      RecSetRecord(RECT_NULL, derived_metric.data(), type, &sum, nullptr, REC_SOURCE_EXPLICIT);
     }
   }
 }

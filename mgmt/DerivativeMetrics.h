@@ -24,13 +24,14 @@
 #pragma once
 
 #include <tuple>
+#include <string_view>
 #include "I_RecLocal.h"
 
 // ToDo: It's a little bizarre that we include this here, but it's the only way to get to RecSetRecord(). We should
 // move that elsewhere... But other places in our core does the same thing.
 #include "P_RecCore.h"
 
-using DerivativeSum = std::tuple<const char *, RecDataT, std::vector<const char *>>;
+using DerivativeSum = std::tuple<std::string_view, RecDataT, std::vector<std::string_view>>;
 
 class DerivativeMetrics
 {
