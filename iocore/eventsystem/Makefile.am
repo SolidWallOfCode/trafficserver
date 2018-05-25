@@ -35,6 +35,7 @@ libinkevent_a_SOURCES = \
 	I_EventProcessor.h \
 	I_EventSystem.h \
 	I_IOBuffer.h \
+	I_IOBufferWriter.h \
 	I_Lock.h \
 	I_PriorityEventQueue.h \
 	I_Processor.h \
@@ -120,11 +121,11 @@ test_Buffer_LDADD = $(test_LD_ADD)
 test_Event_LDADD = $(test_LD_ADD)
 
 
-test_MIOBufferWriter_SOURCES = unit-tests/test_MIOBufferWriter.cc
+test_IOBufferWriter_SOURCES = unit-tests/test_IOBufferWriter.cc
 
-test_MIOBufferWriter_CPPFLAGS = $(test_CPP_FLAGS) -I$(abs_top_srcdir)/tests/include
-test_MIOBufferWriter_LDFLAGS = $(test_LD_FLAGS)
-test_MIOBufferWriter_LDADD = $(test_LD_ADD)
+test_IOBufferWriter_CPPFLAGS = $(test_CPP_FLAGS) -I$(abs_top_srcdir)/tests/include
+test_IOBufferWriter_LDFLAGS = $(test_LD_FLAGS)
+test_IOBufferWriter_LDADD = $(test_LD_ADD)
 
 include $(top_srcdir)/build/tidy.mk
 
