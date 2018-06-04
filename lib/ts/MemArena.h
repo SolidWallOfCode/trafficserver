@@ -45,10 +45,10 @@ namespace ts
 class MemArena
 {
   using self_type = MemArena; ///< Self reference type.
-
 protected:
   struct Block;
   using BlockPtr = ts::IntrusivePtr<Block>;
+  friend struct IntrusivePtrPolicy<Block>;
   /** Simple internal arena block of memory. Maintains the underlying memory.
    */
   struct Block : public ts::IntrusivePtrCounter {
@@ -199,6 +199,15 @@ protected:
 };
 
 // Implementation
+
+template<> struct IntrusivePtrPolicy<MemArena::Block> : public IntrusivePtrDefaultPolicy<MemArena::Block> {
+  static void finalize(MemArena::Block* b) {
+    if (b) {
+      b->MemArena::Block::~Block();
+      free(b);
+    }
+  }
+};
 
 inline MemArena::Block::Block(size_t n) : size(n) {}
 

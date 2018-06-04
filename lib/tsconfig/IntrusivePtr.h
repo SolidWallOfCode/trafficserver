@@ -296,13 +296,12 @@ ptr_cast(IntrusivePtr<U> const &src)
 /* ----------------------------------------------------------------------- */
 /** Default policy class for intrusive pointers.
 
-    This allows per type policy, although not per target instance.
-    Clients can override policy by specializing this class for the
-    target type.
+    This allows per type policy, although not per target instance. Clients can override policy by
+    specializing @c IntrusivePtrPolicy and inheriting from this class to provide default actions.
 
     @code
     template <> IntrusivePtrPolicy<SomeType>
-      : IntrusivePtrDefaultPolicy {
+      : IntrusivePtrDefaultPolicy<SomeType> {
      ... Redefinition of methods and nested types ...
     };
     @endcode
@@ -313,13 +312,12 @@ ptr_cast(IntrusivePtr<U> const &src)
     anyway.
 */
 
-template <typename T> class IntrusivePtrPolicy
+template <typename T> class IntrusivePtrDefaultPolicy
 {
 public:
   /// Called when the pointer is dereferenced.
   /// Default is empty (no action).
-  static void dereferenceCheck(T * ///< Target object.
-                               );
+  static void dereferenceCheck(T *);
 
   /** Perform clean up on a target object that is no longer referenced.
 
@@ -342,15 +340,12 @@ public:
     /// Default constructor.
     Order() {}
     /// Compare by raw pointer.
-    bool operator()(IntrusivePtr<T> const &lhs, ///< Left hand operand.
-                    IntrusivePtr<T> const &rhs  ///< Right hand operand.
-                    ) const;
+    bool operator()(IntrusivePtr<T> const &lhs, IntrusivePtr<T> const &rhs) const;
   };
 };
 
-struct IntrusivePtrDefaultPolicyTag {
-};
-typedef IntrusivePtrPolicy<IntrusivePtrDefaultPolicyTag> IntrusivePtrDefaultPolicy;
+// If no specialization is provided then use the default;
+template < typename T > struct IntrusivePtrPolicy : public IntrusivePtrDefaultPolicy<T> {};
 /* ----------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------- */
 /* Inline Methods */
@@ -379,20 +374,20 @@ IntrusivePtrAtomicCounter::operator=(self_type const &)
 
 template <typename T>
 void
-IntrusivePtrPolicy<T>::dereferenceCheck(T *)
+IntrusivePtrDefaultPolicy<T>::dereferenceCheck(T *)
 {
 }
 
 template <typename T>
 void
-IntrusivePtrPolicy<T>::finalize(T *obj)
+IntrusivePtrDefaultPolicy<T>::finalize(T *obj)
 {
   delete obj;
 }
 
 template <typename T>
 bool
-IntrusivePtrPolicy<T>::Order::operator()(IntrusivePtr<T> const &lhs, IntrusivePtr<T> const &rhs) const
+IntrusivePtrDefaultPolicy<T>::Order::operator()(IntrusivePtr<T> const &lhs, IntrusivePtr<T> const &rhs) const
 {
   return lhs.get() < rhs.get();
 }
