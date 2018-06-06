@@ -272,7 +272,7 @@ namespace detail
 
       while (parent) { // @a n is not the root
         // If the current node is RED, we can just recolor and be done
-        if (n && n == RED) {
+        if (n == RED) {
           n->_color = BLACK;
           break;
         } else {
@@ -287,7 +287,7 @@ namespace detail
 
           self *w = parent->getChild(far); // sibling(n)
 
-          if (w->_color == RED) {
+          if (w == RED) {
             w->_color      = BLACK;
             parent->_color = RED;
             parent->rotate(near);
@@ -301,7 +301,7 @@ namespace detail
             parent    = n->_parent;
             d         = NONE; // Cancel any leaf node logic
           } else {
-            if (wfc->_color == BLACK) {
+            if (wfc == BLACK) {
               w->getChild(near)->_color = BLACK;
               w->_color                 = RED;
               w->rotate(far);

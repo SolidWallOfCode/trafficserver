@@ -21,8 +21,12 @@
     limitations under the License.
 */
 
-#include <ts/IpMap.h>
 #include <sstream>
+#include <fstream>
+#include <iostream>
+#include <chrono>
+#include <ts/IpMap.h>
+#include <ts/TextView.h>
 #include <catch.hpp>
 
 std::ostream &
@@ -602,4 +606,62 @@ TEST_CASE("IpMap CloseIntersection", "[libts][ipmap]")
   CHECK_THAT(map, IsMarkedAt(a_1_m));
 
   CHECK(map.getCount() == 13);
+}
+
+namespace
+{
+int thing;
+}
+
+TEST_CASE("IpMap Performance", "[libts][ipmap]")
+{
+  IpMap map;
+  int count{0};
+  std::ifstream f("ipmap_data.csv");
+  if (f.is_open()) {
+    void *mark{&thing};
+    char line[256];
+    auto start = std::chrono::high_resolution_clock::now();
+    while (f.getline(line, sizeof(line))
+             .
+
+           good()
+
+    ) {
+      IpAddr addr1, addr2;
+      if (0 == ats_ip_range_parse(std::string_view(line), addr1, addr2)) {
+        map.mark(addr1, addr2, mark);
+        ++count;
+      }
+    }
+    auto delta = std::chrono::high_resolution_clock::now() - start;
+    std::cout << "IpMap: Loaded " << count << " ranges in to "
+              << map.getCount()
+              << " ranges in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
+              << "ms" << std::endl;
+    // Test probing.
+    start = std::chrono::high_resolution_clock::now();
+    count = 0;
+    for (uint32_t a = 0; count < 2500000; a += 4) {
+      ++count;
+      map.contains(a);
+    }
+    for (uint32_t a = 0x7fff000; count < 5000000; a += 4) {
+      ++count;
+      map.contains(a);
+    }
+    for (uint32_t a = 0xdfff000; count < 7500000; a += 4) {
+      ++count;
+      map.contains(a);
+    }
+    for (uint32_t a = 0x12345678; count < 10000000; a += 4) {
+      ++count;
+      map.contains(a);
+    }
+    delta = std::chrono::high_resolution_clock::now() - start;
+    std::cout << "IpMap: Probed " << count << " addresses in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
+              << "ms" << std::endl;
+  }
 }
