@@ -342,6 +342,8 @@ public:
   */
   void validate();
 
+  void depth_histogram(std::vector<int> &histogram);
+
   /// Print all spans.
   /// @return This map.
   //  self& print();

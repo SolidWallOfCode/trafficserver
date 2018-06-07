@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <vector>
 
 namespace ts
 {
@@ -205,6 +206,12 @@ namespace detail
 
     //! Invoke @c structure_fixup() on this node and all of its ancestors.
     self *rippleStructureFixup();
+
+    /** Compute a depth histogram - useful only for debugging / performance testing.
+     * @param depth The depth of this node.
+     * @param histogram  Histogram to update.
+     */
+    void depth_histogram(int depth, std::vector<int> &histogram) const;
 
     Color _color;  ///< node color
     self *_parent; ///< parent node (needed for rotations)

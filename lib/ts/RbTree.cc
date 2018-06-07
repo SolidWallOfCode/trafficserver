@@ -366,5 +366,18 @@ namespace detail
     return 0;
 #endif
   }
+
+  void
+  RBNode::depth_histogram(int depth, std::vector<int> &histogram) const
+  {
+    int nd{depth + 1};
+    if (static_cast<int>(histogram.size()) < nd)
+      histogram.resize(nd);
+    ++histogram[depth];
+    if (_left)
+      _left->depth_histogram(nd, histogram);
+    if (_right)
+      _right->depth_histogram(nd, histogram);
+  }
 } // namespace detail
 } // namespace ts

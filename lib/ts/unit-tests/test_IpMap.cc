@@ -27,6 +27,7 @@
 #include <chrono>
 #include <ts/IpMap.h>
 #include <ts/TextView.h>
+#include <ts/BufferWriter.h>
 #include <catch.hpp>
 
 std::ostream &
@@ -613,11 +614,16 @@ namespace
 int thing;
 }
 
+/* The performance test runs if there is an "ipmap_data.txt" file.
+ * This should be a list of networks and/or ranges, one per line. If not present the test is
+ * silently skipped.
+ */
 TEST_CASE("IpMap Performance", "[libts][ipmap]")
 {
   IpMap map;
   int count{0};
-  std::ifstream f("ipmap_data.csv");
+  bool result = false;
+  std::ifstream f("ipmap_data.txt");
   if (f.is_open()) {
     void *mark{&thing};
     char line[256];
@@ -635,33 +641,50 @@ TEST_CASE("IpMap Performance", "[libts][ipmap]")
       }
     }
     auto delta = std::chrono::high_resolution_clock::now() - start;
-    std::cout << "IpMap: Loaded " << count << " ranges in to "
-              << map.getCount()
-              << " ranges in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
-              << "ms" << std::endl;
+    std::cout << "IpMap: Loaded " << count << " ranges in to " << map.getCount() << " ranges in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << std::endl;
     // Test probing.
     start = std::chrono::high_resolution_clock::now();
     count = 0;
     for (uint32_t a = 0; count < 2500000; a += 4) {
       ++count;
-      map.contains(a);
+      result = map.contains(a) || result;
     }
-    for (uint32_t a = 0x7fff000; count < 5000000; a += 4) {
+    for (uint32_t a = 0x3fff000; count < 5000000; a += 4) {
       ++count;
-      map.contains(a);
+      result = map.contains(a) || result;
     }
     for (uint32_t a = 0xdfff000; count < 7500000; a += 4) {
       ++count;
-      map.contains(a);
+      result = map.contains(a) || result;
     }
     for (uint32_t a = 0x12345678; count < 10000000; a += 4) {
       ++count;
-      map.contains(a);
+      result = map.contains(a) | result;
     }
     delta = std::chrono::high_resolution_clock::now() - start;
     std::cout << "IpMap: Probed " << count << " addresses in "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
-              << "ms" << std::endl;
+              << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms " << result << std::endl;
+    std::vector<int> depths;
+    map.depth_histogram(depths);
+    std::cout << "Depth Histogram:" << std::endl;
+    for (unsigned int i = 0; i < depths.size(); ++i) {
+      std::cout << i << ": " << depths[i] << std::endl;
+    }
+
+    IpAddr a;
+    a.load("1.224.252.17");
+    REQUIRE(map.contains(a));
+    a.load("1.112.10.0");
+    REQUIRE(!map.contains(a));
+    a.load("50.192.249.133");
+    REQUIRE(!map.contains(a));
+
+#if 0
+    for ( auto& r : map) {
+      ts::LocalBufferWriter<120> w;
+      std::cout << w.print("{:: =a}-{:: =a}\n", r.min(),r.max());
+    }
+#endif
   }
 }

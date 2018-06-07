@@ -222,6 +222,8 @@ namespace detail
     */
     void validate();
 
+    void depth_histogram(std::vector<int> &histogram);
+
     /// @return The number of distinct ranges.
     size_t getCount() const;
 
@@ -735,6 +737,13 @@ namespace detail
     return *this;
   }
 
+  template <typename N>
+  void
+  IpMapBase<N>::depth_histogram(std::vector<int> &histogram)
+  {
+    if (_root)
+      _root->depth_histogram(0, histogram);
+  }
   //----------------------------------------------------------------------------
   typedef Interval<in_addr_t, in_addr_t> Ip4Span;
 
@@ -1198,6 +1207,15 @@ IpMap::clear()
   return *this;
 }
 
+void
+IpMap::depth_histogram(std::vector<int> &histogram)
+{
+  if (_m4)
+    _m4->depth_histogram(histogram);
+  if (_m6)
+    _m6->depth_histogram(histogram);
+}
+
 IpMap::iterator
 IpMap::begin() const
 {
@@ -1226,7 +1244,7 @@ IpMap::iterator::operator++()
   return *this;
 }
 
-inline IpMap::iterator &
+IpMap::iterator &
 IpMap::iterator::operator--()
 {
   if (_node) {
