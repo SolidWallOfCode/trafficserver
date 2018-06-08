@@ -915,6 +915,24 @@ bwformat(BufferWriter &w, BWFSpec const &spec, bwf::Errno const &e)
   return w;
 }
 
+BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, bwf::Date const &date)
+{
+  if (spec.has_numeric_type()) {
+    bwformat(w, spec, date._epoch);
+  } else {
+    struct tm t;
+    // Unfortunately need to write to a temporary buffer or the sizing isn't correct if @a w is clipped
+    // because @c strftime returns 0 if the buffer isn't large enough.
+    char buff[64];
+    // Verify @a fmt is null terminated, even outside the bounds of the view.
+    ink_assert(date._fmt.data()[date._fmt.size() - 1] == 0 || date._fmt.data()[date._fmt.size()] == 0);
+    auto n = strftime(buff, sizeof(buff), date._fmt.data(), gmtime_r(&date._epoch, &t));
+    w.write(buff, n);
+  }
+  return w;
+}
+
 } // namespace ts
 
 namespace
@@ -927,7 +945,7 @@ BWF_Timestamp(ts::BufferWriter &w, ts::BWFSpec const &spec)
   char buff[32];
   std::time_t t = std::time(nullptr);
   auto n        = strftime(buff, sizeof(buff), "%Y %b %d %H:%M:%S", std::localtime(&t));
-  w.write(std::string_view{buff, n});
+  w.write(buff, n);
 }
 
 void

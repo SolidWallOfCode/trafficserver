@@ -24,6 +24,7 @@
 #pragma once
 
 #include <atomic>
+#include <string_view>
 
 namespace std
 {
@@ -43,8 +44,15 @@ namespace bwf
     int _e;
     Errno(int e) : _e(e) {}
   };
+
+  struct Date {
+    time_t _epoch;
+    std::string_view _fmt;
+    Date(time_t t, std::string_view fmt = "%Y %b %d %H:%M:%S"sv) : _epoch(t), _fmt(fmt) {}
+  };
 } // namespace bwf
 
 BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, bwf::Errno const &e);
+BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, bwf::Date const &date);
 
 } // namespace ts

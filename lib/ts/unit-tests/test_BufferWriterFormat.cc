@@ -491,6 +491,12 @@ TEST_CASE("bwstring std formats", "[libts][bwprint]")
   REQUIRE(w.view() == "EUSERS: Too many users [87]"sv);
   w.reset().print("{}", ts::bwf::Errno(134));
   REQUIRE(w.view().substr(0, 22) == "Unknown: Unknown error"sv);
+
+  time_t t = 1528484137;
+  w.reset().print("{} is {}", t, ts::bwf::Date(t));
+  REQUIRE(w.view() == "1528484137 is 2018 Jun 08 18:55:37");
+  w.reset().print("{} is {}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
+  REQUIRE(w.view() == "1528484137 is Fri, 08 Jun 2018 at 18.55.37");
 }
 
 // Normally there's no point in running the performance tests, but it's worth keeping the code
