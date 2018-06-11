@@ -1712,6 +1712,33 @@ HttpSM::state_http_server_open(int event, void *data)
 {
   SMDebug("http_track", "entered inside state_http_server_open");
   STATE_ENTER(&HttpSM::state_http_server_open, event);
+
+  // AMC - temporary testing code.
+  {
+    auto start            = std::chrono::high_resolution_clock::now();
+    auto delta = std::chrono::high_resolution_clock::now() - start;
+    constexpr int N_LOOPS = 10000;
+
+    start = std::chrono::high_resolution_clock::now();
+    for ( int idx = 0 ; idx < N_LOOPS ; ++idx ) {
+      Debug("http_ss", "[%" PRId64 "] max number of connections: %" PRIu64, sm_id, t_state.txn_conf->origin_max_connections);
+    }
+    delta = std::chrono::high_resolution_clock::now() - start;
+    std::cout << "Base Debug " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
+            << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    for ( int idx = 0 ; idx < N_LOOPS ; ++idx ) {
+      DebugV("http_ss", "[{}] max number of connections: {}", sm_id, t_state.txn_conf->origin_max_connections);
+    }
+
+    delta = std::chrono::high_resolution_clock::now() - start;
+    std::cout << "DebugV " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
+            << "ms" << std::endl;
+
+  }  
+  // AMC
+
   // TODO decide whether to uncomment after finish testing redirect
   // ink_assert(server_entry == NULL);
   pending_action                              = nullptr;

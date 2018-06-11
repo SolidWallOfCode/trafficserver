@@ -25,6 +25,8 @@
 #include "ink_defs.h"
 #include <cstdio>
 #include <cstring>
+#include <ts/TextView.h>
+#include <BufferWriter.h>
 
 // This method takes a SourceLocation source location data structure and
 // converts it to a human-readable representation, in the buffer <buf>
@@ -53,3 +55,18 @@ SourceLocation::str(char *buf, int buflen) const
   buf[buflen - 1] = NUL;
   return (buf);
 }
+
+namespace ts {
+BufferWriter& bwformat(BufferWriter& w, BWFSpec const& spec, SourceLocation const& loc) {
+  if (loc.valid()) {
+    TextView trail{TextView{loc.file, strlen(loc.file)}.take_suffix_at('/')};
+    w.print("{}:{}", trail, loc.line);
+    if (loc.func) {
+      w.write(" ("sv);
+      w.write(std::string_view{loc.func});
+      w.write(')');
+    }
+  }
+  return w;
+}
+} // namespace ts

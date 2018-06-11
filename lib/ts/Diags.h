@@ -34,6 +34,8 @@
 #pragma once
 
 #include <cstdarg>
+#include <string_view>
+#include <chrono>
 #include "ink_mutex.h"
 #include "Regex.h"
 #include "ink_apidefs.h"
@@ -41,6 +43,8 @@
 #include "ink_inet.h"
 #include "BaseLogFile.h"
 #include "SourceLocation.h"
+#include <ts/BufferWriter.h>
+#include <ts/bwf_std_format.h>
 
 #define DIAGS_MAGIC 0x12345678
 #define BYTES_IN_MB 1000000
@@ -162,7 +166,7 @@ public:
   // raw printing interfaces //
   /////////////////////////////
 
-  const char *level_name(DiagsLevel level) const;
+  static std::string_view level_name(DiagsLevel level);
 
   ///////////////////////////////////////////////////////////////////////
   // user diagnostic output interfaces --- enabled on or off based     //
@@ -229,6 +233,26 @@ public:
 
   IpAddr debug_client_ip;
 
+  void pre_bwprint(ts::BufferWriter& w, std::string_view tag, DiagsLevel level, SourceLocation const& loc) const;
+  void post_bwprint(std::string_view msg, DiagsLevel level) const;
+  template < typename TUPLE >
+  void
+  bwprint_v(std::string_view tag, DiagsLevel level, SourceLocation const& loc, std::string_view fmt, TUPLE const& args) const
+  {
+    ts::LocalBufferWriter<1024> w;
+    w.clip(2); // reserve for newline and null.
+    this->pre_bwprint(w, tag, level, loc);
+    w.printv(fmt, args).extend(2).write('\n');
+    w.auxBuffer()[0] = 0; // force null termination w/o adjusting actual size.
+    this->post_bwprint(w.view(), level);
+  }
+  template < typename ... Args >
+  void
+  bwprint(std::string_view tag, DiagsLevel level, const SourceLocation &loc, const char *fmt, Args && ... args) const
+  {
+    this->bwprint_v(tag, level, loc, fmt, std::forward_as_tuple(args...));
+  }
+
 private:
   const char *prefix_str;
   mutable ink_mutex tag_table_lock; // prevents reconfig/read races
@@ -262,6 +286,10 @@ private:
     ink_mutex_release(&tag_table_lock);
   }
 };
+
+namespace ts {
+  BufferWriter& bwformat(BufferWriter&, BWFSpec const&, ::DiagsLevel);
+} // namespace ts
 
 //////////////////////////////////////////////////////////////////////////
 //                                                                      //
@@ -327,6 +355,13 @@ extern inkcoreapi Diags *diags;
     if (unlikely(diags->on())) {                       \
       const SourceLocation loc = MakeSourceLocation(); \
       diags->log(tag, DL_Debug, &loc, __VA_ARGS__);    \
+    }                                                  \
+  } while (0)
+
+#define DebugV(tag, fmt, ...)                                \
+  do {                                                 \
+    if (unlikely(diags->on())) {                       \
+      diags->bwprint_v(std::string_view{tag}, DL_Debug, MakeSourceLocation(), std::string_view{fmt}, std::forward_as_tuple(__VA_ARGS__));    \
     }                                                  \
   } while (0)
 

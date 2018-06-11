@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <ts/BufferWriterForward.h>
+
 // The SourceLocation class wraps up a source code location, including
 // file name, function name, and line number, and contains a method to
 // format the result into a string buffer.
@@ -58,3 +60,7 @@ public:
 
   char *str(char *buf, int buflen) const;
 };
+
+namespace ts {
+  BufferWriter& bwformat(BufferWriter& w, BWFSpec const& spec, ::SourceLocation const& loc);
+}

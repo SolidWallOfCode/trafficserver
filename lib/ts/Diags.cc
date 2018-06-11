@@ -252,7 +252,7 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   // append the diag level prefix //
   //////////////////////////////////
 
-  format_writer.write(level_name(diags_level), strlen(level_name(diags_level)));
+  format_writer.write(level_name(diags_level));
   format_writer.write(": ", 2);
 
   /////////////////////////////
@@ -369,6 +369,102 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
 #endif
 }
 
+void
+Diags::pre_bwprint(ts::BufferWriter& w, std::string_view tag,  DiagsLevel level, SourceLocation const& loc) const {
+  using std::chrono::system_clock;
+  using ms = std::chrono::milliseconds;
+  system_clock::time_point now{system_clock::now()};
+  static const ts::BWFormat fmt{"[{}.{:03d}] {{{thread-id:#x}}} {}:"};
+  static const std::string_view date_fmt{"%b %d %H:%M:%S"};
+
+  w.print(fmt
+    , ts::bwf::Date(system_clock::to_time_t(now), date_fmt)
+    , std::chrono::duration_cast<ms>(now.time_since_epoch()).count() % 1000
+    , level
+  );
+  if (location(&loc, show_location, level)) {
+    w.write(" <"sv);
+    bwformat(w, ts::BWFSpec::DEFAULT, loc);
+    w.write('>');
+  }
+  if (!tag.empty()) {
+    w.write(" ("sv);
+    w.write(tag);
+    w.write(") "sv);
+  }
+}
+
+void
+Diags::post_bwprint(std::string_view msg, DiagsLevel level) const
+{
+  lock();
+  if (config.outputs[level].to_diagslog) {
+    if (diags_log && diags_log->m_fp) {
+      fwrite(msg.data(), msg.size(), 1, diags_log->m_fp);
+    }
+  }
+
+  if (config.outputs[level].to_stdout) {
+    if (stdout_log && stdout_log->m_fp) {
+      fwrite(msg.data(), msg.size(), 1, stdout_log->m_fp);
+    }
+  }
+
+  if (config.outputs[level].to_stderr) {
+    if (stderr_log && stderr_log->m_fp) {
+      fwrite(msg.data(), msg.size(), 1, stderr_log->m_fp);
+    }
+  }
+
+#if !defined(freebsd)
+  unlock();
+#endif
+
+  if (config.outputs[level].to_syslog) {
+    int priority;
+
+    switch (level) {
+    case DL_Diag:
+    case DL_Debug:
+      priority = LOG_DEBUG;
+      break;
+    case DL_Status:
+      priority = LOG_INFO;
+      break;
+    case DL_Note:
+      priority = LOG_NOTICE;
+      break;
+    case DL_Warning:
+      priority = LOG_WARNING;
+      break;
+    case DL_Error:
+      priority = LOG_ERR;
+      break;
+    case DL_Fatal:
+      priority = LOG_CRIT;
+      break;
+    case DL_Alert:
+      priority = LOG_ALERT;
+      break;
+    case DL_Emergency:
+      priority = LOG_EMERG;
+      break;
+    default:
+      priority = LOG_NOTICE;
+      break;
+    }
+    ts::TextView tv{msg};
+    tv.take_prefix_at(']');
+    ++tv; // drop trailing space too.
+    syslog(priority, "%s", tv.data());
+  }
+
+#if defined(freebsd)
+  unlock();
+#endif
+
+}
+
 //////////////////////////////////////////////////////////////////////////////
 //
 //      bool Diags::tag_activated(char * tag, DiagsTagType mode)
@@ -453,30 +549,41 @@ Diags::deactivate_all(DiagsTagType mode)
 //
 //////////////////////////////////////////////////////////////////////////////
 
-const char *
-Diags::level_name(DiagsLevel dl) const
+std::string_view
+Diags::level_name(DiagsLevel dl)
 {
   switch (dl) {
   case DL_Diag:
-    return ("DIAG");
+    return "DIAG"sv;
   case DL_Debug:
-    return ("DEBUG");
+    return "DEBUG"sv;
   case DL_Status:
-    return ("STATUS");
+    return "STATUS"sv;
   case DL_Note:
-    return ("NOTE");
+    return "NOTE"sv;
   case DL_Warning:
-    return ("WARNING");
+    return "WARNING"sv;
   case DL_Error:
-    return ("ERROR");
+    return "ERROR"sv;
   case DL_Fatal:
-    return ("FATAL");
+    return "FATAL"sv;
   case DL_Alert:
-    return ("ALERT");
+    return "ALERT"sv;
   case DL_Emergency:
-    return ("EMERGENCY");
+    return "EMERGENCY"sv;
   default:
-    return ("DIAG");
+    return "DIAG"sv;
+  }
+}
+
+namespace ts {
+  BufferWriter& bwformat(BufferWriter& w, BWFSpec const& spec, ::DiagsLevel level) {
+    if (spec.has_numeric_type()) {
+      bwformat(w, spec, static_cast<unsigned int>(level));
+    } else {
+      bwformat(w, spec, Diags::level_name(level));
+    }
+    return w;
   }
 }
 
@@ -498,7 +605,7 @@ Diags::dump(FILE *fp) const
   fprintf(fp, "  action default tags: '%s'\n", (base_action_tags ? base_action_tags : "NULL"));
   fprintf(fp, "  outputs:\n");
   for (i = 0; i < DiagsLevel_Count; i++) {
-    fprintf(fp, "    %10s [stdout=%d, stderr=%d, syslog=%d, diagslog=%d]\n", level_name((DiagsLevel)i), config.outputs[i].to_stdout,
+    fprintf(fp, "    %10s [stdout=%d, stderr=%d, syslog=%d, diagslog=%d]\n", level_name((DiagsLevel)i).data(), config.outputs[i].to_stdout,
             config.outputs[i].to_stderr, config.outputs[i].to_syslog, config.outputs[i].to_diagslog);
   }
 }

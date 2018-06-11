@@ -29,6 +29,7 @@
 #include <ts/MemSpan.h>
 #include <ts/INK_MD5.h>
 #include <ts/CryptoHash.h>
+#include <ts/SourceLocation.h>
 
 using namespace std::literals;
 
@@ -483,7 +484,7 @@ TEST_CASE("BWFormat floating", "[bwprint][bwformat]")
 
 TEST_CASE("bwstring std formats", "[libts][bwprint]")
 {
-  ts::LocalBufferWriter<120> w;
+  ts::LocalBufferWriter<1024> w;
 
   w.print("{}", ts::bwf::Errno(13));
   REQUIRE(w.view() == "EACCES: Permission denied [13]"sv);
