@@ -60,7 +60,9 @@ namespace ts {
 BufferWriter& bwformat(BufferWriter& w, BWFSpec const& spec, SourceLocation const& loc) {
   if (loc.valid()) {
     TextView trail{TextView{loc.file, strlen(loc.file)}.take_suffix_at('/')};
-    w.print("{}:{}", trail, loc.line);
+    w.write(trail);
+    w.write(':');
+    bwformat(w, spec, loc.line);
     if (loc.func) {
       w.write(" ("sv);
       w.write(std::string_view{loc.func});
