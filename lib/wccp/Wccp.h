@@ -22,11 +22,11 @@
 
 #pragma once
 
-#include <ts/TsBuffer.h>
+#include <tscore/TsBuffer.h>
 #include <tsconfig/Errata.h>
 #include <memory.h>
-#include "ts/ink_defs.h"
-#include "ts/ink_memory.h"
+#include "tscore/ink_defs.h"
+#include "tscore/ink_memory.h"
 // Nasty, defining this with no prefix. The value is still available
 // in TS_VERSION_STRING.
 #undef VERSION

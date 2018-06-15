@@ -45,7 +45,7 @@ traffic_top_traffic_top_LDADD = \
 	$(top_builddir)/iocore/eventsystem/libinkevent.a \
 	$(top_builddir)/proxy/shared/libUglyLogStubs.a \
 	$(top_builddir)/mgmt/api/libtsmgmt.la \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	@CURL_LIBS@ \
 	@CURSES_LIBS@ \
 	@LIBTCL@ @HWLOC_LIBS@

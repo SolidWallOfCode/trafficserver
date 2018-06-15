@@ -36,16 +36,16 @@ traffic_cache_tool_traffic_cache_tool_SOURCES = \
     traffic_cache_tool/CacheScan.cc
 
 traffic_cache_tool_traffic_cache_tool_LDADD = \
-    $(top_builddir)/lib/ts/.libs/ink_assert.o \
-    $(top_builddir)/lib/ts/.libs/ink_code.o \
-    $(top_builddir)/lib/ts/.libs/ink_error.o \
-    $(top_builddir)/lib/ts/.libs/ink_file.o \
-    $(top_builddir)/lib/ts/.libs/ink_memory.o \
-    $(top_builddir)/lib/ts/.libs/ink_string.o \
-    $(top_builddir)/lib/ts/.libs/BufferWriterFormat.o \
-    $(top_builddir)/lib/ts/.libs/TextView.o \
+    $(top_builddir)/lib/tscore/.libs/ink_assert.o \
+    $(top_builddir)/lib/tscore/.libs/ink_code.o \
+    $(top_builddir)/lib/tscore/.libs/ink_error.o \
+    $(top_builddir)/lib/tscore/.libs/ink_file.o \
+    $(top_builddir)/lib/tscore/.libs/ink_memory.o \
+    $(top_builddir)/lib/tscore/.libs/ink_string.o \
+    $(top_builddir)/lib/tscore/.libs/BufferWriterFormat.o \
+    $(top_builddir)/lib/tsutil/.libs/TextView.o \
     $(top_builddir)/lib/tsconfig/.libs/Errata.o \
-    $(top_builddir)/lib/ts/.libs/Regex.o \
-    $(top_builddir)/lib/ts/.libs/CryptoHash.o \
-    $(top_builddir)/lib/ts/.libs/MMH.o \
+    $(top_builddir)/lib/tscore/.libs/Regex.o \
+    $(top_builddir)/lib/tscore/.libs/CryptoHash.o \
+    $(top_builddir)/lib/tscore/.libs/MMH.o \
     @OPENSSL_LIBS@ @LIBPCRE@ @LIBTCL@

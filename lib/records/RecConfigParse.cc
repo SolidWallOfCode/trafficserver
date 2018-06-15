@@ -21,19 +21,19 @@
   limitations under the License.
  */
 
-#include "ts/ink_platform.h"
-#include "ts/ink_memory.h"
+#include "tscore/ink_platform.h"
+#include "tscore/ink_memory.h"
 
-#include "ts/TextBuffer.h"
-#include "ts/Tokenizer.h"
-#include "ts/ink_defs.h"
-#include "ts/ink_string.h"
+#include "tscore/TextBuffer.h"
+#include "tscore/Tokenizer.h"
+#include "tscore/ink_defs.h"
+#include "tscore/ink_string.h"
 
 #include "P_RecFile.h"
 #include "P_RecUtils.h"
 #include "P_RecMessage.h"
-#include "P_RecCore.h"
-#include "ts/I_Layout.h"
+#include "records/P_RecCore.h"
+#include "tscore/I_Layout.h"
 
 const char *g_rec_config_fpath         = nullptr;
 LLQ *g_rec_config_contents_llq         = nullptr;

@@ -22,8 +22,8 @@ bin_PROGRAMS += traffic_server/traffic_server
 traffic_server_traffic_server_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(iocore_include_dirs) \
+	-I$(abs_top_srcdir)/include \
 	-I$(abs_top_srcdir)/lib \
-	-I$(abs_top_srcdir)/lib/records \
 	-I$(abs_top_srcdir)/proxy \
 	-I$(abs_top_srcdir)/proxy/http \
 	-I$(abs_top_srcdir)/proxy/http2 \
@@ -75,7 +75,7 @@ traffic_server_traffic_server_LDADD = \
 	$(top_builddir)/iocore/dns/libinkdns.a \
 	$(top_builddir)/iocore/cache/libinkcache.a \
 	$(top_builddir)/iocore/aio/libinkaio.a \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	$(top_builddir)/proxy/libproxy.a
 
 # ToDo: When we remove this, we hould merge the two _LDADD rules here

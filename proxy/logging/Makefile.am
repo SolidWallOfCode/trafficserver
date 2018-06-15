@@ -17,10 +17,10 @@
 #  limitations under the License.
 
 include $(top_srcdir)/build/tidy.mk
+include $(top_srcdir)/build/ts_includes.mk
 
 AM_CPPFLAGS += \
 	$(iocore_include_dirs) \
-	-I$(abs_top_srcdir)/lib \
 	-I$(abs_top_srcdir)/lib/records \
 	-I$(abs_top_srcdir)/proxy \
 	-I$(abs_top_srcdir)/proxy/http \
@@ -87,7 +87,7 @@ TESTS = \
 	test_LogUtils
 
 test_LogUtils_LDADD = \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	$(top_builddir)/iocore/eventsystem/libinkevent.a
 
 test_LogUtils_SOURCES = \

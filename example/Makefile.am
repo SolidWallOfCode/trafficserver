@@ -20,7 +20,7 @@ include $(top_srcdir)/build/tidy.mk
 AM_CXXFLAGS += -Wno-unused-variable
 AM_LDFLAGS = $(TS_PLUGIN_LD_FLAGS)
 
-libatscppapi = $(top_builddir)/lib/cppapi/libatscppapi.la
+libtscpp = $(top_builddir)/lib/tscpp/libtscpp.la
 libtsconfig = $(top_builddir)/lib/tsconfig/libtsconfig.la
 
 if BUILD_EXAMPLE_PLUGINS
@@ -66,30 +66,30 @@ example_Plugins = \
 	vconn_args.la
 
 example_Plugins += \
-	cppapi/AsyncHttpFetch.la \
-	cppapi/AsyncHttpFetchStreaming.la \
-	cppapi/AsyncTimer.la \
-	cppapi/ClientRedirect.la \
-	cppapi/ClientRequest.la \
-	cppapi/CustomErrorRemapPlugin.la \
-	cppapi/CustomResponse.la \
-	cppapi/DelayTransformationPlugin.la \
-	cppapi/GlobalHookPlugin.la \
-	cppapi/GzipTransformationPlugin.la \
-	cppapi/HelloWorldPlugin.la \
-	cppapi/InternalTransactionHandling.la \
-	cppapi/LoggerExample.la \
-	cppapi/MultipleTransactionHookPlugins.la \
-	cppapi/NullTransformationPlugin.la \
-	cppapi/PostBuffer.la \
-	cppapi/RemapPlugin.la \
-	cppapi/ServerResponse.la \
-	cppapi/StatExample.la \
-	cppapi/TimeoutExamplePlugin.la \
-	cppapi/TransactionHookPlugin.la \
-	cppapi/WebSocket.la \
-	cppapi/boom.la \
-	cppapi/intercept.la
+	tscpp/AsyncHttpFetch.la \
+	tscpp/AsyncHttpFetchStreaming.la \
+	tscpp/AsyncTimer.la \
+	tscpp/ClientRedirect.la \
+	tscpp/ClientRequest.la \
+	tscpp/CustomErrorRemapPlugin.la \
+	tscpp/CustomResponse.la \
+	tscpp/DelayTransformationPlugin.la \
+	tscpp/GlobalHookPlugin.la \
+	tscpp/GzipTransformationPlugin.la \
+	tscpp/HelloWorldPlugin.la \
+	tscpp/InternalTransactionHandling.la \
+	tscpp/LoggerExample.la \
+	tscpp/MultipleTransactionHookPlugins.la \
+	tscpp/NullTransformationPlugin.la \
+	tscpp/PostBuffer.la \
+	tscpp/RemapPlugin.la \
+	tscpp/ServerResponse.la \
+	tscpp/StatExample.la \
+	tscpp/TimeoutExamplePlugin.la \
+	tscpp/TransactionHookPlugin.la \
+	tscpp/WebSocket.la \
+	tscpp/boom.la \
+	tscpp/intercept.la
 
 pkglib_LTLIBRARIES = $(example_Plugins)
 
@@ -136,55 +136,55 @@ redirect_1_la_SOURCES = redirect_1/redirect_1.c
 session_hooks_la_SOURCES = session_hooks/session_hooks.c
 vconn_args_la_SOURCES = vconn_args/vconn_args.cc
 
-cppapi_AsyncHttpFetchStreaming_la_SOURCES = cppapi/async_http_fetch_streaming/AsyncHttpFetchStreaming.cc
-cppapi_AsyncHttpFetch_la_SOURCES = cppapi/async_http_fetch/AsyncHttpFetch.cc
-cppapi_AsyncTimer_la_SOURCES = cppapi/async_timer/AsyncTimer.cc
-cppapi_ClientRedirect_la_SOURCES = cppapi/clientredirect/ClientRedirect.cc
-cppapi_ClientRequest_la_SOURCES = cppapi/clientrequest/ClientRequest.cc
-cppapi_CustomErrorRemapPlugin_la_SOURCES = cppapi/custom_error_remap_plugin/CustomErrorRemapPlugin.cc
-cppapi_CustomResponse_la_SOURCES = cppapi/customresponse/CustomResponse.cc
-cppapi_DelayTransformationPlugin_la_SOURCES = cppapi/delay_transformation_plugin/DelayTransformationPlugin.cc
-cppapi_GlobalHookPlugin_la_SOURCES = cppapi/globalhook/GlobalHookPlugin.cc
-cppapi_GzipTransformationPlugin_la_SOURCES = cppapi/gzip_transformation/GzipTransformationPlugin.cc
-cppapi_HelloWorldPlugin_la_SOURCES = cppapi/helloworld/HelloWorldPlugin.cc
-cppapi_InternalTransactionHandling_la_SOURCES = cppapi/internal_transaction_handling/InternalTransactionHandling.cc
-cppapi_LoggerExample_la_SOURCES = cppapi/logger_example/LoggerExample.cc
-cppapi_MultipleTransactionHookPlugins_la_SOURCES = cppapi/multiple_transaction_hooks/MultipleTransactionHookPlugins.cc
-cppapi_NullTransformationPlugin_la_SOURCES = cppapi/null_transformation_plugin/NullTransformationPlugin.cc
-cppapi_PostBuffer_la_SOURCES = cppapi/post_buffer/PostBuffer.cc
-cppapi_RemapPlugin_la_SOURCES = cppapi/remap_plugin/RemapPlugin.cc
-cppapi_ServerResponse_la_SOURCES = cppapi/serverresponse/ServerResponse.cc
-cppapi_StatExample_la_SOURCES = cppapi/stat_example/StatExample.cc
-cppapi_TimeoutExamplePlugin_la_SOURCES = cppapi/timeout_example/TimeoutExamplePlugin.cc
-cppapi_TransactionHookPlugin_la_SOURCES = cppapi/transactionhook/TransactionHookPlugin.cc
-cppapi_WebSocket_la_SOURCES = cppapi/websocket/WebSocket.cc cppapi/websocket/WSBuffer.cc
-cppapi_boom_la_SOURCES = cppapi/boom/boom.cc
-cppapi_intercept_la_SOURCES = cppapi/intercept/intercept.cc
+tscpp_AsyncHttpFetchStreaming_la_SOURCES = tscpp/async_http_fetch_streaming/AsyncHttpFetchStreaming.cc
+tscpp_AsyncHttpFetch_la_SOURCES = tscpp/async_http_fetch/AsyncHttpFetch.cc
+tscpp_AsyncTimer_la_SOURCES = tscpp/async_timer/AsyncTimer.cc
+tscpp_ClientRedirect_la_SOURCES = tscpp/clientredirect/ClientRedirect.cc
+tscpp_ClientRequest_la_SOURCES = tscpp/clientrequest/ClientRequest.cc
+tscpp_CustomErrorRemapPlugin_la_SOURCES = tscpp/custom_error_remap_plugin/CustomErrorRemapPlugin.cc
+tscpp_CustomResponse_la_SOURCES = tscpp/customresponse/CustomResponse.cc
+tscpp_DelayTransformationPlugin_la_SOURCES = tscpp/delay_transformation_plugin/DelayTransformationPlugin.cc
+tscpp_GlobalHookPlugin_la_SOURCES = tscpp/globalhook/GlobalHookPlugin.cc
+tscpp_GzipTransformationPlugin_la_SOURCES = tscpp/gzip_transformation/GzipTransformationPlugin.cc
+tscpp_HelloWorldPlugin_la_SOURCES = tscpp/helloworld/HelloWorldPlugin.cc
+tscpp_InternalTransactionHandling_la_SOURCES = tscpp/internal_transaction_handling/InternalTransactionHandling.cc
+tscpp_LoggerExample_la_SOURCES = tscpp/logger_example/LoggerExample.cc
+tscpp_MultipleTransactionHookPlugins_la_SOURCES = tscpp/multiple_transaction_hooks/MultipleTransactionHookPlugins.cc
+tscpp_NullTransformationPlugin_la_SOURCES = tscpp/null_transformation_plugin/NullTransformationPlugin.cc
+tscpp_PostBuffer_la_SOURCES = tscpp/post_buffer/PostBuffer.cc
+tscpp_RemapPlugin_la_SOURCES = tscpp/remap_plugin/RemapPlugin.cc
+tscpp_ServerResponse_la_SOURCES = tscpp/serverresponse/ServerResponse.cc
+tscpp_StatExample_la_SOURCES = tscpp/stat_example/StatExample.cc
+tscpp_TimeoutExamplePlugin_la_SOURCES = tscpp/timeout_example/TimeoutExamplePlugin.cc
+tscpp_TransactionHookPlugin_la_SOURCES = tscpp/transactionhook/TransactionHookPlugin.cc
+tscpp_WebSocket_la_SOURCES = tscpp/websocket/WebSocket.cc tscpp/websocket/WSBuffer.cc
+tscpp_boom_la_SOURCES = tscpp/boom/boom.cc
+tscpp_intercept_la_SOURCES = tscpp/intercept/intercept.cc
 
-cppapi_AsyncHttpFetchStreaming_la_LIBADD = $(libatscppapi)
-cppapi_AsyncHttpFetch_la_LIBADD = $(libatscppapi)
-cppapi_AsyncTimer_la_LIBADD = $(libatscppapi)
-cppapi_ClientRedirect_la_LIBADD = $(libatscppapi)
-cppapi_ClientRequest_la_LIBADD = $(libatscppapi)
-cppapi_CustomErrorRemapPlugin_la_LIBADD = $(libatscppapi)
-cppapi_CustomResponse_la_LIBADD = $(libatscppapi)
-cppapi_DelayTransformationPlugin_la_LIBADD = $(libatscppapi)
-cppapi_GlobalHookPlugin_la_LIBADD = $(libatscppapi)
-cppapi_GzipTransformationPlugin_la_LIBADD = $(libatscppapi)
-cppapi_HelloWorldPlugin_la_LIBADD = $(libatscppapi)
-cppapi_InternalTransactionHandling_la_LIBADD = $(libatscppapi)
-cppapi_LoggerExample_la_LIBADD = $(libatscppapi)
-cppapi_MultipleTransactionHookPlugins_la_LIBADD = $(libatscppapi)
-cppapi_NullTransformationPlugin_la_LIBADD = $(libatscppapi)
-cppapi_PostBuffer_la_LIBADD = $(libatscppapi)
-cppapi_RemapPlugin_la_LIBADD = $(libatscppapi)
-cppapi_ServerResponse_la_LIBADD = $(libatscppapi)
-cppapi_StatExample_la_LIBADD = $(libatscppapi)
-cppapi_TimeoutExamplePlugin_la_LIBADD = $(libatscppapi)
-cppapi_TransactionHookPlugin_la_LIBADD = $(libatscppapi)
-cppapi_WebSocket_la_LIBADD = $(libatscppapi)
-cppapi_boom_la_LIBADD = $(libatscppapi)
-cppapi_intercept_la_LIBADD = $(libatscppapi)
+tscpp_AsyncHttpFetchStreaming_la_LIBADD = $(libtscpp)
+tscpp_AsyncHttpFetch_la_LIBADD = $(libtscpp)
+tscpp_AsyncTimer_la_LIBADD = $(libtscpp)
+tscpp_ClientRedirect_la_LIBADD = $(libtscpp)
+tscpp_ClientRequest_la_LIBADD = $(libtscpp)
+tscpp_CustomErrorRemapPlugin_la_LIBADD = $(libtscpp)
+tscpp_CustomResponse_la_LIBADD = $(libtscpp)
+tscpp_DelayTransformationPlugin_la_LIBADD = $(libtscpp)
+tscpp_GlobalHookPlugin_la_LIBADD = $(libtscpp)
+tscpp_GzipTransformationPlugin_la_LIBADD = $(libtscpp)
+tscpp_HelloWorldPlugin_la_LIBADD = $(libtscpp)
+tscpp_InternalTransactionHandling_la_LIBADD = $(libtscpp)
+tscpp_LoggerExample_la_LIBADD = $(libtscpp)
+tscpp_MultipleTransactionHookPlugins_la_LIBADD = $(libtscpp)
+tscpp_NullTransformationPlugin_la_LIBADD = $(libtscpp)
+tscpp_PostBuffer_la_LIBADD = $(libtscpp)
+tscpp_RemapPlugin_la_LIBADD = $(libtscpp)
+tscpp_ServerResponse_la_LIBADD = $(libtscpp)
+tscpp_StatExample_la_LIBADD = $(libtscpp)
+tscpp_TimeoutExamplePlugin_la_LIBADD = $(libtscpp)
+tscpp_TransactionHookPlugin_la_LIBADD = $(libtscpp)
+tscpp_WebSocket_la_LIBADD = $(libtscpp)
+tscpp_boom_la_LIBADD = $(libtscpp)
+tscpp_intercept_la_LIBADD = $(libtscpp)
 
 clang-tidy-local: $(DIST_SOURCES)
 	$(CXX_Clang_Tidy)

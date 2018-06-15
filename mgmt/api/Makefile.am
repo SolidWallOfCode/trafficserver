@@ -18,6 +18,7 @@
 #  limitations under the License.
 
 include $(top_srcdir)/build/tidy.mk
+include $(top_srcdir)/build/ts_includes.mk
 
 SUBDIRS = include
 
@@ -27,7 +28,6 @@ AM_CPPFLAGS += \
 	-I$(abs_top_srcdir)/mgmt \
 	-I$(abs_top_srcdir)/mgmt/utils \
 	-I$(abs_top_srcdir)/mgmt/api/include \
-	-I$(abs_top_srcdir)/lib \
 	$(TS_INCLUDES) \
 	$(LIBUNWIND_CFLAGS)
 
@@ -65,12 +65,13 @@ libtsmgmt_la_SOURCES = \
 
 libmgmtapilocal_la_LIBADD = \
 	libmgmtapi.la \
-	$(top_builddir)/lib/ts/libtsutil.la
+	$(top_builddir)/lib/tsutil/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la
 
 libtsmgmt_la_LDFLAGS = -no-undefined -version-info @TS_LIBTOOL_VERSION@
 libtsmgmt_la_LIBADD = @LIBOBJS@ \
 	libmgmtapi.la \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	$(top_builddir)/mgmt/utils/libutils_p.la
 
 if BUILD_TESTS
@@ -79,7 +80,7 @@ endif
 
 traffic_api_cli_remote_LDADD = \
 	libtsmgmt.la \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	@LIBTCL@ @OPENSSL_LIBS@
 
 clang-tidy-local: $(DIST_SOURCES)

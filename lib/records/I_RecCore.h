@@ -23,9 +23,9 @@
 
 #pragma once
 
-#include "ts/Diags.h"
+#include "tscore/Diags.h"
 
-#include "I_RecDefs.h"
+#include "records/I_RecDefs.h"
 #include "I_RecAlarms.h"
 #include "I_RecSignals.h"
 #include "I_RecEvents.h"

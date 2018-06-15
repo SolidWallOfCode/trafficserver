@@ -22,7 +22,7 @@
  */
 
 #include "P_RecUtils.h"
-#include "P_RecCore.h"
+#include "records/P_RecCore.h"
 
 static Diags *g_diags = nullptr;
 

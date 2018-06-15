@@ -19,16 +19,16 @@
 #include <sstream>
 #include <iostream>
 #include <string_view>
-#include <atscppapi/PluginInit.h>
-#include <atscppapi/GlobalPlugin.h>
-#include <atscppapi/TransformationPlugin.h>
-#include <atscppapi/Logger.h>
+#include <tscpp/PluginInit.h>
+#include <tscpp/GlobalPlugin.h>
+#include <tscpp/TransformationPlugin.h>
+#include <tscpp/Logger.h>
 
 #include <Magick++.h>
 
 using std::string;
 using namespace Magick;
-using namespace atscppapi;
+using namespace tscpp;
 
 #define TAG "webp_transform"
 
@@ -97,7 +97,7 @@ public:
 };
 
 void
-TSPluginInit(int argc ATSCPPAPI_UNUSED, const char *argv[] ATSCPPAPI_UNUSED)
+TSPluginInit(int argc tscpp_UNUSED, const char *argv[] tscpp_UNUSED)
 {
   if (!RegisterGlobalPlugin("CPP_Webp_Transform", "apache", "dev@trafficserver.apache.org")) {
     return;

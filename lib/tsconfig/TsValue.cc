@@ -21,18 +21,18 @@
     limitations under the License.
  */
 
-# include "TsValue.h"
-# include "TsBuilder.h"
-# include "ts/ink_defs.h"
+#include "TsValue.h"
+#include "TsBuilder.h"
+#include "tscore/ink_defs.h"
 
-# include <TsErrataUtil.h>
-# include <sys/stat.h>
-# include <cstdio>
-# include <cstdlib>
+#include <TsErrataUtil.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cstdlib>
 
-# if !defined(_MSC_VER)
-# define _fileno fileno
-# endif
+#if !defined(_MSC_VER)
+#define _fileno fileno
+#endif
 
 // ---------------------------------------------------------------------------
 namespace ts { namespace config {

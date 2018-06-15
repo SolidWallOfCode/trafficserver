@@ -27,8 +27,8 @@
 #include <string>
 #include <vector>
 #include "debug_macros.h"
-#include "ts/ink_atomic.h"
-#include <atscppapi/noncopyable.h>
+#include "tscore/ink_atomic.h"
+#include <tscpp/noncopyable.h>
 
 namespace Gzip
 {
@@ -41,7 +41,7 @@ enum CompressionAlgorithm {
   ALGORITHM_BROTLI  = 4 // For bit manipulations
 };
 
-class HostConfiguration : private atscppapi::noncopyable
+class HostConfiguration : private tscpp::noncopyable
 {
 public:
   explicit HostConfiguration(const std::string &host)
@@ -162,7 +162,7 @@ private:
 
 typedef std::vector<HostConfiguration *> HostContainer;
 
-class Configuration : private atscppapi::noncopyable
+class Configuration : private tscpp::noncopyable
 {
   friend class HostConfiguration;
 

@@ -23,14 +23,14 @@
 
 #pragma once
 
-#include "ts/ink_thread.h"
-#include "ts/ink_hash_table.h"
-#include "ts/ink_llqueue.h"
-#include "ts/ink_rwlock.h"
-#include "ts/TextBuffer.h"
+#include "tscore/ink_thread.h"
+#include "tscore/ink_hash_table.h"
+#include "tscore/ink_llqueue.h"
+#include "tscore/ink_rwlock.h"
+#include "tscore/TextBuffer.h"
 
-#include "I_RecCore.h"
-#include "P_RecDefs.h"
+#include "records/I_RecCore.h"
+#include "records/P_RecDefs.h"
 #include "P_RecUtils.h"
 
 // records, record hash-table, and hash-table rwlock

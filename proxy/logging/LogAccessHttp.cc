@@ -30,7 +30,7 @@
 
 
  ***************************************************************************/
-#include "ts/ink_platform.h"
+#include "tscore/ink_platform.h"
 #include "LogAccessHttp.h"
 #include "http/HttpSM.h"
 #include "MIME.h"

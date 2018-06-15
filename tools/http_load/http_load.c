@@ -1,6 +1,6 @@
 /* http_load - multiprocessing http test client
 **
-** Copyright © 1998,1999,2001 by Jef Poskanzer <jef@mail.acme.com>.
+** Copyright ï¿½ 1998,1999,2001 by Jef Poskanzer <jef@mail.acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -25,7 +25,7 @@
 ** SUCH DAMAGE.
 */
 
-#include "ts/ink_config.h"
+#include "tscore/ink_config.h"
 
 #include <sys/epoll.h>
 #include <unistd.h>

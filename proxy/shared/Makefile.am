@@ -17,6 +17,7 @@
 #  limitations under the License.
 
 include $(top_srcdir)/build/tidy.mk
+include $(top_srcdir)/build/ts_includes.mk
 
 # Note that hdrs is targeted from ../Makefile.am
 noinst_LIBRARIES = \
@@ -35,7 +36,6 @@ AM_CPPFLAGS += \
 	-I$(abs_top_srcdir)/proxy/http \
 	-I$(abs_top_srcdir)/proxy/hdrs \
 	-I$(abs_top_srcdir)/proxy/logging \
-	-I$(abs_top_srcdir)/lib \
 	$(TS_INCLUDES)
 
 libdiagsconfig_a_SOURCES = \

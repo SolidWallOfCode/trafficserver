@@ -21,15 +21,15 @@
   limitations under the License.
  */
 
-#include "ts/ink_platform.h"
-#include "ts/ink_sock.h"
-#include "ts/ink_file.h"
-#include "ts/ink_error.h"
+#include "tscore/ink_platform.h"
+#include "tscore/ink_sock.h"
+#include "tscore/ink_file.h"
+#include "tscore/ink_error.h"
 #include "MgmtUtils.h"
-#include "ts/I_Layout.h"
+#include "tscore/I_Layout.h"
 #include "LocalManager.h"
 #include "MgmtSocket.h"
-#include "ts/ink_cap.h"
+#include "tscore/ink_cap.h"
 #include "FileManager.h"
 #include <string_view>
 

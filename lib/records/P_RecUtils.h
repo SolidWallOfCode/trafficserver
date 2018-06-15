@@ -23,10 +23,10 @@
 
 #pragma once
 
-#include "ts/Diags.h"
-#include "ts/ink_atomic.h"
+#include "tscore/Diags.h"
+#include "tscore/ink_atomic.h"
 
-#include "P_RecDefs.h"
+#include "records/P_RecDefs.h"
 
 //-------------------------------------------------------------------------
 // Macros

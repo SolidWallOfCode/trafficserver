@@ -2044,14 +2044,17 @@ AC_CONFIG_FILES([
   iocore/hostdb/Makefile
   iocore/net/Makefile
   iocore/utils/Makefile
+  include/Makefile
+  include/ts/Makefile
+  include/ts/apidefs.h
   lib/Makefile
-  lib/cppapi/Makefile
+  lib/tscpp/Makefile
   lib/perl/Makefile
   lib/perl/lib/Apache/TS.pm
   lib/records/Makefile
-  lib/ts/Makefile
-  lib/ts/apidefs.h
-  lib/ts/ink_config.h
+  lib/tscore/Makefile
+  lib/tscore/ink_config.h
+  lib/tsutil/Makefile
   lib/tsconfig/Makefile
   lib/wccp/Makefile
   lib/yamlcpp/Makefile
@@ -2061,7 +2064,6 @@ AC_CONFIG_FILES([
   mgmt/utils/Makefile
   plugins/Makefile
   proxy/Makefile
-  proxy/api/ts/Makefile
   proxy/hdrs/Makefile
   proxy/http/Makefile
   proxy/http/remap/Makefile

@@ -21,10 +21,10 @@
   limitations under the License.
  */
 
-#include "ts/ink_platform.h"
+#include "tscore/ink_platform.h"
 #include "Rollback.h"
-#include "ts/ParseRules.h"
-#include "P_RecCore.h"
+#include "tscore/ParseRules.h"
+#include "records/P_RecCore.h"
 #include "P_RecLocal.h"
 #include "P_RecMessage.h"
 #include "P_RecUtils.h"

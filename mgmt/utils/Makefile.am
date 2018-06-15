@@ -17,6 +17,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+include $(top_srcdir)/build/ts_includes.mk
+
 AM_CPPFLAGS += \
 	-I$(abs_top_srcdir)/iocore/utils \
 	-I$(abs_top_srcdir)/mgmt \
@@ -25,7 +27,6 @@ AM_CPPFLAGS += \
 	-I$(abs_top_srcdir)/lib/tsconfig \
 	-I$(abs_top_srcdir)/proxy \
 	-I$(abs_top_srcdir)/lib/records \
-	-I$(abs_top_srcdir)/lib \
 	$(TS_INCLUDES) \
 	@OPENSSL_INCLUDES@
 
@@ -62,7 +63,7 @@ test_marshall_LDFLAGS = \
 test_marshall_SOURCES = test_marshall.cc
 test_marshall_LDADD = \
 	libutils_p.la \
-	$(top_builddir)/lib/ts/libtsutil.la
+	$(top_builddir)/lib/tscore/libtscore.la
 
 include $(top_srcdir)/build/tidy.mk
 

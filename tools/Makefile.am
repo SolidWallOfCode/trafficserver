@@ -35,7 +35,7 @@ noinst_PROGRAMS = jtest/jtest
 endif
 
 jtest_jtest_SOURCES = jtest/jtest.cc
-jtest_jtest_LDADD = $(top_builddir)/lib/ts/libtsutil.la -lssl -lcrypto
+jtest_jtest_LDADD = $(top_builddir)/lib/tscore/libtscore.la -lssl -lcrypto
 
 if BUILD_HTTP_LOAD
 

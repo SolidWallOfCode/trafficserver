@@ -27,15 +27,15 @@
 #include <sstream>
 #include <ts/ts.h>
 #include <ts/experimental.h>
-#include <atscppapi/GlobalPlugin.h>
-#include <atscppapi/utils.h>
+#include <tscpp/GlobalPlugin.h>
+#include <tscpp/utils.h>
 
 #define PLUGIN_NAME "server_push_preload"
 #define PRELOAD_PARAM "rel=preload"
 #define NOPUSH_OPTION "nopush"
 
 using namespace std;
-using namespace atscppapi;
+using namespace tscpp;
 
 static regex linkRegexp("<([^>]+)>;(.+)");
 
@@ -135,7 +135,7 @@ public:
 };
 
 void
-TSPluginInit(int argc ATSCPPAPI_UNUSED, const char *argv[] ATSCPPAPI_UNUSED)
+TSPluginInit(int argc tscpp_UNUSED, const char *argv[] tscpp_UNUSED)
 {
   TSDebug(PLUGIN_NAME, "Init");
   if (!RegisterGlobalPlugin("ServerPushPreloadPlugin", PLUGIN_NAME, "dev@trafficserver.apache.org")) {

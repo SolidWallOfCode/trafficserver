@@ -38,5 +38,5 @@ traffic_wccp_traffic_wccp_SOURCES = \
 traffic_wccp_traffic_wccp_LDADD = \
 	$(top_builddir)/lib/tsconfig/libtsconfig.la \
 	$(top_builddir)/lib/wccp/libwccp.a \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	@OPENSSL_LIBS@

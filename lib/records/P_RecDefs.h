@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "I_RecDefs.h"
+#include "records/I_RecDefs.h"
 
 #define REC_CONFIG_FILE "records.config"
 #define REC_SHADOW_EXT ".shadow"

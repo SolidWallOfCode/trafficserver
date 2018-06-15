@@ -27,9 +27,9 @@
 
  ***************************************************************************/
 #pragma once
-#include "ts/ink_platform.h"
-#include "ts/ink_inet.h"
-#include "ts/ink_align.h"
+#include "tscore/ink_platform.h"
+#include "tscore/ink_inet.h"
+#include "tscore/ink_align.h"
 #include "LogField.h"
 
 /*-------------------------------------------------------------------------

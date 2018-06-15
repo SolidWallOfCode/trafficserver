@@ -21,11 +21,11 @@
   limitations under the License.
  */
 
-#include "ts/ink_platform.h"
-#include "ts/ink_memory.h"
-#include "ts/ParseRules.h"
+#include "tscore/ink_platform.h"
+#include "tscore/ink_memory.h"
+#include "tscore/ParseRules.h"
 #include "P_RecUtils.h"
-#include "P_RecCore.h"
+#include "records/P_RecCore.h"
 
 //-------------------------------------------------------------------------
 // RecRecord initializer / Free

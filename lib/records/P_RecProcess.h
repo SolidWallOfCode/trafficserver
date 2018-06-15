@@ -29,8 +29,8 @@
 // file.
 #include "P_EventSystem.h"
 
-#include "I_RecProcess.h"
-#include "P_RecDefs.h"
+#include "records/I_RecProcess.h"
+#include "records/P_RecDefs.h"
 
 //-------------------------------------------------------------------------
 // Protected Interface

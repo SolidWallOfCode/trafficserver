@@ -16,8 +16,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+include $(top_srcdir)/build/ts_includes.mk
+
 AM_CPPFLAGS += \
-	-I$(abs_top_srcdir)/lib \
 	-I$(abs_top_srcdir)/lib/records \
 	-I$(abs_top_srcdir)/iocore/eventsystem \
 	$(TS_INCLUDES)

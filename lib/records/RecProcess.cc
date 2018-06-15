@@ -21,14 +21,14 @@
   limitations under the License.
  */
 
-#include "ts/ink_platform.h"
-#include "ts/EventNotify.h"
+#include "tscore/ink_platform.h"
+#include "tscore/EventNotify.h"
 
 #include "I_Tasks.h"
 
 #include "P_EventSystem.h"
-#include "P_RecCore.h"
-#include "P_RecProcess.h"
+#include "records/P_RecCore.h"
+#include "records/P_RecProcess.h"
 #include "P_RecMessage.h"
 #include "P_RecUtils.h"
 #include "P_RecFile.h"

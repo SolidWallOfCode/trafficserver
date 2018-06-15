@@ -21,15 +21,15 @@
     limitations under the License.
  */
 
-# if !defined(_MSC_VER)
-# include <cstdio>
-# include <cstring>
-# endif
-# include <cstdarg>
-# include <cerrno>
-# include <TsErrataUtil.h>
-# include "ts/ink_string.h"
-# include "ts/ink_defs.h"
+#if !defined(_MSC_VER)
+#include <cstdio>
+#include <cstring>
+#endif
+#include <cstdarg>
+#include <cerrno>
+#include <TsErrataUtil.h>
+#include "tscore/ink_string.h"
+#include "tscore/ink_defs.h"
 
 namespace ts { namespace msg {
 

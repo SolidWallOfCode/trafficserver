@@ -25,7 +25,7 @@
 #include "P_RecUtils.h"
 #include "test_RecordsConfig.h"
 
-#include "P_RecCore.h"
+#include "records/P_RecCore.h"
 
 Diags *diags = nullptr;
 void RecDumpRecordsHt(RecT rec_type);

@@ -6,10 +6,10 @@ plugins to build large scale web applications.
 
 1. DIRECTORY STRUCTURE
 
-  trafficserver/ ............ Top src dir
+  trafficserver/ ............ top src dir
   |-- build/ ................ Custom macros for configure.ac
   |-- ci/ ................... Quality assurance and other CI tools and configs
-  |-- contrib/ .............. Various contributed auxiliary pieces
+  |-- contrib ............... Various contributed auxiliary pieces
   |-- doc/ ..................
       |-- admin/ ............ Admin guide documentations
       |-- dot/ .............. Graphviz source files for docs pictures
@@ -17,6 +17,9 @@ plugins to build large scale web applications.
       |-- plugins/ .......... Documentation for our core plugins
       |-- sdk/ .............. Plugin developer guide
   |-- example/ .............. Example plugins
+  |-- include/ ..............
+      |-- ts/ ............... C API includes.
+      |-- tscpp/ ............ C++ API includes.
   |-- iocore/ ...............
       |-- aio/ .............. Asynchronous I/O core
       |-- cache/ ............ Disk and RAM cache
@@ -26,25 +29,24 @@ plugins to build large scale web applications.
       |-- net/ .............. Network
       |-- utils/ ............ Utilities
   |-- lib/ ..................
-      |-- cppapi/ ........... C++ api wrapper for plugin developers
+      |-- tscpp/ ............ C++ api wrapper for plugin developers
       |-- perl/ ............. Perl libraries for e.g. mgmt access and configurations
       |-- records/ .......... Library for config files
-      |-- ts/ ............... Base / core library
+      |-- tscore/ ........... Base / core library
+      |-- tsutil/ ........... C++ utilities (core and plugins).
       |-- tsconfig/.......... New config parser and library (experimental)
       |-- wccp/ ............. WCCP implementation
       |-- yamlcpp/ .......... Library for YAML of C++
-  |-- mgmt/ ................. Management server and tools
+  |-- mgmt/ ................. Management server and tools (including traffic_manager)
   |-- plugins/ .............. Stable core plugins
       |-- experimental/ ..... Experimental core plugins
   |-- proxy/ ................ HTTP proxy logic
-      |-- api/ .............. Plugin API includes
       |-- config/ ........... Configurations
       |-- hdrs/ ............. Headers parsing and management
       |-- http/ ............. The actual HTTP protocol implementation
       |---http2/ ............ HTTP/2 implementation
       |-- logging/ .......... Flexible logging
       |-- shared/ ........... Shared files
-  |-- rc/ ................... Installation programs and scripts
   |-- src/ .................. Source for all the main binaries / applications
       |-- traffic_cache_tool/ Tool to interact with the Traffic Server cache
       |-- traffic_crashlog/ . Helper process that catches Traffic Server crashes

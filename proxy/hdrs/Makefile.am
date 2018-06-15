@@ -58,7 +58,7 @@ load_http_hdr_SOURCES = \
 	load_http_hdr.cc
 
 load_http_hdr_LDADD = -L. -lhdrs \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	@LIBTCL@
 
 check_PROGRAMS = test_mime
@@ -66,7 +66,7 @@ check_PROGRAMS = test_mime
 TESTS = test_mime
 
 test_mime_LDADD = -L. -lhdrs \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	$(top_builddir)/iocore/eventsystem/libinkevent.a \
 	$(top_builddir)/lib/records/librecords_p.a \
 	$(top_builddir)/mgmt/libmgmt_p.la \

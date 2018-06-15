@@ -34,7 +34,7 @@ traffic_via_traffic_via_SOURCES = \
 	traffic_via/traffic_via.cc
 
 traffic_via_traffic_via_LDADD = \
-	$(top_builddir)/lib/ts/libtsutil.la \
+	$(top_builddir)/lib/tscore/libtscore.la \
 	@LIBPCRE@
 
 TESTS += \
