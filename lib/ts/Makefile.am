@@ -208,6 +208,8 @@ libtsutil_la_SOURCES = \
 	Tokenizer.h \
 	Trie.h \
 	TsBuffer.h \
+	ts_ip.h \
+	ts_ip.cc \
 	Version.cc \
 	X509HostnameValidator.cc \
 	X509HostnameValidator.h
@@ -277,7 +279,8 @@ test_tslib_SOURCES = \
 	unit-tests/test_MT_hashtable.cc \
 	unit-tests/test_Scalar.cc \
 	unit-tests/test_scoped_resource.cc \
-	unit-tests/test_TextView.cc 
+	unit-tests/test_TextView.cc \
+	unit-tests/test_ts_ip.cc
 
 CompileParseRules_SOURCES = CompileParseRules.cc
 

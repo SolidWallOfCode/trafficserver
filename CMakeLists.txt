@@ -1151,6 +1151,8 @@ add_library(libtsutil SHARED
         lib/ts/Tokenizer.h
         lib/ts/Trie.h
         lib/ts/TsBuffer.h
+	lib/ts/ts_ip.h
+	lib/ts/ts_ip.cc
         lib/ts/Version.cc
         lib/ts/X509HostnameValidator.cc
         lib/ts/X509HostnameValidator.h
@@ -1170,6 +1172,7 @@ add_executable(test_tslib
 	lib/ts/unit-tests/test_Scalar.cc
 	lib/ts/unit-tests/test_scoped_resource.cc
 	lib/ts/unit-tests/test_TextView.cc
+	lib/ts/unit-tests/test_ts_ip.cc
 )
 
 # iocore/cache
