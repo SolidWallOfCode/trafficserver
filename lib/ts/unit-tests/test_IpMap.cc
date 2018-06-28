@@ -22,28 +22,24 @@
 */
 
 #include <ts/IpMap.h>
-#include <sstream>
+#include <iostream>
 #include <catch.hpp>
+#include <ts/BufferWriter.h>
 
-std::ostream &
-operator<<(std::ostream &s, IpEndpoint const &addr)
-{
-  ip_text_buffer b;
-  ats_ip_ntop(addr, b, sizeof(b));
-  s << b;
-  return s;
-}
+using ts::IpEndpoint;
+using ts::IpAddr;
 
 void
 IpMapTestPrint(IpMap &map)
 {
-  printf("IpMap Dump\n");
-  for (auto &spot : map) {
-    ip_text_buffer ipb1, ipb2;
+  std::cout << "IpMap Dump" << std::endl;
 
-    printf("%s - %s : %p\n", ats_ip_ntop(spot.min(), ipb1, sizeof ipb1), ats_ip_ntop(spot.max(), ipb2, sizeof(ipb2)), spot.data());
+  for (auto &spot : map) {
+    ts::LocalBufferWriter<256> w;
+
+    std::cout << w.print("{::a} - {::a} : {:p}\n", spot.min(), spot.max(), spot.data());
   }
-  printf("\n");
+  std::cout << std::endl;
 }
 
 // --- Test helper classes ---
@@ -63,9 +59,9 @@ public:
   std::string
   describe() const override
   {
-    std::ostringstream ss;
-    ss << _addr << " is marked";
-    return ss.str();
+    std::string zret;
+    ts::bwprint(zret, "{} is marked", _addr);
+    return zret;
   }
 };
 
@@ -95,13 +91,13 @@ public:
   std::string
   describe() const override
   {
-    std::ostringstream ss;
+    std::string zret;
     if (_found_p) {
-      ss << "is marked at " << _addr << " with " << std::hex << reinterpret_cast<intptr_t>(_mark);
+      bwprint(zret, "is marked at {} with {:x}", _addr, _mark);
     } else {
-      ss << "is not marked at " << _addr;
+      bwprint(zret, "is not marked at {}", _addr);
     }
-    return ss.str();
+    return zret;
   }
 };
 

@@ -1106,6 +1106,7 @@ add_library(libtsutil SHARED
         lib/ts/MMH.cc
         lib/ts/MMH.h
         lib/ts/MT_hashtable.h
+	lib/ts/Numeric.h
         lib/ts/ParseRules.cc
         lib/ts/ParseRules.h
         lib/ts/PriorityQueue.h

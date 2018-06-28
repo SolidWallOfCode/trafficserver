@@ -94,6 +94,9 @@ namespace detail
 
 class IpMap
 {
+  using IpAddr     = ts::IpAddr;
+  using IpEndpoint = ts::IpEndpoint;
+
 public:
   typedef IpMap self; ///< Self reference type.
 

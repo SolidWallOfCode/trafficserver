@@ -28,6 +28,7 @@
 #include <netinet/in.h>
 //#include <netdb.h>
 #include <string_view>
+#include <ts/Numeric.h>
 
 #include <ts/BufferWriterForward.h>
 
@@ -53,9 +54,25 @@ struct IpAddr; // forward declare.
 union IpEndpoint {
   using self_type = IpEndpoint; ///< Self reference type.
 
-  struct sockaddr sa;       ///< Generic address.
-  struct sockaddr_in sin;   ///< IPv4
-  struct sockaddr_in6 sin6; ///< IPv6
+  struct sockaddr sa;      ///< Generic address.
+  struct sockaddr_in sa4;  ///< IPv4
+  struct sockaddr_in6 sa6; ///< IPv6
+
+  /// Invalidate a @c sockaddr.
+  static void invalidate(sockaddr *addr);
+  /// Invalidate this endpoint.
+  self_type &invalidate();
+
+  /** Copy (assign) the contents of @a src to @a dst.
+   *
+   * The caller must ensure @a dst is large enough to hold the contents of @a src, the size of which
+   * can vary depending on the type of address in @a dst.
+   *
+   * @param dst Destination.
+   * @param src Source.
+   * @return @c true if @a dst is a valid IP address, @c false otherwise.
+   */
+  static bool assign(sockaddr *dst, sockaddr const *src);
 
   /** Assign from a socket address.
       The entire address (all parts) are copied if the @a ip is valid.
@@ -68,9 +85,9 @@ union IpEndpoint {
   /// Test for valid IP address.
   bool is_valid() const;
   /// Test for IPv4.
-  bool isIp4() const;
+  bool is_4() const;
   /// Test for IPv6.
-  bool isIp6() const;
+  bool is_6() const;
 
   uint16_t family() const;
 
@@ -90,6 +107,12 @@ union IpEndpoint {
   in_port_t port() const;
   /// Port in host horder.
   in_port_t host_order_port() const;
+  /// Port in network order from @a sockaddr.
+  static in_port_t &port(sockaddr *sa);
+  /// Port in network order from @a sockaddr.
+  static in_port_t port(sockaddr const *sa);
+  /// Port in host order directly from a @c sockaddr
+  static in_port_t host_order_port(sockaddr const *sa);
 
   operator sockaddr *() { return &sa; }
   operator sockaddr const *() const { return &sa; }
@@ -104,8 +127,9 @@ class IpAddr
 {
   using self_type = IpAddr; ///< Self reference type.
 public:
-  static constexpr size_t IP4_SIZE = sizeof(in_addr_t);  ///< Size of IPv4 address in bytes.
-  static constexpr size_t IP6_SIZE = sizeof(in6_addr); ///< Size of IPv6 address in bytes.
+  static constexpr size_t IP4_SIZE  = sizeof(in_addr_t); ///< Size of IPv4 address in bytes.
+  static constexpr size_t IP6_SIZE  = sizeof(in6_addr);  ///< Size of IPv6 address in bytes.
+  static constexpr size_t IP6_QUADS = IP6_SIZE / 2;      ///< # of quads in an IPv6 address.
 
   IpAddr(); ///< Default constructor - invalid result.
 
@@ -190,8 +214,10 @@ public:
   /// Test for IPv6.
   bool is_6() const;
 
-  in_addr_t raw_4() const;
-  in6_addr const &raw_6() const;
+  in_addr_t raw_ip4() const;
+  in6_addr const &raw_ip6() const;
+  uint8_t const *raw_octet() const;
+  uint64_t const *raw_64() const;
 
   /// Test for validity.
   bool is_valid() const;
@@ -215,11 +241,12 @@ protected:
 
   /// Address data.
   union raw_addr_type {
-    in_addr_t _ip4;                             ///< IPv4 address storage.
-    in6_addr _ip6;                              ///< IPv6 address storage.
-    uint8_t _byte[IP6_SIZE];                    ///< As raw bytes.
-    uint32_t _u32[IP6_SIZE / sizeof(uint32_t)]; ///< As 32 bit chunks.
-    uint64_t _u64[IP6_SIZE / sizeof(uint64_t)]; ///< As 64 bit chunks.
+    in_addr_t _ip4;                              ///< IPv4 address storage.
+    in6_addr _ip6;                               ///< IPv6 address storage.
+    uint8_t _octet[IP6_SIZE];                    ///< IPv4 octets.
+    uint16_t _quad[IP6_SIZE / sizeof(uint16_t)]; ///< IPv6 quads.
+    uint32_t _u32[IP6_SIZE / sizeof(uint32_t)];  ///< As 32 bit chunks.
+    uint64_t _u64[IP6_SIZE / sizeof(uint64_t)];  ///< As 64 bit chunks.
 
     // Constructors needed so @c IpAddr can have @c constexpr constructors.
     constexpr raw_addr_type();
@@ -302,7 +329,7 @@ IpAddr::isCompatibleWith(self_type const &that)
 inline bool
 IpAddr::is_loopback() const
 {
-  return (AF_INET == _family && 0x7F == _addr._byte[0]) || (AF_INET6 == _family && IN6_IS_ADDR_LOOPBACK(&_addr._ip6));
+  return (AF_INET == _family && 0x7F == _addr._octet[0]) || (AF_INET6 == _family && IN6_IS_ADDR_LOOPBACK(&_addr._ip6));
 }
 
 inline bool
@@ -462,6 +489,30 @@ operator<=(IpAddr const &lhs, IpAddr const &rhs)
   return lhs.cmp(rhs) <= 0;
 }
 
+inline in_addr_t
+IpAddr::raw_ip4() const
+{
+  return _addr._ip4;
+}
+
+inline in6_addr const &
+IpAddr::raw_ip6() const
+{
+  return _addr._ip6;
+}
+
+inline uint8_t const *
+IpAddr::raw_octet() const
+{
+  return _addr._octet;
+}
+
+inline uint64_t const *
+IpAddr::raw_64() const
+{
+  return _addr._u64;
+}
+
 inline uint32_t
 IpAddr::hash() const
 {
@@ -474,37 +525,81 @@ IpAddr::hash() const
   return zret;
 }
 
-#if 0
-inline IpEndpoint &
-IpEndpoint::assign(IpAddr const &addr, in_port_t port)
+inline void
+IpEndpoint::invalidate(sockaddr *sa)
 {
-  ats_ip_set(&sa, addr, port);
-  return *this;
+  sa->sa_family = AF_UNSPEC;
 }
 
 inline IpEndpoint &
-IpEndpoint::assign(sockaddr const *ip)
+IpEndpoint::invalidate()
 {
-  ats_ip_copy(&sa, ip);
+  sa.sa_family = AF_UNSPEC;
+  return *this;
+}
+
+inline bool
+IpEndpoint::is_valid() const
+{
+  return sa.sa_family == AF_INET || sa.sa_family == AF_INET6;
+}
+
+inline IpEndpoint &
+IpEndpoint::assign(sockaddr const *src)
+{
+  self_type::assign(&sa, src);
   return *this;
 }
 
 inline in_port_t &
 IpEndpoint::port()
 {
-  return ats_ip_port_cast(&sa);
+  return self_type::port(&sa);
 }
 
 inline in_port_t
 IpEndpoint::port() const
 {
-  return ats_ip_port_cast(&sa);
+  return self_type::port(&sa);
 }
 
 inline in_port_t
 IpEndpoint::host_order_port() const
 {
   return ntohs(this->port());
+}
+
+inline in_port_t &
+IpEndpoint::port(sockaddr *sa)
+{
+  switch (sa->sa_family) {
+  case AF_INET:
+    return reinterpret_cast<sockaddr_in *>(sa)->sin_port;
+  case AF_INET6:
+    return reinterpret_cast<sockaddr_in6 *>(sa)->sin6_port;
+  }
+  // Force a failure upstream by returning a null reference.
+  return *static_cast<in_port_t *>(nullptr);
+}
+
+inline in_port_t
+IpEndpoint::port(sockaddr const *addr)
+{
+  return self_type::port(const_cast<sockaddr *>(addr));
+}
+
+inline in_port_t
+IpEndpoint::host_order_port(sockaddr const *addr)
+{
+  return ntohs(self_type::port(addr));
+}
+
+#if 0
+inline IpEndpoint &
+IpEndpoint::assign(IpAddr const &addr, in_port_t port)
+{
+  ats_ip_set(&sa, addr, port);
+  return *this;
 }
 
 inline bool

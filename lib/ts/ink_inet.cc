@@ -34,9 +34,10 @@
 #include "ts/ink_inet.h"
 #include "ink_inet.h"
 
-IpAddr const IpAddr::INVALID;
-
 using namespace std::literals;
+
+using IpAddr     = ts::IpAddr;
+using IpEndpoint = ts::IpEndpoint;
 
 const std::string_view IP_PROTO_TAG_IPV4("ipv4"sv);
 const std::string_view IP_PROTO_TAG_IPV6("ipv6"sv);
@@ -299,13 +300,13 @@ ats_ip_range_parse(std::string_view src, IpAddr &lower, IpAddr &upper)
     if (idx + 1 >= src.size()) { // must have something past the separator or it's bogus.
       zret = TS_ERROR;
     } else if ('/' == src[idx]) {
-      if (TS_SUCCESS == addr.load(src.substr(0, idx))) { // load the address
+      if (addr.parse(src.substr(0, idx))) { // load the address
         ts::TextView parsed;
         src.remove_prefix(idx + 1); // drop address and separator.
         int cidr = ts::svtoi(src, &parsed);
         if (parsed.size() && 0 <= cidr) { // a cidr that's a positive integer.
           // Special case the cidr sizes for 0, maximum, and for IPv6 64 bit boundaries.
-          if (addr.isIp4()) {
+          if (addr.is_4()) {
             zret = TS_SUCCESS;
             if (0 == cidr) {
               lower = ZERO_ADDR4;
@@ -320,7 +321,7 @@ ats_ip_range_parse(std::string_view src, IpAddr &lower, IpAddr &upper)
             } else {
               zret = TS_ERROR;
             }
-          } else if (addr.isIp6()) {
+          } else if (addr.is_6()) {
             uint64_t mask;
             zret = TS_SUCCESS;
             if (cidr == 0) {
@@ -825,9 +826,9 @@ bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr)
   }
 
   if (addr_p) {
-    if (addr.isIp4()) {
+    if (addr.is_4()) {
       bwformat(w, spec, addr._addr._ip4);
-    } else if (addr.isIp6()) {
+    } else if (addr.is_6()) {
       bwformat(w, spec, addr._addr._ip6);
     } else {
       w.print("*Not IP address [{}]*", addr.family());
