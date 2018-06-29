@@ -58,6 +58,11 @@ union IpEndpoint {
   struct sockaddr_in sa4;  ///< IPv4
   struct sockaddr_in6 sa6; ///< IPv6
 
+  /// Default construct invalid instance.
+  IpEndpoint();
+  /// Construct from string representation of an address.
+  IpEndpoint(std::string_view text);
+
   /// Invalidate a @c sockaddr.
   static void invalidate(sockaddr *addr);
   /// Invalidate this endpoint.
@@ -85,9 +90,9 @@ union IpEndpoint {
   /// Test for valid IP address.
   bool is_valid() const;
   /// Test for IPv4.
-  bool is_4() const;
+  bool is_ip4() const;
   /// Test for IPv6.
-  bool is_6() const;
+  bool is_ip6() const;
 
   uint16_t family() const;
 
@@ -114,9 +119,12 @@ union IpEndpoint {
   /// Port in host order directly from a @c sockaddr
   static in_port_t host_order_port(sockaddr const *sa);
 
+  /// Automatic conversion to @c sockaddr.
   operator sockaddr *() { return &sa; }
+  /// Automatic conversion to @c sockaddr.
   operator sockaddr const *() const { return &sa; }
 
+  /// The string name of the address family.
   static std::string_view family_name(uint16_t family);
 };
 
@@ -525,8 +533,9 @@ IpAddr::hash() const
   return zret;
 }
 
-inline void
-IpEndpoint::invalidate(sockaddr *sa)
+/// ------------------------------------------------------------------------------------
+
+inline IpEndpoint::IpEndpoint()
 {
   sa->sa_family = AF_UNSPEC;
 }
