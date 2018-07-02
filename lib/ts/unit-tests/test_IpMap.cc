@@ -25,6 +25,7 @@
 #include <iostream>
 #include <catch.hpp>
 #include <ts/BufferWriter.h>
+#include "../../../tests/include/catch.hpp"
 
 using ts::IpEndpoint;
 using ts::IpAddr;
@@ -250,33 +251,25 @@ TEST_CASE("IpMap Basic", "[libts][ipmap]")
 TEST_CASE("IpMap Unmark", "[libts][ipmap]")
 {
   IpMap map;
-  //  ip_text_buffer ipb1, ipb2;
-  void *const markA = reinterpret_cast<void *>(1);
+  void *const markA = &map;
 
-  IpEndpoint a_0, a_0_0_0_16, a_0_0_0_17, a_max;
-  IpEndpoint a_10_28_56_0, a_10_28_56_4, a_10_28_56_255;
-  IpEndpoint a_10_28_55_255, a_10_28_57_0;
-  IpEndpoint a_63_128_1_12;
-  IpEndpoint a_loopback, a_loopback2;
-  IpEndpoint a6_0, a6_max, a6_fe80_9d90, a6_fe80_9d9d, a6_fe80_9d95;
-
-  ats_ip_pton("0.0.0.0", &a_0);
-  ats_ip_pton("0.0.0.16", &a_0_0_0_16);
-  ats_ip_pton("0.0.0.17", &a_0_0_0_17);
-  ats_ip_pton("255.255.255.255", &a_max);
-  ats_ip_pton("10.28.55.255", &a_10_28_55_255);
-  ats_ip_pton("10.28.56.0", &a_10_28_56_0);
-  ats_ip_pton("10.28.56.4", &a_10_28_56_4);
-  ats_ip_pton("10.28.56.255", &a_10_28_56_255);
-  ats_ip_pton("10.28.57.0", &a_10_28_57_0);
-  ats_ip_pton("63.128.1.12", &a_63_128_1_12);
-  ats_ip_pton("::", &a6_0);
-  ats_ip_pton("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &a6_max);
-  ats_ip_pton("fe80::221:9bff:fe10:9d90", &a6_fe80_9d90);
-  ats_ip_pton("fe80::221:9bff:fe10:9d9d", &a6_fe80_9d9d);
-  ats_ip_pton("fe80::221:9bff:fe10:9d95", &a6_fe80_9d95);
-  ats_ip_pton("127.0.0.1", &a_loopback);
-  ats_ip_pton("127.0.0.255", &a_loopback2);
+  IpEndpoint a_0{"0.0.0.0"sv};
+  IpEndpoint a_0_0_0_16{"0.0.0.16"sv};
+  IpEndpoint a_0_0_0_17{"0.0.0.17"sv};
+  IpEndpoint a_max{"255.255.255.255"sv};
+  IpEndpoint a_10_28_55_255{"10.28.55.255"sv};
+  IpEndpoint a_10_28_56_0{"10.28.56.0"sv};
+  IpEndpoint a_10_28_56_4{"10.28.56.4"sv};
+  IpEndpoint a_10_28_56_255{"10.28.56.255"sv};
+  IpEndpoint a_10_28_57_0{"10.28.57.0"sv};
+  IpEndpoint a_63_128_1_12{"63.128.1.12"sv};
+  IpEndpoint a6_0{"::"sv};
+  IpEndpoint a6_max{"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"sv};
+  IpEndpoint a6_fe80_9d90{"fe80::221:9bff:fe10:9d90"sv};
+  IpEndpoint a6_fe80_9d9d{"fe80::221:9bff:fe10:9d9d"sv};
+  IpEndpoint a6_fe80_9d95{"fe80::221:9bff:fe10:9d95"sv};
+  IpEndpoint a_loopback{"127.0.0.1"sv};
+  IpEndpoint a_loopback2{"127.0.0.255"sv};
 
   map.mark(&a_0, &a_max, markA);
   {
@@ -330,44 +323,36 @@ TEST_CASE("IpMap Fill", "[libts][ipmap]")
   void *const markB = reinterpret_cast<void *>(2);
   void *const markC = reinterpret_cast<void *>(3);
 
-  IpEndpoint a0, a_10_28_56_0, a_10_28_56_4, a_10_28_56_255, a3, a4;
-  IpEndpoint a_9_255_255_255, a_10_0_0_0, a_10_0_0_19, a_10_0_0_255, a_10_0_1_0;
-  IpEndpoint a_max, a_loopback, a_loopback2;
-  IpEndpoint a_10_28_55_255, a_10_28_57_0;
-  IpEndpoint a_63_128_1_12;
-  IpEndpoint a_0000_0000, a_0000_0001, a_ffff_ffff;
-  IpEndpoint a_fe80_9d8f, a_fe80_9d90, a_fe80_9d95, a_fe80_9d9d, a_fe80_9d9e;
+  IpEndpoint a0{"0.0.0.0"sv};
+  IpEndpoint a_max{"255.255.255.255"sv};
 
-  ats_ip_pton("0.0.0.0", &a0);
-  ats_ip_pton("255.255.255.255", &a_max);
+  IpEndpoint a_9_255_255_255{"9.255.255.255"sv};
+  IpEndpoint a_10_0_0_0{"10.0.0.0"sv};
+  IpEndpoint a_10_0_0_19{"10.0.0.19"sv};
+  IpEndpoint a_10_0_0_255{"10.0.0.255"sv};
+  IpEndpoint a_10_0_1_0{"10.0.1.0"sv};
 
-  ats_ip_pton("9.255.255.255", &a_9_255_255_255);
-  ats_ip_pton("10.0.0.0", &a_10_0_0_0);
-  ats_ip_pton("10.0.0.19", &a_10_0_0_19);
-  ats_ip_pton("10.0.0.255", &a_10_0_0_255);
-  ats_ip_pton("10.0.1.0", &a_10_0_1_0);
+  IpEndpoint a_10_28_55_255{"10.28.55.255"sv};
+  IpEndpoint a_10_28_56_0{"10.28.56.0"sv};
+  IpEndpoint a_10_28_56_4{"10.28.56.4"sv};
+  IpEndpoint a_10_28_56_255{"10.28.56.255"sv};
+  IpEndpoint a_10_28_57_0{"10.28.57.0"sv};
 
-  ats_ip_pton("10.28.55.255", &a_10_28_55_255);
-  ats_ip_pton("10.28.56.0", &a_10_28_56_0);
-  ats_ip_pton("10.28.56.4", &a_10_28_56_4);
-  ats_ip_pton("10.28.56.255", &a_10_28_56_255);
-  ats_ip_pton("10.28.57.0", &a_10_28_57_0);
+  IpEndpoint a3{"192.168.1.0"sv};
+  IpEndpoint a4{"192.168.1.255"sv};
 
-  ats_ip_pton("192.168.1.0", &a3);
-  ats_ip_pton("192.168.1.255", &a4);
+  IpEndpoint a_0000_0000{"::"sv};
+  IpEndpoint a_0000_0001{"::1"sv};
+  IpEndpoint a_ffff_ffff{"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"sv};
+  IpEndpoint a_fe80_9d8f{"fe80::221:9bff:fe10:9d8f"sv};
+  IpEndpoint a_fe80_9d90{"fe80::221:9bff:fe10:9d90"sv};
+  IpEndpoint a_fe80_9d95{"fe80::221:9bff:fe10:9d95"sv};
+  IpEndpoint a_fe80_9d9d{"fe80::221:9bff:fe10:9d9d"sv};
+  IpEndpoint a_fe80_9d9e{"fe80::221:9bff:fe10:9d9e"sv};
 
-  ats_ip_pton("::", &a_0000_0000);
-  ats_ip_pton("::1", &a_0000_0001);
-  ats_ip_pton("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", &a_ffff_ffff);
-  ats_ip_pton("fe80::221:9bff:fe10:9d8f", &a_fe80_9d8f);
-  ats_ip_pton("fe80::221:9bff:fe10:9d90", &a_fe80_9d90);
-  ats_ip_pton("fe80::221:9bff:fe10:9d95", &a_fe80_9d95);
-  ats_ip_pton("fe80::221:9bff:fe10:9d9d", &a_fe80_9d9d);
-  ats_ip_pton("fe80::221:9bff:fe10:9d9e", &a_fe80_9d9e);
-
-  ats_ip_pton("127.0.0.0", &a_loopback);
-  ats_ip_pton("127.0.0.255", &a_loopback2);
-  ats_ip_pton("63.128.1.12", &a_63_128_1_12);
+  IpEndpoint a_loopback{"127.0.0.0"sv};
+  IpEndpoint a_loopback2{"127.0.0.255"sv};
+  IpEndpoint a_63_128_1_12{"63.128.1.12"sv};
 
   SECTION("subnet overfill")
   {
@@ -538,43 +523,36 @@ TEST_CASE("IpMap CloseIntersection", "[libts][ipmap]")
   void *const markD = reinterpret_cast<void *>(4);
   // void *mark; // for retrieval
 
-  IpEndpoint a_1_l, a_1_u, a_2_l, a_2_u, a_3_l, a_3_u, a_4_l, a_4_u, a_5_l, a_5_u, a_6_l, a_6_u, a_7_l, a_7_u;
-  IpEndpoint b_1_l, b_1_u;
-  IpEndpoint c_1_l, c_1_u, c_2_l, c_2_u, c_3_l, c_3_u;
-  IpEndpoint d_1_l, d_1_u, d_2_l, d_2_u;
+  IpEndpoint a_1_l{"123.88.172.0"sv};
+  IpEndpoint a_1_m{"123.88.180.93"sv};
+  IpEndpoint a_1_u{"123.88.191.255"sv};
+  IpEndpoint a_2_l{"123.89.132.0"sv};
+  IpEndpoint a_2_u{"123.89.135.255"sv};
+  IpEndpoint a_3_l{"123.89.160.0"sv};
+  IpEndpoint a_3_u{"123.89.167.255"sv};
+  IpEndpoint a_4_l{"123.90.108.0"sv};
+  IpEndpoint a_4_u{"123.90.111.255"sv};
+  IpEndpoint a_5_l{"123.90.152.0"sv};
+  IpEndpoint a_5_u{"123.90.159.255"sv};
+  IpEndpoint a_6_l{"123.91.0.0"sv};
+  IpEndpoint a_6_u{"123.91.35.255"sv};
+  IpEndpoint a_7_l{"123.91.40.0"sv};
+  IpEndpoint a_7_u{"123.91.47.255"sv};
 
-  IpEndpoint a_1_m;
+  IpEndpoint b_1_l{"123.78.100.0"sv};
+  IpEndpoint b_1_u{"123.78.115.255"sv};
 
-  ats_ip_pton("123.88.172.0", &a_1_l);
-  ats_ip_pton("123.88.180.93", &a_1_m);
-  ats_ip_pton("123.88.191.255", &a_1_u);
-  ats_ip_pton("123.89.132.0", &a_2_l);
-  ats_ip_pton("123.89.135.255", &a_2_u);
-  ats_ip_pton("123.89.160.0", &a_3_l);
-  ats_ip_pton("123.89.167.255", &a_3_u);
-  ats_ip_pton("123.90.108.0", &a_4_l);
-  ats_ip_pton("123.90.111.255", &a_4_u);
-  ats_ip_pton("123.90.152.0", &a_5_l);
-  ats_ip_pton("123.90.159.255", &a_5_u);
-  ats_ip_pton("123.91.0.0", &a_6_l);
-  ats_ip_pton("123.91.35.255", &a_6_u);
-  ats_ip_pton("123.91.40.0", &a_7_l);
-  ats_ip_pton("123.91.47.255", &a_7_u);
+  IpEndpoint c_1_l{"123.88.204.0"sv};
+  IpEndpoint c_1_u{"123.88.219.255"sv};
+  IpEndpoint c_2_l{"123.90.112.0"sv};
+  IpEndpoint c_2_u{"123.90.119.255"sv};
+  IpEndpoint c_3_l{"123.90.132.0"sv};
+  IpEndpoint c_3_u{"123.90.135.255"sv};
 
-  ats_ip_pton("123.78.100.0", &b_1_l);
-  ats_ip_pton("123.78.115.255", &b_1_u);
-
-  ats_ip_pton("123.88.204.0", &c_1_l);
-  ats_ip_pton("123.88.219.255", &c_1_u);
-  ats_ip_pton("123.90.112.0", &c_2_l);
-  ats_ip_pton("123.90.119.255", &c_2_u);
-  ats_ip_pton("123.90.132.0", &c_3_l);
-  ats_ip_pton("123.90.135.255", &c_3_u);
-
-  ats_ip_pton("123.82.196.0", &d_1_l);
-  ats_ip_pton("123.82.199.255", &d_1_u);
-  ats_ip_pton("123.82.204.0", &d_2_l);
-  ats_ip_pton("123.82.219.255", &d_2_u);
+  IpEndpoint d_1_l{"123.82.196.0"sv};
+  IpEndpoint d_1_u{"123.82.199.255"sv};
+  IpEndpoint d_2_l{"123.82.204.0"sv};
+  IpEndpoint d_2_u{"123.82.219.255"sv};
 
   map.mark(a_1_l, a_1_u, markA);
   map.mark(a_2_l, a_2_u, markA);

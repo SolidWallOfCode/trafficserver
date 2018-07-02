@@ -62,6 +62,11 @@ union IpEndpoint {
   IpEndpoint();
   /// Construct from string representation of an address.
   IpEndpoint(std::string_view text);
+  // Construct from @a IpAddr
+  IpEndpoint(IpAddr const &addr);
+
+  static bool tokenize(std::string_view src, std::string_view *host = nullptr, std::string_view *port = nullptr,
+                       std::string_view *rest = nullptr);
 
   /// Invalidate a @c sockaddr.
   static void invalidate(sockaddr *addr);
@@ -261,6 +266,183 @@ protected:
     constexpr raw_addr_type(in_addr_t addr);
     constexpr raw_addr_type(in6_addr const &addr);
   } _addr;
+};
+
+class IpRange
+{
+  using self_type = IpRange;
+
+  IpRange();                       ///< Default (empty) range constructor.
+  IpRange(IpAddr min, IpAddr max); ///< Construct range.
+
+  /** Construct range from text.
+   * The text must be in one of three formats.
+   * - A dashed range, "addr1-addr2"
+   * - A singleton, "addr". This is treated as if it were "addr-addr", a range of size 1.
+   * - CIDR notation, "addr/cidr" where "cidr" is a number from 0 to the number of bits in the address.
+   * @param text Range text.
+   */
+  IpRange(std::string_view text);
+
+  IpAddr const &min() const;
+  IpAddr const &max() const;
+
+protected:
+  using range_type = ts::DiscreteInterval<IpAddr>;
+
+  range_type _r;
+};
+
+/** An IP address mask.
+ *
+ */
+class IpMask
+{
+  using self_type = IpMask;
+  using raw_type  = unsigned int;
+
+public:
+  IpMask();
+  IpMask(raw_type count);
+  IpMask(std::string_view text);
+  // use compiler copy constructor and assignment
+
+  int ValidCount(IpAddr addr); // -1 on invalid mask, otherwise mask width
+
+  friend self_type operator<<(self_type const &m, unsigned int n);
+  friend self_type operator>>(self_type const &m, unsigned int n);
+  self_type &operator<<=(unsigned int n);
+  self_type &operator>>=(unsigned int n);
+  friend bool operator==(const self_type &, const self_type &);
+  friend bool operator<(const self_type &, const self_type &);
+
+  // These return the bitcount. To get it as bit mask, use the
+  // IpAddr ctor.
+  raw_type
+  GetRaw() const
+  {
+    return m_mask;
+  }
+
+  static self_type Min();
+  static self_type Max();
+
+  static self_type aton(const std::string &str);  // DEPRECATED - use ctor
+  static std::string ntoa(const self_type &mask); // DEPRECATED
+
+private:
+  raw_type _mask{0};
+
+  // special purpose for use in mixed operators. Clients should use
+  // IpAddr ctor
+  IpAddr::raw_type GetRawAddr() const;
+
+  // operators that need GetRawAddr()
+  friend IpAddr operator&(IpAddr const &x, self_type const &y);
+  friend IpAddr operator&(self_type const &x, IpAddr const &y);
+  friend IpAddr operator|(IpAddr const &x, self_type const &y);
+  friend IpAddr operator|(self_type const &x, IpAddr const &y);
+  friend IpAddr operator~(self_type const &x);
+};
+
+/** Representation of an IP address network.
+ *
+ */
+class IpNet
+{
+public:
+  IpNet() {}
+  IpNet(const IpAddr &addr, const IpMask &mask) : m_addr(addr & mask), m_mask(mask) {}
+  IpNet(const IpNet &net) : m_addr(net.m_addr), m_mask(net.m_mask) {}
+  IpNet(std::string const &s);
+  // use compiler generated copy and assign
+
+  operator IpAddr() const { return m_addr; }
+  operator IpMask() const { return m_mask; }
+
+  IpAddr
+  GetIpAddr() const
+  {
+    return m_addr;
+  } // DEPRECATED, use GetAddr()
+  IpMask
+  GetIpMask() const
+  {
+    return m_mask;
+  } // DEPRECATED, use GetMask()
+  IpAddr
+  GetAddr() const
+  {
+    return m_addr;
+  }
+  IpMask
+  GetMask() const
+  {
+    return m_mask;
+  }
+
+  IpAddr
+  GetLower() const
+  {
+    return m_addr;
+  }
+  IpAddr
+  GetUpper() const
+  {
+    return m_addr | ~m_mask;
+  }
+  IpAddr
+  GetLowerBound() const
+  {
+    return m_addr;
+  } // DEPRECATED, use GetLower()
+  IpAddr
+  GetUpperBound() const
+  {
+    return m_addr | ~m_mask;
+  } // DEPRECATED, use GetUpper()
+
+  /* Compatible means that the address would fit into the network for this object */
+  bool
+  IsCompatible(const IpAddr &addr) const
+  {
+    return (addr & m_mask) == m_addr;
+  }
+  // computes this is strict subset of other
+  bool
+  IsSubset(const IpNet &other) const
+  {
+    return ((m_addr & other.m_mask) == other.m_addr) && (other.m_mask < m_mask);
+  }
+
+  // Overlap means the intersection of the two networks is non-empty
+  bool
+  HasOverlap(IpNet const &net) const
+  {
+    IpMask m(std::min(m_mask, net.m_mask));
+    return (m_addr & m) == (net.m_addr & m);
+  }
+
+  void
+  Set(const IpAddr &addr, const IpMask &mask)
+  {
+    m_addr = addr & mask;
+    m_mask = mask;
+  }
+
+  static char const SEPARATOR; // the character used between the address and mask
+
+  operator std::string() const; // implicit
+  std::string ntoa() const;     // explicit
+  // the address width is per octet, the mask width for the bit count
+  std::string ntoa(int addr_width, int mask_width) const;
+
+  static std::string ntoa(IpNet const &net); // DEPRECATED
+  static IpNet aton(std::string const &str); // DEPRECATED - use ctor
+
+protected:
+  IpAddr _addr;
+  IpMask _mask;
 };
 
 // @c constexpr constructor is required to initialize _something_, it can't be completely uninitializing.
@@ -537,7 +719,12 @@ IpAddr::hash() const
 
 inline IpEndpoint::IpEndpoint()
 {
-  sa->sa_family = AF_UNSPEC;
+  sa.sa_family = AF_UNSPEC;
+}
+
+inline IpEndpoint::IpEndpoint(IpAddr const &addr)
+{
+  this->assign(addr);
 }
 
 inline IpEndpoint &
@@ -558,6 +745,24 @@ IpEndpoint::assign(sockaddr const *src)
 {
   self_type::assign(&sa, src);
   return *this;
+}
+
+inline bool
+IpEndpoint::is_ip4() const
+{
+  return AF_INET == sa.sa_family;
+}
+
+inline bool
+IpEndpoint::is_ip6() const
+{
+  return AF_INET6 == sa.sa_family;
+}
+
+inline uint16_t
+IpEndpoint::family() const
+{
+  return sa.sa_family;
 }
 
 inline in_port_t &
@@ -615,22 +820,6 @@ inline bool
 IpEndpoint::isValid() const
 {
   return ats_is_ip(this);
-}
-
-inline bool
-IpEndpoint::isIp4() const
-{
-  return AF_INET == sa.sa_family;
-}
-inline bool
-IpEndpoint::isIp6() const
-{
-  return AF_INET6 == sa.sa_family;
-}
-inline uint16_t
-IpEndpoint::family() const
-{
-  return sa.sa_family;
 }
 
 inline IpEndpoint &

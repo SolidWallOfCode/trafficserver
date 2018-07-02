@@ -24,6 +24,8 @@
 #include <fstream>
 #include <ts/ts_ip.h>
 #include <BufferWriter.h>
+#include "ink_memory.h"
+#include "ts_ip.h"
 
 namespace
 {
@@ -316,6 +318,81 @@ bool
 IpAddr::is_multicast() const
 {
   return (AF_INET == _family && 0xe == (_addr._byte[0] >> 4)) || (AF_INET6 == _family && IN6_IS_ADDR_MULTICAST(&_addr._ip6));
+}
+
+IpEndpoint::IpEndpoint(std::string_view text)
+{
+  std::string_view addr, port;
+
+  this->invalidate();
+  if (this->tokenize(text, &addr, &port)) {
+    IpAddr a(addr);
+    if (a.is_valid()) {
+      auto p = ts::svtoi(port);
+      if (0 <= p && p < 65536) {
+        this->assign(a, p);
+      }
+    }
+  }
+}
+
+bool
+IpEndpoint::tokenize(std::string_view src, std::string_view *addr, std::string_view *port, std::string_view *rest)
+{
+  ts::TextView src(str); /// Easier to work with for parsing.
+  // In case the incoming arguments are null, set them here and only check for null once.
+  // it doesn't matter if it's all the same, the results will be thrown away.
+  std::string_view local;
+  if (!addr) {
+    addr = &local;
+  }
+  if (!port) {
+    port = &local;
+  }
+  if (!rest) {
+    rest = &local;
+  }
+
+  *addr = std::string_view{};
+  *port = std::string_view{};
+  *rest = std::string_view{};
+
+  // Let's see if we can find out what's in the address string.
+  if (src) {
+    bool colon_p = false;
+    src.ltrim_if(&isspace);
+    // Check for brackets.
+    if ('[' == *src) {
+      ++src; // skip bracket.
+      *addr = src.take_prefix_at(']');
+      if (':' == *src) {
+        colon_p = true;
+        ++src;
+      }
+    } else {
+      ts::TextView::size_type last = src.rfind(':');
+      if (last != ts::TextView::npos && last == src.find(':')) {
+        // Exactly one colon - leave post colon stuff in @a src.
+        *addr   = src.take_prefix_at(last);
+        colon_p = true;
+      } else { // presume no port, use everything.
+        *addr = src;
+        src.clear();
+      }
+    }
+    if (colon_p) {
+      ts::TextView tmp{src};
+      src.ltrim_if(&isdigit);
+
+      if (tmp.data() == src.data()) {               // no digits at all
+        src.assign(tmp.data() - 1, tmp.size() + 1); // back up to include colon
+      } else {
+        *port = std::string_view(tmp.data(), src.data() - tmp.data());
+      }
+    }
+    *rest = src;
+  }
+  return !addr->empty(); // true if we found an address.
 }
 
 BufferWriter &

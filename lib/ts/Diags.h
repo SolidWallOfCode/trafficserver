@@ -38,7 +38,7 @@
 #include "Regex.h"
 #include "ink_apidefs.h"
 #include "ContFlags.h"
-#include "ink_inet.h"
+#include "ts/ts_ip.h"
 #include "BaseLogFile.h"
 #include "SourceLocation.h"
 
@@ -135,7 +135,7 @@ public:
   }
 
   bool
-  test_override_ip(IpEndpoint const &test_ip)
+  test_override_ip(ts::IpAddr const &test_ip)
   {
     return this->debug_client_ip == test_ip;
   }
@@ -227,7 +227,7 @@ public:
   const char *base_debug_tags;  // internal copy of default debug tags
   const char *base_action_tags; // internal copy of default action tags
 
-  IpAddr debug_client_ip;
+  ts::IpAddr debug_client_ip;
 
 private:
   const char *prefix_str;
