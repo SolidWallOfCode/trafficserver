@@ -23,9 +23,8 @@
 
 #include <fstream>
 #include <ts/ts_ip.h>
-#include <BufferWriter.h>
-#include "ink_memory.h"
-#include "ts_ip.h"
+#include <ts/BufferWriter.h>
+#include <ts/ink_memory.h>
 
 namespace
 {
@@ -126,25 +125,40 @@ IpEndpoint::family_name(uint16_t family)
   return "unknown"sv;
 }
 
+IpEndpoint &
+IpEndpoint::set_to_any(int family)
+{
+  ink_zero(*this);
+  if (AF_INET == family) {
+    sa4.sin_family      = family;
+    sa4.sin_addr.s_addr = INADDR_ANY;
+    Set_Sockaddr_Len(&sa4, Meta_Case_Arg);
+  } else if (AF_INET6 == family) {
+    sa6.sin6_family = family;
+    sa6.sin6_addr   = in6addr_any;
+    Set_Sockaddr_Len(&sa6, Meta_Case_Arg);
+  }
+  return *this;
+}
+
+IpEndpoint &
+IpEndpoint::set_to_loopback(int family)
+{
+  ink_zero(*this);
+  if (AF_INET == family) {
+    sa.sa_family        = family;
+    sa4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    Set_Sockaddr_Len(&sa4, Meta_Case_Arg);
+  } else if (AF_INET6 == family) {
+    static const in6_addr init = IN6ADDR_LOOPBACK_INIT;
+    sa.sa_family               = family;
+    sa6.sin6_addr              = init;
+    Set_Sockaddr_Len(&sa6, Meta_Case_Arg);
+  }
+  return *this;
+}
+
 #if 0
-bool
-IpAddr::parse(std::string_view const &text)
-{
-  IpEndpoint ip;
-  int zret = ats_ip_pton(text, &ip.sa);
-  this->assign(&ip.sa);
-  return zret;
-}
-
-char *
-IpAddr::toString(char *dest, size_t len) const
-{
-  IpEndpoint ip;
-  ip.assign(*this);
-  ats_ip_ntop(&ip, dest, len);
-  return dest;
-}
-
 bool
 operator==(IpAddr const &lhs, sockaddr const *rhs)
 {
@@ -216,7 +230,6 @@ IpAddr::cmp(self_type const &that) const
 
   return zret;
 }
-
 #endif
 
 bool
@@ -243,7 +256,7 @@ IpAddr::parse(const std::string_view &str)
   // Do the real parse now
   switch (family) {
   case AF_INET: {
-    int n = 0; /// # of octets
+    unsigned int n = 0; /// # of octets
     while (n < IP4_SIZE && !src.empty()) {
       ts::TextView token{src.take_prefix_at('.')};
       ts::TextView r;
@@ -257,9 +270,9 @@ IpAddr::parse(const std::string_view &str)
     if (n == IP4_SIZE && src.empty()) {
       _family = AF_INET;
     }
-  }
+  } break;
   case AF_INET6: {
-    int n         = 0;
+    unsigned int n         = 0;
     int empty_idx = -1; // index of empty quad, -1 if not found yet.
     while (n < IP6_QUADS && !src.empty()) {
       ts::TextView token{src.take_prefix_at(':')};
@@ -289,8 +302,8 @@ IpAddr::parse(const std::string_view &str)
     }
     // Handle empty quads - invalid if empty and still had a full set of quads
     if (empty_idx >= 0 && n < IP6_QUADS) {
-      if (n <= empty_idx) {
-        while (empty_idx < IP6_QUADS) {
+      if (static_cast<int>(n) <= empty_idx) {
+        while (empty_idx < static_cast<int>(IP6_QUADS)) {
           _addr._quad[empty_idx++] = 0;
         }
       } else {
@@ -307,17 +320,15 @@ IpAddr::parse(const std::string_view &str)
     if (n == IP6_QUADS && src.empty()) {
       _family = AF_INET6;
     }
-  }
+  } break;
   }
   return this->is_valid();
 }
 
-} // namespace ts
-
 bool
 IpAddr::is_multicast() const
 {
-  return (AF_INET == _family && 0xe == (_addr._byte[0] >> 4)) || (AF_INET6 == _family && IN6_IS_ADDR_MULTICAST(&_addr._ip6));
+  return (AF_INET == _family && 0xe == (_addr._octet[0] >> 4)) || (AF_INET6 == _family && IN6_IS_ADDR_MULTICAST(&_addr._ip6));
 }
 
 IpEndpoint::IpEndpoint(std::string_view text)
@@ -337,7 +348,7 @@ IpEndpoint::IpEndpoint(std::string_view text)
 }
 
 bool
-IpEndpoint::tokenize(std::string_view src, std::string_view *addr, std::string_view *port, std::string_view *rest)
+IpEndpoint::tokenize(std::string_view str, std::string_view *addr, std::string_view *port, std::string_view *rest)
 {
   ts::TextView src(str); /// Easier to work with for parsing.
   // In case the incoming arguments are null, set them here and only check for null once.
@@ -393,6 +404,88 @@ IpEndpoint::tokenize(std::string_view src, std::string_view *addr, std::string_v
     *rest = src;
   }
   return !addr->empty(); // true if we found an address.
+}
+
+bool
+IpRange::parse(std::string_view src)
+{
+  bool zret = false;
+  static const IpAddr ZERO_ADDR4{INADDR_ANY};
+  static const IpAddr MAX_ADDR4{INADDR_BROADCAST};
+  static const IpAddr ZERO_ADDR6{in6addr_any};
+  // I can't find a clean way to static const initialize an IPv6 address to all ones.
+  // This is the best I can find that's portable.
+  static const uint64_t ones[]{UINT64_MAX, UINT64_MAX};
+  static const IpAddr MAX_ADDR6{reinterpret_cast<in6_addr const &>(ones)};
+
+  auto idx = src.find_first_of("/-"sv);
+  if (idx != src.npos) {
+    if (idx + 1 >= src.size()) { // must have something past the separator or it's bogus.
+      ;                          // empty
+    } else if ('/' == src[idx]) {
+      if (_min.parse(src.substr(0, idx))) { // load the address
+        ts::TextView parsed;
+        src.remove_prefix(idx + 1); // drop address and separator.
+        int cidr = ts::svtoi(src, &parsed);
+        if (parsed.size() && 0 <= cidr) { // a cidr that's a positive integer.
+          // Special case the cidr sizes for 0, maximum, and for IPv6 64 bit boundaries.
+          if (_min.is_ip4()) {
+            zret = true;
+            if (0 == cidr) {
+              _min = ZERO_ADDR4;
+              _max = MAX_ADDR4;
+            } else if (cidr <= 32) {
+              _max = _min;
+              if (cidr < 32) {
+                in_addr_t mask = htonl(INADDR_BROADCAST << (32 - cidr));
+                _min._addr._ip4 &= mask;
+                _max._addr._ip4 |= ~mask;
+              }
+            } else {
+              zret = false;
+            }
+          } else if (_min.is_ip6()) {
+            uint64_t mask;
+            zret = true;
+            if (cidr == 0) {
+              _min = ZERO_ADDR6;
+              _max = MAX_ADDR6;
+            } else if (cidr < 64) { // only _max bytes affected, lower bytes are forced.
+              mask          = htobe64(~static_cast<uint64_t>(0) << (64 - cidr));
+              _max._family = _min._family;
+              _min._addr._u64[0]           &= mask;
+              _min._addr._u64[1]           = 0;
+              _max._addr._u64[0]           = _min._addr._u64[0] | ~mask;
+              _max._addr._u64[1]           = ~static_cast<uint64_t>(0);
+            } else if (cidr == 64) {
+              _max._family = _min._family;
+              _max._addr._u64[0] = _min._addr._u64[0];
+              _min._addr._u64[1]                       = 0;
+              _max._addr._u64[1]                       = ~static_cast<uint64_t>(0);
+            } else if (cidr <= 128) { // lower bytes changed, _max bytes unaffected.
+              _max = _min;
+              if (cidr < 128) {
+                mask = htobe64(~static_cast<uint64_t>(0) << (128 - cidr));
+                _min._addr._u64[1] &= mask;
+                _max._addr._u64[1] |= ~mask;
+              }
+            } else {
+              zret = false;
+            }
+          }
+        }
+      }
+    } else if (_min.parse(src.substr(0, idx)) && _max.parse(src.substr(idx + 1)) && _min.family() == _max.family()) {
+      // not '/' so must be '-'
+      zret  = true;
+    }
+  } else if (_min.parse(src)) {
+    zret  = true;
+    _max = _min;
+  }
+
+  if (!zret) this->clear();
+  return zret;
 }
 
 BufferWriter &
@@ -528,10 +621,10 @@ bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr)
   }
 
   if (addr_p) {
-    if (addr.is_4()) {
-      bwformat(w, spec, addr.raw_4());
-    } else if (addr.is_6()) {
-      bwformat(w, spec, addr.raw_6());
+    if (addr.is_ip4()) {
+      bwformat(w, spec, addr.raw_ip4());
+    } else if (addr.is_ip6()) {
+      bwformat(w, spec, addr.raw_ip6());
     } else {
       w.print("*Not IP address [{}]*", addr.family());
     }
