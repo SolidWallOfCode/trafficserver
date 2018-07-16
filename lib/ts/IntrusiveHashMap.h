@@ -247,6 +247,18 @@ public:
   /// Remove all elements in the range (first, last]
   bool erase(iterator const &first, iterator const &last);
 
+  /** Apply @a F(value_type&) to every element in the hash map.
+   *
+   * This is similar to a range for loop except the iteration is done in a way where destruction or alternation of
+   * the element does @b not affect the iterator. Primarily this is useful for @c delete to clean up the elements
+   * but it can have other uses.
+   *
+   * @tparam F A functional object of the form <tt>void F(value_type&)</tt>
+   * @param f The function to apply.
+   * @return
+   */
+  template <typename F> self_type &apply(F &&f);
+
   /** Expand the hash if needed.
 
       Useful primarily when the expansion policy is set to @c MANUAL.
@@ -478,6 +490,13 @@ IntrusiveHashMap<H>::equal_range(key_type key) const -> const_range
 
 template <typename H>
 auto
+IntrusiveHashMap<H>::iterator_for(value_type *v) -> iterator
+{
+  return _list.iterator_for(v);
+}
+
+template <typename H>
+auto
 IntrusiveHashMap<H>::find(value_type *v) -> iterator
 {
   Bucket *b = this->bucket_for(H::key_of(v));
@@ -559,6 +578,19 @@ IntrusiveHashMap<H>::erase(iterator const &loc)
   }
   return zret;
 }
+
+template <typename H>
+template <typename F>
+auto
+IntrusiveHashMap<H>::apply(F &&f) -> self_type &
+{
+  iterator spot{this->begin()};
+  iterator limit{this->end()};
+  while (spot != limit) {
+    f(*spot++); // post increment means @a spot is updated before @a f is applied.
+  }
+  return *this;
+};
 
 template <typename H>
 void
