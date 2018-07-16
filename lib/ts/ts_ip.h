@@ -35,6 +35,7 @@
 
 namespace ts
 {
+
 class IpAddr; // forward declare.
         class IpRange;
 
@@ -106,7 +107,7 @@ union IpEndpoint {
   /// Test for IPv6.
   bool is_ip6() const;
 
-  uint16_t family() const;
+  sa_family_t family() const;
 
   /// Set to be any address for family @a family.
   /// @a family must be @c AF_INET or @c AF_INET6.
@@ -137,7 +138,7 @@ union IpEndpoint {
   operator sockaddr const *() const { return &sa; }
 
   /// The string name of the address family.
-  static std::string_view family_name(uint16_t family);
+  static std::string_view family_name(sa_family_t family);
 };
 
 /** Storage for an IP address.
@@ -229,7 +230,7 @@ public:
 
   /// Get the address family.
   /// @return The address family.
-  uint16_t family() const;
+  sa_family_t family() const;
   /// Test for IPv4.
   bool is_ip4() const;
   /// Test for IPv6.
@@ -258,7 +259,7 @@ public:
 protected:
   friend bool operator==(self_type const &, self_type const &);
 
-  uint16_t _family{AF_UNSPEC}; ///< Protocol family.
+  sa_family_t _family{AF_UNSPEC}; ///< Protocol family.
 
   /// Address data.
   union raw_addr_type {
@@ -276,10 +277,14 @@ protected:
   } _addr;
 };
 
+/** An inclusive range of IP addresses.
+ *
+ * Although this can handle IPv4 and IPv6, a specific range is always one or the other, a range
+ * never spans address families.
+ */
 class IpRange
 {
   using self_type = IpRange;
-  using super_type = DiscreteInterval<self_type>;
 
 public:
 
@@ -300,7 +305,7 @@ public:
    * - CIDR notation, "addr/cidr" where "cidr" is a number from 0 to the number of bits in the address.
    * @param text Range text.
    */
-  bool IpRange::parse(std::string_view text);
+  bool parse(std::string_view text);
 
   /// Reset to default state.
   self_type & clear();
@@ -317,6 +322,7 @@ protected:
 
 /** An IP address mask.
  *
+ * This is essentially a width for a bit mask.
  */
 class IpMask
 {
@@ -328,18 +334,25 @@ public:
   IpMask(raw_type count);
   IpMask(std::string_view text);
 
-  /** Get the CIDR mask equivalent of the address.
+  /** Get the CIDR mask wide enough to cover this address.
    * @param addr Input address.
-   * @return A number of bits if @a addr is a valid mask, -1 otherwise.
+   * @return Effectively the reverse index of the least significant bit set to 1.
    */
   int cidr_of(IpAddr addr);
 
-  // These return the bitcount. To get it as bit mask, use the
-  // IpAddr ctor.
+  /// The width of the mask.
   raw_type width() const;
+
+  /// Family type.
+  sa_family_t family() const;
+
+  /// Write the mask as an address to @a addr.
+  /// @return The filled address.
+  IpAddr& fill(IpAddr& addr);
 
 private:
   raw_type _mask{0};
+  sa_family_t _family{AF_UNSPEC};
 };
 
 /** Representation of an IP address network.
@@ -434,7 +447,7 @@ IpAddr::operator=(sockaddr const *addr)
   return this->assign(addr);
 }
 
-inline uint16_t
+inline sa_family_t
 IpAddr::family() const
 {
   return _family;
@@ -701,7 +714,7 @@ IpEndpoint::is_ip6() const
   return AF_INET6 == sa.sa_family;
 }
 
-inline uint16_t
+inline sa_family_t
 IpEndpoint::family() const
 {
   return sa.sa_family;
