@@ -29,11 +29,8 @@
 #include <sstream>
 #include <tuple>
 #include <mutex>
-#include <ts/ink_platform.h>
-#include <ts/ink_config.h>
-#include <ts/ink_mutex.h>
 #include <ts/ink_inet.h>
-#include <ts/Map.h>
+#include <ts/IntrusiveHashMap.h>
 #include <ts/Diags.h>
 #include <ts/CryptoHash.h>
 #include <ts/BufferWriterForward.h>
@@ -101,6 +98,8 @@ public:
     using Ticker = TimePoint::rep;
     /// Length of time to suppress alerts for a group.
     static const std::chrono::seconds ALERT_DELAY;
+    /// Result of hashing the group.
+    using hash_id = uint64_t;
 
     /// Equivalence key - two groups are equivalent if their keys are equal.
     struct Key {
@@ -108,6 +107,18 @@ public:
       CryptoHash const &_hash;      ///< Hash of the FQDN.
       MatchType const &_match_type; ///< Type of matching.
     };
+
+    /// Types and methods for the hash table.
+    struct Linkage {
+      Group *_next{nullptr}; ///< Next group in container.
+      Group *_prev{nullptr}; ///< Previous group in container.
+
+      static Group *&next_ptr(Group *group);
+      static Group *&prev_ptr(Group *group);
+      static hash_id hash_of(Key const &key);
+      static Key const &key_of(Group *group);
+      static bool equal(Key const &lhs, Key const &rhs);
+    } _link;
 
     IpEndpoint _addr;      ///< Remote IP address.
     CryptoHash _hash;      ///< Hash of the FQDN.
@@ -123,8 +134,6 @@ public:
     std::atomic<int> _in_queue{0};      ///< # of connections queued, waiting for a connection.
     std::atomic<Ticker> _last_alert{0}; ///< Absolute time of the last alert.
 
-    LINK(Group, _link); ///< Intrusive hash table support.
-
     /** Constructor.
      * Construct from @c Key because the use cases do a table lookup first so the @c Key is already constructed.
      * @param key A populated @c Key structure - values are copied to the @c Group.
@@ -134,7 +143,7 @@ public:
     /// Key equality checker.
     static bool equal(Key const &lhs, Key const &rhs);
     /// Hashing function.
-    static uint64_t hash(Key const &);
+    static hash_id hash(Key const &);
     /// Check and clear alert enable.
     /// This is a modifying call - internal state will be updated to prevent too frequent alerts.
     /// @param lat The last alert time, in epoch seconds, if the method returns @c true.
@@ -207,10 +216,12 @@ public:
    * although data inside the groups is volatile.
    */
   static void get(std::vector<Group const *> &groups);
+
   /** Write the connection tracking data to JSON.
    * @return string containing a JSON encoding of the table.
    */
   static std::string to_json_string();
+
   /** Write the groups to @a f.
    * @param f Output file.
    */
@@ -251,34 +262,10 @@ public:
 protected:
   static GlobalConfig *_global_config; ///< Global configuration data.
 
-  /// Types and methods for the hash table.
-  struct HashDescriptor {
-    using ID       = uint64_t;
-    using Key      = Group::Key const &;
-    using Value    = Group;
-    using ListHead = DList(Value, _link);
-
-    static ID
-    hash(Key key)
-    {
-      return Group::hash(key);
-    }
-    static Key
-    key(Value *v)
-    {
-      return v->_key;
-    }
-    static bool
-    equal(Key lhs, Key rhs)
-    {
-      return Group::equal(lhs, rhs);
-    }
-  };
-
   /// Internal implementation class instance.
   struct Imp {
-    TSHashTable<HashDescriptor> _table; ///< Hash table of upstream groups.
-    std::mutex _mutex;                  ///< Lock for insert & find.
+    ts::IntrusiveHashMap<Group::Linkage> _table; ///< Hash table of upstream groups.
+    std::mutex _mutex;                           ///< Lock for insert & find.
   };
   static Imp _imp;
 
@@ -291,6 +278,37 @@ inline OutboundConnTrack::Imp &
 OutboundConnTrack::instance()
 {
   return _imp;
+}
+
+// --- Group ---
+inline auto
+OutboundConnTrack::Group::Linkage::next_ptr(Group *group) -> Group *&
+{
+  return group->_link._next;
+}
+
+inline auto
+OutboundConnTrack::Group::Linkage::prev_ptr(Group *group) -> Group *&
+{
+  return group->_link._prev;
+}
+
+inline auto
+OutboundConnTrack::Group::Linkage::hash_of(Group::Key const &key) -> hash_id
+{
+  return hash(key);
+}
+
+inline auto
+OutboundConnTrack::Group::Linkage::key_of(Group *group) -> Key const &
+{
+  return group->_key;
+}
+
+inline bool
+OutboundConnTrack::Group::Linkage::equal(Key const &lhs, Key const &rhs)
+{
+  return equal(lhs, rhs);
 }
 
 inline OutboundConnTrack::Group::Group(Key const &key, std::string_view fqdn)
@@ -324,6 +342,8 @@ OutboundConnTrack::Group::hash(const Key &key)
     return 0;
   }
 }
+
+// --- TxnState ---
 
 inline bool
 OutboundConnTrack::TxnState::is_active()
