@@ -69,7 +69,7 @@
 #pragma once
 
 #include "ts/ink_platform.h"
-#include "ts/ink_inet.h"
+#include "ts/ts_ip.h"
 
 #include <resolv.h>
 #include <arpa/nameser.h>
@@ -245,11 +245,11 @@ struct ts_imp_res_state {
 #else
   u_long options; /*%< option flags - see below. */
 #endif
-  int nscount;                       /*%< number of name servers */
-  IpEndpoint nsaddr_list[INK_MAXNS]; /*%< address of name server */
-  u_short id;                        /*%< current message id */
-  char *dnsrch[MAXDNSRCH + 1];       /*%< components of domain to search */
-  char defdname[256];                /*%< default domain (deprecated) */
+  int nscount;                           /*%< number of name servers */
+  ts::IpEndpoint nsaddr_list[INK_MAXNS]; /*%< address of name server */
+  u_short id;                            /*%< current message id */
+  char *dnsrch[MAXDNSRCH + 1];           /*%< components of domain to search */
+  char defdname[256];                    /*%< default domain (deprecated) */
 #ifdef sun
   unsigned pfcode; /*%< RES_PRF_ flags - see below. */
 #else
@@ -266,8 +266,8 @@ struct ts_imp_res_state {
 };
 typedef ts_imp_res_state *ink_res_state;
 
-int ink_res_init(ink_res_state, IpEndpoint const *pHostList, size_t pHostListSize, int dnsSearch, const char *pDefDomain = nullptr,
-                 const char *pSearchList = nullptr, const char *pResolvConf = nullptr);
+int ink_res_init(ink_res_state, ts::IpEndpoint const *pHostList, size_t pHostListSize, int dnsSearch,
+                 const char *pDefDomain = nullptr, const char *pSearchList = nullptr, const char *pResolvConf = nullptr);
 
 int ink_res_mkquery(ink_res_state, int, const char *, int, int, const unsigned char *, int, const unsigned char *, unsigned char *,
                     int);

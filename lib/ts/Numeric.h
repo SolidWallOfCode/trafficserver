@@ -66,7 +66,7 @@ public:
   self_type &assign(const I min, const I max);
 
   /// Reset to default state.
-  self_type & clear();
+  self_type &clear();
 
   /// Check if there the interval is empty (contains no values).
   bool empty() const;

@@ -109,6 +109,44 @@ IpEndpoint::assign(IpAddr const &src, in_port_t port)
   return *this;
 }
 
+IpAddr &
+IpAddr::assign(sockaddr const *addr)
+{
+  if (addr) {
+    switch (addr->sa_family) {
+    case AF_INET:
+      return this->assign(reinterpret_cast<sockaddr_in const *>(addr)->sin_addr.s_addr);
+    case AF_INET6:
+      return this->assign(reinterpret_cast<sockaddr_in6 const *>(addr)->sin6_addr);
+    default:
+      break;
+    }
+  }
+  _family = AF_UNSPEC;
+  return *this;
+}
+
+sockaddr *
+IpAddr::fill(sockaddr *sa, in_port_t port) const
+{
+  switch (sa->sa_family = _family) {
+  case AF_INET: {
+    sockaddr_in *sa4{reinterpret_cast<sockaddr_in *>(sa)};
+    memset(sa4, 0, sizeof(*sa4));
+    sa4->sin_addr.s_addr = _addr._ip4;
+    sa4->sin_port        = port;
+    Set_Sockaddr_Len(sa4, Meta_Case_Arg);
+  } break;
+  case AF_INET6: {
+    sockaddr_in6 *sa6{reinterpret_cast<sockaddr_in6 *>(sa)};
+    memset(sa6, 0, sizeof(*sa6));
+    sa6->sin6_port = port;
+    Set_Sockaddr_Len(sa6, Meta_Case_Arg);
+  } break;
+  }
+  return sa;
+}
+
 std::string_view
 IpEndpoint::family_name(uint16_t family)
 {
@@ -272,7 +310,7 @@ IpAddr::parse(const std::string_view &str)
     }
   } break;
   case AF_INET6: {
-    unsigned int n         = 0;
+    int n         = 0;
     int empty_idx = -1; // index of empty quad, -1 if not found yet.
     while (n < IP6_QUADS && !src.empty()) {
       ts::TextView token{src.take_prefix_at(':')};
@@ -451,17 +489,17 @@ IpRange::parse(std::string_view src)
               _min = ZERO_ADDR6;
               _max = MAX_ADDR6;
             } else if (cidr < 64) { // only _max bytes affected, lower bytes are forced.
-              mask          = htobe64(~static_cast<uint64_t>(0) << (64 - cidr));
+              mask         = htobe64(~static_cast<uint64_t>(0) << (64 - cidr));
               _max._family = _min._family;
-              _min._addr._u64[0]           &= mask;
-              _min._addr._u64[1]           = 0;
-              _max._addr._u64[0]           = _min._addr._u64[0] | ~mask;
-              _max._addr._u64[1]           = ~static_cast<uint64_t>(0);
+              _min._addr._u64[0] &= mask;
+              _min._addr._u64[1] = 0;
+              _max._addr._u64[0] = _min._addr._u64[0] | ~mask;
+              _max._addr._u64[1] = ~static_cast<uint64_t>(0);
             } else if (cidr == 64) {
-              _max._family = _min._family;
+              _max._family       = _min._family;
               _max._addr._u64[0] = _min._addr._u64[0];
-              _min._addr._u64[1]                       = 0;
-              _max._addr._u64[1]                       = ~static_cast<uint64_t>(0);
+              _min._addr._u64[1] = 0;
+              _max._addr._u64[1] = ~static_cast<uint64_t>(0);
             } else if (cidr <= 128) { // lower bytes changed, _max bytes unaffected.
               _max = _min;
               if (cidr < 128) {
@@ -477,14 +515,15 @@ IpRange::parse(std::string_view src)
       }
     } else if (_min.parse(src.substr(0, idx)) && _max.parse(src.substr(idx + 1)) && _min.family() == _max.family()) {
       // not '/' so must be '-'
-      zret  = true;
+      zret = true;
     }
   } else if (_min.parse(src)) {
-    zret  = true;
+    zret = true;
     _max = _min;
   }
 
-  if (!zret) this->clear();
+  if (!zret)
+    this->clear();
   return zret;
 }
 

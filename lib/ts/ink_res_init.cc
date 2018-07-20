@@ -86,12 +86,14 @@
 
 #include "ts/ink_string.h"
 #include "ts/ink_resolver.h"
-#include "ts/ink_inet.h"
+#include "ts/ts_ip.h"
 #include "ts/Tokenizer.h"
 
 #if !defined(isascii) /* XXX - could be a function */
 #define isascii(c) (!(c & 0200))
 #endif
+
+using ts::IpEndpoint;
 
 HostResPreferenceOrder const HOST_RES_DEFAULT_PREFERENCE_ORDER = {HOST_RES_PREFER_IPV4, HOST_RES_PREFER_IPV6, HOST_RES_PREFER_NONE};
 
@@ -135,11 +137,10 @@ ink_res_setservers(ink_res_state statp, IpEndpoint const *set, int cnt)
   for (IpEndpoint const *limit = set + cnt; nserv < INK_MAXNS && set < limit; ++set) {
     IpEndpoint *dst = &statp->nsaddr_list[nserv];
 
-    if (dst == set) {
-      if (ats_is_ip(&set->sa)) {
-        ++nserv;
+    if (set->is_valid()) {
+      if (dst != set) {
+        *dst = *set;
       }
-    } else if (ats_ip_copy(&dst->sa, &set->sa)) {
       ++nserv;
     }
   }
@@ -153,7 +154,8 @@ ink_res_getservers(ink_res_state statp, sockaddr *set, int cnt)
   IpEndpoint const *src = statp->nsaddr_list;
 
   for (int i = 0; i < statp->nscount && i < cnt; ++i, ++src) {
-    if (ats_ip_copy(set, &src->sa)) {
+    if (src->is_valid()) {
+      src->fill(set);
       ++set;
       ++zret;
     }
@@ -433,8 +435,8 @@ ink_res_init(ink_res_state statp,         ///< State object to update.
     if (pHostListSize > INK_MAXNS) {
       pHostListSize = INK_MAXNS;
     }
-    for (; nserv < pHostListSize && ats_is_ip(&pHostList[nserv].sa); ++nserv) {
-      ats_ip_copy(&statp->nsaddr_list[nserv].sa, &pHostList[nserv].sa);
+    for (; nserv < pHostListSize && pHostList[nserv].is_valid(); ++nserv) {
+      pHostList[nserv].fill(&statp->nsaddr_list[nserv].sa);
     }
   }
 
@@ -516,10 +518,10 @@ ink_res_init(ink_res_state statp,         ///< State object to update.
         }
         if ((*cp != '\0') && (*cp != '\n')) {
           std::string_view host(cp, strcspn(cp, ";# \t\n"));
-          if (0 == ats_ip_pton(host, &statp->nsaddr_list[nserv].sa)) {
+          if (statp->nsaddr_list[nserv].parse(host)) {
             // If there was no port in the config, lets use NAMESERVER_PORT
-            if (ats_ip_port_host_order(&statp->nsaddr_list[nserv].sa) == 0) {
-              ats_ip_port_cast(&statp->nsaddr_list[nserv].sa) = htons(NAMESERVER_PORT);
+            if (statp->nsaddr_list[nserv].port() == 0) {
+              statp->nsaddr_list[nserv].port() = htons(NAMESERVER_PORT);
             }
             ++nserv;
           }

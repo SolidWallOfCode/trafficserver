@@ -35,17 +35,16 @@
 
 namespace ts
 {
-
 class IpAddr; // forward declare.
-        class IpRange;
+class IpRange;
 
 /** A union to hold the standard IP address structures.
  *
     By standard we mean @c sockaddr compliant.
 
-    This class contains a number of stack methods to perform operations on external @c sockaddr
-    instances. Many of the non-static methods are duplicates that operate on the internal
-    @c sockaddr instead of an external one.
+    This class contains a number of static methods to perform operations on external @c sockaddr
+    instances. These are all duplicates of methods that operate on the internal @c sockaddr and
+    are provided primarily for backwards compatibility during the shift to using this class.
 
     We use the term "endpoint" because these contain more than just the
     raw address, all of the data for an IP endpoint is present.
@@ -75,11 +74,22 @@ union IpEndpoint {
   static bool tokenize(std::string_view src, std::string_view *host = nullptr, std::string_view *port = nullptr,
                        std::string_view *rest = nullptr);
 
+  /** Parse a string for an IP address.
+
+      The address resuling from the parse is copied to this object if the conversion is successful,
+      otherwise this object is invalidated.
+
+      @return @c true on success, @c false otherwise.
+  */
+  bool parse(std::string_view str);
+
   /// Invalidate a @c sockaddr.
   static void invalidate(sockaddr *addr);
 
   /// Invalidate this endpoint.
   self_type &invalidate();
+
+  self_type &operator=(self_type const &that);
 
   /** Copy (assign) the contents of @a src to @a dst.
    *
@@ -99,6 +109,9 @@ union IpEndpoint {
 
   /// Assign from an @a addr and @a port.
   self_type &assign(IpAddr const &addr, in_port_t port = 0);
+
+  /// Copy to @a sa.
+  const self_type &fill(sockaddr *addr) const;
 
   /// Test for valid IP address.
   bool is_valid() const;
@@ -186,6 +199,9 @@ public:
   self_type &operator=(in6_addr const &ip);
   /// Assign from @c sockaddr
   self_type &operator=(sockaddr const *addr);
+
+  /// Write to @c sockaddr.
+  sockaddr *fill(sockaddr *sa, in_port_t port = 0) const;
 
   /** Parse a string for an IP address.
 
@@ -287,7 +303,6 @@ class IpRange
   using self_type = IpRange;
 
 public:
-
   IpRange();                       ///< Default (empty) range constructor.
   IpRange(IpAddr min, IpAddr max); ///< Construct range.
 
@@ -308,16 +323,19 @@ public:
   bool parse(std::string_view text);
 
   /// Reset to default state.
-  self_type & clear();
+  self_type &clear();
+
+  bool empty() const;
+
+  /// Minimum address in range.
+  IpAddr const &min() const;
+
+  /// Maximum address in range.
+  IpAddr const &max() const;
 
 protected:
-  struct NilRange{}; ///< Type for marking the range invalid.
-  enum { NIL, IPV4, IPV6} _type{NIL}; ///< Type of range.
-  union {
-    NilRange _nil;
-    DiscreteInterval<in_addr_t> _r4;
-    DiscreteInterval<in6_addr> _r6;
-  };
+  IpAddr _min; ///< Minimum value in range (inclusive)
+  IpAddr _max; ///< Maximum value in range (inclusive)
 };
 
 /** An IP address mask.
@@ -326,12 +344,12 @@ protected:
  */
 class IpMask
 {
-  using self_type = IpMask;
-  using raw_type  = unsigned int;
+  using self_type = IpMask;   ///< Self reference type.
+  using raw_type  = uint32_t; ///< Storage for mask width.
 
 public:
   IpMask();
-  IpMask(raw_type count);
+  IpMask(raw_type count, sa_family_t family = AF_INET);
   IpMask(std::string_view text);
 
   /** Get the CIDR mask wide enough to cover this address.
@@ -348,7 +366,7 @@ public:
 
   /// Write the mask as an address to @a addr.
   /// @return The filled address.
-  IpAddr& fill(IpAddr& addr);
+  IpAddr &fill(IpAddr &addr);
 
 private:
   raw_type _mask{0};
@@ -365,25 +383,25 @@ public:
   IpNet();
   IpNet(const IpAddr &addr, const IpMask &mask);
 
-  operator IpAddr const&() const;
-  operator IpMask const& () const;
+  operator IpAddr const &() const;
+  operator IpMask const &() const;
 
-  IpAddr const& addr() const;
+  IpAddr const &addr() const;
 
-  IpMask const& mask() const;
+  IpMask const &mask() const;
 
   IpAddr lower_bound() const;
   IpAddr upper_bound() const;
 
-  bool contains(IpAddr const& addr) const;
+  bool contains(IpAddr const &addr) const;
 
   // computes this is strict subset of other
-  bool is_subnet_of(self_type const& that)
+  bool is_subnet_of(self_type const &that);
 
   // Check if there are any addresses in both @a this and @a that.
-  bool intersects(self_type const& that);
+  bool intersects(self_type const &that);
 
-  self_type & assign(IpAddr const& addr, IpMask const& mask);
+  self_type &assign(IpAddr const &addr, IpMask const &mask);
 
   static char const SEPARATOR; // the character used between the address and mask
 
@@ -541,24 +559,6 @@ IpAddr::assign(sockaddr_in6 const *addr)
   return *this;
 }
 
-/// Assign from basic @c sockaddr.
-inline IpAddr &
-IpAddr::assign(sockaddr const *addr)
-{
-  if (addr) {
-    switch (addr->sa_family) {
-    case AF_INET:
-      return this->assign(reinterpret_cast<sockaddr_in const *>(addr)->sin_addr.s_addr);
-    case AF_INET6:
-      return this->assign(reinterpret_cast<sockaddr_in6 const *>(addr)->sin6_addr);
-    default:
-      break;
-    }
-  }
-  _family = AF_UNSPEC;
-  return *this;
-}
-
 inline bool
 IpAddr::is_valid() const
 {
@@ -696,9 +696,23 @@ IpEndpoint::is_valid() const
 }
 
 inline IpEndpoint &
+IpEndpoint::operator=(self_type const &that)
+{
+  self_type::assign(&sa, &that.sa);
+  return *this;
+}
+
+inline IpEndpoint &
 IpEndpoint::assign(sockaddr const *src)
 {
   self_type::assign(&sa, src);
+  return *this;
+}
+
+inline IpEndpoint const &
+IpEndpoint::fill(sockaddr *addr) const
+{
+  self_type::assign(addr, &sa);
   return *this;
 }
 
@@ -763,32 +777,83 @@ IpEndpoint::host_order_port(sockaddr const *addr)
   return ntohs(self_type::port(addr));
 }
 
+// +++ IpRange +++
+
 inline bool
-IpEndpoint::is_valid() const
+IpRange::empty() const
 {
-  return AF_INET == sa.sa_family || AF_INET6 == sa.sa_family;
+  return _min.is_valid() && _max.is_valid();
+}
+inline IpAddr const &
+IpRange::min() const
+{
+  return _min;
+}
+inline IpAddr const &
+IpRange::max() const
+{
+  return _max;
+}
+inline IpRange &
+IpRange::clear()
+{
+  _min.invalidate();
+  _max.invalidate();
+  return *this;
 }
 
+// +++ IpMask +++
+
 inline IpMask::IpMask() {}
-inline IpMask::IpMask(raw_type width) : _mask(width) {}
+inline IpMask::IpMask(raw_type width, sa_family_t family) : _mask(width), _family(family) {}
 
-inline IpMask::raw_type IpMask::width() const { return _mask; }
+inline IpMask::raw_type
+IpMask::width() const
+{
+  return _mask;
+}
 
-bool operator == (IpMask const& lhs, IpMask const& rhs) { return lhs.width() == rhs.width(); }
-bool operator != (IpMask const& lhs, IpMask const& rhs) { return lhs.width() != rhs.width(); }
-bool operator <  (IpMask const& lhs, IpMask const& rhs) { return lhs.width() < rhs.width(); }
+bool
+operator==(IpMask const &lhs, IpMask const &rhs)
+{
+  return lhs.width() == rhs.width();
+}
+bool
+operator!=(IpMask const &lhs, IpMask const &rhs)
+{
+  return lhs.width() != rhs.width();
+}
+bool
+operator<(IpMask const &lhs, IpMask const &rhs)
+{
+  return lhs.width() < rhs.width();
+}
 
 inline IpNet::IpNet() {}
 
-inline IpNet::IpNet(IpAddr const& addr, IpMask const& mask) : _addr(addr), _mask(mask) {}
+inline IpNet::IpNet(IpAddr const &addr, IpMask const &mask) : _addr(addr), _mask(mask) {}
 
-inline IpNet::operator IpAddr const& () const { return _addr; }
+inline IpNet::operator IpAddr const &() const
+{
+  return _addr;
+}
 
-inline IpNet::operator IpMask const& () const { return _mask; }
+inline IpNet::operator IpMask const &() const
+{
+  return _mask;
+}
 
-inline IpAddr const& IpNet::addr() const { return _addr; }
+inline IpAddr const &
+IpNet::addr() const
+{
+  return _addr;
+}
 
-inline IpMask const& IpNet::mask() const { return _mask; }
+inline IpMask const &
+IpNet::mask() const
+{
+  return _mask;
+}
 
 // BufferWriter formatting support.
 BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr);

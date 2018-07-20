@@ -33,11 +33,14 @@
 #include "ts/TextView.h"
 #include "ts/ink_inet.h"
 #include "ink_inet.h"
+#include "ts/ts_ip.h"
 
 using namespace std::literals;
 
 using IpAddr     = ts::IpAddr;
 using IpEndpoint = ts::IpEndpoint;
+
+using ts::IpRange;
 
 const std::string_view IP_PROTO_TAG_IPV4("ipv4"sv);
 const std::string_view IP_PROTO_TAG_IPV6("ipv6"sv);
@@ -286,82 +289,11 @@ int
 ats_ip_range_parse(std::string_view src, IpAddr &lower, IpAddr &upper)
 {
   int zret = TS_ERROR;
-  IpAddr addr, addr2;
-  static const IpAddr ZERO_ADDR4{INADDR_ANY};
-  static const IpAddr MAX_ADDR4{INADDR_BROADCAST};
-  static const IpAddr ZERO_ADDR6{in6addr_any};
-  // I can't find a clean way to static const initialize an IPv6 address to all ones.
-  // This is the best I can find that's portable.
-  static const uint64_t ones[]{UINT64_MAX, UINT64_MAX};
-  static const IpAddr MAX_ADDR6{reinterpret_cast<in6_addr const &>(ones)};
-
-  auto idx = src.find_first_of("/-"sv);
-  if (idx != src.npos) {
-    if (idx + 1 >= src.size()) { // must have something past the separator or it's bogus.
-      zret = TS_ERROR;
-    } else if ('/' == src[idx]) {
-      if (addr.parse(src.substr(0, idx))) { // load the address
-        ts::TextView parsed;
-        src.remove_prefix(idx + 1); // drop address and separator.
-        int cidr = ts::svtoi(src, &parsed);
-        if (parsed.size() && 0 <= cidr) { // a cidr that's a positive integer.
-          // Special case the cidr sizes for 0, maximum, and for IPv6 64 bit boundaries.
-          if (addr.is_4()) {
-            zret = TS_SUCCESS;
-            if (0 == cidr) {
-              lower = ZERO_ADDR4;
-              upper = MAX_ADDR4;
-            } else if (cidr <= 32) {
-              lower = upper = addr;
-              if (cidr < 32) {
-                in_addr_t mask = htonl(INADDR_BROADCAST << (32 - cidr));
-                lower._addr._ip4 &= mask;
-                upper._addr._ip4 |= ~mask;
-              }
-            } else {
-              zret = TS_ERROR;
-            }
-          } else if (addr.is_6()) {
-            uint64_t mask;
-            zret = TS_SUCCESS;
-            if (cidr == 0) {
-              lower = ZERO_ADDR6;
-              upper = MAX_ADDR6;
-            } else if (cidr < 64) { // only upper bytes affected, lower bytes are forced.
-              mask          = htobe64(~static_cast<uint64_t>(0) << (64 - cidr));
-              lower._family = upper._family = addr._family;
-              lower._addr._u64[0]           = addr._addr._u64[0] & mask;
-              lower._addr._u64[1]           = 0;
-              upper._addr._u64[0]           = addr._addr._u64[0] | ~mask;
-              upper._addr._u64[1]           = ~static_cast<uint64_t>(0);
-            } else if (cidr == 64) {
-              lower._family = upper._family = addr._family;
-              lower._addr._u64[0] = upper._addr._u64[0] = addr._addr._u64[0];
-              lower._addr._u64[1]                       = 0;
-              upper._addr._u64[1]                       = ~static_cast<uint64_t>(0);
-            } else if (cidr <= 128) { // lower bytes changed, upper bytes unaffected.
-              lower = upper = addr;
-              if (cidr < 128) {
-                mask = htobe64(~static_cast<uint64_t>(0) << (128 - cidr));
-                lower._addr._u64[1] &= mask;
-                upper._addr._u64[1] |= ~mask;
-              }
-            } else {
-              zret = TS_ERROR;
-            }
-          }
-        }
-      }
-    } else if (TS_SUCCESS == addr.load(src.substr(0, idx)) && TS_SUCCESS == addr2.load(src.substr(idx + 1)) &&
-               addr.family() == addr2.family()) {
-      zret = TS_SUCCESS;
-      // not '/' so must be '-'
-      lower = addr;
-      upper = addr2;
-    }
-  } else if (TS_SUCCESS == addr.load(src)) {
+  IpRange r;
+  if (r.parse(src)) {
     zret  = TS_SUCCESS;
-    lower = upper = addr;
+    lower = r.min();
+    upper = r.max();
   }
   return zret;
 }
@@ -423,16 +355,10 @@ ats_ip_to_hex(sockaddr const *src, char *dst, size_t len)
 sockaddr *
 ats_ip_set(sockaddr *dst, IpAddr const &addr, uint16_t port)
 {
-  if (AF_INET == addr._family) {
-    ats_ip4_set(dst, addr._addr._ip4, port);
-  } else if (AF_INET6 == addr._family) {
-    ats_ip6_set(dst, addr._addr._ip6, port);
-  } else {
-    ats_ip_invalidate(dst);
-  }
-  return dst;
+  return addr.fill(dst, port);
 }
 
+#if 0
 int
 IpAddr::load(const char *text)
 {
@@ -537,6 +463,7 @@ IpAddr::cmp(self const &that) const
 
   return zret;
 }
+#endif
 
 int
 ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
@@ -549,10 +476,10 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
   std::string_view src(host, strlen(host) + 1);
 
   if (ip4) {
-    ats_ip_invalidate(ip4);
+    ip4->invalidate();
   }
   if (ip6) {
-    ats_ip_invalidate(ip6);
+    ip6->invalidate();
   }
 
   if (0 == ats_ip_parse(src, &addr_text, &port_text)) {
@@ -615,10 +542,10 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
         }
       }
       if (ip4 && ip4_type > NA) {
-        ats_ip_copy(ip4, ip4_src);
+        ip4->assign(ip4_src);
       }
       if (ip6 && ip6_type > NA) {
-        ats_ip_copy(ip6, ip6_src);
+        ip6->assign(ip6_src);
       }
       freeaddrinfo(ai_result); // free *after* the copy.
     }
@@ -630,14 +557,14 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
   if (port_text.size()) {
     port = htons(atoi(port_text.data()));
   }
-  if (ats_is_ip(ip4)) {
-    ats_ip_port_cast(ip4) = port;
+  if (ip4->is_valid()) {
+    ip4->port() = port;
   }
-  if (ats_is_ip(ip6)) {
-    ats_ip_port_cast(ip6) = port;
+  if (ip6 && ip6->is_valid()) {
+    ip6->port() = port;
   }
 
-  if (!ats_is_ip(ip4) && !ats_is_ip(ip6)) {
+  if (!((ip4 && ip4->is_valid()) || (ip6 && ip6->is_valid()))) {
     zret = -1;
   }
 
@@ -690,253 +617,3 @@ ats_tcp_somaxconn()
 
   return value;
 }
-
-namespace ts
-{
-BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, in_addr_t addr)
-{
-  uint8_t *ptr = reinterpret_cast<uint8_t *>(&addr);
-  BWFSpec local_spec{spec}; // Format for address elements.
-  bool align_p = false;
-
-  if (spec._ext.size()) {
-    if (spec._ext.front() == '=') {
-      align_p          = true;
-      local_spec._fill = '0';
-    } else if (spec._ext.size() > 1 && spec._ext[1] == '=') {
-      align_p          = true;
-      local_spec._fill = spec._ext[0];
-    }
-  }
-
-  if (align_p) {
-    local_spec._min   = 3;
-    local_spec._align = BWFSpec::Align::RIGHT;
-  } else {
-    local_spec._min = 0;
-  }
-
-  bwformat(w, local_spec, ptr[0]);
-  w.write('.');
-  bwformat(w, local_spec, ptr[1]);
-  w.write('.');
-  bwformat(w, local_spec, ptr[2]);
-  w.write('.');
-  bwformat(w, local_spec, ptr[3]);
-  return w;
-}
-
-BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, in6_addr const &addr)
-{
-  using QUAD = uint16_t const;
-  BWFSpec local_spec{spec}; // Format for address elements.
-  uint8_t const *ptr   = addr.s6_addr;
-  uint8_t const *limit = ptr + sizeof(addr.s6_addr);
-  QUAD *lower          = nullptr; // the best zero range
-  QUAD *upper          = nullptr;
-  bool align_p         = false;
-
-  if (spec._ext.size()) {
-    if (spec._ext.front() == '=') {
-      align_p          = true;
-      local_spec._fill = '0';
-    } else if (spec._ext.size() > 1 && spec._ext[1] == '=') {
-      align_p          = true;
-      local_spec._fill = spec._ext[0];
-    }
-  }
-
-  if (align_p) {
-    local_spec._min   = 4;
-    local_spec._align = BWFSpec::Align::RIGHT;
-  } else {
-    local_spec._min = 0;
-    // do 0 compression if there's no internal fill.
-    for (QUAD *spot = reinterpret_cast<QUAD *>(ptr), *last = reinterpret_cast<QUAD *>(limit), *current = nullptr; spot < last;
-         ++spot) {
-      if (0 == *spot) {
-        if (current) {
-          // If there's no best, or this is better, remember it.
-          if (!lower || (upper - lower < spot - current)) {
-            lower = current;
-            upper = spot;
-          }
-        } else {
-          current = spot;
-        }
-      } else {
-        current = nullptr;
-      }
-    }
-  }
-
-  if (!local_spec.has_numeric_type()) {
-    local_spec._type = 'x';
-  }
-
-  for (; ptr < limit; ptr += 2) {
-    if (reinterpret_cast<uint8_t const *>(lower) <= ptr && ptr <= reinterpret_cast<uint8_t const *>(upper)) {
-      if (ptr == addr.s6_addr) {
-        w.write(':'); // only if this is the first quad.
-      }
-      if (ptr == reinterpret_cast<uint8_t const *>(upper)) {
-        w.write(':');
-      }
-    } else {
-      uint16_t f = (ptr[0] << 8) + ptr[1];
-      bwformat(w, local_spec, f);
-      if (ptr != limit - 2) {
-        w.write(':');
-      }
-    }
-  }
-  return w;
-}
-
-BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr)
-{
-  BWFSpec local_spec{spec}; // Format for address elements and port.
-  bool addr_p{true};
-  bool family_p{false};
-
-  if (spec._ext.size()) {
-    if (spec._ext.front() == '=') {
-      local_spec._ext.remove_prefix(1);
-    } else if (spec._ext.size() > 1 && spec._ext[1] == '=') {
-      local_spec._ext.remove_prefix(2);
-    }
-  }
-  if (local_spec._ext.size()) {
-    addr_p = false;
-    for (char c : local_spec._ext) {
-      switch (c) {
-      case 'a':
-      case 'A':
-        addr_p = true;
-        break;
-      case 'f':
-      case 'F':
-        family_p = true;
-        break;
-      }
-    }
-  }
-
-  if (addr_p) {
-    if (addr.is_4()) {
-      bwformat(w, spec, addr._addr._ip4);
-    } else if (addr.is_6()) {
-      bwformat(w, spec, addr._addr._ip6);
-    } else {
-      w.print("*Not IP address [{}]*", addr.family());
-    }
-  }
-
-  if (family_p) {
-    local_spec._min = 0;
-    if (addr_p) {
-      w.write(' ');
-    }
-    if (spec.has_numeric_type()) {
-      bwformat(w, local_spec, static_cast<uintmax_t>(addr.family()));
-    } else {
-      bwformat(w, local_spec, addr.family());
-    }
-  }
-  return w;
-}
-
-BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, sockaddr const *addr)
-{
-  BWFSpec local_spec{spec}; // Format for address elements and port.
-  bool port_p{true};
-  bool addr_p{true};
-  bool family_p{false};
-  bool local_numeric_fill_p{false};
-  char local_numeric_fill_char{'0'};
-
-  if (spec._type == 'p' || spec._type == 'P') {
-    bwformat(w, spec, static_cast<void const *>(addr));
-    return w;
-  }
-
-  if (spec._ext.size()) {
-    if (spec._ext.front() == '=') {
-      local_numeric_fill_p = true;
-      local_spec._ext.remove_prefix(1);
-    } else if (spec._ext.size() > 1 && spec._ext[1] == '=') {
-      local_numeric_fill_p    = true;
-      local_numeric_fill_char = spec._ext.front();
-      local_spec._ext.remove_prefix(2);
-    }
-  }
-  if (local_spec._ext.size()) {
-    addr_p = port_p = false;
-    for (char c : local_spec._ext) {
-      switch (c) {
-      case 'a':
-      case 'A':
-        addr_p = true;
-        break;
-      case 'p':
-      case 'P':
-        port_p = true;
-        break;
-      case 'f':
-      case 'F':
-        family_p = true;
-        break;
-      }
-    }
-  }
-
-  if (addr_p) {
-    bool bracket_p = false;
-    switch (addr->sa_family) {
-    case AF_INET:
-      bwformat(w, spec, ats_ip4_addr_cast(addr));
-      break;
-    case AF_INET6:
-      if (port_p) {
-        w.write('[');
-        bracket_p = true; // take a note - put in the trailing bracket.
-      }
-      bwformat(w, spec, ats_ip6_addr_cast(addr));
-      break;
-    default:
-      w.print("*Not IP address [{}]*", addr->sa_family);
-      break;
-    }
-    if (bracket_p)
-      w.write(']');
-    if (port_p)
-      w.write(':');
-  }
-  if (port_p) {
-    if (local_numeric_fill_p) {
-      local_spec._min   = 5;
-      local_spec._fill  = local_numeric_fill_char;
-      local_spec._align = BWFSpec::Align::RIGHT;
-    } else {
-      local_spec._min = 0;
-    }
-    bwformat(w, local_spec, static_cast<uintmax_t>(ats_ip_port_host_order(addr)));
-  }
-  if (family_p) {
-    local_spec._min = 0;
-    if (addr_p || port_p)
-      w.write(' ');
-    if (spec.has_numeric_type()) {
-      bwformat(w, local_spec, static_cast<uintmax_t>(addr->sa_family));
-    } else {
-      bwformat(w, local_spec, ats_ip_family_name(addr->sa_family));
-    }
-  }
-  return w;
-}
-
-} // namespace ts
