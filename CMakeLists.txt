@@ -1154,6 +1154,7 @@ add_library(libtsutil SHARED
         lib/ts/TsBuffer.h
 	lib/ts/ts_ip.h
 	lib/ts/ts_ip.cc
+	lib/ts/ts_meta.h
         lib/ts/Version.cc
         lib/ts/X509HostnameValidator.cc
         lib/ts/X509HostnameValidator.h
