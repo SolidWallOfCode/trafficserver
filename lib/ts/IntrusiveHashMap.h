@@ -577,7 +577,6 @@ IntrusiveHashMap<H>::erase(value_type *v)
 
 namespace detail
 {
-
   // Make @c apply more convenient by allowing the function to take a reference type or pointer type to the container
   // elements. The pointer type is the base, plus a shim to convert from a reference type functor to a pointer pointer
   // type. The complex return type definition forces only one, but not both, to be valid for a particular functor. This
@@ -589,7 +588,7 @@ namespace detail
   IntrusiveHashMapApply(IntrusiveHashMap<H> &map, F &&f)
     -> decltype(f(*static_cast<typename IntrusiveHashMap<H>::value_type *>(nullptr)), map)
   {
-    return map.apply([&f](typename IntrusiveHashMap<H>::value_type * v) { return f(*v); });
+    return map.apply([&f](typename IntrusiveHashMap<H>::value_type *v) { return f(*v); });
   }
 
   template <typename H, typename F>
