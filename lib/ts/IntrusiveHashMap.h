@@ -153,12 +153,9 @@ public:
   /// A range of elements in the map.
   /// It is a half open range, [first, last) in the usual STL style.
   /// @internal I tried @c std::pair as a base for this but was unable to get STL container operations to work.
-  struct range {
-    iterator first; ///< First element.
-    iterator last;  ///< Past last element.
-
-    /// Construct from two iterators.
-    range(iterator const &lhs, iterator const &rhs);
+  struct range : public std::pair<iterator, iterator> {
+    using super_type = std::pair<iterator, iterator>; ///< Super type.
+    using super_type::super_type;                     ///< Use super type constructors.
 
     // These methods enable treating the range as a view in to the hash map.
 
@@ -169,12 +166,9 @@ public:
   };
 
   /// A range of constant elements in the map.
-  struct const_range {
-    const_iterator first; ///< First element.
-    const_iterator last;  ///< Past last element.
-
-    /// Construct from two iterators.
-    const_range(const_iterator const &lhs, const_iterator const &rhs);
+  struct const_range : public std::pair<const_iterator, const_iterator> {
+    using super_type = std::pair<iterator, iterator>; ///< Super type.
+    using super_type::super_type;                     ///< Use super type constructors.
 
     // These methods enable treating the range as a view in to the hash map.
 
@@ -343,38 +337,31 @@ IntrusiveHashMap<H>::Bucket::contains(value_type *v) const
 }
 
 // ---------------------
-template <typename H> IntrusiveHashMap<H>::range::range(iterator const &lhs, iterator const &rhs) : first(lhs), last(rhs) {}
-
 template <typename H>
 auto
 IntrusiveHashMap<H>::range::begin() const -> iterator const &
 {
-  return first;
+  return super_type::first;
 }
 template <typename H>
 auto
 IntrusiveHashMap<H>::range::end() const -> iterator const &
 {
-  return last;
-}
-
-template <typename H>
-IntrusiveHashMap<H>::const_range::const_range(const_iterator const &lhs, const_iterator const &rhs) : first(lhs), last(rhs)
-{
+  return super_type::second;
 }
 
 template <typename H>
 auto
 IntrusiveHashMap<H>::const_range::begin() const -> const_iterator const &
 {
-  return first;
+  return super_type::first;
 }
 
 template <typename H>
 auto
 IntrusiveHashMap<H>::const_range::end() const -> const_iterator const &
 {
-  return last;
+  return super_type::second;
 }
 
 // ---------------------
@@ -466,7 +453,7 @@ IntrusiveHashMap<H>::equal_range(key_type key) -> range
     ++last;
   }
 
-  return {first, last};
+  return range{first, last};
 }
 
 template <typename H>

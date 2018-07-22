@@ -120,7 +120,7 @@ TEST_CASE("IntrusiveHashMap", "[libts][IntrusiveHashMap]")
   map.insert(new Thing("dup"sv, 81));
 
   auto r = map.equal_range("dup"sv);
-  REQUIRE(r.first != r.last);
+  REQUIRE(r.first != r.second);
   REQUIRE(r.first->_payload == "dup"sv);
 
   // Erase all the non-"dup" and see if the range is still correct.
@@ -132,7 +132,7 @@ TEST_CASE("IntrusiveHashMap", "[libts][IntrusiveHashMap]")
     }
   }
   r = map.equal_range("dup"sv);
-  REQUIRE(r.first != r.last);
+  REQUIRE(r.first != r.second);
   idx = r.first;
   REQUIRE(idx->_payload == "dup"sv);
   REQUIRE((++idx)->_payload == "dup"sv);
