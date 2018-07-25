@@ -49,16 +49,19 @@ Meta_Case_Void_Func()
 // member if it exists.
 template <typename T>
 auto
-Set_Sockaddr_Len(T *, MetaCase_0 const &) -> decltype(Meta_Case_Void_Func())
+Set_Sockaddr_Len_Case(T *, MetaCase_0 const &) -> decltype(Meta_Case_Void_Func())
 {
 }
 
 template <typename T>
 auto
-Set_Sockaddr_Len(T *addr, MetaCase_1 const &) -> decltype(T::sin_len, Meta_Case_Void_Func())
+Set_Sockaddr_Len_Case(T *addr, MetaCase_1 const &) -> decltype(T::sin_len, Meta_Case_Void_Func())
 {
   addr->sin_len = sizeof(T);
 }
+
+template < typename T >
+void Set_Sockaddr_Len(T * addr) { Set_Sockaddr_Len_Case(addr, Meta_Case_Arg);}
 
 } // namespace
 
