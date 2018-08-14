@@ -487,11 +487,14 @@ struct OverridableHttpConfigParams {
       connect_attempts_rr_retries(3),
       connect_attempts_timeout(30),
       post_connect_attempts_timeout(1800),
+      connect_attempts_timeout_ms(0),
+      post_connect_attempts_timeout_ms(0),
       parent_connect_attempts(4),
       parent_retry_time(300),
       parent_fail_threshold(10),
       per_parent_connect_attempts(2),
       parent_connect_timeout(30),
+      parent_connect_timeout_ms(0),
       down_server_timeout(300),
       client_abort_threshold(10),
       max_cache_open_read_retries(-1),
@@ -705,6 +708,8 @@ struct OverridableHttpConfigParams {
   MgmtInt connect_attempts_rr_retries;
   MgmtInt connect_attempts_timeout;
   MgmtInt post_connect_attempts_timeout;
+  MgmtInt connect_attempts_timeout_ms;
+  MgmtInt post_connect_attempts_timeout_ms;
 
   ////////////////////////////////////
   // parent proxy connect attempts //
@@ -714,6 +719,7 @@ struct OverridableHttpConfigParams {
   MgmtInt parent_fail_threshold;
   MgmtInt per_parent_connect_attempts;
   MgmtInt parent_connect_timeout;
+  MgmtInt parent_connect_timeout_ms;
 
   MgmtInt down_server_timeout;
   MgmtInt client_abort_threshold;

@@ -8026,6 +8026,12 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
   case TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT:
     ret = _memberp_to_generic(&overridableHttpConfig->post_connect_attempts_timeout, conv);
     break;
+  case TS_CONFIG_HTTP_CONNECT_ATTEMPTS_TIMEOUT_MS:
+    ret = _memberp_to_generic(&overridableHttpConfig->connect_attempts_timeout_ms, conv);
+    break;
+  case TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT_MS:
+    ret = _memberp_to_generic(&overridableHttpConfig->post_connect_attempts_timeout_ms, conv);
+    break;
   case TS_CONFIG_HTTP_DOWN_SERVER_CACHE_TIME:
     ret = _memberp_to_generic(&overridableHttpConfig->down_server_timeout, conv);
     break;
@@ -8211,6 +8217,9 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     break;
   case TS_CONFIG_HTTP_PARENT_CONNECT_ATTEMPT_TIMEOUT:
     ret = _memberp_to_generic(&overridableHttpConfig->parent_connect_timeout, conv);
+    break;
+  case TS_CONFIG_HTTP_PARENT_CONNECT_ATTEMPT_TIMEOUT_MS:
+    ret = _memberp_to_generic(&overridableHttpConfig->parent_connect_timeout_ms, conv);
     break;
   case TS_CONFIG_HTTP_ALLOW_MULTI_RANGE:
     ret = _memberp_to_generic(&overridableHttpConfig->allow_multi_range, conv);
@@ -8712,6 +8721,8 @@ TSHttpTxnConfigFind(const char *name, int length, TSOverridableConfigKey *conf, 
         cnf = TS_CONFIG_NET_SOCK_SEND_BUFFER_SIZE_OUT;
       } else if (!strncmp(name, "proxy.config.http.connect_attempts_timeout", length)) {
         cnf = TS_CONFIG_HTTP_CONNECT_ATTEMPTS_TIMEOUT;
+      } else if (!strncmp(name, "proxy.config.http.connect_attempts_timeout_ms", length)) {
+        cnf = TS_CONFIG_HTTP_CONNECT_ATTEMPTS_TIMEOUT_MS;
       } else if (!strncmp(name, "proxy.config.websocket.no_activity_timeout", length)) {
         cnf = TS_CONFIG_WEBSOCKET_NO_ACTIVITY_TIMEOUT;
       }
@@ -8884,6 +8895,8 @@ TSHttpTxnConfigFind(const char *name, int length, TSOverridableConfigKey *conf, 
     case 't':
       if (!strncmp(name, "proxy.config.http.post_connect_attempts_timeout", length)) {
         cnf = TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT;
+      } else if (!strncmp(name, "proxy.config.http.post_connect_attempts_timeout_ms", length)) {
+        cnf = TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT_MS;
       }
       break;
     }
@@ -9003,6 +9016,8 @@ TSHttpTxnConfigFind(const char *name, int length, TSOverridableConfigKey *conf, 
       cnf = TS_CONFIG_HTTP_CACHE_IGNORE_ACCEPT_ENCODING_MISMATCH;
     } else if (!strncmp(name, "proxy.config.http.parent_proxy.connect_attempts_timeout", length)) {
       cnf = TS_CONFIG_HTTP_PARENT_CONNECT_ATTEMPT_TIMEOUT;
+    } else if (!strncmp(name, "proxy.config.http.parent_proxy.connect_attempts_timeout_ms", length)) {
+      cnf = TS_CONFIG_HTTP_PARENT_CONNECT_ATTEMPT_TIMEOUT_MS;
     }
     break;
 

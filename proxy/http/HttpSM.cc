@@ -5927,17 +5927,22 @@ HttpSM::attach_server_session(HttpServerSession *s)
   MgmtInt connect_timeout;
 
   if (t_state.method == HTTP_WKSIDX_POST || t_state.method == HTTP_WKSIDX_PUT) {
-    connect_timeout = t_state.txn_conf->post_connect_attempts_timeout;
+    connect_timeout = (t_state.txn_conf->post_connect_attempts_timeout_ms) ?
+                        HRTIME_MSECONDS(t_state.txn_conf->post_connect_attempts_timeout_ms) :
+                        HRTIME_SECONDS(t_state.txn_conf->post_connect_attempts_timeout);
   } else if (t_state.current.server == &t_state.parent_info) {
-    connect_timeout = t_state.txn_conf->parent_connect_timeout;
+    connect_timeout = (t_state.txn_conf->parent_connect_timeout_ms) ? HRTIME_MSECONDS(t_state.txn_conf->parent_connect_timeout_ms) :
+                                                                      HRTIME_SECONDS(t_state.txn_conf->parent_connect_timeout);
   } else {
-    connect_timeout = t_state.txn_conf->connect_attempts_timeout;
+    connect_timeout = (t_state.txn_conf->connect_attempts_timeout_ms) ?
+                        HRTIME_MSECONDS(t_state.txn_conf->connect_attempts_timeout_ms) :
+                        HRTIME_SECONDS(t_state.txn_conf->connect_attempts_timeout);
   }
 
   if (t_state.api_txn_connect_timeout_value != -1) {
     server_session->get_netvc()->set_inactivity_timeout(HRTIME_MSECONDS(t_state.api_txn_connect_timeout_value));
   } else {
-    server_session->get_netvc()->set_inactivity_timeout(HRTIME_SECONDS(connect_timeout));
+    server_session->get_netvc()->set_inactivity_timeout(connect_timeout);
   }
 
   if (t_state.api_txn_active_timeout_value != -1) {
