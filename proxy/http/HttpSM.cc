@@ -5925,18 +5925,35 @@ HttpSM::attach_server_session(HttpServerSession *s)
   //   we fail this server if it doesn't start sending the response
   //   header
   MgmtInt connect_timeout;
+  RecSourceT source;
 
   if (t_state.method == HTTP_WKSIDX_POST || t_state.method == HTTP_WKSIDX_PUT) {
-    connect_timeout = (t_state.txn_conf->post_connect_attempts_timeout_ms) ?
-                        HRTIME_MSECONDS(t_state.txn_conf->post_connect_attempts_timeout_ms) :
-                        HRTIME_SECONDS(t_state.txn_conf->post_connect_attempts_timeout);
+    RecGetRecordSource("proxy.config.http.post_connect_attempts_timeout_ms", &source, true);
+
+    // timeout ms value set by plugin or config, use it
+    if ((source == REC_SOURCE_PLUGIN) || (source == REC_SOURCE_EXPLICIT)) {
+      connect_timeout = HRTIME_MSECONDS(t_state.txn_conf->post_connect_attempts_timeout_ms);
+    } else {
+      connect_timeout = HRTIME_SECONDS(t_state.txn_conf->post_connect_attempts_timeout);
+    }
   } else if (t_state.current.server == &t_state.parent_info) {
-    connect_timeout = (t_state.txn_conf->parent_connect_timeout_ms) ? HRTIME_MSECONDS(t_state.txn_conf->parent_connect_timeout_ms) :
-                                                                      HRTIME_SECONDS(t_state.txn_conf->parent_connect_timeout);
+    RecGetRecordSource("proxy.config.http.parent_proxy.connect_attempts_timeout_ms", &source, true);
+
+    // timeout ms value set by plugin or config, use it
+    if ((source == REC_SOURCE_PLUGIN) || (source == REC_SOURCE_EXPLICIT)) {
+      connect_timeout = HRTIME_MSECONDS(t_state.txn_conf->parent_connect_timeout_ms);
+    } else {
+      connect_timeout = HRTIME_SECONDS(t_state.txn_conf->parent_connect_timeout);
+    }
   } else {
-    connect_timeout = (t_state.txn_conf->connect_attempts_timeout_ms) ?
-                        HRTIME_MSECONDS(t_state.txn_conf->connect_attempts_timeout_ms) :
-                        HRTIME_SECONDS(t_state.txn_conf->connect_attempts_timeout);
+    RecGetRecordSource("proxy.config.http.connect_attempts_timeout_ms", &source, true);
+
+    // timeout ms value set by plugin or config, use it
+    if ((source == REC_SOURCE_PLUGIN) || (source == REC_SOURCE_EXPLICIT)) {
+      connect_timeout = HRTIME_MSECONDS(t_state.txn_conf->connect_attempts_timeout_ms);
+    } else {
+      connect_timeout = HRTIME_SECONDS(t_state.txn_conf->connect_attempts_timeout);
+    }
   }
 
   if (t_state.api_txn_connect_timeout_value != -1) {
