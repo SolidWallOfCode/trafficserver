@@ -487,7 +487,6 @@ struct OverridableHttpConfigParams {
       connect_attempts_rr_retries(3),
       connect_attempts_timeout(30),
       post_connect_attempts_timeout(1800),
-      connect_attempts_timeout_ms(0),
       post_connect_attempts_timeout_ms(0),
       parent_connect_attempts(4),
       parent_retry_time(300),
@@ -708,7 +707,6 @@ struct OverridableHttpConfigParams {
   MgmtInt connect_attempts_rr_retries;
   MgmtInt connect_attempts_timeout;
   MgmtInt post_connect_attempts_timeout;
-  MgmtInt connect_attempts_timeout_ms;
   MgmtInt post_connect_attempts_timeout_ms;
 
   ////////////////////////////////////

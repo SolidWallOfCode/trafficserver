@@ -8027,7 +8027,6 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     ret = _memberp_to_generic(&overridableHttpConfig->post_connect_attempts_timeout, conv);
     break;
   case TS_CONFIG_HTTP_CONNECT_ATTEMPTS_TIMEOUT_MS:
-    ret = _memberp_to_generic(&overridableHttpConfig->connect_attempts_timeout_ms, conv);
     break;
   case TS_CONFIG_HTTP_POST_CONNECT_ATTEMPTS_TIMEOUT_MS:
     ret = _memberp_to_generic(&overridableHttpConfig->post_connect_attempts_timeout_ms, conv);

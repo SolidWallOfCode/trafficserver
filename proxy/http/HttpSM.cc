@@ -5946,14 +5946,7 @@ HttpSM::attach_server_session(HttpServerSession *s)
       connect_timeout = HRTIME_SECONDS(t_state.txn_conf->parent_connect_timeout);
     }
   } else {
-    RecGetRecordSource("proxy.config.http.connect_attempts_timeout_ms", &source, true);
-
-    // timeout ms value set by plugin or config, use it
-    if ((source == REC_SOURCE_PLUGIN) || (source == REC_SOURCE_EXPLICIT)) {
-      connect_timeout = HRTIME_MSECONDS(t_state.txn_conf->connect_attempts_timeout_ms);
-    } else {
-      connect_timeout = HRTIME_SECONDS(t_state.txn_conf->connect_attempts_timeout);
-    }
+    connect_timeout = HRTIME_MSECONDS(t_state.txn_conf->connect_attempts_timeout);
   }
 
   if (t_state.api_txn_connect_timeout_value != -1) {
