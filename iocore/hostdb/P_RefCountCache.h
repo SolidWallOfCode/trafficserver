@@ -25,10 +25,10 @@
 #include <I_EventSystem.h>
 #include <P_EventSystem.h> // TODO: less? just need ET_TASK
 
-#include <ts/Map.h>
+#include <ts/IntrusiveDList.h>
+#include <ts/IntrusiveHashMap.h>
 #include <ts/PriorityQueue.h>
 
-#include <ts/List.h>
 #include <ts/ink_hrtime.h>
 
 #include <ts/I_Version.h>
@@ -58,9 +58,9 @@ enum RefCountCache_Stats {
 };
 
 struct RefCountCacheItemMeta {
-  uint64_t key;
-  unsigned int size;
-  ink_time_t expiry_time; // expire time as seconds since epoch
+  uint64_t key { 0 };
+  unsigned int size { 0 };
+  ink_time_t expiry_time { -1 }; // expire time as seconds since epoch
   RefCountCacheItemMeta(uint64_t key, unsigned int size, ink_time_t expiry_time = -1)
     : key(key), size(size), expiry_time(expiry_time)
   {
@@ -71,14 +71,19 @@ struct RefCountCacheItemMeta {
 // We'll also use this as the item header, for persisting objects to disk
 class RefCountCacheHashEntry
 {
+  using self_type = RefCountCacheHashEntry;
 public:
-  Ptr<RefCountObj> item;
+  using ItemPtr = Ptr<RefCountObj>;
+  using PriQ = PriorityQueueEntry<self_type *>;
+
+  ItemPtr item;
   LINK(RefCountCacheHashEntry, item_link);
-  PriorityQueueEntry<RefCountCacheHashEntry *> *expiry_entry;
-  RefCountCacheItemMeta meta;
+  PriQ *expiry_entry {nullptr};
+  RefCountCacheItemMeta meta {0, 0};
 
   // Need a no-argument constructor to use the classAllocator
-  RefCountCacheHashEntry() : item(Ptr<RefCountObj>()), expiry_entry(nullptr), meta(0, 0) {}
+  RefCountCacheHashEntry() {}
+
   void
   set(RefCountObj *i, uint64_t key, unsigned int size, int expire_time)
   {
