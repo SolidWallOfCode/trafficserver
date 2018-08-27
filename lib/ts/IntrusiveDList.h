@@ -320,6 +320,93 @@ protected:
   size_t _count{0};           ///< # of elements in list.
 };
 
+/** Declares a struct to contain the intrusive links.
+ *
+ * @code
+ * class Thing {
+ * ...
+ * ts::IntrusiveLink<Thing> link;
+ * struct Linkage {
+ *   static T*& next_ptr(T* t) { return t->link.next; }
+ *   static T*& prev_ptr(T* t) { return t->link.prev; }
+ * };
+ * ts::IntrusiveDList<Thing::Linkage> thing_list;
+ * @endcode
+ *
+ * @tparam T The list element type.
+ *
+ * @see IntrusiveLinkDescriptor
+ * @see IntrusiveLinkable
+ */
+template <typename T> struct IntrusiveLink {
+  struct {
+    T *next;
+    T *prev;
+  };
+};
+
+/** Helper template for @c IntrusiveDList
+ *
+ * This declares the linkage needed for already declared links, which must be members of @a T.
+ *
+ * @code
+ * class Thing {
+ * ...
+ * ts::IntrusiveLink<Thing> link;
+ * using Linkage = ts::IntrusiveLinkDescriptor<Thing, &Thing::link>;
+ * };
+ * ts::IntrusiveDList<Thing::Linkage> thing_list;
+ * @endcode
+ *
+ * @tparam T The list element type.
+ * @tparam LINK the structure containing the links.
+ */
+template <typename T, IntrusiveLink<T> T::*LINK> struct IntrusiveLinkDescriptor {
+  static T *&
+  next_ptr(T *t)
+  {
+    return (t->*LINK).next;
+  }
+  static T *&
+  prev_ptr(T *t)
+  {
+    return (t->*LINK).prev;
+  }
+};
+
+/** A base class to provide @c IntrusiveDList linkage.
+ *
+ * If the default name of "link" for the link structure and "Linkage" for the @c IntrusiveDList link
+ * descriptor is acceptable, a class can inherit from a specialization of this template for that
+ * class.
+ *
+ * @code
+ * class Thing : public ts::IntrusiveLinkable<Thing> {
+ * ...
+ * };
+ * ts::IntrusiveDList<Thing::Linkage> thing_list;
+ * @endcode
+ *
+ * @tparam T The list element type.
+ */
+template <typename T> struct IntrusiveLinkable {
+  IntrusiveLink<T> link;
+  struct Linkage {
+    static T *&
+    next_ptr(T *t)
+    {
+      return t->link.next;
+    }
+    static T *&
+    prev_ptr(T *t)
+    {
+      return t->link.prev;
+    }
+  };
+};
+
+// --- Implementation ---
+
 template <typename L> IntrusiveDList<L>::const_iterator::const_iterator() {}
 
 template <typename L>

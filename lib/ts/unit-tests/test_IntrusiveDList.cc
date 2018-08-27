@@ -30,6 +30,7 @@
 #include <ts/BufferWriter.h>
 
 #include <catch.hpp>
+#include "../../../tests/include/catch.hpp"
 
 // --------------------
 // Code for documentation - placed here to guarantee the examples at least compile.
@@ -292,4 +293,44 @@ TEST_CASE("IntrusiveDList", "[libts][IntrusiveDList]")
   }
   REQUIRE(priv_list.head()->payload() == "Item 1");
   REQUIRE(priv_list.tail()->payload() == "Item 23");
+}
+
+// This tests the helper templates, primarily for compilation.
+class Bob
+{
+public:
+  Bob(std::string_view payload) : _payload(payload) {}
+  std::string _payload;
+  IntrusiveLink<Bob> _link;
+  using Linkage = IntrusiveLinkDescriptor<Bob, &Bob::_link>;
+};
+
+class Dave : public IntrusiveLinkable<Dave>
+{
+public:
+  Dave(std::string_view payload) : _payload(payload) {}
+  std::string _payload;
+};
+
+TEST_CASE("IntrusiveDList Helper", "[libts][IntrusiveDList]")
+{
+  using BobList  = IntrusiveDList<Bob::Linkage>;
+  using DaveList = IntrusiveDList<Dave::Linkage>;
+
+  {
+    BobList list;
+    list.append(new Bob("one"));
+    list.append(new Bob("two"));
+    REQUIRE(list.count() == 2);
+    REQUIRE(list.head()->_payload == "one");
+    REQUIRE(list.tail()->_payload == "two");
+  }
+  {
+    DaveList list;
+    list.append(new Dave("one"));
+    list.append(new Dave("two"));
+    REQUIRE(list.count() == 2);
+    REQUIRE(list.head()->_payload == "one");
+    REQUIRE(list.tail()->_payload == "two");
+  }
 }
