@@ -1,0 +1,118 @@
+{
+  "$schema": "https://github.com/apache/trafficserver/tree/master/lib/wccp/wccp.schema.json",
+  "title": "Traffic Server WCCP configuration",
+  "description": "WCCP configuration. Licensed under Apache V2 https://www.apache.org/licenses/LICENSE-2.0",
+  "type": "object",
+  "properties" : {
+    "wccp": {
+      "description": "Root tag for WCCP configuration",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Configuration format version."
+        },
+        "security" : {
+          "description": "Base security options",
+          "type": "object",
+          "properties" : {
+            "key" : {
+              "description" : "Static key for authentication.",
+              "type" : "string"
+            },
+            "option" : {
+              "description" : "Password encryption",
+              "type" : "string",
+              "enum" : [ "none", "MD5" ]
+            }
+          }
+        },
+        "services" : {
+          "description": "Service definitions",
+          "type" : "array",
+          "items" : {
+            "description" : "Service Definition",
+            "type": "object",
+            "properties" : {
+              "assignments" : {
+                "description" : "Mechanism to do cache assignments.",
+                "type" : "string",
+                "enum" : [ "hash", "mask"]
+              },
+              "description" : {
+                "description": "Service description",
+                "type": "string"
+              },
+              "forward" : {
+                "description" : "Mechanism to forward packets",
+                "type" : "string",
+                "enum" : [ "gre", "l2" ]
+              },
+              "name": {
+                "description" : "Descriptive name",
+                "type" : "string"
+              },
+              "id" : {
+                "description" : "Identifier",
+                "type" : "integer",
+                "minimum" : 0,
+                "maximum" : 255
+              },
+              "protocol" : {
+                "description" : "IP protocol (for non-STANDARD services).",
+                "type" : "integer",
+                "minimum" : 0,
+                "maximum" : 255
+              },
+              "priority" : {
+                "description" : "Priority",
+                "type" : "integer",
+                "minimum" : 0,
+                "maximum" : 255
+              },
+              "ports" : {
+                "description" : "Destination ports.",
+                "type" : [ "integer", "array"],
+                "items" : {
+                  "type" : "integer",
+                  "$ref" : "#/definitions/ip-port"
+                },
+                "$ref" : "#/definitions/ip-port"
+              },
+              "primary-hash" : {
+                "description" : "Value to use for primary hash",
+                "type" : "string",
+                "enum" : [ "src_ip", "dst_ip", "src_port",  ]
+              },
+              "return" : {
+                "description" : "Mechanism for returning packets.",
+                "type" : "string",
+                "enum" : [ "gre", "l2" ]
+              },
+              "routers" : {
+                "description" : "Participating routers, specificed by IPv4 address.",
+                "type" : [ "string" , "array" ],
+                "items" : {
+                  "description" : "IPv4 address",
+                  "type" : "string"
+                }
+              },
+              "type" : {
+                "description" : "Type.",
+                "type" : "string",
+                "enum" : [ "dynamic", "standard" ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [ "wccp" ],
+  "definitions": {
+    "ip-port" : {
+      "minimum" : 0,
+      "maximum" : 65335
+    }
+  }
+}
