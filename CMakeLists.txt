@@ -639,9 +639,6 @@ add_executable(ats
         plugins/experimental/remap_purge/remap_purge.c
         plugins/experimental/remap_stats/remap_stats.c
         plugins/experimental/server_push_preload/server_push_preload.cc
-        plugins/experimental/ssl_cert_loader/domain-tree.cc
-        plugins/experimental/ssl_cert_loader/domain-tree.h
-        plugins/experimental/ssl_cert_loader/ssl-cert-loader.cc
         plugins/experimental/sslheaders/expand.cc
         plugins/experimental/sslheaders/sslheaders.cc
         plugins/experimental/sslheaders/sslheaders.h
@@ -1089,6 +1086,7 @@ add_library(libtsutil SHARED
         lib/ts/IpMapConf.cc
         lib/ts/IpMapConf.h
         lib/ts/Layout.cc
+	lib/ts/Lexicon.h
         lib/ts/List.h
         lib/ts/llqueue.cc
         lib/ts/load_http_hdr.cc
@@ -1161,6 +1159,7 @@ add_executable(test_tslib
 	lib/ts/unit-tests/test_IntrusivePtr.cc
 	lib/ts/unit-tests/test_IpMap.cc
 	lib/ts/unit-tests/test_layout.cc
+	lib/ts/unit-tests/test_Lexicon.cc
 	lib/ts/unit-tests/test_MemArena.cc
 	lib/ts/unit-tests/test_MemSpan.cc
 	lib/ts/unit-tests/test_MT_hashtable.cc

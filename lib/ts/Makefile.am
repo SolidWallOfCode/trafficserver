@@ -171,6 +171,7 @@ libtsutil_la_SOURCES = \
 	JeAllocator.h \
 	JeAllocator.cc \
 	Layout.cc \
+	Lexicon.h \
 	List.h \
 	llqueue.cc \
 	lockfile.cc \
@@ -277,6 +278,7 @@ test_tslib_SOURCES = \
 	unit-tests/test_IntrusivePtr.cc \
 	unit-tests/test_IpMap.cc \
 	unit-tests/test_layout.cc \
+	unit-tests/test_Lexicon.cc \
 	unit-tests/test_MemSpan.cc \
 	unit-tests/test_MemArena.cc \
 	unit-tests/test_MT_hashtable.cc \

@@ -34,6 +34,7 @@ development team.
    Extendible.en
    intrusive-hash-map.en
    intrusive-list.en
+   Lexicon.en
    MemArena.en
    MemSpan.en
    TextView.en
