@@ -872,8 +872,7 @@ CacheImpl::handleRemovalQuery(IpHeader const & /* ip_hdr ATS_UNUSED */, ts::Buff
     return zret.note(Severity::INFO, "Ignored WCCP2_REMOVAL_QUERY with invalid security.\n");
 
   if (svc != group.m_svc)
-    return zret.note(Severity::INFO, "WCCP2_REMOVAL_QUERY ignored - service group definition {} does not match.\n",
-                     svc.getSvcId());
+    return zret.note(Severity::INFO, "WCCP2_REMOVAL_QUERY ignored - service group definition {} does not match.\n", svc.getSvcId());
 
   uint32_t target_addr = msg.m_query.getCacheAddr(); // intended cache
   if (m_addr == target_addr) {
