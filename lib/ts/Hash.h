@@ -57,9 +57,19 @@ struct ATSHash : ATSHashBase {
 struct ATSHash32 : ATSHashBase {
   virtual uint32_t get(void) const = 0;
   virtual bool operator==(const ATSHash32 &) const;
+  uint32_t hash_immediate(void* data, size_t len);
 };
 
 struct ATSHash64 : ATSHashBase {
   virtual uint64_t get(void) const = 0;
   virtual bool operator==(const ATSHash64 &) const;
 };
+
+// ----
+// Implementation
+
+inline uint32_t ATSHash32::hash_immediate(void *data, size_t len) {
+  this->update(data, len);
+  this->final();
+  return this->get();
+}
