@@ -30,6 +30,11 @@ libtscpputil_la_SOURCES = \
 	bw_format.cc \
 	IntrusiveDList.h \
 	IntrusiveHashMap.h \
+	Hash.cc \
+	Hash.h \
+	HashFNV.h \
+	HashSip.cc \
+	HashSip.h \
 	MemArena.h \
 	MemArena.cc \
 	MemSpan.h \

@@ -24,9 +24,12 @@ library_include_HEADERS = \
 	bwf_ex.h \
 	bwf_base.h \
 	bwf_std.h \
-	IntrusiveDList.h \
+    Hash.h \
+    HashFNV.h \
+    HashSip.h \
+    IntrusiveDList.h \
 	IntrusiveHashMap.h \
 	MemArena.h \
 	MemSpan.h \
-        PostScript.h \
-        TextView.h
+    PostScript.h \
+    TextView.h

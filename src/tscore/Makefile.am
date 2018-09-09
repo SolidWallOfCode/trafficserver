@@ -75,14 +75,8 @@ libtscore_la_SOURCES = \
 	Extendible.h \
 	fastlz.c \
 	fastlz.h \
-	Hash.cc \
-	HashFNV.cc \
-	HashFNV.h \
-	Hash.h \
 	HashMD5.cc \
 	HashMD5.h \
-	HashSip.cc \
-	HashSip.h \
 	History.h \
 	HostLookup.cc \
 	HostLookup.h \
