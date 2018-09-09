@@ -33,11 +33,12 @@
 struct ATSHash32FNV1a : ATSHash32 {
 protected:
   using super_type = ATSHash32;
-  using nullxfrm = ATSHash::nullxfrm;
+  using nullxfrm   = ATSHash::nullxfrm;
+
 public:
   ATSHash32FNV1a(void);
 
-  template <typename Transform> void update(const void *data, size_t len, const Transform & xf);
+  template <typename Transform> void update(const void *data, size_t len, const Transform &xf);
 
   void update(const void *data, size_t len) override;
 
@@ -45,16 +46,15 @@ public:
   uint32_t get(void) const override;
   void clear(void) override;
 
-  template < typename Transform >
-  uint32_t hash_immediate(const void *data, size_t len, const Transform & xf = nullxfrm());
+  template <typename Transform> uint32_t hash_immediate(const void *data, size_t len, const Transform &xf = nullxfrm());
 
-  private:
+private:
   uint32_t hval;
 };
 
 template <typename Transform>
 void
-ATSHash32FNV1a::update(const void *data, size_t len, const Transform & xf)
+ATSHash32FNV1a::update(const void *data, size_t len, const Transform &xf)
 {
   const uint8_t *bp = static_cast<const uint8_t *>(data);
   const uint8_t *be = bp + len;
@@ -86,10 +86,16 @@ private:
 // ----------
 // Implementation
 
-inline void ATSHash32FNV1a::update(const void * data, size_t len) { return this->update(data, len, nullxfrm()); }
+inline void
+ATSHash32FNV1a::update(const void *data, size_t len)
+{
+  return this->update(data, len, nullxfrm());
+}
 
-template < typename Transform >
-uint32_t ATSHash32FNV1a::hash_immediate(const void *data, size_t len, const Transform & xf) {
+template <typename Transform>
+uint32_t
+ATSHash32FNV1a::hash_immediate(const void *data, size_t len, const Transform &xf)
+{
   this->update(data, len, xf);
   this->final();
   return this->get();
