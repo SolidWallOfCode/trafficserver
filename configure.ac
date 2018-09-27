@@ -1251,6 +1251,11 @@ fi
 # Check for optional brotli library.
 TS_CHECK_BROTLI
 
+# Check for optional hiredis library
+TS_CHECK_HIREDIS
+
+AM_CONDITIONAL([BUILD_SSL_SESSION_REUSE_PLUGIN], [test ! -z "${LIB_HIREDIS}" -a "x${has_hiredis}" = "x1" ])
+
 # Check for backtrace() support
 has_backtrace=0
 AC_CHECK_HEADERS([execinfo.h], [has_backtrace=1],[])

@@ -142,6 +142,7 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
    MySQL Remap <mysql_remap.en>
    Signed URLs <url_sig.en>
    SSL Headers <sslheaders.en>
+   SSL Session Reuse <ssl_session_reuse.en>
    Stale While Revalidate <stale_while_revalidate.en>
    TS Lua <ts_lua.en>
    WebP Transform <webp_transform.en>
@@ -198,6 +199,9 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
 
 :doc:`Signed URLs <url_sig.en>`
    Adds support for verifying URL signatures for incoming requests to either deny or redirect access.
+
+:doc:`SSL Session Reuse <ssl_session_reuse.en>`
+   Coordinates Session ID and ticket based TLS session resumption between a group of ATS machines.
 
 :doc:`SSL Headers <sslheaders.en>`
    Populate request headers with SSL session information.
