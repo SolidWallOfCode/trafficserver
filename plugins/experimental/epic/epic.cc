@@ -400,5 +400,5 @@ TSPluginInit(int argc, const char *argv[])
   }
 
   debug("initialized plugin with directory %s and period %d sec", epic_prefix, (int)epic_period);
-  TSContScheduleEvery(TSContCreate(epic_flush_stats, TSMutexCreate()), epic_period * 1000ll, TS_THREAD_POOL_TASK);
+  TSContScheduleEveryOnPool(TSContCreate(epic_flush_stats, TSMutexCreate()), epic_period * 1000ll, TS_THREAD_POOL_TASK);
 }

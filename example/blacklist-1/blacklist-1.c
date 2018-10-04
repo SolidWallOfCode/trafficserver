@@ -98,7 +98,7 @@ handle_dns(TSHttpTxn txnp, TSCont contp)
     TSDebug("blacklist-1", "Unable to get lock. Will retry after some time");
     TSHandleMLocRelease(bufp, hdr_loc, url_loc);
     TSHandleMLocRelease(bufp, TS_NULL_MLOC, hdr_loc);
-    TSContSchedule(contp, RETRY_TIME, TS_THREAD_POOL_DEFAULT);
+    TSContScheduleOnPool(contp, RETRY_TIME, TS_THREAD_POOL_NET);
     return;
   }
 
@@ -186,7 +186,7 @@ read_blacklist(TSCont contp)
     if (file != NULL) {
       TSfclose(file);
     }
-    TSContSchedule(contp, RETRY_TIME, TS_THREAD_POOL_DEFAULT);
+    TSContScheduleOnPool(contp, RETRY_TIME, TS_THREAD_POOL_NET);
     return;
   }
 

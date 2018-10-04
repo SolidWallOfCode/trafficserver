@@ -4474,16 +4474,45 @@ TSContDataGet(TSCont contp)
 }
 
 TSAction
-TSContSchedule(TSCont contp, ink_hrtime timeout, TSThreadPool tp)
+TSContSchedule(TSCont contp, TSHRTime timeout)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
 
   FORCE_PLUGIN_SCOPED_MUTEX(contp);
 
-  INKContInternal *i = (INKContInternal *)contp;
-  TSAction action;
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
 
-  if (ink_atomic_increment((int *)&i->m_event_count, 1) < 0) {
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
+    ink_assert(!"not reached");
+  }
+
+  EThread *eth = i->getThreadAffinity();
+  if (eth == nullptr) {
+    return nullptr;
+  }
+
+  TSAction action;
+  if (timeout == 0) {
+    action = reinterpret_cast<TSAction>(eth->schedule_imm(i));
+  } else {
+    action = reinterpret_cast<TSAction>(eth->schedule_in(i, HRTIME_MSECONDS(timeout)));
+  }
+
+  /* This is a hack. Should be handled in ink_types */
+  action = (TSAction)((uintptr_t)action | 0x1);
+  return action;
+}
+
+TSAction
+TSContScheduleOnPool(TSCont contp, TSHRTime timeout, TSThreadPool tp)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
     ink_assert(!"not reached");
   }
 
@@ -4491,7 +4520,6 @@ TSContSchedule(TSCont contp, ink_hrtime timeout, TSThreadPool tp)
 
   switch (tp) {
   case TS_THREAD_POOL_NET:
-  case TS_THREAD_POOL_DEFAULT:
     etype = ET_NET;
     break;
   case TS_THREAD_POOL_TASK:
@@ -4506,9 +4534,6 @@ TSContSchedule(TSCont contp, ink_hrtime timeout, TSThreadPool tp)
   case TS_THREAD_POOL_REMAP:
     etype = ET_TASK; // Should be ET_REMAP
     break;
-  case TS_THREAD_POOL_CLUSTER:
-    etype = ET_CLUSTER;
-    break;
   case TS_THREAD_POOL_UDP:
     etype = ET_UDP;
     break;
@@ -4517,28 +4542,82 @@ TSContSchedule(TSCont contp, ink_hrtime timeout, TSThreadPool tp)
     break;
   }
 
+  TSAction action;
   if (timeout == 0) {
     action = reinterpret_cast<TSAction>(eventProcessor.schedule_imm(i, etype));
   } else {
     action = reinterpret_cast<TSAction>(eventProcessor.schedule_in(i, HRTIME_MSECONDS(timeout), etype));
   }
 
-  /* This is a hack. SHould be handled in ink_types */
+  /* This is a hack. Should be handled in ink_types */
   action = (TSAction)((uintptr_t)action | 0x1);
   return action;
 }
 
 TSAction
-TSContScheduleEvery(TSCont contp, ink_hrtime every, TSThreadPool tp)
+TSContScheduleOnThread(TSCont contp, TSHRTime timeout, TSEventThread ethread)
+{
+  ink_release_assert(ethread != nullptr);
+
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
+    ink_assert(!"not reached");
+  }
+
+  EThread *eth = reinterpret_cast<EThread *>(ethread);
+
+  TSAction action;
+  if (timeout == 0) {
+    action = reinterpret_cast<TSAction>(eth->schedule_imm(i));
+  } else {
+    action = reinterpret_cast<TSAction>(eth->schedule_in(i, HRTIME_MSECONDS(timeout)));
+  }
+
+  /* This is a hack. Should be handled in ink_types */
+  action = (TSAction)((uintptr_t)action | 0x1);
+  return action;
+}
+
+TSAction
+TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
 
   FORCE_PLUGIN_SCOPED_MUTEX(contp);
 
-  INKContInternal *i = (INKContInternal *)contp;
-  TSAction action;
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
 
-  if (ink_atomic_increment((int *)&i->m_event_count, 1) < 0) {
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
+    ink_assert(!"not reached");
+  }
+
+  EThread *eth = i->getThreadAffinity();
+  if (eth == nullptr) {
+    return nullptr;
+  }
+
+  TSAction action = reinterpret_cast<TSAction>(eth->schedule_every(i, HRTIME_MSECONDS(every)));
+
+  /* This is a hack. Should be handled in ink_types */
+  action = (TSAction)((uintptr_t)action | 0x1);
+  return action;
+}
+
+TSAction
+TSContScheduleEveryOnPool(TSCont contp, TSHRTime every, TSThreadPool tp)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
     ink_assert(!"not reached");
   }
 
@@ -4546,7 +4625,6 @@ TSContScheduleEvery(TSCont contp, ink_hrtime every, TSThreadPool tp)
 
   switch (tp) {
   case TS_THREAD_POOL_NET:
-  case TS_THREAD_POOL_DEFAULT:
     etype = ET_NET;
     break;
   case TS_THREAD_POOL_TASK:
@@ -4557,15 +4635,81 @@ TSContScheduleEvery(TSCont contp, ink_hrtime every, TSThreadPool tp)
     break;
   }
 
-  action = reinterpret_cast<TSAction>(eventProcessor.schedule_every(i, HRTIME_MSECONDS(every), etype));
+  TSAction action = reinterpret_cast<TSAction>(eventProcessor.schedule_every(i, HRTIME_MSECONDS(every), etype));
 
-  /* This is a hack. SHould be handled in ink_types */
+  /* This is a hack. Should be handled in ink_types */
   action = (TSAction)((uintptr_t)action | 0x1);
   return action;
 }
 
 TSAction
-TSHttpSchedule(TSCont contp, TSHttpTxn txnp, ink_hrtime timeout)
+TSContScheduleEveryOnThread(TSCont contp, TSHRTime every /* millisecs */, TSEventThread ethread)
+{
+  ink_release_assert(ethread != nullptr);
+
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
+    ink_assert(!"not reached");
+  }
+
+  EThread *eth = reinterpret_cast<EThread *>(ethread);
+
+  TSAction action = reinterpret_cast<TSAction>(eth->schedule_every(i, HRTIME_MSECONDS(every)));
+
+  /* This is a hack. Should be handled in ink_types */
+  action = (TSAction)((uintptr_t)action | 0x1);
+  return action;
+}
+
+TSReturnCode
+TSContThreadAffinitySet(TSCont contp, TSEventThread ethread)
+{
+  ink_release_assert(ethread != nullptr);
+
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i       = reinterpret_cast<INKContInternal *>(contp);
+  EThread *thread_affinity = reinterpret_cast<EThread *>(ethread);
+
+  if (i->setThreadAffinity(thread_affinity)) {
+    return TS_SUCCESS;
+  }
+  return TS_ERROR;
+}
+
+TSEventThread
+TSContThreadAffinityGet(TSCont contp)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  return reinterpret_cast<TSEventThread>(i->getThreadAffinity());
+}
+
+void
+TSContThreadAffinityClear(TSCont contp)
+{
+  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+
+  FORCE_PLUGIN_SCOPED_MUTEX(contp);
+
+  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
+
+  i->clearThreadAffinity();
+}
+
+TSAction
+TSHttpSchedule(TSCont contp, TSHttpTxn txnp, TSHRTime timeout)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
 

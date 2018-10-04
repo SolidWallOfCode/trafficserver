@@ -90,6 +90,8 @@ Event                                        Event Sender                       
 :data:`TS_EVENT_IMMEDIATE`                   :func:`TSVConnClose`
                                              :func:`TSVIOReenable`
                                              :func:`TSContSchedule`
+                                             :func:`TSContScheduleOnPool`
+                                             :func:`TSContScheduleOnThread`
 :data:`TS_EVENT_IMMEDIATE`                   :data:`TS_HTTP_REQUEST_TRANSFORM_HOOK`
 :data:`TS_EVENT_IMMEDIATE`                   :data:`TS_HTTP_RESPONSE_TRANSFORM_HOOK`
 :data:`TS_EVENT_CACHE_OPEN_READ`             :func:`TSCacheRead`                         Cache VC
@@ -106,6 +108,8 @@ Event                                        Event Sender                       
                                              :func:`TSHttpTxnIntercept`
 :data:`TS_EVENT_HOST_LOOKUP`                 :func:`TSHostLookup`                        :type:`TSHostLookupResult`
 :data:`TS_EVENT_TIMEOUT`                     :func:`TSContSchedule`
+                                             :func:`TSContScheduleOnPool`
+                                             :func:`TSContScheduleOnThread`
 :data:`TS_EVENT_ERROR`
 :data:`TS_EVENT_VCONN_READ_READY`            :func:`TSVConnRead`                         :type:`TSVIO`
 :data:`TS_EVENT_VCONN_WRITE_READY`           :func:`TSVConnWrite`                        :type:`TSVIO`
@@ -128,3 +132,5 @@ The continuation functions are listed below:
 -  :func:`TSContDestroy`
 -  :func:`TSContMutexGet`
 -  :func:`TSContSchedule`
+-  :func:`TSContScheduleOnPool`
+-  :func:`TSContScheduleOnThread`

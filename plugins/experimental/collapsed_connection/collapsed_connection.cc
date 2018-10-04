@@ -657,7 +657,7 @@ addMutexRetry(CcTxnData *txn_data, TSEvent event, TSHRTime timeout)
   data->event    = event;
   data->txn_data = txn_data;
   TSContDataSet(contp, data);
-  TSContSchedule(contp, timeout, TS_THREAD_POOL_DEFAULT);
+  TSContScheduleOnPool(contp, timeout, TS_THREAD_POOL_NET);
 }
 
 /**
