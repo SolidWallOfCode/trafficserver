@@ -38,7 +38,7 @@
 
 #include "tscore/ink_memory.h"
 #include "tscore/ink_file.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/bwf_base.h"
 #include "tscore/CryptoHash.h"
 #include "tscore/ArgParser.h"
 #include <thread>

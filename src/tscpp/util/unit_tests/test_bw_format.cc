@@ -4,34 +4,34 @@
 
     @section license License
 
-    Licensed to the Apache Software Foundation (ASF) under one
-    or more contributor license agreements.  See the NOTICE file
-    distributed with this work for additional information
-    regarding copyright ownership.  The ASF licenses this file
-    to you under the Apache License, Version 2.0 (the
-    "License"); you may not use this file except in compliance
-    with the License.  You may obtain a copy of the License at
+    Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+    agreements.  See the NOTICE file distributed with this work for additional information regarding
+    copyright ownership.  The ASF licenses this file to you under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with the License.  You may
+    obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
+    Unless required by applicable law or agreed to in writing, software distributed under the
+    License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+    express or implied. See the License for the specific language governing permissions and
     limitations under the License.
  */
 
-#include "catch.hpp"
-#include "../../../tests/include/catch.hpp"
 #include <chrono>
 #include <iostream>
-#include "tscore/BufferWriter.h"
-#include "tscore/bwf_std_format.h"
+#include <variant>
+
 #include "tscpp/util/MemSpan.h"
-#include "tscore/INK_MD5.h"
-#include "tscore/CryptoHash.h"
+#include "tscpp/util/BufferWriter.h"
+#include "tscpp/util/bwf_std.h"
+#include "tscpp/util/bwf_ex.h"
+#include "tscpp/util/bwf_printf.h"
+
+#include "catch.hpp"
 
 using namespace std::literals;
+using ts::TextView;
 
 TEST_CASE("Buffer Writer << operator", "[bufferwriter][stream]")
 {
@@ -41,7 +41,7 @@ TEST_CASE("Buffer Writer << operator", "[bufferwriter][stream]")
 
   REQUIRE(bw.view() == "The quick brown fox");
 
-  bw.reduce(0);
+  bw.clear();
   bw << "x=" << bw.capacity();
   REQUIRE(bw.view() == "x=50");
 }
@@ -53,187 +53,188 @@ TEST_CASE("bwprint basics", "[bwprint]")
 
   bw.print(fmt1);
   REQUIRE(bw.view() == fmt1);
-  bw.reduce(0);
+  bw.clear();
   bw.print("Arg {}", 1);
   REQUIRE(bw.view() == "Arg 1");
-  bw.reduce(0);
+  bw.clear();
   bw.print("arg 1 {1} and 2 {2} and 0 {0}", "zero", "one", "two");
   REQUIRE(bw.view() == "arg 1 one and 2 two and 0 zero");
-  bw.reduce(0);
+  bw.clear();
   bw.print("args {2}{0}{1}", "zero", "one", "two");
   REQUIRE(bw.view() == "args twozeroone");
-  bw.reduce(0);
+  bw.clear();
   bw.print("left |{:<10}|", "text");
   REQUIRE(bw.view() == "left |text      |");
-  bw.reduce(0);
+  bw.clear();
   bw.print("right |{:>10}|", "text");
   REQUIRE(bw.view() == "right |      text|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("right |{:.>10}|", "text");
   REQUIRE(bw.view() == "right |......text|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("center |{:.^10}|", "text");
   REQUIRE(bw.view() == "center |...text...|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("center |{:.^11}|", "text");
   REQUIRE(bw.view() == "center |...text....|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("center |{:^^10}|", "text");
   REQUIRE(bw.view() == "center |^^^text^^^|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("center |{:%3A^10}|", "text");
   REQUIRE(bw.view() == "center |:::text:::|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("left >{0:<9}< right >{0:>9}< center >{0:^9}<", 956);
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
 
-  bw.reduce(0);
+  bw.clear();
   bw.print("Format |{:>#010x}|", -956);
   REQUIRE(bw.view() == "Format |0000-0x3bc|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("Format |{:<#010x}|", -956);
   REQUIRE(bw.view() == "Format |-0x3bc0000|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("Format |{:#010x}|", -956);
   REQUIRE(bw.view() == "Format |-0x00003bc|");
 
-  bw.reduce(0);
+  bw.clear();
   bw.print("{{BAD_ARG_INDEX:{} of {}}}", 17, 23);
   REQUIRE(bw.view() == "{BAD_ARG_INDEX:17 of 23}");
 
-  bw.reduce(0);
-  bw.print("Arg {0} Arg {3}", 1, 2);
-  REQUIRE(bw.view() == "Arg 1 Arg {BAD_ARG_INDEX:3 of 2}");
+  bw.clear();
+  bw.print("Arg {0} Arg {3}", 0, 1);
+  REQUIRE(bw.view() == "Arg 0 Arg {BAD_ARG_INDEX:3 of 2}");
 
-  bw.reduce(0);
-  bw.print("{{stuff}} Arg {0} Arg {}", 1, 2);
-  REQUIRE(bw.view() == "{stuff} Arg 1 Arg 2");
-  bw.reduce(0);
+  bw.clear().print("{{stuff}} Arg {0} Arg {}", 0, 1, 2);
+  REQUIRE(bw.view() == "{stuff} Arg 0 Arg 0");
+  bw.clear().print("{{stuff}} Arg {0} Arg {} {}", 0, 1, 2);
+  REQUIRE(bw.view() == "{stuff} Arg 0 Arg 0 1");
+  bw.clear();
   bw.print("Arg {0} Arg {} and {{stuff}}", 3, 4);
-  REQUIRE(bw.view() == "Arg 3 Arg 4 and {stuff}");
-  bw.reduce(0);
-  bw.print("Arg {{{0}}} Arg {} and {{stuff}}", 5, 6);
-  REQUIRE(bw.view() == "Arg {5} Arg 6 and {stuff}");
-  bw.reduce(0);
-  bw.print("Arg {0} Arg {{}}{{}} {} and {{stuff}}", 7, 8);
-  REQUIRE(bw.view() == "Arg 7 Arg {}{} 8 and {stuff}");
-  bw.reduce(0);
-  bw.print("Arg {0} Arg {{{{}}}} {}", 9, 10);
-  REQUIRE(bw.view() == "Arg 9 Arg {{}} 10");
+  REQUIRE(bw.view() == "Arg 3 Arg 3 and {stuff}");
+  bw.clear().print("Arg {{{0}}} Arg {} and {{stuff}}", 5, 6);
+  REQUIRE(bw.view() == "Arg {5} Arg 5 and {stuff}");
+  bw.clear().print("Arg {{{0}}} Arg {} {1} {} {0} and {{stuff}}", 5, 6);
+  REQUIRE(bw.view() == "Arg {5} Arg 5 6 6 5 and {stuff}");
+  bw.clear();
+  bw.print("Arg {0} Arg {{}}{{}} {} and {} {{stuff}}", 7, 8);
+  REQUIRE(bw.view() == "Arg 7 Arg {}{} 7 and 8 {stuff}");
+  bw.clear();
+  bw.print("Arg {} Arg {{{{}}}} {} {1} {0}", 9, 10);
+  REQUIRE(bw.view() == "Arg 9 Arg {{}} 10 10 9");
 
-  bw.reduce(0);
-  bw.print("Arg {0} Arg {{{{}}}} {}", 9, 10);
+  bw.clear();
+  bw.print("Arg {} Arg {{{{}}}} {}", 9, 10);
   REQUIRE(bw.view() == "Arg 9 Arg {{}} 10");
-  bw.reduce(0);
+  bw.clear();
 
-  bw.reset().print("{leif}");
+  bw.clear().print("{leif}");
   REQUIRE(bw.view() == "{~leif~}"); // expected to be missing.
 
-  bw.reset().print("Thread: {thread-name} [{thread-id:#x}] - Tick: {tick} - Epoch: {now} - timestamp: {timestamp} {0}\n", 31267);
-  // std::cout << bw;
-  /*
-  std::cout << ts::LocalBufferWriter<256>().print(
-    "Thread: {thread-name} [{thread-id:#x}] - Tick: {tick} - Epoch: {now} - timestamp: {timestamp} {0}{}", 31267, '\n');
-  */
+  //  bw.clear().print("Thread: {thread-name} [{thread-id:#x}] - Tick: {tick} - Epoch: {now} - timestamp: {timestamp} !{0}", 31267);
+  //  REQUIRE(ts::TextView(bw.view()).take_suffix_at('!') == "31267");
 }
 
 TEST_CASE("BWFormat numerics", "[bwprint][bwformat]")
 {
   ts::LocalBufferWriter<256> bw;
-  ts::BWFormat fmt("left >{0:<9}< right >{0:>9}< center >{0:^9}<");
+  ts::bwf::Format fmt("left >{0:<9}< right >{0:>9}< center >{0:^9}<");
   std::string_view text{"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
-  bw.reduce(0);
-  static const ts::BWFormat bad_arg_fmt{"{{BAD_ARG_INDEX:{} of {}}}"};
+  bw.clear();
+  static const ts::bwf::Format bad_arg_fmt{"{{BAD_ARG_INDEX:{} of {}}}"};
   bw.print(bad_arg_fmt, 17, 23);
   REQUIRE(bw.view() == "{BAD_ARG_INDEX:17 of 23}");
 
-  bw.reduce(0);
+  bw.clear();
   bw.print(fmt, 956);
   REQUIRE(bw.view() == "left >956      < right >      956< center >   956   <");
 
-  bw.reduce(0);
-  bw.print("Text: _{0:.10,20}_", text);
-  REQUIRE(bw.view() == "Text: _abcdefghijklmnopqrst_");
-  bw.reduce(0);
-  bw.print("Text: _{0:-<20.52,20}_", text);
+  bw.clear().print("Text: _{0:20.10}_", text);
+  REQUIRE(bw.view() == "Text: _0123456789          _");
+  bw.clear().print("Text: _{0:>20.10}_", text);
+  REQUIRE(bw.view() == "Text: _          0123456789_");
+  bw.clear().print("Text: _{0:-<20.10,20}_", text.substr(52));
   REQUIRE(bw.view() == "Text: _QRSTUVWXYZ----------_");
 
   void *ptr = reinterpret_cast<void *>(0XBADD0956);
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", ptr);
   REQUIRE(bw.view() == "0xbadd0956");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{:X}", ptr);
   REQUIRE(bw.view() == "0XBADD0956");
   int *int_ptr = static_cast<int *>(ptr);
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", int_ptr);
   REQUIRE(bw.view() == "0xbadd0956");
   auto char_ptr = "good";
-  bw.reduce(0);
+  bw.clear();
   bw.print("{:x}", static_cast<char *>(ptr));
   REQUIRE(bw.view() == "0xbadd0956");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", char_ptr);
   REQUIRE(bw.view() == "good");
 
   ts::MemSpan span{ptr, 0x200};
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", span);
   REQUIRE(bw.view() == "0x200@0xbadd0956");
 
-  bw.reduce(0);
+  bw.clear();
   bw.print("{::d}", ts::MemSpan(const_cast<char *>(char_ptr), 4));
   REQUIRE(bw.view() == "676f6f64");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{:#:d}", ts::MemSpan(const_cast<char *>(char_ptr), 4));
   REQUIRE(bw.view() == "0x676f6f64");
 
   std::string_view sv{"abc123"};
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", sv);
   REQUIRE(bw.view() == sv);
-  bw.reduce(0);
+  bw.clear();
   bw.print("{:x}", sv);
   REQUIRE(bw.view() == "616263313233");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{:#x}", sv);
   REQUIRE(bw.view() == "0x616263313233");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:16x}|", sv);
   REQUIRE(bw.view() == "|616263313233    |");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:>16x}|", sv);
   REQUIRE(bw.view() == "|    616263313233|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:^16x}|", sv);
   REQUIRE(bw.view() == "|  616263313233  |");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:>16.2x}|", sv);
-  REQUIRE(bw.view() == "|        63313233|");
-  bw.reduce(0);
-  bw.print("|{:<0.2,5x}|", sv);
-  REQUIRE(bw.view() == "|63313|");
-  bw.reset().print("|{:<.2,5x}|", sv);
-  REQUIRE(bw.view() == "|63313|");
+  REQUIRE(bw.view() == "|            6162|");
+  bw.clear().print("|{:<0.4,7x}|", sv);
+  REQUIRE(bw.view() == "|6162633|");
+  bw.clear().print("|{:<5.2,7x}|", sv);
+  REQUIRE(bw.view() == "|6162 |");
+  bw.clear().print("|{:<5.3,7x}|", sv);
+  REQUIRE(bw.view() == "|616263|");
+  bw.clear().print("|{:<7.3x}|", sv);
+  REQUIRE(bw.view() == "|616263 |");
 
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{}|", true);
   REQUIRE(bw.view() == "|1|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{}|", false);
   REQUIRE(bw.view() == "|0|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:s}|", true);
   REQUIRE(bw.view() == "|true|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:S}|", false);
   REQUIRE(bw.view() == "|FALSE|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:>9s}|", false);
   REQUIRE(bw.view() == "|    false|");
-  bw.reduce(0);
+  bw.clear();
   bw.print("|{:^10s}|", true);
   REQUIRE(bw.view() == "|   true   |");
 
@@ -241,22 +242,13 @@ TEST_CASE("BWFormat numerics", "[bwprint][bwformat]")
   ts::LocalBufferWriter<20> bw20;
   bw20.print("0123456789abc|{:^10s}|", true);
   REQUIRE(bw20.view() == "0123456789abc|   tru");
-  bw20.reduce(0);
+  bw20.clear();
   bw20.print("012345|{:^10s}|6789abc", true);
   REQUIRE(bw20.view() == "012345|   true   |67");
 
-  INK_MD5 md5;
-  bw.reduce(0);
-  bw.print("{}", md5);
-  REQUIRE(bw.view() == "00000000000000000000000000000000");
-  CryptoContext().hash_immediate(md5, sv.data(), sv.size());
-  bw.reduce(0);
-  bw.print("{}", md5);
-  REQUIRE(bw.view() == "e99a18c428cb38d5f260853678922e03");
-
-  bw.reset().print("Char '{}'", 'a');
+  bw.clear().print("Char '{}'", 'a');
   REQUIRE(bw.view() == "Char 'a'");
-  bw.reset().print("Byte '{}'", uint8_t{'a'});
+  bw.clear().print("Byte '{}'", uint8_t{'a'});
   REQUIRE(bw.view() == "Byte '97'");
 }
 
@@ -280,7 +272,7 @@ TEST_CASE("bwstring", "[bwprint][bwstring]")
   char buff[128];
   snprintf(buff, sizeof(buff), "|%s|", bw.print("Deep Silent Complete by {}\0", "Nightwish"sv).data());
   REQUIRE(std::string_view(buff) == "|Deep Silent Complete by Nightwish|");
-  snprintf(buff, sizeof(buff), "|%s|", bw.reset().print("Deep Silent Complete by {}\0elided junk", "Nightwish"sv).data());
+  snprintf(buff, sizeof(buff), "|%s|", bw.clear().print("Deep Silent Complete by {}\0elided junk", "Nightwish"sv).data());
   REQUIRE(std::string_view(buff) == "|Deep Silent Complete by Nightwish|");
 
   // Special tests for clang analyzer failures - special asserts are needed to make it happy but
@@ -311,51 +303,51 @@ TEST_CASE("bwstring", "[bwprint][bwstring]")
 TEST_CASE("BWFormat integral", "[bwprint][bwformat]")
 {
   ts::LocalBufferWriter<256> bw;
-  ts::BWFSpec spec;
+  ts::bwf::Spec spec;
   uint32_t num = 30;
   int num_neg  = -30;
 
   // basic
   bwformat(bw, spec, num);
   REQUIRE(bw.view() == "30");
-  bw.reduce(0);
+  bw.clear();
   bwformat(bw, spec, num_neg);
   REQUIRE(bw.view() == "-30");
-  bw.reduce(0);
+  bw.clear();
 
   // radix
-  ts::BWFSpec spec_hex;
+  ts::bwf::Spec spec_hex;
   spec_hex._radix_lead_p = true;
   spec_hex._type         = 'x';
   bwformat(bw, spec_hex, num);
   REQUIRE(bw.view() == "0x1e");
-  bw.reduce(0);
+  bw.clear();
 
-  ts::BWFSpec spec_dec;
+  ts::bwf::Spec spec_dec;
   spec_dec._type = '0';
   bwformat(bw, spec_dec, num);
   REQUIRE(bw.view() == "30");
-  bw.reduce(0);
+  bw.clear();
 
-  ts::BWFSpec spec_bin;
+  ts::bwf::Spec spec_bin;
   spec_bin._radix_lead_p = true;
   spec_bin._type         = 'b';
   bwformat(bw, spec_bin, num);
   REQUIRE(bw.view() == "0b11110");
-  bw.reduce(0);
+  bw.clear();
 
   int one     = 1;
   int two     = 2;
   int three_n = -3;
   // alignment
-  ts::BWFSpec left;
-  left._align = ts::BWFSpec::Align::LEFT;
+  ts::bwf::Spec left;
+  left._align = ts::bwf::Spec::Align::LEFT;
   left._min   = 5;
-  ts::BWFSpec right;
-  right._align = ts::BWFSpec::Align::RIGHT;
+  ts::bwf::Spec right;
+  right._align = ts::bwf::Spec::Align::RIGHT;
   right._min   = 5;
-  ts::BWFSpec center;
-  center._align = ts::BWFSpec::Align::CENTER;
+  ts::bwf::Spec center;
+  center._align = ts::bwf::Spec::Align::CENTER;
   center._min   = 5;
 
   bwformat(bw, left, one);
@@ -367,105 +359,105 @@ TEST_CASE("BWFormat integral", "[bwprint][bwformat]")
   REQUIRE(bw.view() == "1        2    2 -3  ");
 
   std::atomic<int> ax{0};
-  bw.reset().print("ax == {}", ax);
+  bw.clear().print("ax == {}", ax);
   REQUIRE(bw.view() == "ax == 0");
   ++ax;
-  bw.reset().print("ax == {}", ax);
+  bw.clear().print("ax == {}", ax);
   REQUIRE(bw.view() == "ax == 1");
 }
 
 TEST_CASE("BWFormat floating", "[bwprint][bwformat]")
 {
   ts::LocalBufferWriter<256> bw;
-  ts::BWFSpec spec;
+  ts::bwf::Spec spec;
 
-  bw.reduce(0);
+  bw.clear();
   bw.print("{}", 3.14);
   REQUIRE(bw.view() == "3.14");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{} {:.2} {:.0} ", 32.7, 32.7, 32.7);
   REQUIRE(bw.view() == "32.70 32.70 32 ");
-  bw.reduce(0);
+  bw.clear();
   bw.print("{} neg {:.3}", -123.2, -123.2);
   REQUIRE(bw.view() == "-123.20 neg -123.200");
-  bw.reduce(0);
+  bw.clear();
   bw.print("zero {} quarter {} half {} 3/4 {}", 0, 0.25, 0.50, 0.75);
   REQUIRE(bw.view() == "zero 0 quarter 0.25 half 0.50 3/4 0.75");
-  bw.reduce(0);
+  bw.clear();
   bw.print("long {:.11}", 64.9);
   REQUIRE(bw.view() == "long 64.90000000000");
-  bw.reduce(0);
+  bw.clear();
 
   double n   = 180.278;
   double neg = -238.47;
   bwformat(bw, spec, n);
   REQUIRE(bw.view() == "180.28");
-  bw.reduce(0);
+  bw.clear();
   bwformat(bw, spec, neg);
   REQUIRE(bw.view() == "-238.47");
-  bw.reduce(0);
+  bw.clear();
 
   spec._prec = 5;
   bwformat(bw, spec, n);
   REQUIRE(bw.view() == "180.27800");
-  bw.reduce(0);
+  bw.clear();
   bwformat(bw, spec, neg);
   REQUIRE(bw.view() == "-238.47000");
-  bw.reduce(0);
+  bw.clear();
 
   float f    = 1234;
   float fneg = -1;
   bwformat(bw, spec, f);
   REQUIRE(bw.view() == "1234");
-  bw.reduce(0);
+  bw.clear();
   bwformat(bw, spec, fneg);
   REQUIRE(bw.view() == "-1");
-  bw.reduce(0);
+  bw.clear();
   f          = 1234.5667;
   spec._prec = 4;
   bwformat(bw, spec, f);
   REQUIRE(bw.view() == "1234.5667");
-  bw.reduce(0);
+  bw.clear();
 
   bw << 1234 << .567;
   REQUIRE(bw.view() == "12340.57");
-  bw.reduce(0);
+  bw.clear();
   bw << f;
   REQUIRE(bw.view() == "1234.57");
-  bw.reduce(0);
+  bw.clear();
   bw << n;
   REQUIRE(bw.view() == "180.28");
-  bw.reduce(0);
+  bw.clear();
   bw << f << n;
   REQUIRE(bw.view() == "1234.57180.28");
-  bw.reduce(0);
+  bw.clear();
 
   double edge = 0.345;
   spec._prec  = 3;
   bwformat(bw, spec, edge);
   REQUIRE(bw.view() == "0.345");
-  bw.reduce(0);
+  bw.clear();
   edge = .1234;
   bwformat(bw, spec, edge);
   REQUIRE(bw.view() == "0.123");
-  bw.reduce(0);
+  bw.clear();
   edge = 1.0;
   bwformat(bw, spec, edge);
   REQUIRE(bw.view() == "1");
-  bw.reduce(0);
+  bw.clear();
 
   // alignment
   double first  = 1.23;
   double second = 2.35;
   double third  = -3.5;
-  ts::BWFSpec left;
-  left._align = ts::BWFSpec::Align::LEFT;
+  ts::bwf::Spec left;
+  left._align = ts::bwf::Spec::Align::LEFT;
   left._min   = 5;
-  ts::BWFSpec right;
-  right._align = ts::BWFSpec::Align::RIGHT;
+  ts::bwf::Spec right;
+  right._align = ts::bwf::Spec::Align::RIGHT;
   right._min   = 5;
-  ts::BWFSpec center;
-  center._align = ts::BWFSpec::Align::CENTER;
+  ts::bwf::Spec center;
+  center._align = ts::bwf::Spec::Align::CENTER;
   center._min   = 5;
 
   bwformat(bw, left, first);
@@ -475,97 +467,207 @@ TEST_CASE("BWFormat floating", "[bwprint][bwformat]")
   REQUIRE(bw.view() == "1.23  2.35 2.35");
   bwformat(bw, center, third);
   REQUIRE(bw.view() == "1.23  2.35 2.35-3.50");
-  bw.reduce(0);
+  bw.clear();
 
   double over = 1.4444444;
-  ts::BWFSpec over_min;
+  ts::bwf::Spec over_min;
   over_min._prec = 7;
   over_min._min  = 5;
   bwformat(bw, over_min, over);
   REQUIRE(bw.view() == "1.4444444");
-  bw.reduce(0);
+  bw.clear();
 
   // Edge
   bw.print("{}", (1.0 / 0.0));
   REQUIRE(bw.view() == "Inf");
-  bw.reduce(0);
+  bw.clear();
 
   double inf = std::numeric_limits<double>::infinity();
   bw.print("  {} ", inf);
   REQUIRE(bw.view() == "  Inf ");
-  bw.reduce(0);
+  bw.clear();
 
   double nan_1 = std::nan("1");
   bw.print("{} {}", nan_1, nan_1);
   REQUIRE(bw.view() == "NaN NaN");
-  bw.reduce(0);
+  bw.clear();
 
   double z = 0.0;
   bw.print("{}  ", z);
   REQUIRE(bw.view() == "0  ");
-  bw.reduce(0);
+  bw.clear();
 }
 
-TEST_CASE("bwstring std formats", "[libts][bwprint]")
+TEST_CASE("bwstring std formats", "[[libtscpputil]][bwprint]")
 {
   ts::LocalBufferWriter<120> w;
 
   w.print("{}", ts::bwf::Errno(13));
   REQUIRE(w.view() == "EACCES: Permission denied [13]"sv);
-  w.reset().print("{}", ts::bwf::Errno(134));
+  w.clear().print("{}", ts::bwf::Errno(134));
   REQUIRE(w.view().substr(0, 22) == "Unknown: Unknown error"sv);
 
   time_t t = 1528484137;
   // default is GMT
-  w.reset().print("{} is {}", t, ts::bwf::Date(t));
+  w.clear().print("{} is {}", t, ts::bwf::Date(t));
   REQUIRE(w.view() == "1528484137 is 2018 Jun 08 18:55:37");
-  w.reset().print("{} is {}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
+  w.clear().print("{} is {}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
   REQUIRE(w.view() == "1528484137 is Fri, 08 Jun 2018 at 18.55.37");
   // OK to be explicit
-  w.reset().print("{} is {::gmt}", t, ts::bwf::Date(t));
+  w.clear().print("{} is {::gmt}", t, ts::bwf::Date(t));
   REQUIRE(w.view() == "1528484137 is 2018 Jun 08 18:55:37");
-  w.reset().print("{} is {::gmt}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
+  w.clear().print("{} is {::gmt}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
   REQUIRE(w.view() == "1528484137 is Fri, 08 Jun 2018 at 18.55.37");
   // Local time - set it to something specific or the test will be geographically sensitive.
   setenv("TZ", "CST6", 1);
   tzset();
-  w.reset().print("{} is {::local}", t, ts::bwf::Date(t));
+  w.clear().print("{} is {::local}", t, ts::bwf::Date(t));
   REQUIRE(w.view() == "1528484137 is 2018 Jun 08 12:55:37");
-  w.reset().print("{} is {::local}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
+  w.clear().print("{} is {::local}", t, ts::bwf::Date(t, "%a, %d %b %Y at %H.%M.%S"));
   REQUIRE(w.view() == "1528484137 is Fri, 08 Jun 2018 at 12.55.37");
 
   // Verify these compile and run, not really much hope to check output.
-  w.reset().print("|{}|   |{}|", ts::bwf::Date(), ts::bwf::Date("%a, %d %b %Y"));
+  w.clear().print("|{}|   |{}|", ts::bwf::Date(), ts::bwf::Date("%a, %d %b %Y"));
 
-  w.reset().print("name = {}", ts::bwf::FirstOf("Persia"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("Persia"));
   REQUIRE(w.view() == "name = Persia");
-  w.reset().print("name = {}", ts::bwf::FirstOf("Persia", "Evil Dave"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("Persia", "Evil Dave"));
   REQUIRE(w.view() == "name = Persia");
-  w.reset().print("name = {}", ts::bwf::FirstOf("", "Evil Dave"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("", "Evil Dave"));
   REQUIRE(w.view() == "name = Evil Dave");
-  w.reset().print("name = {}", ts::bwf::FirstOf(nullptr, "Evil Dave"));
+  w.clear().print("name = {}", ts::bwf::FirstOf(nullptr, "Evil Dave"));
   REQUIRE(w.view() == "name = Evil Dave");
-  w.reset().print("name = {}", ts::bwf::FirstOf("Persia", "Evil Dave", "Leif"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("Persia", "Evil Dave", "Leif"));
   REQUIRE(w.view() == "name = Persia");
-  w.reset().print("name = {}", ts::bwf::FirstOf("Persia", nullptr, "Leif"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("Persia", nullptr, "Leif"));
   REQUIRE(w.view() == "name = Persia");
-  w.reset().print("name = {}", ts::bwf::FirstOf("", nullptr, "Leif"));
+  w.clear().print("name = {}", ts::bwf::FirstOf("", nullptr, "Leif"));
   REQUIRE(w.view() == "name = Leif");
 
   const char *empty{nullptr};
   std::string s1{"Persia"};
   std::string_view s2{"Evil Dave"};
   ts::TextView s3{"Leif"};
-  w.reset().print("name = {}", ts::bwf::FirstOf(empty, s3));
+  w.clear().print("name = {}", ts::bwf::FirstOf(empty, s3));
   REQUIRE(w.view() == "name = Leif");
-  w.reset().print("name = {}", ts::bwf::FirstOf(s2, s3));
+  w.clear().print("name = {}", ts::bwf::FirstOf(s2, s3));
   REQUIRE(w.view() == "name = Evil Dave");
-  w.reset().print("name = {}", ts::bwf::FirstOf(s1, empty, s2));
+  w.clear().print("name = {}", ts::bwf::FirstOf(s1, empty, s2));
   REQUIRE(w.view() == "name = Persia");
-  w.reset().print("name = {}", ts::bwf::FirstOf(empty, s2, s1, s3));
+  w.clear().print("name = {}", ts::bwf::FirstOf(empty, s2, s1, s3));
   REQUIRE(w.view() == "name = Evil Dave");
-  w.reset().print("name = {}", ts::bwf::FirstOf(empty, empty, s3, empty, s2, s1));
+  w.clear().print("name = {}", ts::bwf::FirstOf(empty, empty, s3, empty, s2, s1));
   REQUIRE(w.view() == "name = Leif");
+}
+
+// Test alternate format parsing.
+struct AltFormatEx {
+  AltFormatEx(TextView fmt);
+
+  explicit operator bool() const;
+  bool operator()(std::string_view &literal, ts::bwf::Spec &spec);
+  TextView _fmt;
+};
+
+AltFormatEx::AltFormatEx(TextView fmt) : _fmt{fmt} {}
+
+AltFormatEx::operator bool() const
+{
+  return !_fmt.empty();
+}
+
+bool
+AltFormatEx::operator()(std::string_view &literal, ts::bwf::Spec &spec)
+{
+  if (_fmt.size()) {
+    literal = _fmt.split_prefix_at('%');
+    if (literal.empty()) {
+      literal = _fmt;
+      _fmt.clear();
+      return false;
+    }
+
+    if (_fmt.size() >= 1) {
+      char c = _fmt[0];
+      if (c == '%') {
+        literal = {literal.data(), literal.size() + 1};
+        ++_fmt;
+      } else if (c == '<') {
+        size_t off = 0;
+        do {
+          off = _fmt.find('>', off + 1);
+          if (off == TextView::npos) {
+            throw std::invalid_argument("Unclosed leading angle bracket");
+          }
+        } while (':' == _fmt[off - 1]);
+        spec.parse(_fmt.substr(1, off - 1));
+        if (spec._name.empty()) {
+          throw std::invalid_argument("No name in specifier");
+        }
+        _fmt.remove_prefix(off + 1);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+struct Header {
+  TextView
+  proto() const
+  {
+    return "ipv4";
+  }
+  TextView
+  chi() const
+  {
+    return "10.56.128.96";
+  }
+};
+
+using AltNames = ts::bwf::ContextNames<Header>;
+
+TEST_CASE("bwf alternate", "[[libtscpputil]][bwf]")
+{
+  using BW   = ts::BufferWriter;
+  using Spec = ts::bwf::Spec;
+  AltNames names;
+  Header hdr;
+  names.assign("proto", [](BW &w, Spec const &spec, Header &hdr) -> BW & { return ts::bwformat(w, spec, hdr.proto()); });
+  names.assign("chi", [](BW &w, Spec const &spec, Header &hdr) -> BW & { return ts::bwformat(w, spec, hdr.chi()); });
+
+  ts::LocalBufferWriter<256> w;
+  w.print_nv(names.bind(hdr), AltFormatEx("This is chi - %<chi>"));
+  REQUIRE(w.view() == "This is chi - 10.56.128.96");
+  w.clear().print_nv(names.bind(hdr), AltFormatEx("Use %% for a single"));
+  REQUIRE(w.view() == "Use % for a single");
+  w.clear().print_nv(names.bind(hdr), AltFormatEx("Use %%<proto> for %<proto>, dig?"));
+  REQUIRE(w.view() == "Use %<proto> for ipv4, dig?");
+  w.clear().print_nv(names.bind(hdr), AltFormatEx("Width |%<proto:10>| dig?"));
+  REQUIRE(w.view() == "Width |ipv4      | dig?");
+  w.clear().print_nv(names.bind(hdr), AltFormatEx("Width |%<proto:>10>| dig?"));
+  REQUIRE(w.view() == "Width |      ipv4| dig?");
+
+  ts::bwprintf(w.clear(), "Fifty Six = %d", 56);
+  REQUIRE(w.view() == "Fifty Six = 56");
+  ts::bwprintf(w.clear(), "int is %i", 101);
+  REQUIRE(w.view() == "int is 101");
+  ts::bwprintf(w.clear(), "int is %zd", 102);
+  REQUIRE(w.view() == "int is 102");
+  ts::bwprintf(w.clear(), "int is %ld", 103);
+  REQUIRE(w.view() == "int is 103");
+  ts::bwprintf(w.clear(), "int is %s", 104);
+  REQUIRE(w.view() == "int is 104");
+  ts::bwprintf(w.clear(), "int is %ld", -105);
+  REQUIRE(w.view() == "int is -105");
+
+  TextView digits{"0123456789"};
+  ts::bwprintf(w.clear(), "Chars |%*s|", 12, digits);
+  REQUIRE(w.view() == "Chars |  0123456789|");
+  ts::bwprintf(w.clear(), "Chars %.*s", 4, digits);
+  REQUIRE(w.view() == "Chars 0123");
+  ts::bwprintf(w.clear(), "Chars |%*.*s|", 12, 5, digits);
+  REQUIRE(w.view() == "Chars |       01234|");
 }
 
 // Normally there's no point in running the performance tests, but it's worth keeping the code
@@ -583,25 +685,25 @@ TEST_CASE("bwperf", "[bwprint][performance]")
   static constexpr std::string_view text{"e99a18c428cb38d5f260853678922e03"sv};
   ts::LocalBufferWriter<256> bw;
 
-  ts::BWFSpec spec;
+  ts::bwf::Spec spec;
 
-  bw.reduce(0);
+  bw.clear();
   bw.print(fmt, -956, text);
   REQUIRE(bw.view() == "Format |-0x00003bc| 'e99a18c428cb38d5f260853678922e03'");
 
   start = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < N_LOOPS; ++i) {
-    bw.reduce(0);
+    bw.clear();
     bw.print(fmt, -956, text);
   }
   delta = std::chrono::high_resolution_clock::now() - start;
   std::cout << "bw.print() " << delta.count() << "ns or " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count()
             << "ms" << std::endl;
 
-  ts::BWFormat pre_fmt(fmt);
+  ts::bwf::Format pre_fmt(fmt);
   start = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < N_LOOPS; ++i) {
-    bw.reduce(0);
+    bw.clear();
     bw.print(pre_fmt, -956, text);
   }
   delta = std::chrono::high_resolution_clock::now() - start;

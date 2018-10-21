@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 #include <string_view>
 
 /// Apache Traffic Server commons.
@@ -180,7 +180,7 @@ CryptoContext::finalize(CryptoHash &hash)
   return reinterpret_cast<CryptoContextBase *>(_obj)->finalize(hash);
 }
 
-ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, ats::CryptoHash const &hash);
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, ats::CryptoHash const &hash);
 
 } // namespace ats
 

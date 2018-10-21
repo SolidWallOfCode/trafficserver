@@ -27,7 +27,7 @@
 #include <iosfwd>
 
 #include "tscore/ink_assert.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 
 #if !defined(UNIT_TEST_BUFFER_WRITER)
 #include <I_IOBuffer.h>
@@ -59,7 +59,7 @@ public:
   }
 
   char *
-  auxBuffer() override
+  aux_data() override
   {
     IOBufferBlock *iobbPtr = _miob->first_write_block();
 
@@ -86,7 +86,7 @@ public:
   // This function should not be called if no auxiliary buffer is available.
   //
   self_type &
-  fill(size_t n) override
+  commit(size_t n) override
   {
     if (n) {
       IOBufferBlock *iobbPtr = _miob->first_write_block();
@@ -117,11 +117,11 @@ public:
 
   // Not useful in this derived class.
   //
-  self_type &clip(size_t) override { return *this; }
+  self_type &restrict(size_t) override { return *this; }
 
   // Not useful in this derived class.
   //
-  self_type &extend(size_t) override { return *this; }
+  self_type &restore(size_t) override { return *this; }
 
   // This must not be called for this derived class.
   //
@@ -137,7 +137,6 @@ public:
   std::ostream &operator>>(std::ostream &stream) const override;
   /// Output the buffer contents to the file for file descriptor @a fd.
   /// @return The number of bytes written.
-  ssize_t operator>>(int fd) const override;
 
 protected:
   MIOBuffer *_miob;

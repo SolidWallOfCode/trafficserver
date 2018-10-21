@@ -27,7 +27,7 @@
 #include <string_view>
 
 #include "tscore/ink_platform.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 
 #include "HttpTransact.h"
 #include "HttpTransactHeaders.h"
@@ -1026,80 +1026,80 @@ HttpTransactHeaders::add_forwarded_field_to_request(HttpTransact::State *s, HTTP
     if (optSet[HttpForwarded::FOR] and ats_is_ip(&s->client_info.src_addr.sa)) {
       // NOTE:  The logic within this if statement assumes that hdr is empty at this point.
 
-      hdr << "for=";
+      hdr.write("for=");
 
       bool is_ipv6 = ats_is_ip6(&s->client_info.src_addr.sa);
 
       if (is_ipv6) {
-        hdr << "\"[";
+        hdr.write("\"[");
       }
 
-      if (ats_ip_ntop(&s->client_info.src_addr.sa, hdr.auxBuffer(), hdr.remaining()) == nullptr) {
+      if (ats_ip_ntop(&s->client_info.src_addr.sa, hdr.aux_data(), hdr.remaining()) == nullptr) {
         Debug("http_trans", "[add_forwarded_field_to_outgoing_request] ats_ip_ntop() call failed");
         return;
       }
 
       // Fail-safe.
-      hdr.auxBuffer()[hdr.remaining() - 1] = '\0';
+      hdr.aux_data()[hdr.remaining() - 1] = '\0';
 
-      hdr.fill(strlen(hdr.auxBuffer()));
+      hdr.commit(strlen(hdr.aux_data()));
 
       if (is_ipv6) {
-        hdr << "]\"";
+        hdr.write("]\"");
       }
     }
 
     if (optSet[HttpForwarded::BY_UNKNOWN]) {
       if (hdr.size()) {
-        hdr << ';';
+        hdr.write(';');
       }
 
-      hdr << "by=unknown";
+      hdr.write("by=unknown");
     }
 
     if (optSet[HttpForwarded::BY_SERVER_NAME]) {
       if (hdr.size()) {
-        hdr << ';';
+        hdr.write(';');
       }
 
-      hdr << "by=" << s->http_config_param->proxy_hostname;
+      hdr.write("by=").write(s->http_config_param->proxy_hostname);
     }
 
     const Machine &m = *Machine::instance();
 
     if (optSet[HttpForwarded::BY_UUID] and m.uuid.valid()) {
       if (hdr.size()) {
-        hdr << ';';
+        hdr.write(';');
       }
 
-      hdr << "by=_" << m.uuid.getString();
+      hdr.write("by=_").write(m.uuid.getString());
     }
 
     if (optSet[HttpForwarded::BY_IP] and (m.ip_string_len > 0)) {
       if (hdr.size()) {
-        hdr << ';';
+        hdr.write(';');
       }
 
-      hdr << "by=";
+      hdr.write("by=");
 
       bool is_ipv6 = ats_is_ip6(&s->client_info.dst_addr.sa);
 
       if (is_ipv6) {
-        hdr << "\"[";
+        hdr.write("\"[");
       }
 
-      if (ats_ip_ntop(&s->client_info.dst_addr.sa, hdr.auxBuffer(), hdr.remaining()) == nullptr) {
+      if (ats_ip_ntop(&s->client_info.dst_addr.sa, hdr.aux_data(), hdr.remaining()) == nullptr) {
         Debug("http_trans", "[add_forwarded_field_to_outgoing_request] ats_ip_ntop() call failed");
         return;
       }
 
       // Fail-safe.
-      hdr.auxBuffer()[hdr.remaining() - 1] = '\0';
+      hdr.aux_data()[hdr.remaining() - 1] = '\0';
 
-      hdr.fill(strlen(hdr.auxBuffer()));
+      hdr.commit(strlen(hdr.aux_data()));
 
       if (is_ipv6) {
-        hdr << "]\"";
+        hdr.write("]\"");
       }
     }
 
@@ -1118,15 +1118,15 @@ HttpTransactHeaders::add_forwarded_field_to_request(HttpTransact::State *s, HTTP
 
     if (optSet[HttpForwarded::PROTO] and (n_proto > 0)) {
       if (hdr.size()) {
-        hdr << ';';
+        hdr.write(';');
       }
 
-      hdr << "proto=";
+      hdr.write("proto=");
 
-      int numChars = HttpTransactHeaders::write_hdr_protocol_stack(hdr.auxBuffer(), hdr.remaining(), ProtocolStackDetail::Compact,
+      int numChars = HttpTransactHeaders::write_hdr_protocol_stack(hdr.aux_data(), hdr.remaining(), ProtocolStackDetail::Compact,
                                                                    protoBuf.data(), n_proto, '-');
       if (numChars > 0) {
-        hdr.fill(size_t(numChars));
+        hdr.commit(size_t(numChars));
       }
     }
 
@@ -1139,16 +1139,16 @@ HttpTransactHeaders::add_forwarded_field_to_request(HttpTransact::State *s, HTTP
         bool needsDoubleQuotes = hSV.find(':') != std::string_view::npos;
 
         if (hdr.size()) {
-          hdr << ';';
+          hdr.write(';');
         }
 
-        hdr << "host=";
+        hdr.write("host=");
         if (needsDoubleQuotes) {
-          hdr << '"';
+          hdr.write('"');
         }
-        hdr << hSV;
+        hdr.write(hSV);
         if (needsDoubleQuotes) {
-          hdr << '"';
+          hdr.write('"');
         }
       }
     }
@@ -1156,18 +1156,18 @@ HttpTransactHeaders::add_forwarded_field_to_request(HttpTransact::State *s, HTTP
     if (n_proto > 0) {
       auto Conn = [&](HttpForwarded::Option opt, HttpTransactHeaders::ProtocolStackDetail detail) -> void {
         if (optSet[opt] && hdr.remaining() > 0) {
-          ts::FixedBufferWriter lw{hdr.auxBuffer(), hdr.remaining()};
+          ts::FixedBufferWriter lw{hdr.aux_data(), hdr.remaining()};
 
           if (hdr.size()) {
-            lw << ';';
+            hdr.write(';');
           }
 
-          lw << "connection=";
+          hdr.write("connection=");
 
           int numChars =
-            HttpTransactHeaders::write_hdr_protocol_stack(lw.auxBuffer(), lw.remaining(), detail, protoBuf.data(), n_proto, '-');
-          if (numChars > 0 && !lw.fill(size_t(numChars)).error()) {
-            hdr.fill(lw.size());
+            HttpTransactHeaders::write_hdr_protocol_stack(lw.aux_data(), lw.remaining(), detail, protoBuf.data(), n_proto, '-');
+          if (numChars > 0 && !lw.commit(size_t(numChars)).error()) {
+            hdr.commit(lw.size());
           }
         }
       };

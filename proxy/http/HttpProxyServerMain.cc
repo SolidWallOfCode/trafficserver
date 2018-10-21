@@ -39,6 +39,7 @@
 #include "http2/Http2SessionAccept.h"
 #include "HttpConnectionCount.h"
 #include "HttpProxyServerMain.h"
+#include "tscpp/util/bwf_base.h"
 
 #include <vector>
 
@@ -58,22 +59,22 @@ extern int num_accept_threads;
 /// Global BufferWriter format name functions.
 namespace
 {
-void
-TS_bwf_thread(ts::BufferWriter &w, ts::BWFSpec const &spec)
+ts::BufferWriter &
+TS_bwf_thread(ts::BufferWriter &w, ts::bwf::Spec const &spec)
 {
-  bwformat(w, spec, this_thread());
+  return bwformat(w, spec, this_thread());
 }
-void
-TS_bwf_ethread(ts::BufferWriter &w, ts::BWFSpec const &spec)
+ts::BufferWriter &
+TS_bwf_ethread(ts::BufferWriter &w, ts::bwf::Spec const &spec)
 {
-  bwformat(w, spec, this_ethread());
+  return bwformat(w, spec, this_ethread());
 }
 } // namespace
 
 // File / process scope initializations
 static bool HTTP_SERVER_INITIALIZED __attribute__((unused)) = []() -> bool {
-  ts::bwf_register_global("ts-thread", &TS_bwf_thread);
-  ts::bwf_register_global("ts-ethread", &TS_bwf_ethread);
+  ts::bwf::Global_Names.assign("ts-thread", &TS_bwf_thread);
+  ts::bwf::Global_Names.assign("ts-ethread", &TS_bwf_ethread);
   return true;
 }();
 

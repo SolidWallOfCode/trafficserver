@@ -24,8 +24,8 @@
 #include <algorithm>
 #include <records/P_RecDefs.h>
 #include "HttpConnectionCount.h"
-#include "tscore/bwf_std_format.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/bwf_ex.h"
+#include "tscpp/util/BufferWriter.h"
 
 using namespace std::literals;
 
@@ -262,9 +262,9 @@ OutboundConnTrack::to_json_string()
 {
   std::string text;
   size_t extent = 0;
-  static const ts::BWFormat header_fmt{R"({{"count": {}, "list": [
+  static const ts::bwf::Format header_fmt{R"({{"count": {}, "list": [
 )"};
-  static const ts::BWFormat item_fmt{
+  static const ts::bwf::Format item_fmt{
     R"(  {{"type": "{}", "ip": "{}", "fqdn": "{}", "current": {}, "max": {}, "blocked": {}, "queued": {}, "alert": {}}},
 )"};
   static const std::string_view trailer{" \n]}"};
@@ -288,12 +288,12 @@ OutboundConnTrack::to_json_string()
 
   text.resize(extent);
   ts::FixedBufferWriter w(const_cast<char *>(text.data()), text.size());
-  w.clip(trailer.size());
+  w.restrict(trailer.size());
   w.print(header_fmt, groups.size());
   for (auto g : groups) {
     printer(w, g);
   }
-  w.extend(trailer.size());
+  w.restore(trailer.size());
   w.write(trailer);
   return text;
 }
@@ -363,7 +363,7 @@ OutboundConnTrack::Warning_Bad_Match_Type(std::string_view tag)
     w.write(n);
     w.write("',"sv);
   }
-  w.auxBuffer()[-1] = '\0'; // clip trailing comma and null terminate.
+  w.aux_data()[-1] = '\0'; // clip trailing comma and null terminate.
   Warning("%s", w.data());
 }
 
@@ -407,7 +407,7 @@ OutboundConnTrack::TxnState::Warn_Blocked(TxnConfig *config, int64_t sm_id, int 
 namespace ts
 {
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::MatchType type)
+bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::MatchType type)
 {
   if (spec.has_numeric_type()) {
     bwformat(w, spec, static_cast<unsigned int>(type));
@@ -418,7 +418,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::MatchType type
 }
 
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group::Key const &key)
+bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::Group::Key const &key)
 {
   switch (key._match_type) {
   case OutboundConnTrack::MATCH_BOTH:
@@ -438,7 +438,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group::Key con
 }
 
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group const &g)
+bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::Group const &g)
 {
   switch (g._match_type) {
   case OutboundConnTrack::MATCH_BOTH:

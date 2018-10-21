@@ -36,8 +36,8 @@
 #include <string_view>
 #include <algorithm>
 #include "tscpp/util/TextView.h"
-#include "tscore/BufferWriter.h"
-#include "tscore/bwf_std_format.h"
+#include "tscpp/util/BufferWriter.h"
+#include "tscpp/util/bwf_ex.h"
 
 #if TS_USE_POSIX_CAP
 #include <sys/capability.h>
@@ -901,7 +901,7 @@ LocalManager::startProxy(const char *onetime_options)
     char options_buffer[OPTIONS_SIZE];
     ts::FixedBufferWriter w{options_buffer, OPTIONS_SIZE};
 
-    w.clip(1);
+    w.restrict(1);
     w.print("{}{}", ts::bwf::OptionalAffix(proxy_options), ts::bwf::OptionalAffix(onetime_options));
 
     // Make sure we're starting the proxy in mgmt mode
@@ -936,7 +936,7 @@ LocalManager::startProxy(const char *onetime_options)
       }
     }
 
-    w.extend(1);
+    w.restore(1);
     w.write('\0'); // null terminate.
 
     Debug("lm", "[LocalManager::startProxy] Launching %s '%s'", absolute_proxy_binary, w.data());

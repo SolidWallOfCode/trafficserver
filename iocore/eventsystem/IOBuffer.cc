@@ -424,25 +424,3 @@ MIOBufferWriter::operator>>(std::ostream &stream) const
   }
   return stream;
 }
-
-ssize_t
-MIOBufferWriter::operator>>(int fd) const
-{
-  ssize_t zret           = 0;
-  IOBufferReader *reader = _miob->alloc_reader();
-  if (reader) {
-    IOBufferBlock *b;
-    while (nullptr != (b = reader->get_current_block())) {
-      auto n = b->read_avail();
-      auto r = ::write(fd, b->start(), n);
-      if (r <= 0) {
-        break;
-      } else {
-        reader->consume(r);
-        zret += r;
-      }
-    }
-    _miob->dealloc_reader(reader);
-  }
-  return zret;
-}

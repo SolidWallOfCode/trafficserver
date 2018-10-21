@@ -29,8 +29,8 @@
 
  ****************************************************************************/
 #include "tscore/ink_config.h"
-#include "tscore/BufferWriter.h"
-#include "tscore/bwf_std_format.h"
+#include "tscpp/util/BufferWriter.h"
+#include "tscpp/util/bwf_std.h"
 #include "tscore/Allocator.h"
 #include "HttpServerSession.h"
 #include "HttpSessionManager.h"

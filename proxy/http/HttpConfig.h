@@ -47,7 +47,7 @@
 #include "tscore/IpMap.h"
 #include "tscore/Regex.h"
 #include "string_view"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 #include "HttpProxyAPIEnums.h"
 #include "ProxyConfig.h"
 #include "records/P_RecProcess.h"

@@ -25,7 +25,7 @@
 #include <netinet/in.h>
 #include <iostream>
 #include "tscore/I_Version.h"
-#include "tscore/Scalar.h"
+#include "tscpp/util/Scalar.h"
 #include "tscore/Regex.h"
 #include <tsconfig/Errata.h>
 #include "tscpp/util/TextView.h"

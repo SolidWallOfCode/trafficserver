@@ -22,8 +22,10 @@
  */
 
 #include "CacheDefs.h"
+#include <cassert>
 #include <iostream>
 #include <fcntl.h>
+#include "tscpp/util/bwf_base.h"
 
 using namespace std;
 using namespace ts;

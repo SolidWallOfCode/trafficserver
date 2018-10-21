@@ -26,6 +26,7 @@
 #include "../../proxy/hdrs/HdrHeap.h"
 #include "../../proxy/hdrs/MIME.h"
 #include "../../proxy/hdrs/URL.h"
+#include "tscpp/util/bwf_base.h"
 
 // using namespace ct;
 

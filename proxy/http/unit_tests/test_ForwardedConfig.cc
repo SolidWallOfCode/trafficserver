@@ -97,7 +97,7 @@ test(const char *spec, const char *reqErr, OptionBitSet bS)
 {
   ts::LocalBufferWriter<1024> error;
 
-  error << "cheese";
+  error.write("cheese");
 
   REQUIRE(bS == optStrToBitset(XS(spec), error));
   std::size_t len = std::strlen(reqErr);

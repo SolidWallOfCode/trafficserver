@@ -24,7 +24,7 @@
 #pragma once
 
 #include "HttpTransact.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 
 class HttpDebugNames
 {
@@ -37,7 +37,7 @@ public:
   static const char *get_server_state_name(HttpTransact::ServerState_t state);
 };
 
-ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::ServerState_t state);
-ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::CacheAction_t state);
-ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::StateMachineAction_t state);
-ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, TSHttpHookID id);
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::ServerState_t state);
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::CacheAction_t state);
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::StateMachineAction_t state);
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, TSHttpHookID id);

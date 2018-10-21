@@ -36,7 +36,7 @@
 #include "tscpp/util/IntrusiveHashMap.h"
 #include "tscore/Diags.h"
 #include "tscore/CryptoHash.h"
-#include "tscore/BufferWriterForward.h"
+#include "tscpp/util/BufferWriter.h"
 #include "tscpp/util/TextView.h"
 #include <MgmtDefs.h>
 #include "HttpProxyAPIEnums.h"
@@ -271,7 +271,7 @@ protected:
   /// Internal implementation class instance.
   struct Imp {
     ts::IntrusiveHashMap<Linkage> _table; ///< Hash table of upstream groups.
-    std::mutex _mutex;                ///< Lock for insert & find.
+    std::mutex _mutex;                    ///< Lock for insert & find.
   };
   static Imp _imp;
 
@@ -430,7 +430,7 @@ Action *register_ShowConnectionCount(Continuation *, HTTPHdr *);
 
 namespace ts
 {
-BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::MatchType type);
-BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group::Key const &key);
-BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group const &g);
+BufferWriter &bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::MatchType type);
+BufferWriter &bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::Group::Key const &key);
+BufferWriter &bwformat(BufferWriter &w, bwf::Spec const &spec, OutboundConnTrack::Group const &g);
 } // namespace ts
