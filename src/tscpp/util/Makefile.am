@@ -28,6 +28,7 @@ libtscpputil_la_LDFLAGS = -no-undefined -version-info @TS_LIBTOOL_VERSION@
 
 libtscpputil_la_SOURCES = \
 	IntrusiveDList.h \
+	IntrusiveHashMap.h \
 	MemArena.h \
 	MemArena.cc \
 	MemSpan.h \

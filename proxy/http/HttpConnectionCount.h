@@ -33,7 +33,7 @@
 #include "tscore/ink_config.h"
 #include "tscore/ink_mutex.h"
 #include "tscore/ink_inet.h"
-#include "tscore/IntrusiveHashMap.h"
+#include "tscpp/util/IntrusiveHashMap.h"
 #include "tscore/Diags.h"
 #include "tscore/CryptoHash.h"
 #include "tscore/BufferWriterForward.h"
@@ -270,7 +270,7 @@ protected:
 
   /// Internal implementation class instance.
   struct Imp {
-    IntrusiveHashMap<Linkage> _table; ///< Hash table of upstream groups.
+    ts::IntrusiveHashMap<Linkage> _table; ///< Hash table of upstream groups.
     std::mutex _mutex;                ///< Lock for insert & find.
   };
   static Imp _imp;

@@ -20,6 +20,7 @@ library_includedir=$(includedir)/tscpp/util
 
 library_include_HEADERS = \
 	IntrusiveDList.h \
+	IntrusiveHashMap.h \
 	MemArena.h \
 	MemSpan.h \
         PostScript.h \

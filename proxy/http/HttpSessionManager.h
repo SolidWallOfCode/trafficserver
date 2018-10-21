@@ -34,7 +34,7 @@
 
 #include "P_EventSystem.h"
 #include "HttpServerSession.h"
-#include "tscore/IntrusiveHashMap.h"
+#include "tscpp/util/IntrusiveHashMap.h"
 
 class ProxyClientTransaction;
 class HttpSM;
@@ -67,8 +67,8 @@ public:
   static bool validate_sni(HttpSM *sm, NetVConnection *netvc);
 
 protected:
-  using IPTable   = IntrusiveHashMap<HttpServerSession::IPLinkage>;
-  using FQDNTable = IntrusiveHashMap<HttpServerSession::FQDNLinkage>;
+  using IPTable   = ts::IntrusiveHashMap<HttpServerSession::IPLinkage>;
+  using FQDNTable = ts::IntrusiveHashMap<HttpServerSession::FQDNLinkage>;
 
 public:
   /** Check if a session matches address and host name.
