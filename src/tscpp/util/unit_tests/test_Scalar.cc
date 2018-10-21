@@ -4,28 +4,23 @@
 
     @section license License
 
-    Licensed to the Apache Software Foundation (ASF) under one
-    or more contributor license agreements.  See the NOTICE file
-    distributed with this work for additional information
-    regarding copyright ownership.  The ASF licenses this file
-    to you under the Apache License, Version 2.0 (the
-    "License"); you may not use this file except in compliance
-    with the License.  You may obtain a copy of the License at
+    Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+    agreements.  See the NOTICE file distributed with this work for additional information regarding
+    copyright ownership.  The ASF licenses this file to you under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with the License.  You may
+    obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
+    Unless required by applicable law or agreed to in writing, software distributed under the
+    License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+    express or implied. See the License for the specific language governing permissions and
     limitations under the License.
 */
 
-#include <catch.hpp>
-#include "tscore/Scalar.h"
-//#include <string>
-//#include <cstdarg>
-//#include <iostream>
+#include "tscpp/util/Scalar.h"
+#include "tscpp/util/bwf_base.h"
+#include "catch.hpp"
 
 using Bytes      = ts::Scalar<1, off_t>;
 using Paragraphs = ts::Scalar<16, off_t>;
@@ -228,58 +223,21 @@ TEST_CASE("Scalar Arithmetic", "[libts][Scalar][arithmetic]")
   REQUIRE(kb >= b);
 }
 
-#if 0
 struct KBytes_tag {
-  static std::string const label;
+  static constexpr std::string_view label{" bytes"};
 };
-std::string const KBytes_tag::label(" bytes");
 
-void
-Test_IO()
+TEST_CASE("Scalar Formatting", "[libts][Scalar][bwf]")
 {
-  typedef ts::Scalar<1024, long int, KBytes_tag> KBytes;
-  typedef ts::Scalar<1024, int> KiBytes;
+  using KBytes  = ts::Scalar<1024, long int, KBytes_tag>;
+  using KiBytes = ts::Scalar<1000, int>;
 
   KBytes x(12);
   KiBytes y(12);
+  ts::LocalBufferWriter<128> w;
 
-  std::cout << "Testing" << std::endl;
-  std::cout << "x is " << x << std::endl;
-  std::cout << "y is " << y << std::endl;
+  w.print("x is {}", x);
+  REQUIRE(w.view() == "x is 12288 bytes");
+  w.clear().print("y is {}", y);
+  REQUIRE(w.view() == "y is 12000");
 }
-
-void
-test_Compile()
-{
-  // These tests aren't normally run, they exist to detect compiler issues.
-
-  typedef ts::Scalar<1024, short> KBytes;
-  typedef ts::Scalar<1024, int> KiBytes;
-  int delta = 10;
-
-  KBytes x(12);
-  KiBytes y(12);
-
-  if (x > 12) {
-    std::cout << "Operator > works" << std::endl;
-  }
-  if (y > 12) {
-    std::cout << "Operator > works" << std::endl;
-  }
-
-  (void)(x.inc(10));
-  (void)(x.inc(static_cast<int>(10)));
-  (void)(x.inc(static_cast<long int>(10)));
-  (void)(x.inc(delta));
-  (void)(y.inc(10));
-  (void)(y.inc(static_cast<int>(10)));
-  (void)(y.inc(static_cast<long int>(10)));
-  (void)(y.inc(delta));
-
-  (void)(x.dec(10));
-  (void)(x.dec(static_cast<int>(10)));
-  (void)(x.dec(static_cast<long int>(10)));
-  (void)(x.dec(delta));
-}
-
-#endif

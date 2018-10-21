@@ -60,7 +60,6 @@ libtscore_la_SOURCES = \
 	BaseLogFile.h \
 	BufferWriter.h \
 	BufferWriterForward.h \
-	BufferWriterFormat.cc \
 	ConsistentHash.cc \
 	ConsistentHash.h \
 	ContFlags.cc \
@@ -248,8 +247,6 @@ test_tscore_SOURCES = \
 	unit_tests/test_AcidPtr.cc \
 	unit_tests/test_arena.cc \
 	unit_tests/test_ArgParser.cc \
-	unit_tests/test_BufferWriter.cc \
-	unit_tests/test_BufferWriterFormat.cc \
 	unit_tests/test_Extendible.cc \
 	unit_tests/test_History.cc \
 	unit_tests/test_ink_inet.cc \
@@ -262,7 +259,6 @@ test_tscore_SOURCES = \
 	unit_tests/test_PriorityQueue.cc \
 	unit_tests/test_Ptr.cc \
 	unit_tests/test_Regex.cc \
-	unit_tests/test_Scalar.cc \
 	unit_tests/test_scoped_resource.cc \
 	unit_tests/test_ts_file.cc \
 	unit_tests/test_Vec.cc

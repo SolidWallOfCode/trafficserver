@@ -29,6 +29,7 @@
 #include "tscore/ink_code.h"
 #include "tscore/CryptoHash.h"
 #include "tscore/SHA256.h"
+#include "tscpp/util/bwf_base.h"
 
 #if TS_ENABLE_FIPS == 1
 CryptoContext::HashType CryptoContext::Setting = CryptoContext::SHA256;
@@ -111,9 +112,9 @@ CryptoHash::toHexStr(char buffer[(CRYPTO_HASH_SIZE * 2) + 1]) const
 namespace ats
 {
 ts::BufferWriter &
-bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, ats::CryptoHash const &hash)
+bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, ats::CryptoHash const &hash)
 {
-  ts::BWFSpec local_spec{spec};
+  ts::bwf::Spec local_spec{spec};
   if ('X' != local_spec._type)
     local_spec._type = 'x';
   return bwformat(w, local_spec, std::string_view(reinterpret_cast<const char *>(hash.u8), CRYPTO_HASH_SIZE));

@@ -22,7 +22,7 @@
  */
 
 #include "catch.hpp"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 #include <cstring>
 
 namespace

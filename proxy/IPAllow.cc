@@ -26,7 +26,7 @@
 
 #include <sstream>
 #include "IPAllow.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/bwf_base.h"
 
 extern char *readIntoBuffer(const char *file_path, const char *module_name, int *read_size_ptr);
 
@@ -215,7 +215,7 @@ IpAllow::BuildTable()
   TextView src(file_buff, file_size);
   TextView line;
   auto err_prefix = [&]() -> ts::BufferWriter & {
-    return bw_err.reset().print("{} discarding '{}' entry at line {} : ", MODULE_NAME, config_file_path, line_num);
+    return bw_err.clear().print("{} discarding '{}' entry at line {} : ", MODULE_NAME, config_file_path, line_num);
   };
 
   while (!(line = src.take_prefix_at('\n')).empty()) {
@@ -280,7 +280,7 @@ IpAllow::BuildTable()
                 if (method_idx < HTTP_WKSIDX_CONNECT || method_idx >= HTTP_WKSIDX_CONNECT + HTTP_WKSIDX_METHODS_CNT) {
                   nonstandard_methods.push_back(method_name);
                   Debug("ip-allow", "%s",
-                        bw_err.reset().print("Found nonstandard method '{}' on line {}\0", method_name, line_num).data());
+                        bw_err.clear().print("Found nonstandard method '{}' on line {}\0", method_name, line_num).data());
                 } else { // valid method.
                   acl_method_mask |= ACL::MethodIdxToMask(method_idx);
                 }

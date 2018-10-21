@@ -30,7 +30,7 @@
 #include <sys/stat.h>
 #include "tscore/ink_memory.h"
 #include "tscpp/util/TextView.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 
 namespace ts
 {

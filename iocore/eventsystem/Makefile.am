@@ -70,8 +70,7 @@ libinkevent_a_SOURCES = \
 	UnixEvent.cc \
 	UnixEventProcessor.cc
 
-check_PROGRAMS = test_Buffer test_Event \
-	test_MIOBufferWriter
+check_PROGRAMS = test_Buffer test_Event
 
 test_LD_FLAGS = \
 	@AM_LDFLAGS@ \
@@ -121,11 +120,7 @@ test_Buffer_LDADD = $(test_LD_ADD)
 test_Event_LDADD = $(test_LD_ADD)
 
 
-test_MIOBufferWriter_SOURCES = unit_tests/test_MIOBufferWriter.cc
 
-test_MIOBufferWriter_CPPFLAGS = $(test_CPP_FLAGS) -I$(abs_top_srcdir)/tests/include
-test_MIOBufferWriter_LDFLAGS = $(test_LD_FLAGS)
-test_MIOBufferWriter_LDADD = $(test_LD_ADD)
 
 include $(top_srcdir)/build/tidy.mk
 

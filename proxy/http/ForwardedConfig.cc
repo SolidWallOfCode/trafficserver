@@ -45,14 +45,14 @@ public:
   add(ts::TextView badOpt)
   {
     if (_count == 0) {
-      _err << "\"Forwarded\" configuration: ";
+      _err.write("\"Forwarded\" configuration: ");
       _addQuoted(badOpt);
       _count = 1;
     } else if (_count == 1) {
       _saveLast = badOpt;
       _count    = 2;
     } else {
-      _err << ", ";
+      _err.write(", ");
       _addQuoted(_saveLast);
       _saveLast = badOpt;
       ++_count;
@@ -69,12 +69,12 @@ public:
     }
 
     if (_count == 1) {
-      _err << " is a bad option.";
+      _err.write(" is a bad option.");
 
     } else if (_count != 0) {
-      _err << " and ";
+      _err.write(" and ");
       _addQuoted(_saveLast);
-      _err << " are bad options.";
+      _err.write(" are bad options.");
     }
     return true;
   }
@@ -83,7 +83,7 @@ private:
   void
   _addQuoted(ts::TextView sv)
   {
-    _err << '\"' << sv << '\"';
+    _err.write('\"').write(sv).write('\"');
   }
 
   ts::FixedBufferWriter &_err;

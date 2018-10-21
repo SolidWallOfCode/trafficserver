@@ -31,6 +31,7 @@
 #include "tscore/ink_assert.h"
 #include "ts/apidefs.h"
 #include "tscpp/util/TextView.h"
+#include "tscpp/util/bwf_base.h"
 #include "tscore/ink_inet.h"
 
 IpAddr const IpAddr::INVALID;
@@ -692,10 +693,10 @@ ats_tcp_somaxconn()
 namespace ts
 {
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, in_addr_t addr)
+bwformat(BufferWriter &w, bwf::Spec const &spec, in_addr_t addr)
 {
   uint8_t *ptr = reinterpret_cast<uint8_t *>(&addr);
-  BWFSpec local_spec{spec}; // Format for address elements.
+  bwf::Spec local_spec{spec}; // Format for address elements.
   bool align_p = false;
 
   if (spec._ext.size()) {
@@ -710,7 +711,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, in_addr_t addr)
 
   if (align_p) {
     local_spec._min   = 3;
-    local_spec._align = BWFSpec::Align::RIGHT;
+    local_spec._align = bwf::Spec::Align::RIGHT;
   } else {
     local_spec._min = 0;
   }
@@ -726,10 +727,10 @@ bwformat(BufferWriter &w, BWFSpec const &spec, in_addr_t addr)
 }
 
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, in6_addr const &addr)
+bwformat(BufferWriter &w, bwf::Spec const &spec, in6_addr const &addr)
 {
   using QUAD = uint16_t const;
-  BWFSpec local_spec{spec}; // Format for address elements.
+  bwf::Spec local_spec{spec}; // Format for address elements.
   uint8_t const *ptr   = addr.s6_addr;
   uint8_t const *limit = ptr + sizeof(addr.s6_addr);
   QUAD *lower          = nullptr; // the best zero range
@@ -748,7 +749,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, in6_addr const &addr)
 
   if (align_p) {
     local_spec._min   = 4;
-    local_spec._align = BWFSpec::Align::RIGHT;
+    local_spec._align = bwf::Spec::Align::RIGHT;
   } else {
     local_spec._min = 0;
     // do 0 compression if there's no internal fill.
@@ -794,9 +795,9 @@ bwformat(BufferWriter &w, BWFSpec const &spec, in6_addr const &addr)
 }
 
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr)
+bwformat(BufferWriter &w, bwf::Spec const &spec, IpAddr const &addr)
 {
-  BWFSpec local_spec{spec}; // Format for address elements and port.
+  bwf::Spec local_spec{spec}; // Format for address elements and port.
   bool addr_p{true};
   bool family_p{false};
 
@@ -848,9 +849,9 @@ bwformat(BufferWriter &w, BWFSpec const &spec, IpAddr const &addr)
 }
 
 BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, sockaddr const *addr)
+bwformat(BufferWriter &w, bwf::Spec const &spec, sockaddr const *addr)
 {
-  BWFSpec local_spec{spec}; // Format for address elements and port.
+  bwf::Spec local_spec{spec}; // Format for address elements and port.
   bool port_p{true};
   bool addr_p{true};
   bool family_p{false};
@@ -918,7 +919,7 @@ bwformat(BufferWriter &w, BWFSpec const &spec, sockaddr const *addr)
     if (local_numeric_fill_p) {
       local_spec._min   = 5;
       local_spec._fill  = local_numeric_fill_char;
-      local_spec._align = BWFSpec::Align::RIGHT;
+      local_spec._align = bwf::Spec::Align::RIGHT;
     } else {
       local_spec._min = 0;
     }

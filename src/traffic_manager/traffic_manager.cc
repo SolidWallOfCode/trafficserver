@@ -56,7 +56,7 @@
 #endif
 #include <grp.h>
 #include <atomic>
-#include "tscore/bwf_std_format.h"
+#include "tscpp/util/bwf_ex.h"
 
 #define FD_THROTTLE_HEADROOM (128 + 64) // TODO: consolidate with THROTTLE_FD_HEADROOM
 #define DIAGS_LOG_FILENAME "manager.log"

@@ -19,6 +19,11 @@
 library_includedir=$(includedir)/tscpp/util
 
 library_include_HEADERS = \
+	BufferWriter.h \
+	bwf_printf.h \
+	bwf_ex.h \
+	bwf_base.h \
+	bwf_std.h \
 	IntrusiveDList.h \
 	IntrusiveHashMap.h \
 	MemArena.h \

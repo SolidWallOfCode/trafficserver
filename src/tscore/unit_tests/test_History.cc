@@ -24,7 +24,7 @@
 #include <string_view>
 
 #include "tscore/History.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/bwf_base.h"
 #include "catch.hpp"
 
 using std::string_view;
@@ -73,7 +73,7 @@ TEST_CASE("History", "[libts][History]")
   w.print("{}", sm->history[0].location);
   REQUIRE(w.view() == "test_History.cc:69 (____C_A_T_C_H____T_E_S_T____0)");
 
-  w.reset().print("{}", sm->history[1].location);
+  w.clear().print("{}", sm->history[1].location);
   REQUIRE(w.view() == "test_History.cc:70 (____C_A_T_C_H____T_E_S_T____0)");
 
   REQUIRE(sm->history[0].event == 1);
@@ -105,10 +105,10 @@ TEST_CASE("History", "[libts][History]")
   REQUIRE(sm2->history.size() == 2);
   REQUIRE(sm2->history.overflowed() == true);
 
-  w.reset().print("{}", sm2->history[0].location);
+  w.clear().print("{}", sm2->history[0].location);
   REQUIRE(w.view() == "test_History.cc:103 (____C_A_T_C_H____T_E_S_T____0)");
 
-  w.reset().print("{}", sm2->history[1].location);
+  w.clear().print("{}", sm2->history[1].location);
   REQUIRE(w.view() == "test_History.cc:98 (____C_A_T_C_H____T_E_S_T____0)");
 
   sm2->history.clear();

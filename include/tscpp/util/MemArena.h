@@ -26,7 +26,7 @@
 #include <utility>
 
 #include "tscpp/util/MemSpan.h"
-#include "tscore/Scalar.h"
+#include "tscpp/util/Scalar.h"
 #include "tscpp/util/IntrusiveDList.h"
 
 namespace ts

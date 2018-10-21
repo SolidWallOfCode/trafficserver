@@ -42,7 +42,7 @@
 #include "tscore/ink_time.h"
 #include "tscore/ink_hrtime.h"
 #include "tscore/ink_thread.h"
-#include "tscore/BufferWriter.h"
+#include "tscpp/util/BufferWriter.h"
 #include "tscore/Diags.h"
 
 int diags_on_for_plugins         = 0;
@@ -220,7 +220,7 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   LocalBufferWriter<1024> format_writer;
 
   // Save room for optional newline and terminating NUL bytes.
-  format_writer.clip(2);
+  format_writer.restrict(2);
 
   //////////////////////
   // append timestamp //
@@ -245,8 +245,8 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   ///////////////////////
   // add the thread id //
   ///////////////////////
-  format_writer.fill(
-    snprintf(format_writer.auxBuffer(), format_writer.remaining(), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self()));
+  format_writer.commit(
+    snprintf(format_writer.aux_data(), format_writer.remaining(), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self()));
 
   //////////////////////////////////
   // append the diag level prefix //
@@ -283,7 +283,7 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   //////////////////////////////////////////////////////
 
   format_writer.write(format_string, strlen(format_string));
-  format_writer.extend(2);
+  format_writer.restore(2);
   if (format_writer.data()[format_writer.size() - 1] != '\n') {
     format_writer.write('\n');
   }

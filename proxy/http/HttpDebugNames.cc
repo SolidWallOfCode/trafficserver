@@ -28,6 +28,7 @@
 #include "Transform.h"
 #include "HttpSM.h"
 #include "HttpUpdateSM.h"
+#include "tscpp/util/bwf_base.h"
 
 //----------------------------------------------------------------------------
 const char *
@@ -482,7 +483,7 @@ HttpDebugNames::get_api_hook_name(TSHttpHookID t)
 }
 
 ts::BufferWriter &
-bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::ServerState_t state)
+bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::ServerState_t state)
 {
   if (spec.has_numeric_type()) {
     return bwformat(w, spec, static_cast<uintmax_t>(state));
@@ -492,7 +493,7 @@ bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::ServerState
 }
 
 ts::BufferWriter &
-bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::CacheAction_t state)
+bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::CacheAction_t state)
 {
   if (spec.has_numeric_type()) {
     return bwformat(w, spec, static_cast<uintmax_t>(state));
@@ -502,7 +503,7 @@ bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::CacheAction
 }
 
 ts::BufferWriter &
-bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::StateMachineAction_t state)
+bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, HttpTransact::StateMachineAction_t state)
 {
   if (spec.has_numeric_type()) {
     return bwformat(w, spec, static_cast<uintmax_t>(state));
@@ -512,7 +513,7 @@ bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, HttpTransact::StateMachin
 }
 
 ts::BufferWriter &
-bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, TSHttpHookID id)
+bwformat(ts::BufferWriter &w, ts::bwf::Spec const &spec, TSHttpHookID id)
 {
   if (spec.has_numeric_type()) {
     return bwformat(w, spec, static_cast<uintmax_t>(id));

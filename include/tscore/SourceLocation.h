@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "tscore/BufferWriterForward.h"
+#include "tscpp/util/BufferWriter.h"
 
 // The SourceLocation class wraps up a source code location, including
 // file name, function name, and line number, and contains a method to
@@ -59,13 +59,13 @@ public:
   }
 
   char *str(char *buf, int buflen) const;
-  ts::BufferWriter &print(ts::BufferWriter &w, ts::BWFSpec const &spec) const;
+  ts::BufferWriter &print(ts::BufferWriter &w, ts::bwf::Spec const &spec) const;
 };
 
 namespace ts
 {
 inline BufferWriter &
-bwformat(BufferWriter &w, BWFSpec const &spec, SourceLocation const &loc)
+bwformat(BufferWriter &w, bwf::Spec const &spec, SourceLocation const &loc)
 {
   return loc.print(w, spec);
 }
