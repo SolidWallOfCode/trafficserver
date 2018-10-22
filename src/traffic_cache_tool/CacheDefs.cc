@@ -293,7 +293,7 @@ Stripe::updateHeaderFooter()
 
   int64_t hdr_size    = this->vol_headerlen();
   int64_t dir_size    = this->vol_dirlen();
-  Bytes footer_offset = Bytes(dir_size - ROUND_TO_STORE_BLOCK(sizeof(StripeMeta)));
+  Bytes footer_offset = Bytes(dir_size - CacheStoreBlocks(round_up(sizeof(StripeMeta))));
   _meta_pos[A][HEAD]  = round_down(_start);
   _meta_pos[A][FOOT]  = round_down(_start + footer_offset);
   _meta_pos[B][HEAD]  = round_down(this->_start + Bytes(dir_size));
@@ -326,7 +326,7 @@ Stripe::updateHeaderFooter()
       return zret;
     }
     // copy dir entries
-    dir_size = dir_size - hdr_size - ROUND_TO_STORE_BLOCK(sizeof(StripeMeta));
+    dir_size = dir_size - hdr_size - CacheStoreBlocks(round_up(sizeof(StripeMeta)));
     memcpy(meta_t, (char *)dir, dir_size);
     n = pwrite(_span->_fd, meta_t, dir_size, _meta_pos[i][HEAD] + hdr_size); //
     if (n < dir_size) {
@@ -340,7 +340,7 @@ Stripe::updateHeaderFooter()
     // copy footer,
     memcpy(meta_t, &_meta[i][FOOT], sizeof(StripeMeta));
 
-    int64_t footer_size = ROUND_TO_STORE_BLOCK(sizeof(StripeMeta));
+    int64_t footer_size = CacheStoreBlocks(round_up(sizeof(StripeMeta)));
     n                   = pwrite(_span->_fd, meta_t, footer_size, _meta_pos[i][FOOT]);
     if (n < footer_size) {
       std::cout << "problem writing footer to disk: " << strerror(errno) << ":"
@@ -357,8 +357,8 @@ Stripe::updateHeaderFooter()
 size_t
 Stripe::vol_dirlen()
 {
-  return vol_headerlen() + ROUND_TO_STORE_BLOCK(((size_t)this->_buckets) * DIR_DEPTH * this->_segments * SIZEOF_DIR) +
-         ROUND_TO_STORE_BLOCK(sizeof(StripeMeta));
+  return vol_headerlen() + CacheStoreBlocks(round_up(((size_t)this->_buckets) * DIR_DEPTH * this->_segments * SIZEOF_DIR)) +
+         CacheStoreBlocks(round_up(sizeof(StripeMeta)));
 }
 
 void

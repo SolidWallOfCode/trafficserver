@@ -46,9 +46,6 @@ using ts::round_up;
 
 namespace ts
 {
-/* INK_ALIGN() is only to be used to align on a power of 2 boundary */
-#define INK_ALIGN(size, boundary) (((size) + ((boundary)-1)) & ~((boundary)-1))
-#define ROUND_TO_STORE_BLOCK(_x) INK_ALIGN((_x), 8192)
 #define dir_clear(_e) \
   do {                \
     (_e)->w[0] = 0;   \
@@ -568,10 +565,11 @@ struct Stripe {
 
   Bytes stripe_offset(CacheDirEntry *e); // offset w.r.t the stripe content
   size_t vol_dirlen();
+
   TS_INLINE int
   vol_headerlen()
   {
-    return ROUND_TO_STORE_BLOCK(sizeof(StripeMeta) + sizeof(uint16_t) * (this->_segments - 1));
+    return CacheStoreBlocks(round_up(sizeof(StripeMeta) + sizeof(uint16_t) * (this->_segments - 1)));
   }
   void vol_init_data_internal();
   void vol_init_data();
