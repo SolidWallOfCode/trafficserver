@@ -61,7 +61,6 @@ enum { SILENT = 0, NORMAL, VERBOSE } Verbosity = NORMAL;
 extern int cache_config_min_average_object_size;
 extern CacheStoreBlocks Vol_hash_alloc_size;
 extern int OPEN_RW_FLAG;
-const Bytes ts::CacheSpan::OFFSET{CacheStoreBlocks{1}};
 ts::file::path SpanFile;
 ts::file::path VolumeFile;
 ts::ArgParser parser;

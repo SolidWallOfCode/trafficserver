@@ -71,19 +71,19 @@ constexpr static int MAX_VOLUME_IDX          = 255;
 constexpr static int ENTRIES_PER_BUCKET      = 4;
 constexpr static int MAX_BUCKETS_PER_SEGMENT = (1 << 16) / ENTRIES_PER_BUCKET;
 
-typedef Scalar<1, off_t, tag::bytes> Bytes;
-typedef Scalar<1024, off_t, tag::bytes> Kilobytes;
-typedef Scalar<1024 * Kilobytes::SCALE, off_t, tag::bytes> Megabytes;
-typedef Scalar<1024 * Megabytes::SCALE, off_t, tag::bytes> Gigabytes;
-typedef Scalar<1024 * Gigabytes::SCALE, off_t, tag::bytes> Terabytes;
+using Bytes     = Scalar<1, off_t, tag::bytes>;
+using Kilobytes = Scalar<1024, off_t, tag::bytes>;
+using Megabytes = Scalar<1024 * Kilobytes::SCALE, off_t, tag::bytes>;
+using Gigabytes = Scalar<1024 * Megabytes::SCALE, off_t, tag::bytes>;
+using Terabytes = Scalar<1024 * Gigabytes::SCALE, off_t, tag::bytes>;
 
 // Units of allocation for stripes.
-typedef Scalar<128 * Megabytes::SCALE, int64_t, tag::bytes> CacheStripeBlocks;
+using CacheStripeBlocks = Scalar<128 * Megabytes::SCALE, int64_t, tag::bytes>;
 // Size measurement of cache storage.
 // Also size of meta data storage units.
-typedef Scalar<8 * Kilobytes::SCALE, int64_t, tag::bytes> CacheStoreBlocks;
+using CacheStoreBlocks = Scalar<8 * Kilobytes::SCALE, int64_t, tag::bytes>;
 // Size unit for content stored in cache.
-typedef Scalar<512, int64_t, tag::bytes> CacheDataBlocks;
+using CacheDataBlocks = Scalar<512, int64_t, tag::bytes>;
 
 /** A cache span is a representation of raw storage.
     It corresponds to a raw disk, disk partition, file, or directory.
@@ -93,7 +93,7 @@ class CacheSpan
 public:
   /// Default offset of start of data in a span.
   /// @internal I think this is done to avoid collisions with partition tracking mechanisms.
-  static const Bytes OFFSET;
+  static constexpr Bytes OFFSET{CacheStoreBlocks{1}};
 };
 
 /** A section of storage in a span, used to contain a stripe.
@@ -486,7 +486,7 @@ struct Stripe {
     Bytes _skip;  ///< # of bytes not valid at the start of the first block.
     Bytes _clip;  ///< # of bytes not valid at the end of the last block.
 
-    typedef std::vector<MemSpan> Chain;
+    using Chain = std::vector<MemSpan>;
     Chain _chain; ///< Chain of blocks.
 
     ~Chunk();
