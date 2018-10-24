@@ -293,6 +293,8 @@ RollingOffsetHr     number      Specifies an hour (from 0 to 23) at which log
                                 :ts:cv:`proxy.config.log.rolling_offset_hr`.
 RollingSizeMb       number      Size, in megabytes, at which log files are
                                 rolled.
+RollingMinCount     number      Specifies the min count to use during log
+                                deletion.
 Filters             array of    The optional list of filter objects which
                     filters     restrict the individual events logged.
 CollationHosts      array of    If present, one or more strings specifying the

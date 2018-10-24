@@ -294,6 +294,7 @@ create_log_object(lua_State *L, const char *name, LogFileFormat which)
   lua_Integer interval;
   lua_Integer offset;
   lua_Integer size;
+  lua_Integer min;
 
   BindingInstance::typecheck(L, name, LUA_TTABLE, LUA_TNONE);
 
@@ -303,6 +304,7 @@ create_log_object(lua_State *L, const char *name, LogFileFormat which)
   interval = lua_getfield<lua_Integer>(L, -1, "RollingIntervalSec", conf->rolling_interval_sec);
   offset   = lua_getfield<lua_Integer>(L, -1, "RollingOffsetHr", conf->rolling_offset_hr);
   size     = lua_getfield<lua_Integer>(L, -1, "RollingSizeMb", conf->rolling_size_mb);
+  min      = lua_getfield<lua_Integer>(L, -1, "RollingMinCount", conf->rolling_min_count);
 
   lua_pushstring(L, "Format"); // Now key is at -1 and table is at -2.
   lua_gettable(L, -2);         // Now the result is at -1.
@@ -339,6 +341,8 @@ create_log_object(lua_State *L, const char *name, LogFileFormat which)
 
   log = new LogObject(fmt.get(), conf->logfile_dir, filename, which, header, (Log::RollingEnabledValues)rolling,
                       conf->collation_preproc_threads, interval, offset, size);
+
+  conf->deleting_info.insert(new LogDeletingInfo(log->get_base_filename(), ((min == 0) ? INT_MAX : min)));
 
   lua_pushstring(L, "Filters"); // Now key is at -1 and table is at -2.
   lua_gettable(L, -2);          // Now the result is at -1.

@@ -155,6 +155,7 @@ libtsutil_la_SOURCES = \
   ink_uuid.cc \
   ink_uuid.h \
   IntrusiveDList.h \
+  IntrusiveHashMap.h \
   IpMap.cc \
   IpMapConf.cc \
   IpMapConf.h \
