@@ -5304,7 +5304,7 @@ HttpSM::do_api_callout_internal()
     ink_assert(!"not reached");
   }
 
-  hook_state.init(cur_hook_id, http_global_hooks, ua_txn ? ua_txn->feature_hooks() : nullptr, &api_hooks);
+  hook_state.init(cur_hook_id, http_global_hooks, ua_session ? ua_session->feature_hooks() : nullptr, &api_hooks);
   cur_hook  = nullptr;
   cur_hooks = 0;
   state_api_callout(0, nullptr);
