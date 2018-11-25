@@ -1558,4 +1558,11 @@ bwformat(BufferWriter &w, BWFSpec const &spec, IpEndpoint const &addr)
 {
   return bwformat(w, spec, &addr.sa);
 }
+
+namespace bwf
+{
+  struct HexDump;
+
+  HexDump As_Hex(IpEndpoint const &addr);
+} // namespace bwf
 } // namespace ts

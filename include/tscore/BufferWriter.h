@@ -885,6 +885,48 @@ FixedBufferWriter::printv(BWFormat const &fmt, std::tuple<Args...> const &args) 
   return static_cast<self_type &>(this->super_type::printv(fmt, args));
 }
 
+// Basic format wrappers - these are here because they're used internally.
+namespace bwf
+{
+  /** Hex dump wrapper.
+   *
+   * This wrapper indicates the contained view should be dumped as raw memory in hexadecimal format.
+   * This is intended primarily for internal use by other formatting logic.
+   *
+   * @see As_Hex
+   */
+  struct HexDump {
+    std::string_view _view;
+
+    /** Dump @a n bytes starting at @a mem as hex.
+     *
+     * @param mem First byte of memory to dump.
+     * @param n Number of bytes.
+     */
+    HexDump(void const *mem, size_t n) : _view(static_cast<char const *>(mem), n) {}
+  };
+
+  /** Treat @a t as raw memory and dump the memory as hexadecimal.
+   *
+   * @tparam T Type of argument.
+   * @param t Object to dump.
+   * @return @a A wrapper to do a hex dump.
+   *
+   * This is the standard way to do a hexadecimal memory dump of an object.
+   *
+   * @internal This function exists so that other types can overload it for special processing,
+   * which would not be possible with just @c HexDump.
+   */
+  template <typename T>
+  HexDump
+  As_Hex(T const &t)
+  {
+    return HexDump(&t, sizeof(T));
+  }
+} // namespace bwf
+
+BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, bwf::HexDump const &hex);
+
 } // end namespace ts
 
 namespace std

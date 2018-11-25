@@ -937,4 +937,13 @@ bwformat(BufferWriter &w, BWFSpec const &spec, sockaddr const *addr)
   return w;
 }
 
+namespace bwf
+{
+  HexDump
+  As_Hex(IpEndpoint const &addr)
+  {
+    return HexDump(ats_ip_addr8_cast(&addr), ats_ip_addr_size(&addr));
+  }
+} // namespace bwf
+
 } // namespace ts
