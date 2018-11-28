@@ -1,12 +1,30 @@
-#include <ts/ts.h>
+/*
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+#include "ts/ts.h"
 #include <atomic>
 #include <vector>
-#include <inttypes.h>
-#include <ts/TextView.h>
+#include <cinttypes>
+#include "ts/TextView.h"
 #include "regex.h"
 
 #define PLUGIN_NAME "TLS Bridge"
-#define PLUGIN_TAG "tls-bridge"
+#define PLUGIN_TAG "tls_bridge"
 
 using ts::TextView;
 
@@ -50,6 +68,7 @@ class BridgeConfig
     /// @internal Pass in the compiled regex because no instance of this is created if
     /// the regex doesn't compile successfully.
     Item(const char *pattern, Regex &&r, const char *dest) : _pattern(pattern), _r(std::move(r)), _dest(dest) {}
+
     std::string _pattern; ///< Original configuration regular expression.
     Regex _r;             ///< Compiled regex.
     std::string _dest;    ///< Destination if matched.
@@ -170,8 +189,6 @@ struct Bridge {
   TSHttpStatus _out_response_code = TS_HTTP_STATUS_NONE;
   /// Response reason, if not TS_HTTP_STATUS_OK
   std::string _out_response_reason;
-  /// Is the response to the user agent suspended?
-  bool _ua_response_suspended = false;
 
   /// Bridge requires a continuation for scheduling and the transaction.
   Bridge(TSCont cont, TSHttpTxn txn, TextView peer);
@@ -213,9 +230,9 @@ void
 Bridge::net_accept(TSVConn vc)
 {
   char buff[1024];
-  int64_t n = snprintf(buff, sizeof(buff) - 1, CONNECT_FORMAT, static_cast<int>(_peer.size()), _peer.data());
+  int64_t n = snprintf(buff, sizeof(buff), CONNECT_FORMAT, int(_peer.size()), _peer.data());
 
-  TSDebug(PLUGIN_TAG, "Received UA VConn");
+  TSDebug(PLUGIN_TAG, "Received UA VConn, connecting to peer %.*s", int(_peer.size()), _peer.data());
   // UA side intercepted.
   _ua.init(vc);
   _ua.do_read(_self_cont, INT64_MAX);
@@ -246,12 +263,14 @@ Bridge::read_ready(TSVIO vio)
     case EOS:
       break;
     case OPEN:
-      if (!this->check_outbound_OK() || _out_resp_state != OK)
+      if (!this->check_outbound_OK() || _out_resp_state != OK) {
         break;
+      }
     // FALL THROUGH
     case OK:
-      if (!this->check_outbound_terminal() || _out_resp_state != READY)
+      if (!this->check_outbound_terminal() || _out_resp_state != READY) {
         break;
+      }
     // FALL THROUGH
     case READY:
       // Do setup for flowing upstream data to user agent.
@@ -297,12 +316,6 @@ Bridge::check_outbound_OK()
         }
         // 519 is POOMA, useful for debugging, but may want to change this later.
         _out_response_code = c ? c : static_cast<TSHttpStatus>(519);
-        if (_ua_response_suspended) {
-          this->update_ua_response();
-          TSHttpTxnReenable(_ua_txn, TS_EVENT_HTTP_CONTINUE);
-          _ua_response_suspended = false;
-          TSDebug(PLUGIN_TAG, "TXN resumed");
-        }
         _out.consume(block.data() - raw.data());
         zret = true;
         TSDebug(PLUGIN_TAG, "Outbound status %d", c);
@@ -326,10 +339,11 @@ Bridge::check_outbound_terminal()
     while (block) {
       char c = *block;
       if ('\r' == c) {
-        if (_out_terminal_pos == 2)
+        if (_out_terminal_pos == 2) {
           _out_terminal_pos = 3;
-        else
+        } else {
           _out_terminal_pos = 1;
+        }
       } else if ('\n' == c) {
         if (_out_terminal_pos == 3) {
           _out_terminal_pos = 4;
@@ -396,23 +410,19 @@ Bridge::eos(TSVIO vio)
   }
   _out.do_close();
   _ua.do_close();
-  _out_resp_state = EOS;
-  if (_ua_response_suspended)
-    TSHttpTxnReenable(_ua_txn, TS_EVENT_HTTP_CONTINUE);
+  if (_out_resp_state != ERROR) {
+    _out_resp_state = EOS;
+  }
 }
 
 void
 Bridge::send_response_cb()
 {
-  // If the upstream response hasn't been parsed yet, make the UA response wait for that.
-  // Set a flag so the upstream response parser knows to update response and reenable.
-  if (_out_resp_state < OK) {
-    _ua_response_suspended = true;
-    TSDebug(PLUGIN_TAG, "TXN suspended");
-  } else { // Already have all the data needed to do the update, so do it and move on.
-    this->update_ua_response();
-    TSHttpTxnReenable(_ua_txn, TS_EVENT_HTTP_CONTINUE);
-  }
+  // This happens either after the upstream connection and the writing the response there,
+  // or because the upstream connection was blocked. In either case the upstream work is
+  // done and the original transaction can proceed.
+  this->update_ua_response();
+  TSHttpTxnReenable(_ua_txn, TS_EVENT_HTTP_CONTINUE);
 }
 
 void
@@ -421,15 +431,14 @@ Bridge::update_ua_response()
   TSMBuffer mbuf;
   TSMLoc hdr_loc;
   if (TS_SUCCESS == TSHttpTxnClientRespGet(_ua_txn, &mbuf, &hdr_loc)) {
-    // A 200 for @a out_response_code only means there wasn't an internal failure on the upstream
-    // CONNECT. Network and other failures get reported in this response. This response code will
-    // be more accurate, so use it unless it's 200, in which case use the stored response code if
-    // that's not 200.
-    TSHttpStatus status = TSHttpHdrStatusGet(mbuf, hdr_loc);
-    if (TS_HTTP_STATUS_OK == status && TS_HTTP_STATUS_OK != _out_response_code) {
+    // If there is a non-200 upstream code then that's the most accurate because it was from
+    // an actual upstream connection. Otherwise, let the original connection response code
+    // ride.
+    if (_out_response_code != TS_HTTP_STATUS_OK && _out_response_code != TS_HTTP_STATUS_NONE) {
       TSHttpHdrStatusSet(mbuf, hdr_loc, _out_response_code);
-      if (!_out_response_reason.empty())
+      if (!_out_response_reason.empty()) {
         TSHttpHdrReasonSet(mbuf, hdr_loc, _out_response_reason.data(), _out_response_reason.size());
+      }
     }
     // TS insists on adding these fields, despite it being a CONNECT.
     Hdr_Remove_Field(mbuf, hdr_loc, {TS_MIME_FIELD_TRANSFER_ENCODING, TS_MIME_LEN_TRANSFER_ENCODING});
@@ -585,6 +594,8 @@ CB_Read_Request_Hdr(TSCont contp, TSEvent ev_idx, void *data)
           TSHttpTxnHookAdd(txn, TS_HTTP_SEND_RESPONSE_HDR_HOOK, actor);
           // Arrange for cleanup.
           TSHttpTxnHookAdd(txn, TS_HTTP_TXN_CLOSE_HOOK, actor);
+          // Skip remap and remap rule requirement - authorized by TLS bridge config.
+          TSSkipRemappingSet(txn, 1);
           // Grab the transaction
           TSHttpTxnIntercept(actor, txn);
         }
