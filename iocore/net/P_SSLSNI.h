@@ -44,8 +44,8 @@
 // Properties for the next hop server
 struct NextHopProperty {
   std::string name;                                                               // name of the server
-  LuaSNIConfig::Policy verifyServerPolicy       = LuaSNIConfig::Policy::DISABLED; // whether to verify the next hop
-  LuaSNIConfig::Property verifyServerProperties = LuaSNIConfig::Property::NONE;   // what to verify on the next hop
+  LuaSNIConfig::Policy verifyServerPolicy       = LuaSNIConfig::Policy::UNSET; // whether to verify the next hop
+  LuaSNIConfig::Property verifyServerProperties = LuaSNIConfig::Property::UNSET;   // what to verify on the next hop
   SSL_CTX *ctx                                   = nullptr; // ctx generated off the certificate to present to this server
   NextHopProperty();
 };

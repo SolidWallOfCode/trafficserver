@@ -65,8 +65,8 @@ struct LuaSNIConfig : public TsConfigBase {
     client_key
   };
   enum class Level : uint8_t { NONE = 0, MODERATE, STRICT };
-  enum class Policy : uint8_t { DISABLED = 0, PERMISSIVE, ENFORCED };
-  enum class Property : uint8_t { NONE = 0, SIGNATURE_MASK = 0x1, NAME_MASK = 0x2, ALL_MASK = 0x3 };
+  enum class Policy : uint8_t { DISABLED = 0, PERMISSIVE, ENFORCED, UNSET };
+  enum class Property : uint8_t { NONE = 0, SIGNATURE_MASK = 0x1, NAME_MASK = 0x2, ALL_MASK = 0x3, UNSET };
   static TsConfigDescriptor desc;
   static TsConfigArrayDescriptor DESCRIPTOR;
 

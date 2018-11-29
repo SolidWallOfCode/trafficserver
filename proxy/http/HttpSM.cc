@@ -4837,6 +4837,46 @@ HttpSM::send_origin_throttled_response()
   call_transact_and_set_next_state(HttpTransact::HandleResponse);
 }
 
+static void
+set_tls_options(NetVCOptions &opt, OverridableHttpConfigParams *txn_conf)
+{
+  char *verify_server = nullptr;
+  if (txn_conf->ssl_client_verify_server_policy == nullptr) {
+    opt.verifyServerPolicy = LuaSNIConfig::Policy::UNSET;
+  } else {
+    verify_server = txn_conf->ssl_client_verify_server_policy;
+    if (strcmp(verify_server, "DISABLED") == 0) {
+      opt.verifyServerPolicy = LuaSNIConfig::Policy::DISABLED;
+    } else if (strcmp(verify_server, "PERMISSIVE") == 0) {
+      opt.verifyServerPolicy = LuaSNIConfig::Policy::PERMISSIVE;
+    } else if (strcmp(verify_server, "ENFORCED") == 0) {
+      opt.verifyServerPolicy = LuaSNIConfig::Policy::ENFORCED;
+    } else {
+      Warning("%s is invalid for proxy.config.ssl.client.verify.server.policy.  Should be one of DISABLED, PERMISSIVE, or ENFORCED",
+              verify_server);
+      opt.verifyServerPolicy = LuaSNIConfig::Policy::UNSET;
+    }
+  }
+  if (txn_conf->ssl_client_verify_server_properties == nullptr) {
+    opt.verifyServerProperties = LuaSNIConfig::Property::UNSET;
+  } else {
+    verify_server = txn_conf->ssl_client_verify_server_properties;
+    if (strcmp(verify_server, "SIGNATURE") == 0) {
+      opt.verifyServerProperties = LuaSNIConfig::Property::SIGNATURE_MASK;
+    } else if (strcmp(verify_server, "NAME") == 0) {
+      opt.verifyServerProperties = LuaSNIConfig::Property::NAME_MASK;
+    } else if (strcmp(verify_server, "ALL") == 0) {
+      opt.verifyServerProperties = LuaSNIConfig::Property::ALL_MASK;
+    } else if (strcmp(verify_server, "NONE") == 0) {
+      opt.verifyServerProperties = LuaSNIConfig::Property::NONE;
+    } else {
+      Warning("%s is invalid for proxy.config.ssl.client.verify.server.properties.  Should be one of SIGNATURE, NAME, or ALL",
+              verify_server);
+      opt.verifyServerProperties = LuaSNIConfig::Property::NONE;
+    }
+  }
+}
+
 //////////////////////////////////////////////////////////////////////////
 //
 //  HttpSM::do_http_server_open()
@@ -5137,6 +5177,7 @@ HttpSM::do_http_server_open(bool raw)
                      t_state.txn_conf->sock_packet_tos_out);
 
   opt.ip_family = t_state.current.server->dst_addr.sa.sa_family;
+  set_tls_options(opt, t_state.txn_conf);
 
   if (ua_session) {
     opt.local_port = ua_session->get_outbound_port();

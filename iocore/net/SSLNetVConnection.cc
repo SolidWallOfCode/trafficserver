@@ -1043,15 +1043,27 @@ SSLNetVConnection::sslStartHandShake(int event, int &err)
       auto nps           = sniParam->getPropertyConfig(serverKey);
       SSL_CTX *clientCTX = nullptr;
       if (nps) {
-        clientCTX                      = nps->ctx;
-        options.verifyServerPolicy     = nps->verifyServerPolicy;
-        options.verifyServerProperties = nps->verifyServerProperties;
+        clientCTX = nps->ctx;
+      } else { // Just stay with the values passed down from the SM for verify
+        clientCTX = params->client_ctx;
+      }
 
+      if (options.verifyServerPolicy != LuaSNIConfig::Policy::UNSET) {
+        // Stay with conf-override version as the highest priority
+      } else if (nps && nps->verifyServerPolicy != LuaSNIConfig::Policy::UNSET) {
+        options.verifyServerPolicy = nps->verifyServerPolicy;
       } else {
-        clientCTX                      = params->client_ctx;
-        options.verifyServerPolicy     = params->verifyServerPolicy;
+        options.verifyServerPolicy = params->verifyServerPolicy;
+      }
+
+      if (options.verifyServerProperties != LuaSNIConfig::Property::UNSET) {
+        // Stay with conf-override version as the highest priority
+      } else if (nps && nps->verifyServerProperties != LuaSNIConfig::Property::UNSET) {
+        options.verifyServerProperties = nps->verifyServerProperties;
+      } else {
         options.verifyServerProperties = params->verifyServerProperties;
       }
+
       if (!clientCTX) {
         SSLErrorVC(this, "failed to create SSL client session");
         return EVENT_ERROR;

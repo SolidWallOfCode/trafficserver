@@ -8369,11 +8369,15 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
   case TS_CONFIG_SSL_CERT_FILEPATH:
     ret = _memberp_to_generic(&overridableHttpConfig->client_cert_filepath, conv);
     break;
-  case TS_CONFIG_PARENT_FAILURES_UPDATE_HOSTDB:
-    ret = _memberp_to_generic(&overridableHttpConfig->parent_failures_update_hostdb, conv);
-    break;
   case TS_CONFIG_SSL_CLIENT_VERIFY_SERVER:
     ret = _memberp_to_generic(&overridableHttpConfig->ssl_client_verify_server, conv);
+    break;
+  case TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_POLICY:
+  case TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_PROPERTIES:
+    // String, must be handled elsewhere
+    break;
+  case TS_CONFIG_PARENT_FAILURES_UPDATE_HOSTDB:
+    ret = _memberp_to_generic(&overridableHttpConfig->parent_failures_update_hostdb, conv);
     break;
   case TS_CONFIG_HTTP_PARENT_PROXY_FAIL_THRESHOLD:
     ret = _memberp_to_generic(&overridableHttpConfig->parent_fail_threshold, conv);
@@ -8548,6 +8552,16 @@ TSHttpTxnConfigStringSet(TSHttpTxn txnp, TSOverridableConfigKey conf, const char
   case TS_CONFIG_SSL_CERT_FILEPATH:
     if (value && length > 0) {
       s->t_state.txn_conf->client_cert_filepath = const_cast<char *>(value);
+    }
+    break;
+  case TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_POLICY:
+    if (value && length > 0) {
+      s->t_state.txn_conf->ssl_client_verify_server_policy = const_cast<char *>(value);
+    }
+    break;
+  case TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_PROPERTIES:
+    if (value && length > 0) {
+      s->t_state.txn_conf->ssl_client_verify_server_properties = const_cast<char *>(value);
     }
     break;
   default: {
@@ -8733,8 +8747,12 @@ static const std::unordered_map<ts::string_view, std::tuple<const TSOverridableC
    {"proxy.config.http.safe_requests_retryable", {TS_CONFIG_HTTP_SAFE_REQUESTS_RETRYABLE, TS_RECORDDATATYPE_INT}},
    {"proxy.config.http.origin_max_connections_queue", {TS_CONFIG_HTTP_ORIGIN_MAX_CONNECTIONS_QUEUE, TS_RECORDDATATYPE_INT}},
    {"proxy.config.ssl.client.cert.filename", {TS_CONFIG_SSL_CERT_FILENAME, TS_RECORDDATATYPE_STRING}},
-   {"proxy.config.cache.max_doc_size", {TS_CONFIG_HTTP_CACHE_MAX_DOC_SIZE, TS_RECORDDATATYPE_INT}}
-});
+   {"proxy.config.cache.max_doc_size", {TS_CONFIG_HTTP_CACHE_MAX_DOC_SIZE, TS_RECORDDATATYPE_INT}},
+   {"proxy.config.ssl.client.verify.server", {TS_CONFIG_SSL_CLIENT_VERIFY_SERVER, TS_RECORDDATATYPE_INT}},
+   {"proxy.config.ssl.client.verify.server.policy", {TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_POLICY, TS_RECORDDATATYPE_STRING}},
+   {"proxy.config.ssl.client.verify.server.properties",
+    {TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_PROPERTIES, TS_RECORDDATATYPE_STRING}}}
+);
 
 
 // This is pretty suboptimal, and should only be used outside the critical path.
