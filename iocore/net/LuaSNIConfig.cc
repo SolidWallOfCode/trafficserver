@@ -39,6 +39,8 @@ TsConfigEnumDescriptor LuaSNIConfig::Item::LEVEL_DESCRIPTOR = {TsConfigDescripto
                                                                {{"NONE", 0}, {"MODERATE", 1}, {"STRICT", 2}}};
 TsConfigDescriptor LuaSNIConfig::Item::TUNNEL_DEST_DESCRIPTOR = {TsConfigDescriptor::Type::STRING, "String", TS_tunnel_route,
                                                                  "tunnel route destination"};
+TsConfigDescriptor LuaSNIConfig::Item::FORWARD_DEST_DESCRIPTOR = {TsConfigDescriptor::Type::STRING, "String", TS_forward_route,
+                                                                 "tunnel route destination"};
 TsConfigDescriptor LuaSNIConfig::Item::IP_ALLOW_DESCRIPTOR = {TsConfigDescriptor::Type::STRING, "String", TS_ip_allow,
                                                               "Client IP allowed for this communication"};
 TsConfigDescriptor LuaSNIConfig::Item::CLIENT_CERT_DESCRIPTOR = {TsConfigDescriptor::Type::STRING, "String", TS_client_cert,
@@ -130,6 +132,9 @@ LuaSNIConfig::Item::loader(lua_State *L)
       CLIENT_KEY_CONFIG.loader(L);
     } else if (!strncmp(name, TS_tunnel_route, strlen(TS_tunnel_route))) {
       TUNNEL_DEST_CONFIG.loader(L);
+    } else if (!strncmp(name, TS_forward_route, strlen(TS_forward_route))) {
+      FORWARD_DEST_CONFIG.loader(L);
+      this->tunnel_decrypt = true;
     } else if (!strncmp(name, TS_ip_allow, strlen(TS_ip_allow))) {
       IP_ALLOW_CONFIG.loader(L);
     } else {

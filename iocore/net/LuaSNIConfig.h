@@ -42,6 +42,7 @@ constexpr char TS_fqdn[]                 = "fqdn";
 constexpr char TS_disable_H2[]           = "disable_h2";
 constexpr char TS_verify_client[]        = "verify_client";
 constexpr char TS_tunnel_route[]         = "tunnel_route";
+constexpr char TS_forward_route[]        = "forward_route";
 constexpr char TS_ip_allow[]             = "ip_allow";
 constexpr char TS_verify_server_policy[] = "verify_server_policy";
 constexpr char TS_verify_server_properties[] = "verify_server_properties";
@@ -56,6 +57,7 @@ struct LuaSNIConfig : public TsConfigBase {
     disable_h2 = start,
     verify_client,
     tunnel_route, // blind tunnel action
+    forward_route, // blind forward action
     ip_allow,
     verify_server_policy, // this applies to the server side vc only
     verify_server_properties, // this applies to the server side vc only
@@ -76,6 +78,7 @@ struct LuaSNIConfig : public TsConfigBase {
         DISABLEH2_CONFIG(DISABLE_h2_DESCRIPTOR, disable_h2),
         VERIFYCLIENT_CONFIG(LEVEL_DESCRIPTOR, (int &)verify_client_level),
         TUNNEL_DEST_CONFIG(TUNNEL_DEST_DESCRIPTOR, tunnel_destination),
+        FORWARD_DEST_CONFIG(FORWARD_DEST_DESCRIPTOR, tunnel_destination),
         IP_ALLOW_CONFIG(IP_ALLOW_DESCRIPTOR, ip_allow),
         CLIENT_CERT_CONFIG(CLIENT_CERT_DESCRIPTOR, client_cert),
         CLIENT_KEY_CONFIG(CLIENT_KEY_DESCRIPTOR, client_key),
@@ -94,6 +97,7 @@ struct LuaSNIConfig : public TsConfigBase {
     bool disable_h2             = false;
     uint8_t verify_client_level = 0;
     std::string tunnel_destination;
+    bool tunnel_decrypt = false;
     std::string ip_allow;
     Level verify_origin_server = Level::NONE;
     Policy verify_server_policy = Policy::DISABLED;
@@ -111,6 +115,8 @@ struct LuaSNIConfig : public TsConfigBase {
     TsConfigEnum<self::Level> VERIFYCLIENT_CONFIG;
     static TsConfigDescriptor TUNNEL_DEST_DESCRIPTOR;
     TsConfigString TUNNEL_DEST_CONFIG;
+    static TsConfigDescriptor FORWARD_DEST_DESCRIPTOR;
+    TsConfigString FORWARD_DEST_CONFIG;
     static TsConfigDescriptor IP_ALLOW_DESCRIPTOR;
     TsConfigString IP_ALLOW_CONFIG;
     static TsConfigDescriptor CLIENT_CERT_DESCRIPTOR;

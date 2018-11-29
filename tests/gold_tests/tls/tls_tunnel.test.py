@@ -83,7 +83,7 @@ ts.Disk.ssl_server_name_config.AddLines([
   "},{ fqdn='bob.*.com',",
   "  tunnel_route='localhost:{0}'".format(server_foo.Variables.Port),
   "},{ fqdn='',", # No SNI sent
-  "  tunnel_route='localhost:{0}'".format(server_bar.Variables.Port)
+  "  tunnel_route='localhost:{0}'".format(server_bar.Variables.Port),
   "}}"
 ])
 
