@@ -60,11 +60,13 @@ ts.Disk.records_config.update({
     'proxy.config.url_remap.pristine_host_hdr': 1
 })
 
-ts.Disk.ssl_server_name_yaml.AddLines([
-  '- fqdn: bar.com',
-  '  disable_h2: true',
-  '- fqdn: bob.*.com',
-  '  disable_h2: true',
+ts.Disk.ssl_server_name_config.AddLines([
+  "server_config={",
+  "{ fqdn='bar.com',",
+  "  disable_h2='true'",
+  "},{ fqdn='bob.*.com',",
+  "  disable_h2='true'",
+  "}}"
 ])
 
 tr = Test.AddTestRun("Negotiate-h2")

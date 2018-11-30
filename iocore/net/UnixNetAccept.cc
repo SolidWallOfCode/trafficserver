@@ -119,7 +119,12 @@ net_accept(NetAccept *na, void *ep, bool blockable)
     SET_CONTINUATION_HANDLER(vc, (NetVConnHandler)&UnixNetVConnection::acceptEvent);
 
     if (e->ethread->is_event_type(na->opt.etype)) {
-      vc->dispatchEvent(EVENT_NONE, e);
+      MUTEX_TRY_LOCK(lock, vc->mutex, this_ethread());
+      if (!lock.is_locked()) {
+        ink_release_assert(0);
+      } else {
+        vc->handleEvent(EVENT_NONE, e);
+      }
     } else {
       eventProcessor.schedule_imm(vc, na->opt.etype);
     }
