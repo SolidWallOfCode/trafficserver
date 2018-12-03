@@ -72,5 +72,5 @@ main(int argc, const char **argv)
 
   engine.arguments.invoke();
 
-  return 0;
+  return engine.status_code;
 }
