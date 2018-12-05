@@ -40,6 +40,18 @@ enum URLType {
   URL_TYPE_HTTPS,
 };
 
+/// This stores a matrix parameter attached to a specific path segment.
+struct MatrixParam {
+  using self_type = MatrixParam;
+  uint16_t m_path_idx {0}; ///< Path segment.
+  uint16_t m_path_off {0}; ///< Offset in path.
+  uint16_t m_path_size {0}; ///< Length of path segment.
+  uint16_t m_size {0}; ///< Size of the params.
+  const char *m_param {nullptr}; ///< Pointer to start of params.
+
+  MatrixParam * m_next{nullptr};
+};
+
 struct URLImpl : public HdrHeapObjImpl {
   // HdrHeapObjImpl is 4 bytes
   uint16_t m_len_scheme;
@@ -65,6 +77,16 @@ struct URLImpl : public HdrHeapObjImpl {
   const char *m_ptr_fragment;
   const char *m_ptr_printed_string;
   // pointer aligned (4 or 8)
+
+  /** Matrix parameter handling.
+   *  The state of this union is signaled by the m_ptr_params value. If it's @c nullptr, then
+   *  it's stored here. If not @c nullptr then the vector here is populated. Therefore it's OK
+   *  to zero initialize this structure.
+   */
+  union {
+    MatrixParam m_single; ///< Data for a single matrix parameter.
+    std::vector<MatrixParam> m_vec; ///< Data for multiple matrix parameters.
+  } m_params;
 
   // Tokenized values
   int16_t m_scheme_wks_idx;
