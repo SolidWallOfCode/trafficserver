@@ -47,7 +47,7 @@ struct NextHopProperty {
   LuaSNIConfig::Policy verifyServerPolicy       = LuaSNIConfig::Policy::UNSET; // whether to verify the next hop
   LuaSNIConfig::Property verifyServerProperties = LuaSNIConfig::Property::UNSET;   // what to verify on the next hop
   SSL_CTX *ctx                                   = nullptr; // ctx generated off the certificate to present to this server
-  NextHopProperty();
+  NextHopProperty() {}
 };
 
 using actionVector = std::vector<std::unique_ptr<ActionItem>>;

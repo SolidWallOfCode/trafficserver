@@ -38,10 +38,10 @@
 #include "P_SSLNextProtocolAccept.h"
 #include "ts/ink_inet.h"
 
-extern Map<int, SSLNextProtocolSet *> snpsMap;
-
 /** action for setting next hop properties should be listed in the following enum*/
 /* enum PropertyActions { TS_VERIFY_SERVER = 200, TS_CLIENT_CERT }; */
+
+extern std::unordered_map<int, SSLNextProtocolSet *> snpsMap;
 
 class ActionItem
 {
@@ -61,8 +61,10 @@ public:
     auto ssl_vc     = dynamic_cast<SSLNetVConnection *>(cont);
     auto accept_obj = ssl_vc ? ssl_vc->accept_object : nullptr;
     if (accept_obj && accept_obj->snpa && ssl_vc) {
-      auto nps = snpsMap.get(accept_obj->id);
-      ssl_vc->registerNextProtocolSet(reinterpret_cast<SSLNextProtocolSet *>(nps));
+      auto it = snpsMap.find(accept_obj->id);
+      if (it != snpsMap.end()) {
+        ssl_vc->registerNextProtocolSet(it->second);
+      }
     }
     return SSL_TLSEXT_ERR_OK;
   }

@@ -35,8 +35,6 @@
 #include "P_SSLNextProtocolAccept.h"
 #include "P_SSLUtils.h"
 
-extern Map<int, SSLNextProtocolSet *> snpsMap;
-
 int
 SNIActionPerformer::PerformAction(Continuation *cont, cchar *servername)
 {

@@ -40,8 +40,7 @@
 
 static ConfigUpdateHandler<SNIConfig> *sniConfigUpdate;
 struct NetAccept;
-Map<int, SSLNextProtocolSet *> snpsMap;
-NextHopProperty::NextHopProperty() {}
+std::unordered_map<int, SSLNextProtocolSet *> snpsMap;
 
 const NextHopProperty *
 SNIConfigParams::getPropertyConfig(const std::string &servername) const
@@ -80,11 +79,11 @@ SNIConfigParams::loadSNIConfig()
 
     // set the next hop properties
     SSLConfig::scoped_config params;
-    auto clientCTX  = params->getClientSSL_CTX();
-    cchar *certFile = item.client_cert.data();
-    cchar *keyFile  = item.client_key.data();
-    if (certFile) {
-      clientCTX = params->getNewCTX(certFile, keyFile);
+    auto clientCTX       = params->getClientSSL_CTX();
+    const char *certFile = item.client_cert.data();
+    const char *keyFile  = item.client_key.data();
+    if (certFile && certFile[0] != '\0') {
+      clientCTX = params->getCTX(certFile, keyFile, params->clientCACertFilename, params->clientCACertPath);
     }
     auto nps = next_hop_list.emplace(next_hop_list.end());
     nps->setGlobName(item.fqdn);
@@ -155,7 +154,7 @@ SNIConfig::cloneProtoSet()
     if (na->snpa) {
       auto snps = na->snpa->cloneProtoSet();
       snps->unregisterEndpoint(TS_ALPN_PROTOCOL_HTTP_2_0, nullptr);
-      snpsMap.put(na->id, snps);
+      snpsMap.emplace(na->id, snps);
     }
   }
 }

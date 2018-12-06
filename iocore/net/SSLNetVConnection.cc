@@ -22,6 +22,7 @@
  */
 #include "ts/ink_config.h"
 #include "ts/EventNotify.h"
+#include "ts/I_Layout.h"
 #include "records/I_RecHttp.h"
 #include "P_Net.h"
 #include "P_SSLNextProtocolSet.h"
@@ -1042,7 +1043,25 @@ SSLNetVConnection::sslStartHandShake(int event, int &err)
       }
       auto nps           = sniParam->getPropertyConfig(serverKey);
       SSL_CTX *clientCTX = nullptr;
-      if (nps) {
+
+      // First Look to see if there are override parameters
+      if (options.ssl_client_cert_name) {
+        std::string certFilePath = Layout::get()->relative_to(params->clientCertPathOnly, options.ssl_client_cert_name);
+        std::string keyFilePath;
+        if (options.ssl_client_private_key_name) {
+          keyFilePath = Layout::get()->relative_to(params->clientKeyPathOnly, options.ssl_client_private_key_name);
+        }
+        std::string caCertFilePath;
+        if (options.ssl_client_ca_cert_name) {
+          caCertFilePath = Layout::get()->relative_to(params->clientCACertPath, options.ssl_client_ca_cert_name);
+        }
+        clientCTX =
+          params->getCTX(certFilePath.c_str(), keyFilePath.empty() ? nullptr : keyFilePath.c_str(),
+                         caCertFilePath.empty() ? params->clientCACertFilename : caCertFilePath.c_str(), params->clientCACertPath);
+      } else if (options.ssl_client_ca_cert_name) {
+        std::string caCertFilePath = Layout::get()->relative_to(params->clientCACertPath, options.ssl_client_ca_cert_name);
+        clientCTX = params->getCTX(params->clientCertPath, params->clientKeyPath, caCertFilePath.c_str(), params->clientCACertPath);
+      } else if (nps) {
         clientCTX = nps->ctx;
       } else { // Just stay with the values passed down from the SM for verify
         clientCTX = params->client_ctx;

@@ -517,8 +517,9 @@ struct OverridableHttpConfigParams {
       cache_heuristic_lm_factor(0.10),
       freshness_fuzz_prob(0.005),
       background_fill_threshold(0.5),
-      client_cert_filename(NULL),
-      client_cert_filepath(NULL)
+      ssl_client_cert_filename(nullptr),
+      ssl_client_private_key_filename(nullptr),
+      ssl_client_ca_cert_filename(nullptr)
   {
   }
 
@@ -762,8 +763,11 @@ struct OverridableHttpConfigParams {
   MgmtFloat cache_heuristic_lm_factor;
   MgmtFloat freshness_fuzz_prob;
   MgmtFloat background_fill_threshold;
-  char *client_cert_filename;
-  char *client_cert_filepath;
+
+  // Various strings, good place for them here ...
+  char *ssl_client_cert_filename;
+  char *ssl_client_private_key_filename;
+  char *ssl_client_ca_cert_filename;
 };
 
 /////////////////////////////////////////////////////////////
@@ -1010,6 +1014,9 @@ inline HttpConfigParams::~HttpConfigParams()
   ats_free(cache_vary_default_text);
   ats_free(cache_vary_default_images);
   ats_free(cache_vary_default_other);
+  ats_free(oride.ssl_client_cert_filename);
+  ats_free(oride.ssl_client_private_key_filename);
+  ats_free(oride.ssl_client_ca_cert_filename);
   ats_free(connect_ports_string);
   ats_free(reverse_proxy_no_host_redirect);
 
