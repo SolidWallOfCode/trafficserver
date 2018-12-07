@@ -21,8 +21,7 @@
  * @brief Common declarations and definitions (header file).
  */
 
-#ifndef PLUGINS_EXPERIMENTAL_CACHEKEY_COMMON_H_
-#define PLUGINS_EXPERIMENTAL_CACHEKEY_COMMON_H_
+#pragma once
 
 #define PLUGIN_NAME "cachekey"
 
@@ -31,7 +30,9 @@
 #include <list>
 #include <vector>
 
+#include <ts/string_view.h>
 typedef std::string String;
+typedef ts::string_view StringView;
 typedef std::set<std::string> StringSet;
 typedef std::list<std::string> StringList;
 typedef std::vector<std::string> StringVector;
@@ -58,5 +59,3 @@ void PrintToStdErr(const char *fmt, ...);
     TSDebug(PLUGIN_NAME, "%s:%d:%s() " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
   } while (0)
 #endif /* CACHEKEY_UNIT_TEST */
-
-#endif /* PLUGINS_EXPERIMENTAL_CACHEKEY_COMMON_H_ */

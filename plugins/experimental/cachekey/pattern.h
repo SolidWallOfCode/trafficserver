@@ -21,8 +21,7 @@
  * @brief PRCE related classes (header file).
  */
 
-#ifndef PLUGINS_EXPERIMENTAL_CACHEKEY_PATTERN_H_
-#define PLUGINS_EXPERIMENTAL_CACHEKEY_PATTERN_H_
+#pragma once
 
 #include "ts/ink_defs.h"
 
@@ -56,7 +55,6 @@ public:
 
 private:
   bool compile();
-  bool failed(const String &subject) const;
   void pcreFree();
 
   pcre *_re;          /**< @brief PCRE compiled info structure, computed during initialization */
@@ -87,13 +85,15 @@ public:
   virtual bool match(const String &subject) const;
   const String &name() const;
 
+  bool process(const String &subject, StringVector &result) const;
+
 protected:
   std::vector<Pattern *> _list; /**< @brief vector which dictates the order of the pattern evaluation. */
   String _name;                 /**< @brief multi-pattern name */
 
-private:
-  MultiPattern(const MultiPattern &);            // disallow
-  MultiPattern &operator=(const MultiPattern &); // disallow
+  // noncopyable
+  MultiPattern(const MultiPattern &) = delete;            // disallow
+  MultiPattern &operator=(const MultiPattern &) = delete; // disallow
 };
 
 /**
@@ -108,16 +108,15 @@ public:
    * @param subject subject string
    * @return return false if any of the patterns matches, true otherwise.
    */
-  virtual bool
-  match(const String &subject) const
+  bool
+  match(const String &subject) const override
   {
     return !MultiPattern::match(subject);
   }
 
-private:
-  NonMatchingMultiPattern();                                           // disallow
-  NonMatchingMultiPattern(const NonMatchingMultiPattern &);            // disallow
-  NonMatchingMultiPattern &operator=(const NonMatchingMultiPattern &); // disallow
+  // noncopyable
+  NonMatchingMultiPattern(const NonMatchingMultiPattern &) = delete;            // disallow
+  NonMatchingMultiPattern &operator=(const NonMatchingMultiPattern &) = delete; // disallow
 };
 
 /**
@@ -132,11 +131,10 @@ public:
   bool classify(const String &subject, String &name) const;
   void add(MultiPattern *pattern);
 
+  // noncopyable
+  Classifier(const Classifier &) = delete;            // disallow
+  Classifier &operator=(const Classifier &) = delete; // disallow
+
 private:
   std::vector<MultiPattern *> _list; /**< @brief vector which dictates the multi-pattern evaluation order */
-
-  Classifier(const Classifier &);            // disallow
-  Classifier &operator=(const Classifier &); // disallow
 };
-
-#endif /* PLUGINS_EXPERIMENTAL_CACHEKEY_PATTERN_H_ */

@@ -21,9 +21,10 @@
  * @brief Cache key manipulation (header file).
  */
 
-#ifndef PLUGINS_EXPERIMENTAL_CACHEKEY_CACHEKEY_H_
-#define PLUGINS_EXPERIMENTAL_CACHEKEY_CACHEKEY_H_
+#pragma once
 
+#include "ts/ts.h"
+#include "ts/remap.h"
 #include "common.h"
 #include "configs.h"
 
@@ -49,7 +50,8 @@
 class CacheKey
 {
 public:
-  CacheKey(TSHttpTxn txn, TSMBuffer buf, TSMLoc url, TSMLoc hdrs, String separator);
+  CacheKey(TSHttpTxn txn, String separator, CacheKeyUriType urlType, TSRemapRequestInfo *rri = nullptr);
+  ~CacheKey();
 
   void append(unsigned number);
   void append(const String &);
@@ -64,19 +66,26 @@ public:
   bool appendUaClass(Classifier &classifier);
   bool finalize() const;
 
+  // noncopyable
+  CacheKey(const CacheKey &) = delete;            // disallow
+  CacheKey &operator=(const CacheKey &) = delete; // disallow
+
 private:
-  CacheKey();                            // disallow
-  CacheKey(const CacheKey &);            // disallow
-  CacheKey &operator=(const CacheKey &); // disallow
+  CacheKey(); // disallow
+
+  template <class T>
+  void processHeader(const String &name_s, const ConfigHeaders &config, T &dst,
+                     void (*fun)(const ConfigHeaders &config, const String &name_s, const String &value_s, T &captures));
 
   /* Information from the request */
-  TSHttpTxn _txn; /**< @brief transaction handle */
-  TSMBuffer _buf; /**< @brief marshal buffer */
-  TSMLoc _url;    /**< @brief URI handle */
-  TSMLoc _hdrs;   /**< @brief headers handle */
+  TSHttpTxn _txn;      /**< @brief transaction handle */
+  TSMBuffer _buf;      /**< @brief marshal buffer */
+  TSMLoc _url;         /**< @brief URI handle */
+  TSMLoc _hdrs;        /**< @brief headers handle */
+  bool _valid = false; /**< @brief shows if the constructor discovered the input correctly */
+  bool _remap = false; /**< @brief shows if the input URI was from remap info */
 
-  String _key;       /**< @brief cache key */
-  String _separator; /**< @brief a separator used to separate the cache key elements extracted from the URI */
+  String _key;              /**< @brief cache key */
+  String _separator;        /**< @brief a separator used to separate the cache key elements extracted from the URI */
+  CacheKeyUriType _uriType; /**< @brief the URI type used as a cachekey base: pristine, remap, etc. */
 };
-
-#endif /* PLUGINS_EXPERIMENTAL_CACHEKEY_CACHEKEY_H_ */

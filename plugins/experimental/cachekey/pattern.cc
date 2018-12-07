@@ -38,9 +38,7 @@ replaceString(String &str, const String &from, const String &to)
   }
 }
 
-Pattern::Pattern() : _re(nullptr), _extra(nullptr), _pattern(""), _replacement(""), _replace(false), _tokenCount(0)
-{
-}
+Pattern::Pattern() : _re(nullptr), _extra(nullptr), _pattern(""), _replacement(""), _replace(false), _tokenCount(0) {}
 
 /**
  * @brief Initializes PCRE pattern by providing the subject and replacement strings.
@@ -216,8 +214,9 @@ Pattern::match(const String &subject)
 
   matchCount = pcre_exec(_re, _extra, subject.c_str(), subject.length(), 0, PCRE_NOTEMPTY, nullptr, 0);
   if (matchCount < 0) {
-    if (matchCount != PCRE_ERROR_NOMATCH)
+    if (matchCount != PCRE_ERROR_NOMATCH) {
       CacheKeyError("matching error %d", matchCount);
+    }
     return false;
   }
 
@@ -244,8 +243,9 @@ Pattern::capture(const String &subject, StringVector &result)
 
   matchCount = pcre_exec(_re, nullptr, subject.c_str(), subject.length(), 0, PCRE_NOTEMPTY, ovector, OVECOUNT);
   if (matchCount < 0) {
-    if (matchCount != PCRE_ERROR_NOMATCH)
+    if (matchCount != PCRE_ERROR_NOMATCH) {
       CacheKeyError("matching error %d", matchCount);
+    }
     return false;
   }
 
@@ -283,8 +283,9 @@ Pattern::replace(const String &subject, String &result)
 
   matchCount = pcre_exec(_re, nullptr, subject.c_str(), subject.length(), 0, PCRE_NOTEMPTY, ovector, OVECOUNT);
   if (matchCount < 0) {
-    if (matchCount != PCRE_ERROR_NOMATCH)
+    if (matchCount != PCRE_ERROR_NOMATCH) {
       CacheKeyError("matching error %d", matchCount);
+    }
     return false;
   }
 
@@ -301,6 +302,12 @@ Pattern::replace(const String &subject, String &result)
     int replIndex = _tokens[i];
     int start     = ovector[2 * replIndex];
     int length    = ovector[2 * replIndex + 1] - ovector[2 * replIndex];
+
+    /* Handle the case when no match / a group capture result in an empty string */
+    if (start < 0) {
+      start  = 0;
+      length = 0;
+    }
 
     String src(_replacement, _tokenOffset[i], 2);
     String dst(subject, start, length);
@@ -449,6 +456,18 @@ const String &
 MultiPattern::name() const
 {
   return _name;
+}
+
+bool
+MultiPattern::process(const String &subject, StringVector &result) const
+{
+  bool res = false;
+  for (auto p : this->_list) {
+    if (nullptr != p && p->process(subject, result)) {
+      res = true;
+    }
+  }
+  return res;
 }
 
 /**

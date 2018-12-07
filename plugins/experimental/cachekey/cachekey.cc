@@ -172,17 +172,98 @@ classifyUserAgent(const Classifier &c, TSMBuffer buf, TSMLoc hdrs, String &class
   return matched;
 }
 
+static String
+getUri(TSMBuffer buf, TSMLoc url)
+{
+  String uri;
+  int uriLen;
+  const char *uriPtr = TSUrlStringGet(buf, url, &uriLen);
+  if (nullptr != uriPtr && 0 != uriLen) {
+    uri.assign(uriPtr, uriLen);
+    TSfree((void *)uriPtr);
+  } else {
+    CacheKeyError("failed to get URI");
+  }
+  return uri;
+}
+
 /**
  * @brief Constructor setting up the cache key prefix, initializing request info.
  * @param txn transaction handle.
- * @param buf marshal buffer
- * @param url URI handle
- * @param hdrs headers handle
+ * @param separator cache key elements separator
+ * @param uriType type of the URI used to create the cachekey ("remap" or "pristine")
+ * @param rri remap request info
  */
-CacheKey::CacheKey(TSHttpTxn txn, TSMBuffer buf, TSMLoc url, TSMLoc hdrs, String separator)
-  : _txn(txn), _buf(buf), _url(url), _hdrs(hdrs), _separator(separator)
+CacheKey::CacheKey(TSHttpTxn txn, String separator, CacheKeyUriType uriType, TSRemapRequestInfo *rri)
+  : _txn(txn), _separator(separator), _uriType(uriType)
 {
   _key.reserve(512);
+
+  _remap = (nullptr != rri);
+
+  /* Get the URI and header to base the cachekey on.
+   * @TODO it might make sense to add more supported URI types */
+
+  if (_remap) {
+    CacheKeyDebug("setting cache key from a remap plugin");
+    if (PRISTINE == _uriType) {
+      if (TS_SUCCESS != TSHttpTxnPristineUrlGet(_txn, &_buf, &_url)) {
+        /* Failing here is unlikely. No action seems the only reasonable thing to do from within this plug-in */
+        CacheKeyError("failed to get pristine URI handle");
+        return;
+      }
+      CacheKeyDebug("using pristine uri '%s'", getUri(_buf, _url).c_str());
+    } else {
+      _buf = rri->requestBufp;
+      _url = rri->requestUrl;
+      CacheKeyDebug("using remap uri '%s'", getUri(_buf, _url).c_str());
+    }
+    _hdrs = rri->requestHdrp;
+  } else {
+    CacheKeyDebug("setting cache key from a global plugin");
+    if (TS_SUCCESS != TSHttpTxnClientReqGet(_txn, &_buf, &_hdrs)) {
+      /* Failing here is unlikely. No action seems the only reasonable thing to do from within this plug-in */
+      CacheKeyError("failed to get client request handle");
+      return;
+    }
+
+    if (PRISTINE == _uriType) {
+      if (TS_SUCCESS != TSHttpTxnPristineUrlGet(_txn, &_buf, &_url)) {
+        TSHandleMLocRelease(_buf, TS_NULL_MLOC, _hdrs);
+        CacheKeyError("failed to get pristine URI handle");
+        return;
+      }
+      CacheKeyDebug("using pristine uri '%s'", getUri(_buf, _url).c_str());
+    } else {
+      if (TS_SUCCESS != TSHttpHdrUrlGet(_buf, _hdrs, &_url)) {
+        TSHandleMLocRelease(_buf, TS_NULL_MLOC, _hdrs);
+        CacheKeyError("failed to get URI handle");
+        return;
+      }
+      CacheKeyDebug("using post-remap uri '%s','", getUri(_buf, _url).c_str());
+    }
+  }
+  _valid = true; /* success, we got all necessary elements - URI, headers, etc. */
+}
+
+CacheKey::~CacheKey()
+{
+  if (_valid) {
+    /* free resources only if valid, if not valid it is assumed nothing was allocated or was freed */
+    if (_remap) {
+      /* _buf and _hdrs are assigned from remap info - no need to release here. */
+      if (PRISTINE == _uriType) {
+        if (TS_SUCCESS != TSHandleMLocRelease(_buf, TS_NULL_MLOC, _url)) {
+          CacheKeyError("failed to release pristine URI handle");
+        }
+      }
+    } else {
+      if (TS_SUCCESS != TSHandleMLocRelease(_buf, TS_NULL_MLOC, _hdrs) &&
+          TS_SUCCESS != TSHandleMLocRelease(_buf, TS_NULL_MLOC, _url)) {
+        CacheKeyError("failed to release URI and headers handle");
+      }
+    }
+  }
 }
 
 /**
@@ -230,23 +311,9 @@ CacheKey::append(const char *s, unsigned n)
   ::appendEncoded(_key, s, n);
 }
 
-static String
-getUri(TSMBuffer buf, TSMLoc url)
-{
-  String uri;
-  int uriLen;
-  const char *uriPtr = TSUrlStringGet(buf, url, &uriLen);
-  if (nullptr != uriPtr && 0 != uriLen) {
-    uri.assign(uriPtr, uriLen);
-    TSfree((void *)uriPtr);
-  } else {
-    CacheKeyError("failed to get URI");
-  }
-  return uri;
-}
-
 /**
- * @brief Append to the cache key a custom prefix, capture from hots:port, capture from URI or default to host:port part of the URI.
+ * @brief Append to the cache key a custom prefix, capture from hots:port, capture from URI or default to host:port part of the
+ * URI.
  * @note This is the only cache key component from the key which is always available.
  * @param prefix if not empty string will append the static prefix to the cache key.
  * @param prefixCapture if not empty will append regex capture/replacement from the host:port.
@@ -370,6 +437,61 @@ CacheKey::appendPath(Pattern &pathCapture, Pattern &pathCaptureUri)
   }
 }
 
+template <class T>
+void
+CacheKey::processHeader(const String &name, const ConfigHeaders &config, T &dst,
+                        void (*fun)(const ConfigHeaders &config, const String &name_s, const String &value_s, T &captures))
+{
+  TSMLoc field;
+
+  for (field = TSMimeHdrFieldFind(_buf, _hdrs, name.c_str(), name.size()); field != TS_NULL_MLOC;
+       field = ::nextDuplicate(_buf, _hdrs, field)) {
+    const char *value;
+    int vlen;
+    int count = TSMimeHdrFieldValuesCount(_buf, _hdrs, field);
+
+    for (int i = 0; i < count; ++i) {
+      value = TSMimeHdrFieldValueStringGet(_buf, _hdrs, field, i, &vlen);
+      if (value == nullptr || vlen == 0) {
+        CacheKeyDebug("missing value %d for header %s", i, name.c_str());
+        continue;
+      }
+
+      String value_s(value, vlen);
+      fun(config, name, value_s, dst);
+    }
+  }
+}
+
+template <class T>
+void
+captureWholeHeaders(const ConfigHeaders &config, const String &name, const String &value, T &captures)
+{
+  CacheKeyDebug("processing header %s", name.c_str());
+  if (config.toBeAdded(name)) {
+    String header;
+    header.append(name).append(":").append(value);
+    captures.insert(header);
+    CacheKeyDebug("adding header '%s: %s'", name.c_str(), value.c_str());
+  } else {
+    CacheKeyDebug("failed to find header '%s'", name.c_str());
+  }
+}
+
+template <class T>
+void
+captureFromHeaders(const ConfigHeaders &config, const String &name, const String &value, T &captures)
+{
+  CacheKeyDebug("processing capture from header %s", name.c_str());
+  auto itMp = config.getCaptures().find(name);
+  if (config.getCaptures().end() != itMp) {
+    itMp->second->process(value, captures);
+    CacheKeyDebug("found capture pattern for header '%s'", name.c_str());
+  } else {
+    CacheKeyDebug("failed to find header '%s'", name.c_str());
+  }
+}
+
 /**
  * @brief Append headers by following the rules specified in the header configuration object.
  * @param config header-related configuration containing information about which headers need to be appended to the key.
@@ -378,49 +500,35 @@ CacheKey::appendPath(Pattern &pathCapture, Pattern &pathCaptureUri)
 void
 CacheKey::appendHeaders(const ConfigHeaders &config)
 {
-  if (config.toBeRemoved() || config.toBeSkipped()) {
-    // Don't add any headers to the cache key.
-    return;
-  }
+  if (!config.toBeRemoved() && !config.toBeSkipped()) {
+    /* Iterating header by header is not efficient according to comments inside traffic server API,
+     * Iterate over an 'include'-kind of list or the capture definitions to avoid header by header iteration.
+     * @todo: revisit this when (if?) adding regex matching for headers. */
 
-  TSMLoc field;
-  StringSet hset; /* Sort and uniquify the header list in the cache key. */
+    /* Adding whole headers, iterate over "--include-header" list */
+    StringSet hdrSet; /* Sort and uniquify the header list in the cache key. */
+    for (auto it = config.getInclude().begin(); it != config.getInclude().end(); ++it) {
+      processHeader(*it, config, hdrSet, captureWholeHeaders);
+    }
 
-  /* Iterating header by header is not efficient according to comments inside traffic server API,
-   * Iterate over an 'include'-kind of list to avoid header by header iteration.
-   * @todo: revisit this when (if?) adding regex matching for headers. */
-  for (StringSet::iterator it = config.getInclude().begin(); it != config.getInclude().end(); ++it) {
-    String name_s = *it;
-
-    for (field = TSMimeHdrFieldFind(_buf, _hdrs, name_s.c_str(), name_s.size()); field != TS_NULL_MLOC;
-         field = ::nextDuplicate(_buf, _hdrs, field)) {
-      const char *value;
-      int vlen;
-      int count = TSMimeHdrFieldValuesCount(_buf, _hdrs, field);
-
-      for (int i = 0; i < count; ++i) {
-        value = TSMimeHdrFieldValueStringGet(_buf, _hdrs, field, i, &vlen);
-        if (value == nullptr || vlen == 0) {
-          CacheKeyDebug("missing value %d for header %s", i, name_s.c_str());
-          continue;
-        }
-
-        String value_s(value, vlen);
-
-        if (config.toBeAdded(name_s)) {
-          String header;
-          header.append(name_s).append(":").append(value_s);
-          hset.insert(header);
-          CacheKeyDebug("adding header => '%s: %s'", name_s.c_str(), value_s.c_str());
-        }
-      }
+    /* Append to the cache key. It doesn't make sense to have the headers unordered in the cache key. */
+    String headers_key = containerToString<StringSet, StringSet::const_iterator>(hdrSet, "", _separator);
+    if (!headers_key.empty()) {
+      append(headers_key);
     }
   }
 
-  /* It doesn't make sense to have the headers unordered in the cache key. */
-  String headers_key = containerToString<StringSet, StringSet::const_iterator>(hset, "", _separator);
-  if (!headers_key.empty()) {
-    append(headers_key);
+  if (!config.getCaptures().empty()) {
+    /* Adding captures from headers, iterate over "--capture-header" definitions */
+    StringVector hdrCaptures;
+    for (auto it = config.getCaptures().begin(); it != config.getCaptures().end(); ++it) {
+      processHeader(it->first, config, hdrCaptures, captureFromHeaders);
+    }
+
+    /* Append to the cache key. Add the captures in the order capture definitions are captured / specified */
+    for (auto &capture : hdrCaptures) {
+      append(capture);
+    }
   }
 }
 
@@ -592,6 +700,24 @@ CacheKey::appendUaClass(Classifier &classifier)
 bool
 CacheKey::finalize() const
 {
-  CacheKeyDebug("finalizing cache key '%s'", _key.c_str());
-  return TSCacheUrlSet(_txn, &(_key[0]), _key.size()) == TS_SUCCESS;
+  bool res = true;
+  CacheKeyDebug("finalizing cache key '%s' from a %s plugin", _key.c_str(), (_remap ? "remap" : "global"));
+  if (TS_SUCCESS != TSCacheUrlSet(_txn, &(_key[0]), _key.size())) {
+    int len;
+    char *url = TSHttpTxnEffectiveUrlStringGet(_txn, &len);
+    if (nullptr != url) {
+      if (_remap) {
+        /* Remap instance. Always runs first by design (before TS_HTTP_POST_REMAP_HOOK) */
+        CacheKeyError("failed to set cache key for url %.*s", len, url);
+      } else {
+        /* Global instance. We would fail and get here if a per-remap instance has already set the cache key
+         * (currently TSCacheUrlSet() can be called only once successfully). Don't error, just debug.
+         * @todo avoid the consecutive attempts and error only on unexpected failures. */
+        CacheKeyDebug("failed to set cache key for url %.*s", len, url);
+      }
+      TSfree(url);
+    }
+    res = false;
+  }
+  return res;
 }

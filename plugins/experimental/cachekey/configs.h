@@ -21,11 +21,12 @@
  * @brief Plugin configuration (header file).
  */
 
-#ifndef PLUGINS_EXPERIMENTAL_CACHEKEY_CONFIGS_H_
-#define PLUGINS_EXPERIMENTAL_CACHEKEY_CONFIGS_H_
+#pragma once
 
 #include "pattern.h"
 #include "common.h"
+
+#include <map>
 
 enum CacheKeyUriType {
   REMAP,
@@ -39,16 +40,37 @@ enum CacheKeyUriType {
  */
 class ConfigElements
 {
+protected:
+  bool noIncludeExcludeRules() const;
+  bool setCapture(const String &name, const String &pattern);
+
+  StringSet _exclude;
+  StringSet _include;
+
+  MultiPattern _includePatterns;
+  MultiPattern _excludePatterns;
+
+  bool _sort;
+  bool _remove;
+  bool _skip;
+
+  std::map<String, MultiPattern *> _captures;
+
 public:
   ConfigElements() : _sort(false), _remove(false), _skip(false) {}
-  virtual ~ConfigElements() {}
+  virtual ~ConfigElements();
   void setExclude(const char *arg);
   void setInclude(const char *arg);
   void setExcludePatterns(const char *arg);
   void setIncludePatterns(const char *arg);
   void setRemove(const char *arg);
   void setSort(const char *arg);
-
+  void addCapture(const char *arg);
+  auto
+  getCaptures() const -> const decltype(_captures) &
+  {
+    return _captures;
+  }
   /** @brief shows if the elements are to be sorted in the result */
   bool toBeSorted() const;
   /** @brief shows if the elements are to be removed from the result */
@@ -65,19 +87,6 @@ public:
    * @return true if successful, false if failure.
    */
   virtual bool finalize() = 0;
-
-protected:
-  bool noIncludeExcludeRules() const;
-
-  StringSet _exclude;
-  StringSet _include;
-
-  MultiPattern _includePatterns;
-  MultiPattern _excludePatterns;
-
-  bool _sort;
-  bool _remove;
-  bool _skip;
 };
 
 /**
@@ -86,10 +95,10 @@ protected:
 class ConfigQuery : public ConfigElements
 {
 public:
-  bool finalize();
+  bool finalize() override;
 
 private:
-  const String &name() const;
+  const String &name() const override;
   static const String _NAME;
 };
 
@@ -99,12 +108,12 @@ private:
 class ConfigHeaders : public ConfigElements
 {
 public:
-  bool finalize();
+  bool finalize() override;
 
   const StringSet &getInclude() const;
 
 private:
-  const String &name() const;
+  const String &name() const override;
   static const String _NAME;
 };
 
@@ -114,10 +123,10 @@ private:
 class ConfigCookies : public ConfigElements
 {
 public:
-  bool finalize();
+  bool finalize() override;
 
 private:
-  const String &name() const;
+  const String &name() const override;
   static const String _NAME;
 };
 
@@ -127,13 +136,14 @@ private:
 class Configs
 {
 public:
-  Configs() : _prefixToBeRemoved(false), _pathToBeRemoved(false), _separator("/") {}
+  Configs() {}
   /**
    * @brief initializes plugin configuration.
    * @param argc number of plugin parameters
    * @param argv plugin parameters
+   * @param perRemapConfig boolean showing if this is per-remap config (vs global config).
    */
-  bool init(int argc, char *argv[]);
+  bool init(int argc, const char *argv[], bool perRemapConfig);
 
   /**
    * @brief provides means for post-processing of the plugin parameters to finalize the configuration or to "cache" some of the
@@ -198,5 +208,3 @@ private:
   String _separator        = "/";   /**< @brief a separator used to separate the cache key elements extracted from the URI */
   CacheKeyUriType _uriType = REMAP; /**< @brief shows which URI the cache key will be based on */
 };
-
-#endif // PLUGINS_EXPERIMENTAL_CACHEKEY_CONFIGS_H_
