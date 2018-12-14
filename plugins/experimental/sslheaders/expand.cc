@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+#include <array>
 #include "sslheaders.h"
 #include "ts/ink_defs.h"
 
@@ -106,7 +107,7 @@ x509_expand_notafter(X509 *x509, BIO *bio)
   ASN1_TIME_print(bio, time);
 }
 
-static const x509_expansion expansions[SSL_HEADERS_FIELD_MAX] = {
+static const std::array<x509_expansion, SSL_HEADERS_FIELD_MAX> expansions = {{
   x509_expand_none,        // SSL_HEADERS_FIELD_NONE
   x509_expand_certificate, // SSL_HEADERS_FIELD_CERTIFICATE
   x509_expand_subject,     // SSL_HEADERS_FIELD_SUBJECT
@@ -114,8 +115,8 @@ static const x509_expansion expansions[SSL_HEADERS_FIELD_MAX] = {
   x509_expand_serial,      // SSL_HEADERS_FIELD_SERIAL
   x509_expand_signature,   // SSL_HEADERS_FIELD_SIGNATURE
   x509_expand_notbefore,   // SSL_HEADERS_FIELD_NOTBEFORE
-  x509_expand_notafter,    // SSL_HEADERS_FIELD_NOTBEFORE
-};
+  x509_expand_notafter,    // SSL_HEADERS_FIELD_NOTAFTER
+}};
 
 bool
 SslHdrExpandX509Field(BIO *bio, X509 *x509, ExpansionField field)
@@ -123,7 +124,7 @@ SslHdrExpandX509Field(BIO *bio, X509 *x509, ExpansionField field)
   // Rewind the BIO.
   (void)BIO_reset(bio);
 
-  if ((int)field < (int)countof(expansions)) {
+  if (field < expansions.size()) {
     expansions[field](x509, bio);
   }
 
