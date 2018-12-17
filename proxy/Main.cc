@@ -133,6 +133,7 @@ static void *mgmt_storage_device_cmd_callback(void *x, char *data, int len);
 static void *mgmt_lifecycle_msg_callback(void *x, char *data, int len);
 static void init_ssl_ctx_callback(void *ctx, bool server);
 static void load_ssl_file_callback(const char *ssl_file, unsigned int options);
+static void task_threads_started_callback();
 
 // We need these two to be accessible somewhere else now
 int num_of_net_threads = ink_number_of_processors();
@@ -2008,6 +2009,8 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     RecConfigWarnIfUnregistered();
 
     // "Task" processor, possibly with its own set of task threads
+    tasksProcessor.register_event_type();
+    eventProcessor.thread_group[ET_TASK]._afterStartCallback = task_threads_started_callback;
     tasksProcessor.start(num_task_threads, stacksize);
 
     if (netProcessor.socks_conf_stuff->accept_enabled) {
@@ -2144,4 +2147,14 @@ static void
 load_ssl_file_callback(const char *ssl_file, unsigned int options)
 {
   pmgmt->signalConfigFileChild("ssl_multicert.config", ssl_file, options);
+}
+
+static void
+task_threads_started_callback()
+{
+  APIHook *hook = lifecycle_hooks->get(TS_LIFECYCLE_TASK_THREADS_READY_HOOK);
+  while (hook) {
+    hook->invoke(TS_EVENT_LIFECYCLE_TASK_THREADS_READY, nullptr);
+    hook = hook->next();
+  }
 }
