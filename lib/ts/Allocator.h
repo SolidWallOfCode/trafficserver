@@ -49,8 +49,6 @@
 
 #define RND16(_x) (((_x) + 15) & ~15)
 
-extern int cmd_disable_pfreelist;
-
 /** Allocator for fixed size memory blocks. */
 class Allocator
 {
@@ -62,7 +60,7 @@ public:
   void *
   alloc_void()
   {
-    return ink_freelist_new(this->fl, freelist_class_ops);
+    return ink_freelist_new(this->fl);
   }
 
   /**
@@ -73,7 +71,7 @@ public:
   void
   free_void(void *ptr)
   {
-    ink_freelist_free(this->fl, ptr, freelist_class_ops);
+    ink_freelist_free(this->fl, ptr);
   }
 
   /**
@@ -86,7 +84,7 @@ public:
   void
   free_void_bulk(void *head, void *tail, size_t num_item)
   {
-    ink_freelist_free_bulk(this->fl, head, tail, num_item, freelist_class_ops);
+    ink_freelist_free_bulk(this->fl, head, tail, num_item);
   }
 
   Allocator() { fl = nullptr; }
@@ -131,7 +129,7 @@ public:
   C *
   alloc()
   {
-    void *ptr = ink_freelist_new(this->fl, freelist_class_ops);
+    void *ptr = ink_freelist_new(this->fl);
 
     memcpy(ptr, (void *)&this->proto.typeObject, sizeof(C));
     return (C *)ptr;
@@ -145,7 +143,7 @@ public:
   void
   free(C *ptr)
   {
-    ink_freelist_free(this->fl, ptr, freelist_class_ops);
+    ink_freelist_free(this->fl, ptr);
   }
 
   /**
@@ -158,7 +156,7 @@ public:
   void
   free_bulk(C *head, C *tail, size_t num_item)
   {
-    ink_freelist_free_bulk(this->fl, head, tail, num_item, freelist_class_ops);
+    ink_freelist_free_bulk(this->fl, head, tail, num_item);
   }
 
   /**
