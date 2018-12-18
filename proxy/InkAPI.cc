@@ -8846,7 +8846,7 @@ static const std::unordered_map<ts::string_view, OV_Pair> Overridable_Map(
    {"proxy.config.ssl.client.verify.server.policy", OV_Pair{TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_POLICY, TS_RECORDDATATYPE_STRING}},
    {"proxy.config.ssl.client.verify.server.properties",
     OV_Pair{TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_PROPERTIES, TS_RECORDDATATYPE_STRING}},
-   {"proxy.config.ssl.sni_policy",
+   {"proxy.config.ssl.client.sni_policy",
     OV_Pair{TS_CONFIG_SSL_CLIENT_SNI_POLICY, TS_RECORDDATATYPE_STRING}},
    {"proxy.config.ssl.client.cert.filename", OV_Pair{TS_CONFIG_SSL_CLIENT_CERT_FILENAME, TS_RECORDDATATYPE_STRING}},
    {"proxy.config.ssl.client.cert.path", OV_Pair{TS_CONFIG_SSL_CERT_FILEPATH, TS_RECORDDATATYPE_STRING}},
