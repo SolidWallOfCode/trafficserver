@@ -7626,7 +7626,8 @@ std::array<ts::string_view, TS_CONFIG_LAST_ENTRY> SDK_Overridable_Configs = {{"p
                                                              "proxy.config.http.allow_multi_range",
                                                              "proxy.config.http.allow_half_open",
                                                              "proxy.config.ssl.client.verify.server.policy",
-                                                             "proxy.config.ssl.client.verify.server.properties"}};
+                                                             "proxy.config.ssl.client.verify.server.properties",
+                                                             "proxy.config.ssl.client.sni_policy"}};
 
 REGRESSION_TEST(SDK_API_OVERRIDABLE_CONFIGS)(RegressionTest *test, int /* atype ATS_UNUSED */, int *pstatus)
 {

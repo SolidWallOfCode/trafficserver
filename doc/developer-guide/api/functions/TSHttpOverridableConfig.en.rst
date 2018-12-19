@@ -157,6 +157,12 @@ TSOverridableConfigKey Value                                        Configuratio
 :c:macro:`TS_CONFIG_NET_SOCK_RECV_BUFFER_SIZE_OUT`                  :ts:cv:`proxy.config.net.sock_recv_buffer_size_out`
 :c:macro:`TS_CONFIG_NET_SOCK_SEND_BUFFER_SIZE_OUT`                  :ts:cv:`proxy.config.net.sock_send_buffer_size_out`
 :c:macro:`TS_CONFIG_SRV_ENABLED`                                    :ts:cv:`proxy.config.srv_enabled`
+:c:macro:`TS_CONFIG_SSL_CERT_FILENAME`                              :ts:cv:`proxy.config.ssl.client.cert.filename`
+:c:macro:`TS_CONFIG_SSL_CERT_FILEPATH`                              :ts:cv:`proxy.config.ssl.client.cert.path`
+:c:macro:`TS_CONFIG_SSL_CLIENT_VERIFY_SERVER`                       :ts:cv:`proxy.config.ssl.client.verify.server`
+:c:macro:`TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_PROPERTIES`            :ts:cv:`proxy.config.ssl.client.verify.server,properties`
+:c:macro:`TS_CONFIG_SSL_CLIENT_VERIFY_SERVER_POLICY`                :ts:cv:`proxy.config.ssl.client.verify.server.policy`
+:c:macro:`TS_CONFIG_SSL_CLIENT_SNI_POLICY`                          :ts:cv:`proxy.config.ssl.client.sni_policy`
 :c:macro:`TS_CONFIG_SSL_HSTS_INCLUDE_SUBDOMAINS`                    :ts:cv:`proxy.config.ssl.hsts_include_subdomains`
 :c:macro:`TS_CONFIG_SSL_HSTS_MAX_AGE`                               :ts:cv:`proxy.config.ssl.hsts_max_age`
 :c:macro:`TS_CONFIG_URL_REMAP_PRISTINE_HOST_HDR`                    :ts:cv:`proxy.config.url_remap.pristine_host_hdr`
