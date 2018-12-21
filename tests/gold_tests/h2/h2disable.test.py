@@ -61,11 +61,11 @@ ts.Disk.records_config.update({
 })
 
 ts.Disk.ssl_server_name_config.AddLines([
-  "server_config={",
-  "{ fqdn='bar.com',",
-  "  disable_h2='true'",
-  "},{ fqdn='bob.*.com',",
-  "  disable_h2='true'",
+  "server_config = {",
+  "{ fqdn='bar.com',"
+  "  disable_h2=true"
+  "},{ fqdn='bob.*.com',"
+  "  disable_h2=true",
   "}}"
 ])
 

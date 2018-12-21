@@ -84,10 +84,10 @@ ts.Disk.ssl_multicert_config.AddLine(
 )
 
 ts.Disk.remap_config.AddLine(
-    'map /case1 https://127.0.0.1:{0}/'.format(server.Variables.Port)
+    'map /case1 https://127.0.0.1:{0}/'.format(server.Variables.SSL_Port)
 )
 ts.Disk.remap_config.AddLine(
-    'map /case2 https://127.0.0.1:{0}/'.format(server2.Variables.Port)
+    'map /case2 https://127.0.0.1:{0}/'.format(server2.Variables.SSL_Port)
 )
 
 ts.Disk.ssl_server_name_config.AddLines([

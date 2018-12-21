@@ -205,7 +205,7 @@ def MakeOriginServer(obj, name, port=None, s_port=None, ip='INADDR_LOOPBACK', de
         "options": "skipHooks"
     })
 
-    p.Ready = When.uServerUpAndRunning(ipaddr, port, ssl, IPConstants.isIPv6(ip), clientcert=clientcert, clientkey=clientkey)
+    p.Ready = When.uServerUpAndRunning(ipaddr, s_port if ssl else port, ssl, IPConstants.isIPv6(ip), clientcert=clientcert, clientkey=clientkey)
     p.ReturnCode = Any(None, 0)
 
     return p
