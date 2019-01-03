@@ -201,6 +201,7 @@ libtsutil_la_SOURCES = \
   Tokenizer.cc \
   Tokenizer.h \
   Trie.h \
+  ts_file.h ts_file.cc \
   TsBuffer.h \
   Vec.cc \
   Vec.h \
