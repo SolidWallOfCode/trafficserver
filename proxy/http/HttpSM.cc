@@ -5788,7 +5788,6 @@ HttpSM::do_drain_request_body()
 
 close_connection:
   t_state.client_info.keep_alive = HTTP_NO_KEEPALIVE;
-  t_state.hdr_info.client_response.value_set(MIME_FIELD_CONNECTION, MIME_LEN_CONNECTION, "close", 5);
 }
 
 void
