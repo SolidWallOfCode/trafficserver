@@ -310,13 +310,6 @@ System Variables
 
    Specifies at what size to roll the output log at.
 
-.. ts:cv:: CONFIG proxy.config.output.logfile.rolling_min_count INT 0
-   :reloadable:
-
-   Specifies the minimum count of rolled output logs to keep. This value will be used to decide the
-   order of auto-deletion (if enabled). A default value of 0 means auto-deletion will try to keep
-   output logs as much as possible. See :doc:`../logging/rotation.en.rst` for guidance.
-
 .. ts:cv:: CONFIG proxy.config.snapshot_dir STRING snapshots
 
    The directory in which Traffic Server stores configuration
@@ -1887,7 +1880,7 @@ Cache Control
 
    Forces the use of a specific hardware sector size, e.g. 4096, for all disks.
 
-   SSDs and "advanced format" drives claim a sector size of 512; however, it is safe to force a higher
+   SSDs and "advanced format” drives claim a sector size of 512; however, it is safe to force a higher
    size than the hardware supports natively as we count atomicity in 512 byte increments.
 
    4096-sized drives formatted for Windows will have partitions aligned on 63 512-byte sector boundaries,
@@ -2958,13 +2951,6 @@ Logging Configuration
    The size, in megabytes, that log files must reach before rolling takes place.
    The minimum value for this setting is ``10``.
 
-.. ts:cv:: CONFIG proxy.config.log.rolling_min_count INT 0
-   :reloadable:
-
-   Specifies the minimum count of rolled (event) logs to keep. This value will be used to decide the
-   order of auto-deletion (if enabled). A default value of 0 means auto-deletion will try to keep
-   logs as much as possible. This value can be and should be overridden in logging.yaml. See :doc:`../logging/rotation.en.rst` for guidance.
-
 .. ts:cv:: CONFIG proxy.config.log.auto_delete_rolled_files INT 1
    :reloadable:
 
@@ -3102,13 +3088,6 @@ Diagnostic Logging Configuration
    :units: megabytes
 
    Specifies at what size to roll the diagnostics log at.
-
-.. ts:cv:: CONFIG proxy.config.diags.logfile.rolling_min_count INT 0
-   :reloadable:
-
-   Specifies the minimum count of rolled diagnostic logs to keep. This value will be used to decide the
-   order of auto-deletion (if enabled). A default value of 0 means auto-deletion will try to keep
-   diagnostic logs as much as possible. See :doc:`../logging/rotation.en.rst` for guidance.
 
 Reverse Proxy
 =============
@@ -3426,11 +3405,11 @@ Client-Related Configuration
 
    You can override this global setting on a per domain basis in the ssl_servername.yaml file using the :ref:`verify_server_policy attribute<override-verify-server-policy>`.
 
-:code:`DISABLED`
+:code:`DISABLED` 
    Server Certificate will not be verified
-:code:`PERMISSIVE`
+:code:`PERMISSIVE` 
    Certificate will be verified and the connection will not be established if verification fails.
-:code:`ENFORCED`
+:code:`ENFORCED` 
    The provided certificate will be verified and the connection will be established irrespective of the verification result. If verification fails the name of the server will be logged.
 
 .. ts:cv:: CONFIG proxy.config.ssl.client.verify.server.properties STRING ALL
@@ -3463,7 +3442,7 @@ Client-Related Configuration
 
    :0: Server Certificate will not be verified
    :1: Certificate will be verified and the connection will not be established if verification fail
-   :2: The provided certificate will be verified and the connection will be established
+   :2: The provided certificate will be verified and the connection will be established 
 
 .. ts:cv:: CONFIG proxy.config.ssl.client.cert.filename STRING NULL
    :reloadable:
@@ -3528,7 +3507,7 @@ Client-Related Configuration
    thread will be rescheduled for other work until the crypto engine operation
    completes. A test crypto engine that inserts a 5 second delay on private key
    operations can be found at :ts:git:`contrib/openssl/async_engine.c`.
-
+   
 .. ts:cv:: CONFIG proxy.config.ssl.engine.conf_file STRING NULL
 
    Specify the location of the openssl config file used to load dynamic crypto
