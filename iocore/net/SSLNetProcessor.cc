@@ -76,6 +76,8 @@ SSLNetProcessor::start(int, size_t stacksize)
 
 #ifdef HAVE_OPENSSL_OCSP_STAPLING
   if (SSLConfigParams::ssl_ocsp_enabled) {
+    // Call the update initially to get things populated
+    ocsp_update();
     EventType ET_OCSP = eventProcessor.spawn_event_threads("ET_OCSP", 1, stacksize);
     eventProcessor.schedule_every(new OCSPContinuation(), HRTIME_SECONDS(SSLConfigParams::ssl_ocsp_update_period), ET_OCSP);
   }
