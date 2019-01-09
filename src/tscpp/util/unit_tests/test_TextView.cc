@@ -314,4 +314,33 @@ TEST_CASE("TextView Conversions", "[libts][TextView]")
 
   REQUIRE(25 == svtoi(n3));
   REQUIRE(31 == svtoi(n3, nullptr, 10));
+
+  std::error_condition ec;
+  n      = "18446744073709551616";
+  auto v = ts::svto_radix<10>(n, &ec);
+  REQUIRE(v == std::numeric_limits<decltype(v)>::max());
+  REQUIRE(ec == std::errc::result_out_of_range);
+  REQUIRE("6" == n);
+
+  n = "18446744073709551615";
+  ec.clear();
+  v = ts::svto_radix<10>(n, &ec);
+  REQUIRE(v == std::numeric_limits<decltype(v)>::max());
+  REQUIRE(bool(ec) == false);
+  REQUIRE(n.empty());
+
+  n = "18446744073709551614";
+  ec.clear();
+  v = ts::svto_radix<10>(n, &ec);
+  REQUIRE(v < std::numeric_limits<decltype(v)>::max());
+  REQUIRE(bool(ec) == false);
+  REQUIRE(n.empty());
+
+  n = "99918446744073709551614";
+  ec.clear();
+  v = ts::svto_radix<10>(n, &ec);
+  REQUIRE(v == std::numeric_limits<decltype(v)>::max());
+  REQUIRE(ec == std::errc::result_out_of_range);
+  REQUIRE(!n.empty());
+  REQUIRE("1614" == n);
 }
