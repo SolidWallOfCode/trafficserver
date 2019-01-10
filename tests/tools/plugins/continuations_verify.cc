@@ -126,6 +126,7 @@ handle_order_2(TSCont contp, TSEvent event, void *edata)
     break;
   }
 
+
   return 0;
 }
 
@@ -157,8 +158,8 @@ TSPluginInit(int argc, const char *argv[])
     TSError("[%s] Plugin registration failed. \n", plugin_name);
   }
 
-  TSCont contp_1 = TSContCreate(handle_order_1, TSMutexCreate());
-  TSCont contp_2 = TSContCreate(handle_order_2, TSMutexCreate());
+  TSCont contp_1 = TSContCreate(handle_order_1, nullptr);
+  TSCont contp_2 = TSContCreate(handle_order_2, nullptr);
   TSCont contp   = TSContCreate(handle_msg, TSMutexCreate());
 
   if (contp_1 == nullptr || contp_2 == nullptr || contp == nullptr) {
