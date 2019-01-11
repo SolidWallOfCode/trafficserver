@@ -4224,16 +4224,14 @@ HttpSM::do_hostdb_update_if_necessary()
 void
 HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
 {
+  static constexpr ts::TextView BYTES_TAG{"bytes="};
   int prev_good_range = -1;
-  const char *value;
-  int value_len;
+  ts::TextView value;
   int n_values;
   int nr          = 0; // number of valid ranges, also index to range array.
   int not_satisfy = 0;
   HdrCsvIter csv;
-  const char *s, *e, *tmp;
   RangeRecord *ranges = nullptr;
-  int64_t start, end;
 
   ink_assert(field != nullptr && t_state.range_setup == HttpTransact::RANGE_NONE && t_state.ranges == nullptr);
 
@@ -4253,134 +4251,91 @@ HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
   }
   parse_range_done = true;
 
-  n_values = 0;
-  value    = csv.get_first(field, &value_len);
-  while (value) {
-    ++n_values;
-    value = csv.get_next(&value_len);
-  }
+  n_values = csv.count_values(field);
+  if (n_values <= 0)
+    return;
 
-  value = csv.get_first(field, &value_len);
-  if (n_values <= 0 || ptr_len_ncmp(value, value_len, "bytes=", 6)) {
+  value = csv.get_first(field);
+  if (!BYTES_TAG.isNoCasePrefixOf(value)) {
     return;
   }
+  value.remove_prefix(BYTES_TAG.size());
 
   ranges = new RangeRecord[n_values];
-  value += 6; // skip leading 'bytes='
-  value_len -= 6;
 
   // assume range_in_cache
   t_state.range_in_cache = true;
 
-  for (; value; value = csv.get_next(&value_len)) {
-    if (!(tmp = (const char *)memchr(value, '-', value_len))) {
+  for (; value; value = csv.get_next()) {
+    static constexpr auto LIMIT = std::numeric_limits<int64_t>::max();
+    std::error_condition ec;
+    bool min_p = true; // a missing minimum requires special handling.
+    int64_t min, max;
+    auto idx = value.find('-');
+    if (idx == value.npos) {
       t_state.range_setup = HttpTransact::RANGE_NONE;
       goto Lfaild;
     }
 
-    // process start value
-    s = value;
-    e = tmp;
-    // skip leading white spaces
-    for (; s < e && ParseRules::is_ws(*s); ++s) {
-      ;
-    }
-
-    if (s >= e) {
-      start = -1;
+    ts::TextView text = value.take_prefix_at(idx).trim_if(&ParseRules::is_ws);
+    if (text) {
+      auto n = ts::svto_radix<10>(text);
+      if (!text.empty() || ec || n > LIMIT) {
+        t_state.range_setup = HttpTransact::RANGE_NONE;
+        goto Lfaild;
+      } else {
+        min = int64_t(n);
+      }
     } else {
-      for (start = 0; s < e && *s >= '0' && *s <= '9'; ++s) {
-        // check the int64 overflow in case of high gcc with O3 option
-        // thinking the start is always positive
-        int64_t new_start = start * 10 + (*s - '0');
-
-        if (new_start < start) { // Overflow
-          t_state.range_setup = HttpTransact::RANGE_NONE;
-          goto Lfaild;
-        }
-        start = new_start;
-      }
-      // skip last white spaces
-      for (; s < e && ParseRules::is_ws(*s); ++s) {
-        ;
-      }
-
-      if (s < e || start < 0) {
-        t_state.range_setup = HttpTransact::RANGE_NONE;
-        goto Lfaild;
-      }
+      min   = 0;
+      min_p = false;
     }
 
-    // process end value
-    s = tmp + 1;
-    e = value + value_len;
-    // skip leading white spaces
-    for (; s < e && ParseRules::is_ws(*s); ++s) {
-      ;
-    }
-
-    if (s >= e) {
-      if (start < 0) {
+    text = value.trim_if(&ParseRules::is_ws);
+    if (text) {
+      auto n = ts::svto_radix<10>(text, &ec);
+      if (!text.empty() || ec || n > LIMIT) {
         t_state.range_setup = HttpTransact::RANGE_NONE;
         goto Lfaild;
-      } else if (start >= content_length) {
-        not_satisfy++;
+      } else {
+        // If there's a minimum, bound by max index, otherwise it's a length and need to bound
+        // by the content_length.
+        max = std::min(min_p ? content_length - 1 : content_length, int64_t(n));
+      }
+    } else {        // ellided max
+      if (!min_p) { // can't be missing both min and max.
+        t_state.range_setup = HttpTransact::RANGE_NONE;
+        goto Lfaild;
+      } else if (min >= content_length) {
+        ++not_satisfy;
         continue;
       }
-      end = content_length - 1;
-    } else {
-      for (end = 0; s < e && *s >= '0' && *s <= '9'; ++s) {
-        // check the int64 overflow in case of high gcc with O3 option
-        // thinking the start is always positive
-        int64_t new_end = end * 10 + (*s - '0');
-
-        if (new_end < end) { // Overflow
-          t_state.range_setup = HttpTransact::RANGE_NONE;
-          goto Lfaild;
-        }
-        end = new_end;
-      }
-      // skip last white spaces
-      for (; s < e && ParseRules::is_ws(*s); ++s) {
-        ;
-      }
-
-      if (s < e || end < 0) {
-        t_state.range_setup = HttpTransact::RANGE_NONE;
-        goto Lfaild;
-      }
-
-      if (start < 0) {
-        if (end >= content_length) {
-          end = content_length;
-        }
-        start = content_length - end;
-        end   = content_length - 1;
-      } else if (start >= content_length && start <= end) {
-        not_satisfy++;
-        continue;
-      }
-
-      if (end >= content_length) {
-        end = content_length - 1;
-      }
+      max = content_length - 1;
     }
 
-    if (start > end) {
+    if (!min_p) { // range is specified in bytes from the end.
+      min = content_length - max;
+      max = content_length - 1;
+    } else if (min >= content_length && min <= max) {
+      ++not_satisfy;
+      continue;
+    }
+
+    if (min > max) {
       t_state.range_setup = HttpTransact::RANGE_NONE;
       goto Lfaild;
     }
 
-    if (prev_good_range >= 0 && start <= ranges[prev_good_range]._end) {
+    if (prev_good_range >= 0 && min <= ranges[prev_good_range]._end) {
       t_state.range_setup = HttpTransact::RANGE_NOT_HANDLED;
       goto Lfaild;
     }
 
-    ink_assert(start >= 0 && end >= 0 && start < content_length && end < content_length);
+    ink_assert(min >= 0 && max >= 0 && min < content_length && max < content_length);
 
     prev_good_range   = nr;
-    ranges[nr]._start = start;
-    ranges[nr]._end   = end;
+    ranges[nr]._start = min;
+    ranges[nr]._end   = max;
     ++nr;
 
     if (!cache_sm.cache_read_vc->is_pread_capable() && cache_config_read_while_writer == 2) {
@@ -4388,8 +4343,8 @@ HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
       HTTPInfo::FragOffset *frag_offset_tbl = t_state.cache_info.object_read->get_frag_table();
       int frag_offset_cnt                   = t_state.cache_info.object_read->get_frag_offset_count();
 
-      if (!frag_offset_tbl || !frag_offset_cnt || (frag_offset_tbl[frag_offset_cnt - 1] < (uint64_t)end)) {
-        Debug("http_range", "request range in cache, end %" PRId64 ", frg_offset_cnt %d" PRId64, end, frag_offset_cnt);
+      if (!frag_offset_tbl || !frag_offset_cnt || (frag_offset_tbl[frag_offset_cnt - 1] < uint64_t(max))) {
+        Debug("http_range", "request range in cache, end %" PRId64 ", frg_offset_cnt %d" PRId64, max, frag_offset_cnt);
         t_state.range_in_cache = false;
       }
     }
