@@ -105,9 +105,10 @@ tr.Processes.Default.ReturnCode = 0
 #
 tr = Test.AddTestRun()
 tr.DelayStart = 10
-tr.Processes.Default.Command = 'python {0} {3} < {1} > {2}'.format(
-    os.path.join(Test.TestDirectory, 'all_headers_sanitizer.py'),
+tr.Processes.Default.Command = '. {0} < {1} | python {2} {4} > {3}'.format(
+    os.path.join(Test.TestDirectory, 'all_headers_sanitizer.sh'),
     os.path.join(ts.Variables.LOGDIR, 'test_all_headers.log'),
+    os.path.join(Test.TestDirectory, 'all_headers_sanitizer.py'),
     os.path.join(ts.Variables.LOGDIR, 'test_all_headers.log.san'),
     server.Variables.Port)
 tr.Processes.Default.ReturnCode = 0

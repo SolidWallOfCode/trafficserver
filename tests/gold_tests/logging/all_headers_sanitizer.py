@@ -40,4 +40,4 @@ for line in sys.stdin:
     for rex, subStr in rexl:
         line = rex.sub(subStr, line)
 
-    print(line)
+    print(line, end='')
