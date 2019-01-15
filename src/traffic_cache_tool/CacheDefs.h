@@ -300,7 +300,7 @@ struct url_matcher {
       for (i = 0; i < count; i++) {
         std::cout << "regex " << patterns[i] << std::endl;
       }
-      if (regex.compile(patterns, count) != 0) {
+      if (regex.compile(patterns, count) != count) {
         std::cout << "Check your regular expression" << std::endl;
       }
 
@@ -328,19 +328,12 @@ struct url_matcher {
   uint8_t
   match(const char *hostname) const
   {
-    if (regex.match(hostname) != -1) {
-      return 1;
-    }
-
-    return 0;
+    return regex.match(hostname) ? 1 : 0;
   }
   uint8_t
   portmatch(const char *hostname, int length) const
   {
-    if (port.match(hostname, length) != -1) {
-      return 1;
-    }
-    return 0;
+    return port.match({hostname, size_t(length)}) ? 1 : 0;
   }
 
 private:
