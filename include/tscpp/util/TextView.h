@@ -534,7 +534,6 @@ intmax_t svtoi(TextView src, TextView *parsed = nullptr, int base = 0);
  *
  * @tparam N The radix (must be  1..36)
  * @param src The source text. Updated during parsing.
- * @param ec An optional pointer to an @c error_condition.
  * @return The converted numeric value.
  *
  * This is a specialized function useful only where conversion performance is critical, or for some
@@ -546,15 +545,13 @@ intmax_t svtoi(TextView src, TextView *parsed = nullptr, int base = 0);
  * is needed, used @c svtoi.
  *
  * @a src is updated in place by removing parsed characters. Parsing stops on the first invalid
- * digit, so any leading non-digit characters (e.g. whitespace) must already be removed.
- *
- * The @c error_condition pointed at by @a ec (if not @c nullptr) is updated if there is an error.
- * Currently only overflow is detected. In that case, the first digit which would cause an overflow
- * is not parsed and remains in @a src. If overflow occurs, the maximum value will be returned.
+ * digit, so any leading non-digit characters (e.g. whitespace) must already be removed. Overflow
+ * is detected and the first digit that would overflow is not parsed, and the maximum value is
+ * returned.
  */
 template <uintmax_t N>
 uintmax_t
-svto_radix(ts::TextView &src, std::error_condition *ec = nullptr)
+svto_radix(ts::TextView &src)
 {
   static_assert(0 < N && N <= 36, "Radix must be in the range 1..36");
   uintmax_t zret{0};
@@ -562,9 +559,6 @@ svto_radix(ts::TextView &src, std::error_condition *ec = nullptr)
   while (src.size() && (0 <= (v = ts::svtoi_convert[static_cast<unsigned char>(*src)])) && v < N) {
     auto n = zret * N + v;
     if (n < zret) { // overflow / wrap
-      if (ec) {
-        *ec = std::errc::result_out_of_range;
-      }
       return std::numeric_limits<uintmax_t>::max();
     }
     zret = n;
