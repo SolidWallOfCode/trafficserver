@@ -31,6 +31,7 @@
 #include "tsconfig/TsConfigLua.h"
 
 #include <vector>
+#include "ts/TextView.h"
 
 using ts::Errata;
 #define LUA_ENUM(L, name, val)                  \
@@ -49,6 +50,7 @@ constexpr char TS_verify_server_properties[] = "verify_server_properties";
 constexpr char TS_verify_origin_server[] = "verify_origin_server";
 constexpr char TS_client_cert[]          = "client_cert";
 constexpr char TS_client_key[]           = "client_key";
+constexpr ts::TextView TS_tls_protocols = "valid_tls_versions_in";
 
 const int start = 0;
 struct LuaSNIConfig : public TsConfigBase {
@@ -67,6 +69,7 @@ struct LuaSNIConfig : public TsConfigBase {
   enum class Level : uint8_t { NONE = 0, MODERATE, STRICT };
   enum class Policy : uint8_t { DISABLED = 0, PERMISSIVE, ENFORCED, UNSET };
   enum class Property : uint8_t { NONE = 0, SIGNATURE_MASK = 0x1, NAME_MASK = 0x2, ALL_MASK = 0x3, UNSET };
+  enum class TLS_Protocols : uint8_t { TLSv1 = 0, TLSv1_1 = 1, TLSv1_2 = 2, TLSv1_3 = 3};
   static TsConfigDescriptor desc;
   static TsConfigArrayDescriptor DESCRIPTOR;
 
@@ -93,6 +96,7 @@ struct LuaSNIConfig : public TsConfigBase {
     {
     }
 
+    void InitializeNegativeMask(uint8_t valid_protocols);
     std::string fqdn;
     bool disable_h2             = false;
     uint8_t verify_client_level = 0;
@@ -104,6 +108,9 @@ struct LuaSNIConfig : public TsConfigBase {
     Property verify_server_properties = Property::NONE;
     std::string client_cert;
     std::string client_key;
+    bool protocol_unset = true;
+    unsigned long protocol_mask;
+    uint8_t tls_valid_protocols_in;
 
     // These need to be initialized statically.
     static TsConfigObjectDescriptor OBJ_DESCRIPTOR;
@@ -129,6 +136,8 @@ struct LuaSNIConfig : public TsConfigBase {
     TsConfigEnum<self::Level> VERIFY_SERVER_POLICY_CONFIG;
     static TsConfigEnumDescriptor VERIFY_SERVER_PROPERTIES_DESCRIPTOR;
     TsConfigEnum<self::Level> VERIFY_SERVER_PROPERTIES_CONFIG;
+    static TsConfigEnumDescriptor TLS_PROTOCOLS_DESCRIPTOR;
+    TsConfigEnumSet<TLS_Protocols, uint8_t> TLS_PROTOCOL_SET_CONFIG { TLS_PROTOCOLS_DESCRIPTOR, tls_valid_protocols_in};
     ~Item() {}
   };
   std::vector<self::Item> items;

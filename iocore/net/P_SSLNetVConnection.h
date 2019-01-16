@@ -383,6 +383,9 @@ public:
   SSLNetVConnection(const SSLNetVConnection &) = delete;
   SSLNetVConnection &operator=(const SSLNetVConnection &) = delete;
 
+  bool protocol_mask_set = false;
+  unsigned long protocol_mask;
+
 private:
   ts::string_view map_tls_protocol_to_tag(const char *proto_string) const;
   bool update_rbio(bool move_to_socket);

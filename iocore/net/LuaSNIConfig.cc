@@ -24,7 +24,6 @@
 #include "ts/Diags.h"
 #include "P_SNIActionPerformer.h"
 #include "tsconfig/Errata.h"
-#include "tsconfig/TsConfigLua.h"
 
 TsConfigDescriptor LuaSNIConfig::desc = {TsConfigDescriptor::Type::ARRAY, "Array", "Item vector", "Vector"};
 TsConfigArrayDescriptor LuaSNIConfig::DESCRIPTOR(LuaSNIConfig::desc);
@@ -64,6 +63,8 @@ TsConfigEnumDescriptor LuaSNIConfig::Item::VERIFY_SERVER_PROPERTIES_DESCRIPTOR =
                                                                         "Properties to be verified",
                                                                         {{"NONE", 0}, {"SIGNATURE", 0x1}, {"NAME", 0x2}, {"ALL", 0x3}}};
                                                                        
+
+TsConfigEnumDescriptor LuaSNIConfig::Item::TLS_PROTOCOLS_DESCRIPTOR = {TsConfigDescriptor::Type::ENUM, "enum", "Protocols", "Enabled TLS protocols", {{"TLSv1", 0}, {"TLSv1_1", 1}, {"TLSv1_2", 2}, {"TLSv1_3", 3}}};
 
 ts::Errata
 LuaSNIConfig::loader(lua_State *L)
@@ -137,6 +138,9 @@ LuaSNIConfig::Item::loader(lua_State *L)
       this->tunnel_decrypt = true;
     } else if (!strncmp(name, TS_ip_allow, strlen(TS_ip_allow))) {
       IP_ALLOW_CONFIG.loader(L);
+    } else if (0 == strncmp(name, TS_tls_protocols.data(), TS_tls_protocols.size())) {
+      TLS_PROTOCOL_SET_CONFIG.loader(L);
+      InitializeNegativeMask(tls_valid_protocols_in);
     } else {
       zret.push(ts::Errata::Message(0, 0, "Invalid Entry at SNI config"));
     }
@@ -169,5 +173,43 @@ LuaSNIConfig::registerEnum(lua_State *L)
   LUA_ENUM(L, "NAME", 2);
   LUA_ENUM(L, "ALL", 3);
 
+  lua_newtable(L);
+  lua_setglobal(L, "TLSVersionTable");
+  LUA_ENUM(L, "TLSv1", 0);
+  LUA_ENUM(L, "TLSv1_1", 1);
+  LUA_ENUM(L, "TLSv1_2", 2);
+  LUA_ENUM(L, "TLSV1_3", 3);
+
   return zret;
 }
+
+void
+LuaSNIConfig::Item::InitializeNegativeMask(uint8_t valid_protocols)
+{
+  if (valid_protocols > 0) {
+    protocol_unset = false;
+    protocol_mask = TLSValidProtocols::max_mask;
+    uint8_t i = 0;
+    for (; static_cast<LuaSNIConfig::TLS_Protocols>(i) <= LuaSNIConfig::TLS_Protocols::TLSv1_3; i++) {
+      if ((1<<i) & valid_protocols) {
+        switch (static_cast<LuaSNIConfig::TLS_Protocols>(i)) {
+        case LuaSNIConfig::TLS_Protocols::TLSv1:
+          protocol_mask &= ~SSL_OP_NO_TLSv1;
+          break;
+        case LuaSNIConfig::TLS_Protocols::TLSv1_1:
+          protocol_mask &= ~SSL_OP_NO_TLSv1_1;
+          break;
+        case LuaSNIConfig::TLS_Protocols::TLSv1_2:
+          protocol_mask &= ~SSL_OP_NO_TLSv1_2;
+          break;
+        case LuaSNIConfig::TLS_Protocols::TLSv1_3:
+#ifdef SSL_OP_NO_TLSv1_3
+          protocol_mask &= ~SSL_OP_NO_TLSv1_3;
+#endif
+          break;
+        }
+      }
+    }
+  }
+}
+

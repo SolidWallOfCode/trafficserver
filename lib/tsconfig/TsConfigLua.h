@@ -181,4 +181,44 @@ public:
     }
 };
 
+template < class E , class MASK >
+class TsConfigEnumSet : public TsConfigBase {
+  TsConfigEnumDescriptor _enum_descriptor;
+  MASK& _mask;
+
+public:
+
+  TsConfigEnumSet(TsConfigEnumDescriptor const& d, MASK& i) : TsConfigBase(d), _enum_descriptor(d), _mask(i) {}
+
+  ts::Errata loader(lua_State* L) override
+  {
+    ts::Errata zret;
+    _mask = 0;
+
+    int l_type = lua_type(L, -1);
+    if (LUA_TTABLE == l_type) {
+      lua_pushnil(L);
+      while (lua_next(L, -2) != 0) {
+        l_type = lua_type(L, -1);
+        if (l_type == LUA_TSTRING) {
+          ts::string_view key(lua_tostring(L, -1));
+          auto spot = _enum_descriptor.values.find(key);
+          if (spot != _enum_descriptor.values.end()) {
+            _mask |= (1<<spot->second);
+          } else {
+            zret.push(ts::Errata::Message(0, 0, "SNI Config: set element not a valid name"));
+          }
+        } else if (l_type == LUA_TNUMBER) {
+          _mask |= (1<<lua_tointeger(L, -1)_;
+        } else {
+          zret.push(ts::Errata::Message(0, 0, "SNI Config: set element not a string."));
+        }
+        lua_pop(L, 1);
+      }
+    }
+
+    return zret;
+  }
+};
+
 #endif /* TSCONFIGLUA_H */
