@@ -5365,11 +5365,11 @@ HttpSM::mark_host_failure(HostDBInfo *info, time_t time_down)
 
   if (info->app.http_data.last_failure == 0) {
     char *url_str = t_state.hdr_info.client_request.url_string_get(&t_state.arena, nullptr);
-    Log::error("%s", lbw()
-                       .print("CONNECT: could not connect to {} for '{}' (setting last failure time) connect_result={}\0",
-                              t_state.current.server->dst_addr, url_str ? url_str : "<none>",
-                              ts::bwf::Errno(t_state.current.server->connect_result))
-                       .data());
+    ts::LocalBufferWriter<256> w;
+    w.print("CONNECT Error: {} connecting to {} for '{}' (setting last failure time)",
+           ts::bwf::Errno(t_state.current.server->connect_result), t_state.current.server->dst_addr,
+           url_str ? url_str : "<none>");
+    Log::error("%.*s", int(w.size()),  w.data());
 
     if (url_str) {
       t_state.arena.str_free(url_str);
