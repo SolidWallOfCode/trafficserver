@@ -4279,7 +4279,7 @@ HttpSM::parse_range_and_compare(MIMEField *field, int64_t content_length)
 
     ts::TextView text = value.take_prefix_at(idx).trim_if(&ParseRules::is_ws);
     if (text) {
-      auto n = ts::svto_radix<10>(text);
+      auto n = ts::svto_radix<10>(text, &ec);
       if (!text.empty() || ec || n > LIMIT) {
         t_state.range_setup = HttpTransact::RANGE_NONE;
         goto Lfaild;
