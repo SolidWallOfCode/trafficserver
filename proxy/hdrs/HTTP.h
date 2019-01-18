@@ -443,8 +443,6 @@ const char *http_hdr_reason_lookup(unsigned status);
 
 void http_parser_init(HTTPParser *parser);
 void http_parser_clear(HTTPParser *parser);
-ParseResult http_parser_parse_req(HTTPParser *parser, HdrHeap *heap, HTTPHdrImpl *hh, const char **start, const char *end,
-                                  bool must_copy_strings, bool eof, bool strict_uri_parsing);
 ParseResult validate_hdr_host(HTTPHdrImpl *hh);
 ParseResult validate_hdr_content_length(HdrHeap *heap, HTTPHdrImpl *hh);
 ParseResult http_parser_parse_resp(HTTPParser *parser, HdrHeap *heap, HTTPHdrImpl *hh, const char **start, const char *end,
@@ -622,7 +620,21 @@ public:
   const char *reason_get(int *length);
   void reason_set(const char *value, int length);
 
-  ParseResult parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing = false);
+  /** Restartably parse the HTTP request.
+   *
+   * @param parser The HTTP request parser.
+   * @param text [in|out] Text to parse.
+   * @param eof Whether the input stream has been closed.
+   * @param strict_uri_parsing Be pedantic about URI parsing.
+   * @return The result of parsing @a data.
+   *
+   * @a text is updated to reflect the data parsed. The value after parsing is data that was not
+   * parsed. Parsing state is preserved across calls such that parsing can be restarted at
+   * the next character. @a eof is used to indicate to the parser that no further data is expected
+   * and therefore incomplete parsing is an error.
+   */
+  ParseResult parse_req(HTTPParser *parser, std::string_view &text, bool eof, bool strict_uri_parsing = false);
+
   ParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, bool eof);
 
   ParseResult parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof, bool strict_uri_parsing = false);
@@ -1219,6 +1231,7 @@ HTTPHdr::reason_set(const char *value, int length)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
+#if 0
 inline ParseResult
 HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing)
 {
@@ -1227,6 +1240,7 @@ HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool
 
   return http_parser_parse_req(parser, m_heap, m_http, start, end, true, eof, strict_uri_parsing);
 }
+#endif
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
