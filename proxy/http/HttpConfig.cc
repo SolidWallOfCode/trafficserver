@@ -1243,6 +1243,8 @@ HttpConfig::startup()
   c.codeNegCache.add(HTTP_STATUS_GATEWAY_TIMEOUT);
   c.codeNegCache.qsort(lt_sort);
 
+  HttpEstablishStaticConfigStringAlloc(c.oride.ssl_client_sni_policy, "proxy.config.ssl.client.sni_policy");
+
   OutboundConnTrack::config_init(&c.outbound_conntrack, &c.oride.outbound_conntrack);
 
   MUTEX_TRY_LOCK(lock, http_config_cont->mutex, this_ethread());
@@ -1540,6 +1542,7 @@ HttpConfig::reconfigure()
   params->synthetic_port = m_master.synthetic_port;
   params->codeNegCache   = m_master.codeNegCache;
   m_id                   = configProcessor.set(m_id, params);
+  params->oride.ssl_client_sni_policy = ats_strdup(m_master.oride.ssl_client_sni_policy);
 
 #undef INT_TO_BOOL
 }

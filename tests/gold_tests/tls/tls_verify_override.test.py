@@ -56,19 +56,25 @@ ts.addSSLfile("ssl/signer.key")
 
 ts.Variables.ssl_port = 4443
 ts.Disk.remap_config.AddLine(
+    'map http://foo.com/basictobar https://bar.com:{0}'.format(server_bar.Variables.SSL_Port))
+ts.Disk.remap_config.AddLine(
     'map http://foo.com/basic https://foo.com:{0}'.format(server_foo.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
-    'map http://bar.com//basic https://foo.com:{0}'.format(server_foo.Variables.SSL_Port))
+    'map http://foo.com/override https://foo.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
+ts.Disk.remap_config.AddLine(
+    'map http://bar.com/basic https://bar.com:{0}'.format(server_foo.Variables.SSL_Port))
+ts.Disk.remap_config.AddLine(
+    'map http://bar.com/overridedisabled https://bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=DISABLED'.format(server_foo.Variables.SSL_Port))
+ts.Disk.remap_config.AddLine(
+    'map http://bar.com/overridesignature https://bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=SIGNATURE @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
+ts.Disk.remap_config.AddLine(
+    'map http://bar.com/overrideenforced https://bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
     'map /basic https://random.com:{0}'.format(server.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
-    'map /overridedisabled https://bad_bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=DISABLED'.format(server_foo.Variables.SSL_Port))
+    'map /overrideenforce https://127.0.0.1:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
-    'map /overridesignature https://foo.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=SIGNATURE @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
-ts.Disk.remap_config.AddLine(
-    'map /overrideenforced https://foo.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
-ts.Disk.remap_config.AddLine(
-    'map /overridename  https://randome.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=NAME'.format(server.Variables.SSL_Port))
+    'map /overridename  https://127.0.0.1:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=NAME'.format(server.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
     'map /snipolicyfooremap  https://foo.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=NAME @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED @plugin=conf_remap.so @pparam=proxy.config.ssl.client.sni_policy=remap'.format(server_bar.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
@@ -77,8 +83,6 @@ ts.Disk.remap_config.AddLine(
     'map /snipolicybarremap  https://bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=NAME @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED @plugin=conf_remap.so @pparam=proxy.config.ssl.client.sni_policy=remap'.format(server_bar.Variables.SSL_Port))
 ts.Disk.remap_config.AddLine(
     'map /snipolicybarhost  https://bar.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.properties=NAME @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED @plugin=conf_remap.so @pparam=proxy.config.ssl.client.sni_policy=host'.format(server_bar.Variables.SSL_Port))
-ts.Disk.remap_config.AddLine(
-    'map /override https://foo.com:{0} @plugin=conf_remap.so @pparam=proxy.config.ssl.client.verify.server.policy=ENFORCED'.format(server_foo.Variables.SSL_Port))
 
 ts.Disk.ssl_multicert_config.AddLine(
     'dest_ip=* ssl_cert_name=server.pem ssl_key_name=server.key'
@@ -101,12 +105,12 @@ ts.Disk.records_config.update({
     'proxy.config.ssl.client.CA.cert.filename': 'signer.pem',
     'proxy.config.url_remap.pristine_host_hdr': 1,
     'proxy.config.dns.nameservers': '127.0.0.1:{0}'.format(dns.Variables.Port),
-    'proxy.config.dns.resolv_conf': 'NULL'
+    'proxy.config.dns.resolv_conf': 'NULL',
+    'proxy.config.ssl.client.sni_policy': 'remap'
 })
 
 dns.addRecords(records={"foo.com.": ["127.0.0.1"]})
 dns.addRecords(records={"bar.com.": ["127.0.0.1"]})
-dns.addRecords(records={"bad_bar.com.": ["127.0.0.1"]})
 dns.addRecords(records={"random.com.": ["127.0.0.1"]})
 
 # Should succeed without message
@@ -115,7 +119,7 @@ tr.Setup.Copy("ssl/signed-foo.key")
 tr.Setup.Copy("ssl/signed-foo.pem")
 tr.Setup.Copy("ssl/signed-bar.key")
 tr.Setup.Copy("ssl/signed-bar.pem")
-tr.Processes.Default.Command = "curl -k --resolve 'foo.com:{0}:127.0.0.1'  http://foo.com:{0}/basic".format(ts.Variables.port)
+tr.Processes.Default.Command = 'curl -k -H \"host: foo.com\"  http://127.0.0.1:{0}/basic'.format(ts.Variables.port)
 tr.ReturnCode = 0
 tr.Processes.Default.StartBefore(dns)
 tr.Processes.Default.StartBefore(server_foo)
@@ -124,112 +128,119 @@ tr.Processes.Default.StartBefore(server)
 tr.Processes.Default.StartBefore(Test.Processes.ts, ready=When.PortOpen(ts.Variables.port))
 tr.StillRunningAfter = server
 tr.StillRunningAfter = ts
-tr.Processes.Default.TimeOut = 5
+tr.Processes.Default.TimeOut = 10
 # Should succed.  No message
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
-tr.TimeOut = 5
 
 tr2 = Test.AddTestRun("default-permissive-fail")
-tr2.Processes.Default.Command = "curl -k --resolve 'bar.com:{0}:127.0.0.1'  http://bar.com:{0}/basic".format(ts.Variables.port)
+tr2.Processes.Default.Command = "curl -k -H \"host: bar.com\"  http://127.0.0.1:{0}/basic".format(ts.Variables.port)
 tr2.ReturnCode = 0
 tr2.StillRunningAfter = server
-tr2.Processes.Default.TimeOut = 5
+tr2.Processes.Default.TimeOut = 10
 tr2.StillRunningAfter = ts
 # Should succeed, but will be message in log about name mismatch
 tr2.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
-tr2.TimeOut = 5
 
 tr2 = Test.AddTestRun("default-permissive-fail2")
-tr2.Processes.Default.Command = "curl -k --resolve 'random.com:{0}:127.0.0.1'  http://random.com:{0}/basic".format(ts.Variables.port)
+tr2.Processes.Default.Command = "curl -k -H \"host: random.com\"  http://127.0.0.1:{0}/basic".format(ts.Variables.port)
 tr2.ReturnCode = 0
 tr2.StillRunningAfter = server
-tr2.Processes.Default.TimeOut = 5
+tr2.Processes.Default.TimeOut = 10
 tr2.StillRunningAfter = ts
 # Should succeed, but will be message in log about signature 
 tr2.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
-tr2.TimeOut = 5
 
-tr3 = Test.AddTestRun("override-foo")
-tr3.Processes.Default.Command = "curl -k --resolve 'foo.com:{0}:127.0.0.1'  http://foo.com:{0}/override".format(ts.Variables.port)
+tr3 = Test.AddTestRun("default-foo-to-bar")
+tr3.Processes.Default.Command = "curl -k -v -H \"host: foo.com\"  http://127.0.0.1:{0}/basictobar".format(ts.Variables.port)
 tr3.ReturnCode = 0
 tr3.StillRunningAfter = server
 tr3.StillRunningAfter = ts
 # Should succeed.  No error messages
 tr3.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
-tr3.Processes.Default.TimeOut = 5
+tr3.Processes.Default.TimeOut = 10
+
+tr3 = Test.AddTestRun("override-foo")
+tr3.Processes.Default.Command = "curl -k -H \"host: foo.com\"  http://127.0.0.1:{0}/override".format(ts.Variables.port)
+tr3.ReturnCode = 0
+tr3.StillRunningAfter = server
+tr3.StillRunningAfter = ts
+# Should succeed.  No error messages
+tr3.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
+tr3.Processes.Default.TimeOut = 10
 
 tr4 = Test.AddTestRun("override-bar-disabled")
-tr4.Processes.Default.Command = "curl -k --resolve 'bad_bar.com:{0}:127.0.0.1'  http://bad_bar.com:{0}/overridedisabled".format(ts.Variables.port)
+tr4.Processes.Default.Command = "curl -k -H \"host: bad_bar.com\"  http://127.0.0.1:{0}/overridedisabled".format(ts.Variables.port)
 tr4.ReturnCode = 0
 tr4.StillRunningAfter = server
 tr4.StillRunningAfter = ts
 # Succeed. No error messages
 tr4.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
-tr4.Processes.Default.TimeOut = 5
+tr4.Processes.Default.TimeOut = 10
 
 tr5 = Test.AddTestRun("override-bar-signature-enforced")
-tr5.Processes.Default.Command = "curl -k --resolve 'bar.com:{0}:127.0.0.1'  http://bar.com:{0}/overridesignature".format(ts.Variables.port)
+tr5.Processes.Default.Command = "curl -k -H \"host: bar.com\"  http://127.0.0.1:{0}/overridesignature".format(ts.Variables.port)
 tr5.ReturnCode = 0
 tr5.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
 tr5.StillRunningAfter = server
 tr5.StillRunningAfter = ts
-tr5.Processes.Default.TimeOut = 5
+tr5.Processes.Default.TimeOut = 10
 
 tr6 = Test.AddTestRun("override-bar-enforced")
-tr6.Processes.Default.Command = "curl -k --resolve 'bar.com:{0}:127.0.0.1'  http://bar.com:{0}/overrideenforced".format(ts.Variables.port)
+tr6.Processes.Default.Command = "curl -k -H \"host: bar.com\"  http://127.0.0.1:{0}/overrideenforced".format(ts.Variables.port)
 tr6.ReturnCode = 0
 # Should fail
 tr6.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Curl attempt should have failed")
 tr6.StillRunningAfter = server
 tr6.StillRunningAfter = ts
-tr6.Processes.Default.TimeOut = 5
+tr6.Processes.Default.TimeOut = 10
 
 # Should succeed
 tr = Test.AddTestRun("foo-to-bar-sni-policy-remap")
-tr.Processes.Default.Command = "curl -k --resolve 'foo.com:{0}:127.0.0.1'  http://foo.com:{0}/snipolicybarremap".format(ts.Variables.port)
+tr.Processes.Default.Command = "curl -k -H \"host: foo.com\"  http://127.0.0.1:{0}/snipolicybarremap".format(ts.Variables.port)
 tr.ReturnCode = 0
 tr.StillRunningAfter = server
 tr.StillRunningAfter = ts
-tr.Processes.Default.TimeOut = 5
+tr.Processes.Default.TimeOut = 10
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could not connect", "Curl attempt should succeed")
 
 # Should fail
 tr = Test.AddTestRun("foo-to-bar-sni-policy-host")
-tr.Processes.Default.Command = "curl -k --resolve 'foo.com:{0}:127.0.0.1'  http://foo.com:{0}/snipolicybarhost".format(ts.Variables.port)
+tr.Processes.Default.Command = "curl -k -H \"host: foo.com\"  http://127.0.0.1:{0}/snipolicybarhost".format(ts.Variables.port)
 tr.ReturnCode = 0
 tr.StillRunningAfter = server
 tr.StillRunningAfter = ts
-tr.Processes.Default.TimeOut = 5
+tr.Processes.Default.TimeOut = 10
 tr.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could not connect", "Curl attempt should fail")
 
 # Should fail
 tr = Test.AddTestRun("bar-to-foo-sni-policy-remap")
-tr.Processes.Default.Command = "curl -k --resolve 'bar.com:{0}:127.0.0.1'  http://bar.com:{0}/snipolicyfooremap".format(ts.Variables.port)
+tr.Processes.Default.Command = "curl -k -H \"host: bar.com\"  http://127.0.0.1:{0}/snipolicyfooremap".format(ts.Variables.port)
 tr.ReturnCode = 0
 tr.StillRunningAfter = server
 tr.StillRunningAfter = ts
-tr.Processes.Default.TimeOut = 5
+tr.Processes.Default.TimeOut = 10
 tr.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could not connect", "Curl attempt should fail")
 
 # Should succeed
 tr = Test.AddTestRun("bar-to-foo-sni-policy-host")
-tr.Processes.Default.Command = "curl -k --resolve 'bar.com:{0}:127.0.0.1'  http://bar.com:{0}/snipolicyfoohost".format(ts.Variables.port)
+tr.Processes.Default.Command = "curl -k -H \"host: bar.com\"  http://127.0.0.1:{0}/snipolicyfoohost".format(ts.Variables.port)
 tr.ReturnCode = 0
 tr.StillRunningAfter = server
 tr.StillRunningAfter = ts
-tr.Processes.Default.TimeOut = 5
+tr.Processes.Default.TimeOut = 10
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could not connect", "Curl attempt should succeed")
-
 
 # Over riding the built in ERROR check since we expect some cases to fail
 
 # checks on random.com should fail with message only
 ts.Disk.diags_log.Content = Testers.ContainsExpression("WARNING: Core server certificate verification failed for \(random.com\). Action=Continue Error=self signed certificate server=random.com\(127.0.0.1\) depth=0", "Warning for self signed certificate")
 # permissive failure for bar.com
-ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(bar.com\) not in certificate. Action=Continue server=random.com\(127.0.0.1\)", "Warning on missing name for bar.com")
+ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(bar.com\) not in certificate. Action=Continue server=bar.com\(127.0.0.1\)", "Warning on missing name for bar.com")
 # name check failure for random.com
-ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(random.com\) not in certificate. Action=Continue server=random.com\(127.0.0.1\)", "Warning on missing name for random.com")
+ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(random.com\) not in certificate. Action=Continue server=random.com\(127.0.0.1\)", "Warning on missing name for randome.com")
 # name check failure for bar.com
-ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(bar.com\) not in certificate. Action=Terminate server=foo.com\(127.0.0.1\)", "Failure on missing name for bar.com")
+ts.Disk.diags_log.Content += Testers.ContainsExpression("WARNING: SNI \(bar.com\) not in certificate. Action=Terminate server=bar.com\(127.0.0.1\)", "Failure on missing name for bar.com")
+# See if the explicitly set default sni_policy of remap works.  
+ts.Disk.diags_log.Content += Testers.ExcludesExpression("WARNING: SNI \(foo.com\) not in certificate. Action=Continue", "Warning on missing name for foo.com")
 
 

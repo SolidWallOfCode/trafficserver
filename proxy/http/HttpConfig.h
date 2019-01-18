@@ -1019,6 +1019,7 @@ inline HttpConfigParams::~HttpConfigParams()
   ats_free(oride.ssl_client_ca_cert_filename);
   ats_free(connect_ports_string);
   ats_free(reverse_proxy_no_host_redirect);
+  ats_free(oride.ssl_client_sni_policy);
 
   int len = codeNegCache.n - 1;
   for (int i = len; i >= 0; i--) {
