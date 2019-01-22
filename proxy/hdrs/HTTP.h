@@ -620,12 +620,18 @@ public:
   const char *reason_get(int *length);
   void reason_set(const char *value, int length);
 
+  /// Options for HTTP header parsing.
+  struct ParseOptions {
+    bool eof_p = false; ///< End of input stream.
+    bool strict_uri_parsing_p = false; ///< Be pedantic about URI format.
+    bool copy_strings_p = false; ///< Copy strings from the input to the heap.
+  };
+
   /** Restartably parse the HTTP request.
    *
    * @param parser The HTTP request parser.
    * @param text [in|out] Text to parse.
-   * @param eof Whether the input stream has been closed.
-   * @param strict_uri_parsing Be pedantic about URI parsing.
+   * @param opt Parsing options.
    * @return The result of parsing @a data.
    *
    * @a text is updated to reflect the data parsed. The value after parsing is data that was not
@@ -633,11 +639,11 @@ public:
    * the next character. @a eof is used to indicate to the parser that no further data is expected
    * and therefore incomplete parsing is an error.
    */
-  ParseResult parse_req(HTTPParser *parser, std::string_view &text, bool eof, bool strict_uri_parsing = false);
+  ParseResult parse_req(HTTPParser *parser, std::string_view &text, ParseOptions const& opt = {});
 
-  ParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, bool eof);
+  ParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, ParseOptions const& opt = {});
 
-  ParseResult parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof, bool strict_uri_parsing = false);
+  ParseResult parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, ParseOptions const& opt);
   ParseResult parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof);
 
 public:
