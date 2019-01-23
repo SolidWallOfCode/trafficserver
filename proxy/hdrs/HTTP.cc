@@ -875,7 +875,7 @@ http_parser_clear(HTTPParser *parser)
 // NOTE: end is ONE CHARACTER PAST end of string!
 
 ParseResult
-HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof, bool strict_uri_parsing)
+HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsigned opt)
 {
   bool must_copy_strings = true;
   auto start = text.data();
@@ -1219,7 +1219,7 @@ validate_hdr_content_length(HdrHeap *heap, HTTPHdrImpl *hh)
   -------------------------------------------------------------------------*/
 
 ParseResult
-http_parser_parse_resp(HTTPParser *parser, HdrHeap *heap, HTTPHdrImpl *hh, const char **start, const char *end,
+HttpHdr::parse_resp(HTTPParser *parser, HdrHeap *heap, HTTPHdrImpl *hh, const char **start, const char *end,
                        bool must_copy_strings, bool eof)
 {
   if (parser->m_parsing_http) {

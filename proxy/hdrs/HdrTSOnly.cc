@@ -45,7 +45,7 @@
   -------------------------------------------------------------------------*/
 
 ParseResult
-HTTPHdr::parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof, bool strict_uri_parsing)
+HTTPHdr::parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof)
 {
   const char *start;
   const char *tmp;
@@ -65,17 +65,16 @@ HTTPHdr::parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool 
       break;
     }
 
-    tmp = start = r->start();
-    end         = start + b_avail;
+    std::string_view data { r->start(), size_t(b_avail) };
 
     int heap_slot = m_heap->attach_block(r->get_current_block(), start);
 
     m_heap->lock_ronly_str_heap(heap_slot);
-    state = http_parser_parse_req(parser, m_heap, m_http, &tmp, end, false, eof, strict_uri_parsing);
+    state = this->_parse_req(parser, data, eof, PARSE_OPT_NONE);
     m_heap->set_ronly_str_heap_end(heap_slot, tmp);
     m_heap->unlock_ronly_str_heap(heap_slot);
 
-    used = (int)(tmp - start);
+    used = b_avail - data.size();
     r->consume(used);
     *bytes_used += used;
 
@@ -100,13 +99,13 @@ HTTPHdr::parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool
 
   do {
     int64_t b_avail = r->block_read_avail();
-    tmp = start = r->start();
+    std::string_view data { r->start(), size_t(b_avail) };
 
     // No data currently available.
     if (b_avail <= 0) {
       if (eof == false) { // more data may arrive later, return CONTINUE state.
         break;
-      } else if (nullptr == start) {
+      } else if (data.empty()) {
         // EOF on empty MIOBuffer - that's a fail, don't bother with parsing.
         // (otherwise will attempt to attach_block a non-existent block)
         state = PARSE_RESULT_ERROR;
@@ -119,7 +118,7 @@ HTTPHdr::parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool
     int heap_slot = m_heap->attach_block(r->get_current_block(), start);
 
     m_heap->lock_ronly_str_heap(heap_slot);
-    state = http_parser_parse_resp(parser, m_heap, m_http, &tmp, end, false, eof);
+    state = this->_parser_parse_resp(parser, data, eof, PARSE_OPT_NONE);
     m_heap->set_ronly_str_heap_end(heap_slot, tmp);
     m_heap->unlock_ronly_str_heap(heap_slot);
 

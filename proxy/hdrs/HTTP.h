@@ -445,8 +445,6 @@ void http_parser_init(HTTPParser *parser);
 void http_parser_clear(HTTPParser *parser);
 ParseResult validate_hdr_host(HTTPHdrImpl *hh);
 ParseResult validate_hdr_content_length(HdrHeap *heap, HTTPHdrImpl *hh);
-ParseResult http_parser_parse_resp(HTTPParser *parser, HdrHeap *heap, HTTPHdrImpl *hh, const char **start, const char *end,
-                                   bool must_copy_strings, bool eof);
 
 HTTPStatus http_parse_status(const char *start, const char *end);
 int32_t http_parse_version(const char *start, const char *end);
@@ -620,31 +618,37 @@ public:
   const char *reason_get(int *length);
   void reason_set(const char *value, int length);
 
-  /// Options for HTTP header parsing.
-  struct ParseOptions {
-    bool eof_p = false; ///< End of input stream.
-    bool strict_uri_parsing_p = false; ///< Be pedantic about URI format.
-    bool copy_strings_p = false; ///< Copy strings from the input to the heap.
-  };
-
   /** Restartably parse the HTTP request.
    *
-   * @param parser The HTTP request parser.
+   * @param parser The HTTP parser.
    * @param text [in|out] Text to parse.
-   * @param opt Parsing options.
+   * @param eof_p Pass as @c true if there will never be more input to parse.
    * @return The result of parsing @a data.
    *
    * @a text is updated to reflect the data parsed. The value after parsing is data that was not
-   * parsed. Parsing state is preserved across calls such that parsing can be restarted at
-   * the next character. @a eof is used to indicate to the parser that no further data is expected
-   * and therefore incomplete parsing is an error.
+   * parsed. Parsing state is preserved across calls such that parsing can be restarted at the next
+   * character. @a eof_p indicates to the parser that no further data is expected and therefore
+   * incomplete parsing is an error.
    */
-  ParseResult parse_req(HTTPParser *parser, std::string_view &text, ParseOptions const& opt = {});
+  ParseResult parse_req(HTTPParser *parser, std::string_view &text, bool eof_p);
 
-  ParseResult parse_resp(HTTPParser *parser, const char **start, const char *end, ParseOptions const& opt = {});
+  /** Restartably parse the HTTP response.
+   *
+   * @param parser The HTTP parser.
+   * @param text [in|out] Text to parse.
+   * @param eof_p Pass as @c true if there will never be more input to parse.
+   * @return The result of parsing @a data.
+   *
+   * @a text is updated to reflect the data parsed. The value after parsing is data that was not
+   * parsed. Parsing state is preserved across calls such that parsing can be restarted at the next
+   * character. @a eof_p indicates to the parser that no further data is expected and therefore
+   * incomplete parsing is an error.
+   */
+  ParseResult parse_resp(HTTPParser *parser, std::string_view &text, bool eof_p);
 
-  ParseResult parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, ParseOptions const& opt);
-  ParseResult parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof);
+  // Convenience overloads
+  ParseResult parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof_p);
+  ParseResult parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool eof_p);
 
 public:
   // Utility routines
@@ -664,6 +668,51 @@ protected:
       @ _fill_target_cache @b always does a cache fill.
   */
   void _test_and_fill_target_cache() const;
+
+  /// Options for HTTP header parsing.
+  static constexpr unsigned PARSE_OPT_NONE = 0; ///< Explicit pass in no enabled options.
+  static constexpr unsigned PARSE_OPT_STRICT_URI = 1; ///< Be pedantic about URI format.
+  static constexpr unsigned PARSE_OPT_COPY_STRINGS = 2; ///< Copy strings in to local heap.
+
+  /** Restartably parse the HTTP request.
+   *
+   * @param parser The HTTP parser.
+   * @param text [in|out] Text to parse.
+   * @param eof_p Pass as @c true if there will never be more input to parse.
+   * @param opt Parsing options.
+   * @return The result of parsing @a data.
+   *
+   * @note Internal method.
+   *
+   * @a text is updated to reflect the data parsed. The value after parsing is data that was not
+   * parsed. Parsing state is preserved across calls such that parsing can be restarted at the next
+   * character. @a eof_p indicates to the parser that no further data is expected and therefore
+   * incomplete parsing is an error. @a opt is a set of bit flags.
+   *
+   * - STRICT_URI : parse the URI strictly.
+   * - COPY_STRINGS : always copy strings to the header heap.
+   */
+  ParseResult _parse_req(HTTPParser *parser, std::string_view &text, bool eof_p, unsigned opt);
+
+  /** Restartably parse the HTTP response.
+   *
+   * @param parser The HTTP parser.
+   * @param text [in|out] Text to parse.
+   * @param eof_p Pass as @c true if there will never be more input to parse.
+   * @param opt Parsing options.
+   * @return The result of parsing @a data.
+   *
+   * @note Internal method.
+   *
+   * @a text is updated to reflect the data parsed. The value after parsing is data that was not
+   * parsed. Parsing state is preserved across calls such that parsing can be restarted at the next
+   * character. @a eof_p indicates to the parser that no further data is expected and therefore
+   * incomplete parsing is an error. @a opt is a set of bit flags.
+   *
+   * - STRICT_URI : parse the URI strictly.
+   * - COPY_STRINGS : always copy strings to the header heap.
+   */
+  ParseResult _parse_resp(HTTPParser *parser, std::string_view &text, bool eof_p, unsigned opt);
 
   static Arena *const USE_HDR_HEAP_MAGIC;
 
@@ -1237,27 +1286,25 @@ HTTPHdr::reason_set(const char *value, int length)
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-#if 0
 inline ParseResult
-HTTPHdr::parse_req(HTTPParser *parser, const char **start, const char *end, bool eof, bool strict_uri_parsing)
+HTTPHdr::parse_req(HTTPParser *parser, std::string_view &text, bool eof_p)
 {
   ink_assert(valid());
   ink_assert(m_http->m_polarity == HTTP_TYPE_REQUEST);
 
-  return http_parser_parse_req(parser, m_heap, m_http, start, end, true, eof, strict_uri_parsing);
+  return this->_parse_req(parser, text, eof_p, PARSE_OPT_COPY_STRINGS);
 }
-#endif
 
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
 inline ParseResult
-HTTPHdr::parse_resp(HTTPParser *parser, const char **start, const char *end, bool eof)
+HTTPHdr::parse_resp(HTTPParser *parser, std::string_view &text, bool eof_p)
 {
   ink_assert(valid());
   ink_assert(m_http->m_polarity == HTTP_TYPE_RESPONSE);
 
-  return http_parser_parse_resp(parser, m_heap, m_http, start, end, true, eof);
+  return this->_parse_resp(parser, text, eof_p, PARSE_OPT_COPY_STRINGS);
 }
 
 /*-------------------------------------------------------------------------
