@@ -64,8 +64,6 @@ ts.addSSLfile("ssl/signed-bar.key")
 
 ts.Variables.ssl_port = 4443
 ts.Disk.records_config.update({
-    'proxy.config.diags.debug.enabled': 1,
-    'proxy.config.diags.debug.tags': 'ssl_verify_test',
     'proxy.config.ssl.server.cert.path': '{0}'.format(ts.Variables.SSLDir),
     'proxy.config.ssl.server.private_key.path': '{0}'.format(ts.Variables.SSLDir),
     'proxy.config.ssl.client.cert.path': '{0}'.format(ts.Variables.SSLDir),
@@ -73,6 +71,7 @@ ts.Disk.records_config.update({
     'proxy.config.http.server_ports': '{0}'.format(ts.Variables.port),
     'proxy.config.ssl.client.verify.server':  0,
     'proxy.config.ssl.server.cipher_suite': 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:ECDHE-RSA-RC4-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:RC4-SHA:RC4-MD5:AES128-SHA:AES256-SHA:DES-CBC3-SHA!SRP:!DSS:!PSK:!aNULL:!eNULL:!SSLv2',
+    'proxy.config.exec_thread.autoconfig.scale': 1.0,
     'proxy.config.url_remap.pristine_host_hdr' : 1,
 })
 
@@ -112,7 +111,6 @@ tr.StillRunningAfter = server
 tr.StillRunningAfter = server2
 tr.Processes.Default.Command = "curl -H host:bob.bar.com  http://127.0.0.1:{0}/case1".format(ts.Variables.port)
 tr.Processes.Default.ReturnCode = 0
-tr.Processes.Default.TimeOut = 5
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Check response")
 tr.TimeOut = 5
 
@@ -123,7 +121,6 @@ trfail.StillRunningAfter = server
 trfail.StillRunningAfter = server2
 trfail.Processes.Default.Command = 'curl -H host:bob.bar.com  http://127.0.0.1:{0}/case2'.format(ts.Variables.port)
 trfail.Processes.Default.ReturnCode = 0
-trfail.Processes.Default.TimeOut = 5
 trfail.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Check response")
 trfail.TimeOut = 5
 
@@ -134,7 +131,6 @@ tr.StillRunningAfter = server
 tr.StillRunningAfter = server2
 tr.Processes.Default.Command = "curl -H host:bob.foo.com  http://127.0.0.1:{0}/case1".format(ts.Variables.port)
 tr.Processes.Default.ReturnCode = 0
-tr.Processes.Default.TimeOut = 5
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Check response")
 tr.TimeOut = 5
 
@@ -145,7 +141,6 @@ trfail.StillRunningAfter = server
 trfail.StillRunningAfter = server2
 trfail.Processes.Default.Command = 'curl -H host:bob.foo.com  http://127.0.0.1:{0}/case2'.format(ts.Variables.port)
 trfail.Processes.Default.ReturnCode = 0
-trfail.Processes.Default.TimeOut = 5
 trfail.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Check response")
 trfail.TimeOut = 5
 
@@ -156,7 +151,6 @@ tr.StillRunningAfter = server
 tr.StillRunningAfter = server2
 tr.Processes.Default.Command = "curl -H host:random.bar.com  http://127.0.0.1:{0}/case2".format(ts.Variables.port)
 tr.Processes.Default.ReturnCode = 0
-tr.Processes.Default.TimeOut = 5
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Check response")
 tr.TimeOut = 5
 
@@ -167,7 +161,6 @@ trfail.StillRunningAfter = server
 trfail.StillRunningAfter = server2
 trfail.Processes.Default.Command = 'curl -H host:random.bar.com  http://127.0.0.1:{0}/case1'.format(ts.Variables.port)
 trfail.Processes.Default.ReturnCode = 0
-trfail.Processes.Default.TimeOut = 5
 trfail.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Check response")
 trfail.TimeOut = 5
 

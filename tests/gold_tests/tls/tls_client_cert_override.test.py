@@ -64,8 +64,6 @@ ts.addSSLfile("ssl/signed-bar.key")
 
 ts.Variables.ssl_port = 4443
 ts.Disk.records_config.update({
-    'proxy.config.diags.debug.enabled': 0,
-    'proxy.config.diags.debug.tags': 'ssl',
     'proxy.config.ssl.server.cert.path': '{0}'.format(ts.Variables.SSLDir),
     'proxy.config.ssl.server.private_key.path': '{0}'.format(ts.Variables.SSLDir),
     'proxy.config.http.server_ports': '{0}'.format(ts.Variables.port),
@@ -75,6 +73,7 @@ ts.Disk.records_config.update({
     'proxy.config.ssl.client.cert.filename': 'signed-foo.pem',
     'proxy.config.ssl.client.private_key.path': '{0}'.format(ts.Variables.SSLDir),
     'proxy.config.ssl.client.private_key.filename': 'signed-foo.key',
+    'proxy.config.exec_thread.autoconfig.scale': 1.0,
     'proxy.config.url_remap.pristine_host_hdr' : 1,
 })
 
@@ -105,9 +104,7 @@ tr.StillRunningAfter = server
 tr.StillRunningAfter = server2
 tr.Processes.Default.Command = "curl -H host:example.com  http://127.0.0.1:{0}/case1".format(ts.Variables.port)
 tr.Processes.Default.ReturnCode = 0
-tr.Processes.Default.TimeOut = 5
 tr.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Check response")
-tr.TimeOut = 5
 
 #Should fail
 trfail = Test.AddTestRun("Connect with bad client cert to first server")
@@ -116,9 +113,7 @@ trfail.StillRunningAfter = server
 trfail.StillRunningAfter = server2
 trfail.Processes.Default.Command = 'curl -H host:example.com  http://127.0.0.1:{0}/badcase1'.format(ts.Variables.port)
 trfail.Processes.Default.ReturnCode = 0
-trfail.Processes.Default.TimeOut = 5
 trfail.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Check response")
-trfail.TimeOut = 5
 
 # Should succeed
 trbar = Test.AddTestRun("Connect with correct client cert to second server")
@@ -127,9 +122,7 @@ trbar.StillRunningAfter = server
 trbar.StillRunningAfter = server2
 trbar.Processes.Default.Command = "curl -H host:bar.com  http://127.0.0.1:{0}/case2".format(ts.Variables.port)
 trbar.Processes.Default.ReturnCode = 0
-trbar.Processes.Default.TimeOut = 5
 trbar.Processes.Default.Streams.stdout = Testers.ExcludesExpression("Could Not Connect", "Check response")
-trbar.TimeOut = 5
 
 #Should fail
 trbarfail = Test.AddTestRun("Connect with bad client cert to second server")
@@ -138,8 +131,6 @@ trbarfail.StillRunningAfter = server
 trbarfail.StillRunningAfter = server2
 trbarfail.Processes.Default.Command = 'curl -H host:bar.com  http://127.0.0.1:{0}/badcase2'.format(ts.Variables.port)
 trbarfail.Processes.Default.ReturnCode = 0
-trbarfail.Processes.Default.TimeOut = 5
 trbarfail.Processes.Default.Streams.stdout = Testers.ContainsExpression("Could Not Connect", "Check response")
-trbarfail.TimeOut = 5
 
 
