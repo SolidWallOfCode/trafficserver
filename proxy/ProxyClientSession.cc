@@ -113,28 +113,19 @@ ProxyClientSession::state_api_callout(int event, void *data)
       cur_hook = hook_state.getNext();
     }
     if (nullptr != cur_hook) {
-      bool plugin_lock    = false;
       APIHook const *hook = cur_hook;
 
-      Ptr<ProxyMutex> plugin_mutex;
+      MUTEX_TRY_LOCK(lock, hook->m_cont->mutex, mutex->thread_holding);
 
-      if (hook->m_cont->mutex) {
-        plugin_mutex = hook->m_cont->mutex;
-        MUTEX_TRY_LOCK(lock, hook->m_cont->mutex, mutex->thread_holding);
-
-        if (!(plugin_lock = lock.is_locked())) {
-          SET_HANDLER(&ProxyClientSession::state_api_callout);
-          mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
-          return 0;
-        }
+      // Have a mutex but didn't get the lock, reschedule
+      if (!lock.is_locked()) {
+        SET_HANDLER(&ProxyClientSession::state_api_callout);
+        mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(1));
+        return 0;
       }
 
       cur_hook = nullptr; // mark current callback at dispatched.
       hook->invoke(eventmap[hook_state.id()], this);
-
-      if (plugin_lock) {
-        Mutex_unlock(plugin_mutex, this_ethread());
-      }
 
       return 0;
     }

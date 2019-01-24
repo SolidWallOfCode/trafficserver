@@ -538,11 +538,15 @@ public:
     ProxyMutex *am, EThread *t)
     : m(am)
   {
-    lock_acquired = Mutex_trylock(
+    if (am) {
+      lock_acquired = Mutex_trylock(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t);
+        m.get(), t);
+    } else {
+      lock_acquired = true;
+    }
   }
 
   MutexTryLock(
@@ -552,11 +556,15 @@ public:
     Ptr<ProxyMutex> &am, EThread *t)
     : m(am)
   {
-    lock_acquired = Mutex_trylock(
+    if (am) {
+      lock_acquired = Mutex_trylock(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t);
+        m.get(), t);
+    } else {
+      lock_acquired = true;
+    }
   }
 
   MutexTryLock(
@@ -566,12 +574,17 @@ public:
     ProxyMutex *am, EThread *t, int sp)
     : m(am)
   {
-    lock_acquired = Mutex_trylock_spin(
+    if (am) {
+      lock_acquired = Mutex_trylock_spin(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t, sp);
+        m.get(), t, sp);
+    } else {
+      lock_acquired = true;
+    }
   }
+  
 
   MutexTryLock(
 #ifdef DEBUG
@@ -580,17 +593,22 @@ public:
     Ptr<ProxyMutex> &am, EThread *t, int sp)
     : m(am)
   {
-    lock_acquired = Mutex_trylock_spin(
+    if (am) {
+      lock_acquired = Mutex_trylock_spin(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t, sp);
+        m.get(), t, sp);
+    } else {
+      lock_acquired = true;
+    }
   }
 
   ~MutexTryLock()
   {
-    if (lock_acquired)
+    if (lock_acquired && m.get()) {
       Mutex_unlock(m.get(), m->thread_holding);
+    }
   }
 
   /** Spin till lock is acquired
@@ -598,15 +616,17 @@ public:
   void
   acquire(EThread *t)
   {
-    MUTEX_TAKE_LOCK(m.get(), t);
     lock_acquired = true;
+    if (m.get()) {
+      MUTEX_TAKE_LOCK(m.get(), t);
+    }
   }
 
   void
   release()
   {
-    ink_assert(lock_acquired); // generate a warning because it shouldn't be done.
-    if (lock_acquired) {
+    //ink_assert(lock_acquired); // generate a warning because it shouldn't be done.
+    if (lock_acquired && m.get()) {
       Mutex_unlock(m.get(), m->thread_holding);
     }
     lock_acquired = false;

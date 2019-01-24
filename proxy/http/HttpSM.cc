@@ -1487,29 +1487,15 @@ plugins required to work with sni_routing.
         callout_state = HTTP_API_IN_CALLOUT;
       }
 
-      /* The MUTEX_TRY_LOCK macro was changed so
-         that it can't handle NULL mutex'es.  The plugins
-         can use null mutexes so we have to do this manually.
-         We need to take a smart pointer to the mutex since
-         the plugin could release it's mutex while we're on
-         the callout
-       */
-      bool plugin_lock;
-      Ptr<ProxyMutex> plugin_mutex;
-      if (cur_hook->m_cont->mutex) {
-        plugin_mutex = cur_hook->m_cont->mutex;
-        MUTEX_TRY_LOCK(lock, cur_hook->m_cont->mutex, mutex->thread_holding);
-
-        if (!(plugin_lock = lock.is_locked())) {
-          api_timer = -Thread::get_hrtime_updated();
-          HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_api_callout);
-          ink_assert(pending_action == nullptr);
-          pending_action = mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
-          return 0;
-        }
-      } else {
-        plugin_lock = false;
-      }
+      MUTEX_TRY_LOCK(lock, cur_hook->m_cont->mutex, mutex->thread_holding);
+      // Have a mutex but didn't get the lock, reschedule
+      if (!lock.is_locked()) {
+        api_timer = -Thread::get_hrtime_updated();
+        HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_api_callout);
+        ink_assert(pending_action == nullptr);
+        pending_action = mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
+        return 0;
+      } 
 
       DebugSM("http", "[%" PRId64 "] calling plugin on hook %s at hook %p", sm_id, HttpDebugNames::get_api_hook_name(cur_hook_id),
               cur_hook);
@@ -1531,11 +1517,6 @@ plugins required to work with sni_routing.
         // tracking a non-complete callout from a chain so just let it ride. It will get cleaned
         // up in state_api_callback when the plugin re-enables this transaction.
       }
-
-      if (plugin_lock) {
-        Mutex_unlock(plugin_mutex, mutex->thread_holding);
-      }
-
       return 0;
     }
     // Map the callout state into api_next
