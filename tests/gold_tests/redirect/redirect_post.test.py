@@ -40,7 +40,9 @@ ts.Disk.records_config.update({
     'proxy.config.http.number_of_redirections': MAX_REDIRECT,
     'proxy.config.http.post_copy_size' : 919430601,
     'proxy.config.http.cache.http': 0,
-    'proxy.config.http.redirect.actions': 'self:follow', # redirects to self are not followed by default
+    'proxy.config.http.redirection_enabled': 1,
+    # 'proxy.config.http.redirect.actions' config setting not supported in 7.1.x
+    # 'proxy.config.http.redirect.actions': 'self:follow', # redirects to self are not followed by default
     # 'proxy.config.diags.debug.enabled': 1,
 })
 
@@ -64,10 +66,13 @@ ts.Disk.remap_config.AddLine(
 )
 
 tr = Test.AddTestRun()
-tr.Processes.Default.Command = 'touch largefile.txt && truncate largefile.txt -s 50M && curl -i http://127.0.0.1:{0}/redirect1 -F "filename=@./largefile.txt" && rm -f largefile.txt'.format(ts.Variables.port)
-tr.Processes.Default.StartBefore(ts)
-tr.Processes.Default.StartBefore(redirect_serv1)
-tr.Processes.Default.StartBefore(redirect_serv2)
-tr.Processes.Default.StartBefore(dest_serv)
+tr.Processes.Default.Command = (
+    'touch largefile.txt && truncate largefile.txt -s 50M && ' +
+    'curl -i http://127.0.0.1:{0}/redirect1 -F "filename=@./largefile.txt" && rm -f largefile.txt'.format(ts.Variables.port)
+)
+tr.Processes.Default.StartBefore(ts, ready=When.PortOpen(ts.Variables.port))
+tr.Processes.Default.StartBefore(redirect_serv1, ready=When.PortOpen(redirect_serv1.Variables.Port))
+tr.Processes.Default.StartBefore(redirect_serv2, ready=When.PortOpen(redirect_serv2.Variables.Port))
+tr.Processes.Default.StartBefore(dest_serv, ready=When.PortOpen(dest_serv.Variables.Port))
 tr.Processes.Default.Streams.stdout = "gold/redirect_post.gold"
 tr.Processes.Default.ReturnCode = 0
