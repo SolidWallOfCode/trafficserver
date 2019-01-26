@@ -50,6 +50,7 @@ Plugins that are considered stable are installed by default in |TS| releases.
    Background Fetch <background_fetch.en>
    Combo Handler <combo_handler.en>
    Configuration Remap <conf_remap.en>
+   Cookie Remap <cookie_remap.en>
    ESI <esi.en>
    GZip <gzip.en>
    Generator <generator.en>
