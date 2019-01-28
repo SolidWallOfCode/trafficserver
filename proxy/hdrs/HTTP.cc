@@ -858,13 +858,13 @@ http_parser_clear(HTTPParser *parser)
 
 #define GETNEXT(label) \
   {                    \
-    cur += 1;          \
-    if (cur >= end) {  \
+    cur.remove_prefix(1);          \
+    if (cur.empty()) {  \
       goto label;      \
     }                  \
   }
 
-#define GETPREV(label)      \
+#define QQGETPREV(label)      \
   {                         \
     cur -= 1;               \
     if (cur < line_start) { \
@@ -875,11 +875,8 @@ http_parser_clear(HTTPParser *parser)
 // NOTE: end is ONE CHARACTER PAST end of string!
 
 ParseResult
-HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsigned opt)
+HTTPHdr::_parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsigned opt)
 {
-  bool must_copy_strings = true;
-  auto start = text.data();
-  auto end = text.data() + text.size();
 
   if (parser->m_parsing_http) {
     MIMEScanner *scanner = &parser->m_mime_parser.m_scanner;
@@ -887,14 +884,10 @@ HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsig
 
     ParseResult err;
     bool line_is_real;
-    const char *cur;
     const char *line_start;
-    const char *method_start;
-    const char *method_end;
-    const char *url_start;
-    const char *url_end;
-    const char *version_start;
-    const char *version_end;
+    std::string_view method_text;
+    std::string_view url_text;
+    std::string_view version_text;
 
   start:
     m_http->m_polarity = HTTP_TYPE_REQUEST;
@@ -904,7 +897,9 @@ HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsig
       return PARSE_RESULT_ERROR;
     }
 
-    err = mime_scanner_get(scanner, &start, text.data() + text.size(), &line_start, &end, &line_is_real, eof, MIME_SCANNER_TYPE_LINE);
+    auto start = text.data();
+    auto end = text.data() + text.size();
+    err = mime_scanner_get(scanner, &start, text.data() + text.size(), &line_start, &end, &line_is_real, eof_p, MIME_SCANNER_TYPE_LINE);
     if (err < 0) {
       return err;
     }
@@ -917,15 +912,15 @@ HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsig
       return err;
     }
 
-    cur = line_start;
-    ink_assert((end - cur) >= 0);
-    ink_assert((end - cur) < UINT16_MAX);
+    ink_assert(end >= line_start);
+    std::string_view cur { line_start, static_cast<size_t>(end - line_start) };
+    ink_assert(cur.size() < UINT16_MAX);
 
-    must_copy_strings = must_copy_strings || !line_is_real;
+    bool must_copy_strings_p = (opt & PARSE_OPT_COPY_STRINGS) || !line_is_real;
 
 #if (ENABLE_PARSER_FAST_PATHS)
     // first try fast path
-    if (end - cur >= 16) {
+    if (cur.size() >= 16) {
       if (((cur[0] ^ 'G') | (cur[1] ^ 'E') | (cur[2] ^ 'T')) != 0) {
         goto slow_case;
       }
@@ -946,23 +941,23 @@ HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsig
 
       int32_t version = HTTP_VERSION(end[-5] - '0', end[-3] - '0');
 
-      http_hdr_method_set(m_heap, m_http, &(cur[0]), hdrtoken_wks_to_index(HTTP_METHOD_GET), 3, must_copy_strings);
+      http_hdr_method_set(m_heap, m_http, cur.data(), hdrtoken_wks_to_index(HTTP_METHOD_GET), 3, must_copy_strings_p);
       ink_assert(m_http->u.req.m_url_impl != nullptr);
       url       = m_http->u.req.m_url_impl;
-      url_start = &(cur[4]);
-      err       = ::url_parse(m_heap, url, &url_start, &(end[-11]), must_copy_strings, strict_uri_parsing);
+      start = cur.data() + 4;
+      err       = ::url_parse(m_heap, url, &start, end - 11, must_copy_strings_p, opt & PARSE_OPT_STRICT_URI);
       if (err < 0) {
         return err;
       }
       http_hdr_version_set(m_http, version);
 
-      end                    = text.data() + text.size();
+      cur.remove_prefix(start - cur.data()); // url_start updated by url_parse, drop that.
       parser->m_parsing_http = false;
       if (version == HTTP_VERSION(0, 9)) {
         return PARSE_RESULT_ERROR;
       }
 
-      ParseResult ret = mime_parser_parse(&parser->m_mime_parser, m_heap, m_http->m_fields_impl, &start, end, must_copy_strings, eof);
+      ParseResult ret = mime_parser_parse(&parser->m_mime_parser, m_heap, m_http->m_fields_impl, &start, end, must_copy_strings_p, eof_p);
       // If we're done with the main parse do some validation
       if (ret == PARSE_RESULT_DONE) {
         ret = validate_hdr_host(m_http); // check HOST header
@@ -976,23 +971,18 @@ HTTPHdr::parse_req(HTTPParser *parser, std::string_view& text, bool eof_p, unsig
 
   slow_case:
 
-    method_start  = nullptr;
-    method_end    = nullptr;
-    url_start     = nullptr;
-    url_end       = nullptr;
-    version_start = nullptr;
-    version_end   = nullptr;
+    char c = cur[0];
     url           = nullptr;
 
-    if (ParseRules::is_cr(*cur))
+    if (ParseRules::is_cr(c))
       GETNEXT(done);
-    if (ParseRules::is_lf(*cur)) {
+    if (ParseRules::is_lf(c)) {
       goto start;
     }
 
   parse_method1:
 
-    if (ParseRules::is_ws(*cur)) {
+    if (ParseRules::is_ws(c)) {
       GETNEXT(done);
       goto parse_method1;
     }

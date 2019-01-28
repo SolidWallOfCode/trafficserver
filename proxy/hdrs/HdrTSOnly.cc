@@ -59,22 +59,24 @@ HTTPHdr::parse_req(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool 
   *bytes_used       = 0;
 
   do {
-    int64_t b_avail = r->block_read_avail();
+    auto text { r->block_read_view() };
 
-    if (b_avail <= 0 && eof == false) {
+    if (text.empty()) {
+      if (eof == true) {
+        state = PARSE_RESULT_ERROR; // no chance of a future successful parse.
+      }
       break;
     }
 
-    std::string_view data { r->start(), size_t(b_avail) };
-
-    int heap_slot = m_heap->attach_block(r->get_current_block(), start);
+    int heap_slot = m_heap->attach_block(r->get_current_block(), text.data());
+    auto remain { text }; // for updating by the parse logic
 
     m_heap->lock_ronly_str_heap(heap_slot);
-    state = this->_parse_req(parser, data, eof, PARSE_OPT_NONE);
+    state = this->_parse_req(parser, remain, eof, PARSE_OPT_NONE);
     m_heap->set_ronly_str_heap_end(heap_slot, tmp);
     m_heap->unlock_ronly_str_heap(heap_slot);
 
-    used = b_avail - data.size();
+    used = static_cast<int>(text.size() - remain.size());
     r->consume(used);
     *bytes_used += used;
 
@@ -98,31 +100,24 @@ HTTPHdr::parse_resp(HTTPParser *parser, IOBufferReader *r, int *bytes_used, bool
   *bytes_used       = 0;
 
   do {
-    int64_t b_avail = r->block_read_avail();
-    std::string_view data { r->start(), size_t(b_avail) };
+    std::string_view text { r->block_read_view() };
 
-    // No data currently available.
-    if (b_avail <= 0) {
-      if (eof == false) { // more data may arrive later, return CONTINUE state.
-        break;
-      } else if (data.empty()) {
-        // EOF on empty MIOBuffer - that's a fail, don't bother with parsing.
-        // (otherwise will attempt to attach_block a non-existent block)
-        state = PARSE_RESULT_ERROR;
-        break;
+    if (text.empty()) {
+      if (eof == true) {
+        state = PARSE_RESULT_ERROR; // no chance of a future successful parse.
       }
+      break;
     }
 
-    end = start + b_avail;
-
     int heap_slot = m_heap->attach_block(r->get_current_block(), start);
+    auto remain { text }; // updated to unparsed data.
 
     m_heap->lock_ronly_str_heap(heap_slot);
-    state = this->_parser_parse_resp(parser, data, eof, PARSE_OPT_NONE);
+    state = this->_parse_resp(parser, remain, eof, PARSE_OPT_NONE);
     m_heap->set_ronly_str_heap_end(heap_slot, tmp);
     m_heap->unlock_ronly_str_heap(heap_slot);
 
-    used = (int)(tmp - start);
+    used = static_cast<int>(text.size() - remain.size());
     r->consume(used);
     *bytes_used += used;
 
