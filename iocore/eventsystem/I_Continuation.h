@@ -137,7 +137,7 @@ public:
   */
   ContFlags control_flags;
 
-  EThread *thread_affinity = this_event_thread();
+  EThread *thread_affinity = nullptr;
 
   bool
   setThreadAffinity(EThread *ethread)

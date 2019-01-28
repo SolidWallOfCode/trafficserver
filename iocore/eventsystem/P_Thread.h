@@ -45,7 +45,7 @@ Thread::set_specific()
 TS_INLINE Thread *
 this_thread()
 {
-  return (Thread *)ink_thread_getspecific(Thread::thread_data_key);
+  return static_cast<Thread *>(ink_thread_getspecific(Thread::thread_data_key));
 }
 
 #endif //_P_Thread_h_
