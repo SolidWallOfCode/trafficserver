@@ -611,30 +611,30 @@ CoreUtils::load_http_hdr(HTTPHdr *core_hdr, HTTPHdr *live_hdr)
     ink_assert(obj_is_aligned(obj));
 
     switch (obj->m_type) {
-    case HDR_HEAP_OBJ_URL:
+    case HdrHeapObjType::URL:
       if (((URLImpl *)obj)->marshal(str_xlation, str_heaps) < 0) {
         goto Failed;
       }
       break;
-    case HDR_HEAP_OBJ_HTTP_HEADER:
+    case HdrHeapObjType::HTTP_HEADER:
       if (((HTTPHdrImpl *)obj)->marshal(&ptr_xlation[0], ptr_heaps, str_xlation, str_heaps) < 0) {
         goto Failed;
       }
       live_hdr->m_http = (HTTPHdrImpl *)obj;
       break;
-    case HDR_HEAP_OBJ_FIELD_BLOCK:
+    case HdrHeapObjType::FIELD_BLOCK:
       if (((MIMEFieldBlockImpl *)obj)->marshal(&ptr_xlation[0], ptr_heaps, str_xlation, str_heaps) < 0) {
         goto Failed;
       }
       break;
-    case HDR_HEAP_OBJ_MIME_HEADER:
+    case HdrHeapObjType::MIME_HEADER:
       if (((MIMEHdrImpl *)obj)->marshal(&ptr_xlation[0], ptr_heaps, str_xlation, str_heaps)) {
         goto Failed;
       }
       break;
-    case HDR_HEAP_OBJ_EMPTY:
+    case HdrHeapObjType::EMPTY:
       break;
-    case HDR_HEAP_OBJ_RAW:
+    case HdrHeapObjType::RAW:
       // Check to make sure we aren't stuck
       //   in an infinite loop
       if (obj->m_length <= 0) {

@@ -501,9 +501,9 @@ inline MIMEHdrImpl *
 _hdr_obj_to_mime_hdr_impl(HdrHeapObjImpl *obj)
 {
   MIMEHdrImpl *impl;
-  if (obj->m_type == HDR_HEAP_OBJ_HTTP_HEADER) {
+  if (obj->m_type == HdrHeapObjType::HTTP_HEADER) {
     impl = ((HTTPHdrImpl *)obj)->m_fields_impl;
-  } else if (obj->m_type == HDR_HEAP_OBJ_MIME_HEADER) {
+  } else if (obj->m_type == HdrHeapObjType::MIME_HEADER) {
     impl = (MIMEHdrImpl *)obj;
   } else {
     ink_release_assert(!"mloc not a header type");
@@ -526,7 +526,7 @@ sdk_sanity_check_field_handle(TSMLoc field, TSMLoc parent_hdr = nullptr)
   }
 
   MIMEFieldSDKHandle *field_handle = (MIMEFieldSDKHandle *)field;
-  if (field_handle->m_type != HDR_HEAP_OBJ_FIELD_SDK_HANDLE) {
+  if (field_handle->m_type != HdrHeapObjType::FIELD_SDK_HANDLE) {
     return TS_ERROR;
   }
 
@@ -558,7 +558,7 @@ sdk_sanity_check_mime_hdr_handle(TSMLoc field)
   }
 
   MIMEFieldSDKHandle *field_handle = (MIMEFieldSDKHandle *)field;
-  if (field_handle->m_type != HDR_HEAP_OBJ_MIME_HEADER) {
+  if (field_handle->m_type != HdrHeapObjType::MIME_HEADER) {
     return TS_ERROR;
   }
 
@@ -573,7 +573,7 @@ sdk_sanity_check_url_handle(TSMLoc field)
   }
 
   MIMEFieldSDKHandle *field_handle = (MIMEFieldSDKHandle *)field;
-  if (field_handle->m_type != HDR_HEAP_OBJ_URL) {
+  if (field_handle->m_type != HdrHeapObjType::URL) {
     return TS_ERROR;
   }
 
@@ -588,7 +588,7 @@ sdk_sanity_check_http_hdr_handle(TSMLoc field)
   }
 
   HTTPHdrImpl *field_handle = (HTTPHdrImpl *)field;
-  if (field_handle->m_type != HDR_HEAP_OBJ_HTTP_HEADER) {
+  if (field_handle->m_type != HdrHeapObjType::HTTP_HEADER) {
     return TS_ERROR;
   }
 
@@ -724,7 +724,7 @@ sdk_alloc_field_handle(TSMBuffer /* bufp ATS_UNUSED */, MIMEHdrImpl *mh)
   // TODO: Should remove this when memory allocation can't fail.
   sdk_assert(sdk_sanity_check_null_ptr((void *)handle) == TS_SUCCESS);
 
-  obj_init_header(handle, HDR_HEAP_OBJ_FIELD_SDK_HANDLE, sizeof(MIMEFieldSDKHandle), 0);
+  obj_init_header(handle, HdrHeapObjType::FIELD_SDK_HANDLE, sizeof(MIMEFieldSDKHandle), 0);
   handle->mh = mh;
 
   return handle;
@@ -1937,12 +1937,12 @@ TSHandleMLocRelease(TSMBuffer bufp, TSMLoc parent, TSMLoc mloc)
   sdk_assert(sdk_sanity_check_mbuffer(bufp) == TS_SUCCESS);
 
   switch (obj->m_type) {
-  case HDR_HEAP_OBJ_URL:
-  case HDR_HEAP_OBJ_HTTP_HEADER:
-  case HDR_HEAP_OBJ_MIME_HEADER:
+  case HdrHeapObjType::URL:
+  case HdrHeapObjType::HTTP_HEADER:
+  case HdrHeapObjType::MIME_HEADER:
     return TS_SUCCESS;
 
-  case HDR_HEAP_OBJ_FIELD_SDK_HANDLE:
+  case HdrHeapObjType::FIELD_SDK_HANDLE:
     field_handle = (MIMEFieldSDKHandle *)obj;
     if (sdk_sanity_check_field_handle(mloc, parent) != TS_SUCCESS) {
       return TS_ERROR;
@@ -3622,7 +3622,7 @@ TSHttpHdrClone(TSMBuffer dest_bufp, TSMBuffer src_bufp, TSMLoc src_hdr, TSMLoc *
   d_heap = ((HdrHeapSDKHandle *)dest_bufp)->m_heap;
   s_hh   = (HTTPHdrImpl *)src_hdr;
 
-  if (s_hh->m_type != HDR_HEAP_OBJ_HTTP_HEADER) {
+  if (s_hh->m_type != HdrHeapObjType::HTTP_HEADER) {
     return TS_ERROR;
   }
 
@@ -3659,7 +3659,7 @@ TSHttpHdrCopy(TSMBuffer dest_bufp, TSMLoc dest_obj, TSMBuffer src_bufp, TSMLoc s
   s_hh   = (HTTPHdrImpl *)src_obj;
   d_hh   = (HTTPHdrImpl *)dest_obj;
 
-  if ((s_hh->m_type != HDR_HEAP_OBJ_HTTP_HEADER) || (d_hh->m_type != HDR_HEAP_OBJ_HTTP_HEADER)) {
+  if ((s_hh->m_type != HdrHeapObjType::HTTP_HEADER) || (d_hh->m_type != HdrHeapObjType::HTTP_HEADER)) {
     return TS_ERROR;
   }
 
@@ -3684,7 +3684,7 @@ TSHttpHdrPrint(TSMBuffer bufp, TSMLoc obj, TSIOBuffer iobufp)
   int done;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
 
   dumpoffset = 0;
   do {
@@ -3720,7 +3720,7 @@ TSHttpHdrParseReq(TSHttpParser parser, TSMBuffer bufp, TSMLoc obj, const char **
   HTTPHdr h;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
   TSHttpHdrTypeSet(bufp, obj, TS_HTTP_TYPE_REQUEST);
   return (TSParseResult)h.parse_req((HTTPParser *)parser, start, end, false);
 }
@@ -3741,7 +3741,7 @@ TSHttpHdrParseResp(TSHttpParser parser, TSMBuffer bufp, TSMLoc obj, const char *
   HTTPHdr h;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
   TSHttpHdrTypeSet(bufp, obj, TS_HTTP_TYPE_RESPONSE);
   return (TSParseResult)h.parse_resp((HTTPParser *)parser, start, end, false);
 }
@@ -3755,7 +3755,7 @@ TSHttpHdrLengthGet(TSMBuffer bufp, TSMLoc obj)
   HTTPHdr h;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
   return h.length_get();
 }
 
@@ -3768,7 +3768,7 @@ TSHttpHdrTypeGet(TSMBuffer bufp, TSMLoc obj)
   HTTPHdr h;
   SET_HTTP_HDR(h, bufp, obj);
   /* Don't need the assert as the check is done in sdk_sanity_check_http_hdr_handle
-     ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+     ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
    */
   return (TSHttpType)h.type_get();
 }
@@ -3791,7 +3791,7 @@ TSHttpHdrTypeSet(TSMBuffer bufp, TSMLoc obj, TSHttpType type)
   HTTPHdr h;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
 
   // FIX: why are we using an HTTPHdr here?  why can't we
   //      just manipulate the impls directly?
@@ -3843,7 +3843,7 @@ TSHttpHdrVersionSet(TSMBuffer bufp, TSMLoc obj, int ver)
   HTTPVersion version(ver);
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
 
   h.version_set(version);
   return TS_SUCCESS;
@@ -3935,7 +3935,7 @@ TSHttpHdrUrlSet(TSMBuffer bufp, TSMLoc obj, TSMLoc url)
   HdrHeap *heap   = ((HdrHeapSDKHandle *)bufp)->m_heap;
   HTTPHdrImpl *hh = (HTTPHdrImpl *)obj;
 
-  if (hh->m_type != HDR_HEAP_OBJ_HTTP_HEADER) {
+  if (hh->m_type != HdrHeapObjType::HTTP_HEADER) {
     return TS_ERROR;
   }
 
@@ -3973,7 +3973,7 @@ TSHttpHdrStatusSet(TSMBuffer bufp, TSMLoc obj, TSHttpStatus status)
   HTTPHdr h;
 
   SET_HTTP_HDR(h, bufp, obj);
-  ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+  ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
   h.status_set((HTTPStatus)status);
   return TS_SUCCESS;
 }
@@ -4010,7 +4010,7 @@ TSHttpHdrReasonSet(TSMBuffer bufp, TSMLoc obj, const char *value, int length)
 
   SET_HTTP_HDR(h, bufp, obj);
   /* Don't need the assert as the check is done in sdk_sanity_check_http_hdr_handle
-     ink_assert(h.m_http->m_type == HDR_HEAP_OBJ_HTTP_HEADER);
+     ink_assert(h.m_http->m_type == HdrHeapObjType::HTTP_HEADER);
   */
 
   if (length < 0) {

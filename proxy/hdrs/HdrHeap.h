@@ -62,21 +62,21 @@
 class CoreUtils;
 class IOBufferBlock;
 
-enum {
-  HDR_HEAP_OBJ_EMPTY            = 0,
-  HDR_HEAP_OBJ_RAW              = 1,
-  HDR_HEAP_OBJ_URL              = 2,
-  HDR_HEAP_OBJ_HTTP_HEADER      = 3,
-  HDR_HEAP_OBJ_MIME_HEADER      = 4,
-  HDR_HEAP_OBJ_FIELD_BLOCK      = 5,
-  HDR_HEAP_OBJ_FIELD_STANDALONE = 6, // not a type that lives in HdrHeaps
-  HDR_HEAP_OBJ_FIELD_SDK_HANDLE = 7, // not a type that lives in HdrHeaps
-
-  HDR_HEAP_OBJ_MAGIC = 0x0FEEB1E0
+enum class HdrHeapObjType : uint8_t {
+  EMPTY            = 0,
+  RAW              = 1,
+  URL              = 2,
+  HTTP_HEADER      = 3,
+  MIME_HEADER      = 4,
+  FIELD_BLOCK      = 5,
+  FIELD_STANDALONE = 6, // not a type that lives in HdrHeaps
+  FIELD_SDK_HANDLE = 7, // not a type that lives in HdrHeaps
 };
 
+static constexpr uint32_t HDR_HEAP_OBJ_MAGIC = 0x0FEEB1E0;
+
 struct HdrHeapObjImpl {
-  uint32_t m_type : 8;
+  HdrHeapObjType m_type : 8;
   uint32_t m_length : 20;
   uint32_t m_obj_flags : 4;
 };
@@ -120,7 +120,7 @@ obj_copy(HdrHeapObjImpl *s_obj, char *d_addr)
 }
 
 inline void
-obj_init_header(HdrHeapObjImpl *obj, uint32_t type, uint32_t nbytes, uint32_t obj_flags)
+obj_init_header(HdrHeapObjImpl *obj, HdrHeapObjType type, uint32_t nbytes, uint32_t obj_flags)
 {
   obj->m_type      = type;
   obj->m_length    = nbytes;
@@ -180,7 +180,7 @@ public:
   inkcoreapi void destroy();
 
   // PtrHeap allocation
-  HdrHeapObjImpl *allocate_obj(int nbytes, int type);
+  HdrHeapObjImpl *allocate_obj(int nbytes, HdrHeapObjType type);
   void deallocate_obj(HdrHeapObjImpl *obj);
 
   // StrHeap allocation
@@ -192,7 +192,7 @@ public:
   // Marshalling
   inkcoreapi int marshal_length();
   inkcoreapi int marshal(char *buf, int length);
-  int unmarshal(int buf_length, int obj_type, HdrHeapObjImpl **found_obj, RefCountObj *block_ref);
+  int unmarshal(int buf_length, HdrHeapObjType obj_type, HdrHeapObjImpl **found_obj, RefCountObj *block_ref);
   /// Computes the valid data size of an unmarshalled instance.
   /// Callers should round up to HDR_PTR_SIZE to get the actual footprint.
   int unmarshal_size() const; // TBD - change this name, it's confusing.

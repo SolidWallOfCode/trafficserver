@@ -294,7 +294,7 @@ http_hdr_create(HdrHeap *heap, HTTPType polarity)
 {
   HTTPHdrImpl *hh;
 
-  hh = (HTTPHdrImpl *)heap->allocate_obj(sizeof(HTTPHdrImpl), HDR_HEAP_OBJ_HTTP_HEADER);
+  hh = (HTTPHdrImpl *)heap->allocate_obj(sizeof(HTTPHdrImpl), HdrHeapObjType::HTTP_HEADER);
   http_hdr_init(heap, hh, polarity);
   return (hh);
 }
@@ -1780,7 +1780,7 @@ HTTPHdr::unmarshal(char *buf, int len, RefCountObj *block_ref)
 {
   m_heap = (HdrHeap *)buf;
 
-  int res = m_heap->unmarshal(len, HDR_HEAP_OBJ_HTTP_HEADER, (HdrHeapObjImpl **)&m_http, block_ref);
+  int res = m_heap->unmarshal(len, HdrHeapObjType::HTTP_HEADER, reinterpret_cast<HdrHeapObjImpl **>(&m_http), block_ref);
 
   if (res > 0) {
     m_mime = m_http->m_fields_impl;
@@ -2125,7 +2125,7 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
   HTTPHdrImpl *hh = nullptr;
   int tmp;
   if (heap != nullptr) {
-    tmp = heap->unmarshal(len, HDR_HEAP_OBJ_HTTP_HEADER, (HdrHeapObjImpl **)&hh, block_ref);
+    tmp = heap->unmarshal(len, HdrHeapObjType::HTTP_HEADER, reinterpret_cast<HdrHeapObjImpl **>(&hh), block_ref);
     if (hh == nullptr || tmp < 0) {
       ink_assert(!"HTTPInfo::request unmarshal failed");
       return -1;
@@ -2139,7 +2139,7 @@ HTTPInfo::unmarshal(char *buf, int len, RefCountObj *block_ref)
 
   heap = (HdrHeap *)(alt->m_response_hdr.m_heap ? (buf + (intptr_t)alt->m_response_hdr.m_heap) : nullptr);
   if (heap != nullptr) {
-    tmp = heap->unmarshal(len, HDR_HEAP_OBJ_HTTP_HEADER, (HdrHeapObjImpl **)&hh, block_ref);
+    tmp = heap->unmarshal(len, HdrHeapObjType::HTTP_HEADER, reinterpret_cast<HdrHeapObjImpl **>(&hh), block_ref);
     if (hh == nullptr || tmp < 0) {
       ink_assert(!"HTTPInfo::response unmarshal failed");
       return -1;
