@@ -52,6 +52,7 @@
 #include "ProxyConfig.h"
 #include "records/P_RecProcess.h"
 #include "HttpConnectionCount.h"
+#include "cache/I_CacheDefs.h"
 
 static const unsigned HTTP_STATUS_NUMBER = 600;
 using HttpStatusBitset                   = std::bitset<HTTP_STATUS_NUMBER>;
@@ -463,14 +464,6 @@ struct OverridableHttpConfigParams {
       insert_squid_x_forwarded_for(1),
       insert_forwarded(HttpForwarded::OptionBitSet()),
       send_http11_requests(1),
-      cache_http(1),
-      cache_ignore_client_no_cache(1),
-      cache_ignore_client_cc_max_age(0),
-      cache_ims_on_client_no_cache(1),
-      cache_ignore_server_no_cache(0),
-      cache_responses_to_cookies(1),
-      cache_ignore_auth(0),
-      cache_urls_that_look_dynamic(1),
       cache_required_headers(2),
       cache_range_lookup(1),
       cache_range_write(0),

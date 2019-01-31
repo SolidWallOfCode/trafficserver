@@ -138,3 +138,30 @@ struct HttpCacheKey {
    word(2) - tag (lower bits), hosttable hash (upper bits)
    word(3) - ram cache hash, lookaside cache
  */
+
+struct CacheRuntimeConfig {
+  /// Enable the HTTP cache.
+  bool enable_cache = true;
+  /// Cache even if client say "no-cache".
+  bool cache_ignore_client_no_cache = true;
+  bool cache_ignore_client_cc_max_age = false;
+  bool cache_ims_on_client_no_cache = true;
+  bool cache_ignore_server_no_cache = false;
+  bool cache_responses_to_cookies = true;
+  bool cache_ignore_auth = false;
+  bool cache_urls_that_look_dynamic = true;
+  CacheRequiredHeaderAction cache_required_headers;
+  MgmtByte cache_range_lookup;
+  MgmtByte cache_range_write;
+  MgmtByte allow_multi_range;
+
+  MgmtByte cache_enable_default_vary_headers;
+
+  MgmtByte ignore_accept_mismatch;
+  MgmtByte ignore_accept_language_mismatch;
+  MgmtByte ignore_accept_encoding_mismatch;
+  MgmtByte ignore_accept_charset_mismatch;
+
+  MgmtByte insert_request_via_string;
+  MgmtByte insert_response_via_string;
+};
