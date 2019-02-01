@@ -953,6 +953,42 @@ load_negative_caching_var(RecRecord const *r, void *cookie)
   set_negative_caching_list(r->name, r->data_type, r->data, c, false);
 }
 
+/** Handle updates for an enum.
+ *
+ * @tparam E Enum type.
+ * @tparam V_MIN Minimum value that is valid.
+ * @tparam V_MAX Maximum value that is valid.
+ * @param item The item to update.
+ * @param name Configuration variable name.
+ *
+ * This will also trigger the callback to update the variable.
+ */
+template <typename E, E V_MIN = 0, E V_MAX = MAXINT>
+void
+EstablishUpdateConfigEnum(E &item, std::string_view name)
+{
+  static constexpr auto cb = [](char const *name, RecDataT type, RecData data, void *cookie) -> int {
+    if (RECD_INT == type) {
+      auto ev = static_cast<E>(data.rec_int);
+      if (V_MIN <= ev && ev <= V_MAX) {
+        *static_cast<E *>(cookie) = ev;
+        return REC_ERR_OKAY;
+      } else {
+        Warning("'%s' set to value [%ld] out of range [%d..%d]", name, data.rec_int, static_cast<int>(V_MIN),
+                static_cast<int>(V_MAX));
+      }
+    } else {
+      Warning("'%s' set to incorrect type [%d], should be [%d] (RECD_INT)", name, type, RECD_INT);
+    }
+    return REC_ERR_FAIL;
+  };
+  RecRegisterConfigUpdateCb(name.data(), cb, &item);
+
+  // Trigger the updated using the data in the config, which will do the initial value set.
+  static constexpr auto updater = [](RecRecord const *r, void *cookie) -> void { cb(r->name, r->data_type, r->data, cookie); };
+  RecLookupRecord(name.data(), updater, &item, true);
+}
+
 ////////////////////////////////////////////////////////////////
 //
 //  HttpConfig::startup()
@@ -1158,7 +1194,8 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.oride.cache_open_write_fail_action, "proxy.config.http.cache.open_write_fail_action");
 
   HttpEstablishStaticConfigByte(c.oride.cache_when_to_revalidate, "proxy.config.http.cache.when_to_revalidate");
-  HttpEstablishStaticConfigByte(c.oride.cache_required_headers, "proxy.config.http.cache.required_headers");
+  EstablishUpdateConfigEnum<CacheRequiredHeaders, CacheRequiredHeaders::NONE, CacheRequiredHeaders::CACHE_CONTROL>(
+    c.oride.cache_required_headers, "proxy.config.http.cache.required_headers");
   HttpEstablishStaticConfigByte(c.oride.cache_range_lookup, "proxy.config.http.cache.range.lookup");
   HttpEstablishStaticConfigByte(c.oride.cache_range_write, "proxy.config.http.cache.range.write");
 

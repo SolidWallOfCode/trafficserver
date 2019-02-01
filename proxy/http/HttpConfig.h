@@ -431,6 +431,13 @@ static std::map<std::string, Action> action_map = {
 };
 } // namespace RedirectEnabled
 
+/// Which headers are required in a response to be valid for the cache.
+enum class CacheRequiredHeaders {
+  NONE          = 0, ///< No headers are required.
+  LAST_MODIFIED = 1, ///< Must have 'LastModified'
+  CACHE_CONTROL = 2  ///< Must have values in 'CacheControl'
+};
+
 /////////////////////////////////////////////////////////////
 // This is a little helper class, used by the HttpConfigParams
 // and State (txn) structure. It allows for certain configs
@@ -471,7 +478,6 @@ struct OverridableHttpConfigParams {
       cache_responses_to_cookies(1),
       cache_ignore_auth(0),
       cache_urls_that_look_dynamic(1),
-      cache_required_headers(2),
       cache_range_lookup(1),
       cache_range_write(0),
       allow_multi_range(0),
@@ -628,7 +634,7 @@ struct OverridableHttpConfigParams {
   MgmtByte cache_responses_to_cookies;
   MgmtByte cache_ignore_auth;
   MgmtByte cache_urls_that_look_dynamic;
-  MgmtByte cache_required_headers;
+  CacheRequiredHeaders cache_required_headers = CacheRequiredHeaders::CACHE_CONTROL;
   MgmtByte cache_range_lookup;
   MgmtByte cache_range_write;
   MgmtByte allow_multi_range;
@@ -819,12 +825,6 @@ struct HttpConfigParams : public ConfigInfo {
 public:
   HttpConfigParams();
   ~HttpConfigParams() override;
-
-  enum {
-    CACHE_REQUIRED_HEADERS_NONE                   = 0,
-    CACHE_REQUIRED_HEADERS_AT_LEAST_LAST_MODIFIED = 1,
-    CACHE_REQUIRED_HEADERS_CACHE_CONTROL          = 2
-  };
 
   enum {
     SEND_HTTP11_NEVER                    = 0,
