@@ -25,12 +25,16 @@
 #include <records/I_RecHttp.h>
 #include "tscore/ink_defs.h"
 #include "tscore/TextBuffer.h"
-#include "tscore/Tokenizer.h"
 #include <strings.h>
 #include "tscore/ink_inet.h"
 #include <string_view>
 #include <unordered_set>
 #include <tscore/IpMapConf.h>
+#include <tscpp/util/TextView.h>
+#include <tscore/BufferWriter.h>
+
+using ts::TextView;
+using namespace std::literals;
 
 SessionProtocolNameRegistry globalSessionProtocolNameRegistry;
 
@@ -72,6 +76,32 @@ SessionProtocolSet HTTP2_PROTOCOL_SET;
 SessionProtocolSet DEFAULT_NON_TLS_SESSION_PROTOCOL_SET;
 SessionProtocolSet DEFAULT_TLS_SESSION_PROTOCOL_SET;
 
+namespace
+{
+template <typename... Args>
+void
+BW_Warning(TextView format, Args &&... args)
+{
+  std::string text;
+  bwprint(text, format, args...);
+  Warning("%s", text.c_str());
+}
+
+bool
+Validate_Prefix(TextView &token, TextView const &prefix)
+{
+  if (prefix.isNoCasePrefixOf(token)) {
+    token.remove_prefix(prefix.size());
+    if ('-' == *token || '=' == *token) {
+      ++token;
+    }
+    return true;
+  }
+  return false;
+}
+
+} // namespace
+
 static bool
 mptcp_supported()
 {
@@ -91,14 +121,17 @@ mptcp_supported()
 void
 RecHttpLoadIp(const char *value_name, IpAddr &ip4, IpAddr &ip6)
 {
-  char value[1024];
+  std::string value;
   ip4.invalidate();
   ip6.invalidate();
-  if (REC_ERR_OKAY == RecGetRecordString(value_name, value, sizeof(value))) {
-    Tokenizer tokens(", ");
-    int n_addrs = tokens.Initialize(value);
-    for (int i = 0; i < n_addrs; ++i) {
-      const char *host = tokens[i];
+  if (REC_ERR_OKAY == RecGetRecordString(std::string_view{value_name}, value)) {
+    TextView text{value};
+    while (text) {
+      auto host = text.take_prefix_at(", "sv).trim_if(&isspace);
+      if (host.empty()) {
+        continue;
+      }
+
       IpEndpoint tmp4, tmp6;
       // For backwards compatibility we need to support the use of host names
       // for the address to bind.
@@ -107,18 +140,18 @@ RecHttpLoadIp(const char *value_name, IpAddr &ip4, IpAddr &ip6)
           if (!ip4.isValid()) {
             ip4 = tmp4;
           } else {
-            Warning("'%s' specifies more than one IPv4 address, ignoring %s.", value_name, host);
+            BW_Warning("'{}' specifies more than one IPv4 address, ignoring '{}'.", value_name, host);
           }
         }
         if (ats_is_ip6(&tmp6)) {
           if (!ip6.isValid()) {
             ip6 = tmp6;
           } else {
-            Warning("'%s' specifies more than one IPv6 address, ignoring %s.", value_name, host);
+            BW_Warning("'{}' specifies more than one IPv6 address, ignoring '{}'", value_name, host);
           }
         }
       } else {
-        Warning("'%s' has an value '%s' that is not recognized as an IP address, ignored.", value_name, host);
+        BW_Warning("'{}' has an value '{}' that is not recognized as an IP address, ignored.", value_name, host);
       }
     }
   }
@@ -127,20 +160,21 @@ RecHttpLoadIp(const char *value_name, IpAddr &ip4, IpAddr &ip6)
 void
 RecHttpLoadIpMap(const char *value_name, IpMap &ipmap)
 {
-  char value[1024];
+  std::string value;
   IpAddr laddr;
   IpAddr raddr;
   void *payload = nullptr;
 
-  if (REC_ERR_OKAY == RecGetRecordString(value_name, value, sizeof(value))) {
-    Debug("config", "RecHttpLoadIpMap: parsing the name [%s] and value [%s] to an IpMap", value_name, value);
-    Tokenizer tokens(", ");
-    int n_addrs = tokens.Initialize(value);
-    for (int i = 0; i < n_addrs; ++i) {
-      const char *val = tokens[i];
-
-      Debug("config", "RecHttpLoadIpMap: marking the value [%s] to an IpMap entry", val);
-      if (0 == ats_ip_range_parse(val, laddr, raddr)) {
+  if (REC_ERR_OKAY == RecGetRecordString(std::string_view{value_name}, value)) {
+    Debug("config", "RecHttpLoadIpMap: parsing the name [%s] and value [%s] to an IpMap", value_name, value.c_str());
+    TextView text{value};
+    while (text) {
+      auto token{text.take_prefix_at(", "sv)};
+      if (token.trim_if(&isspace).empty()) {
+        continue;
+      }
+      Debug("config", "RecHttpLoadIpMap: marking the value [%.*s] to an IpMap entry", static_cast<int>(token.size()), token.data());
+      if (0 == ats_ip_range_parse(token, laddr, raddr)) {
         ipmap.fill(laddr, raddr, payload);
       }
     }
@@ -148,19 +182,9 @@ RecHttpLoadIpMap(const char *value_name, IpMap &ipmap)
   Debug("config", "RecHttpLoadIpMap: parsed %zu IpMap entries", ipmap.count());
 }
 
-const char *const HttpProxyPort::DEFAULT_VALUE = "8080";
-
-const char *const HttpProxyPort::PORTS_CONFIG_NAME = "proxy.config.http.server_ports";
-
 // "_PREFIX" means the option contains additional data.
 // Each has a corresponding _LEN value that is the length of the option text.
 // Options without _PREFIX are just flags with no additional data.
-
-const char *const HttpProxyPort::OPT_FD_PREFIX          = "fd";
-const char *const HttpProxyPort::OPT_OUTBOUND_IP_PREFIX = "ip-out";
-const char *const HttpProxyPort::OPT_INBOUND_IP_PREFIX  = "ip-in";
-const char *const HttpProxyPort::OPT_HOST_RES_PREFIX    = "ip-resolve";
-const char *const HttpProxyPort::OPT_PROTO_PREFIX       = "proto";
 
 const char *const HttpProxyPort::OPT_IPV6                    = "ipv6";
 const char *const HttpProxyPort::OPT_IPV4                    = "ipv4";
@@ -172,19 +196,7 @@ const char *const HttpProxyPort::OPT_SSL                     = "ssl";
 const char *const HttpProxyPort::OPT_PROXY_PROTO             = "pp";
 const char *const HttpProxyPort::OPT_PLUGIN                  = "plugin";
 const char *const HttpProxyPort::OPT_BLIND_TUNNEL            = "blind";
-const char *const HttpProxyPort::OPT_COMPRESSED              = "compressed";
 const char *const HttpProxyPort::OPT_MPTCP                   = "mptcp";
-
-// File local constants.
-namespace
-{
-// Length values for _PREFIX options.
-size_t const OPT_FD_PREFIX_LEN          = strlen(HttpProxyPort::OPT_FD_PREFIX);
-size_t const OPT_OUTBOUND_IP_PREFIX_LEN = strlen(HttpProxyPort::OPT_OUTBOUND_IP_PREFIX);
-size_t const OPT_INBOUND_IP_PREFIX_LEN  = strlen(HttpProxyPort::OPT_INBOUND_IP_PREFIX);
-size_t const OPT_HOST_RES_PREFIX_LEN    = strlen(HttpProxyPort::OPT_HOST_RES_PREFIX);
-size_t const OPT_PROTO_PREFIX_LEN       = strlen(HttpProxyPort::OPT_PROTO_PREFIX);
-} // namespace
 
 namespace
 {
@@ -212,10 +224,10 @@ HttpProxyPort::hasSSL(Group const &ports)
 const HttpProxyPort *
 HttpProxyPort::findHttp(Group const &ports, uint16_t family)
 {
-  bool check_family_p = ats_is_ip(family);
-  const self *zret    = nullptr;
+  bool check_family_p   = ats_is_ip(family);
+  const self_type *zret = nullptr;
   for (int i = 0, n = ports.size(); i < n && !zret; ++i) {
-    const self &p = ports[i];
+    const self_type &p = ports[i];
     if (p.m_port &&                               // has a valid port
         TRANSPORT_DEFAULT == p.m_type &&          // is normal HTTP
         (!check_family_p || p.m_family == family) // right address family
@@ -241,16 +253,13 @@ HttpProxyPort::checkPrefix(const char *src, char const *prefix, size_t prefix_le
 }
 
 bool
-HttpProxyPort::loadConfig(std::vector<self> &entries)
+HttpProxyPort::loadConfig(std::vector<self_type> &entries)
 {
-  char *text;
-  bool found_p;
+  std::string text;
 
-  text = REC_readString(PORTS_CONFIG_NAME, &found_p);
-  if (found_p) {
-    self::loadValue(entries, text);
+  if (REC_ERR_OKAY == RecGetRecordString(PORTS_CONFIG_NAME, text)) {
+    self_type::loadValue(entries, text);
   }
-  ats_free(text);
 
   return 0 < entries.size();
 }
@@ -259,165 +268,168 @@ bool
 HttpProxyPort::loadDefaultIfEmpty(Group &ports)
 {
   if (0 == ports.size()) {
-    self::loadValue(ports, DEFAULT_VALUE);
+    self_type::loadValue(ports, DEFAULT_VALUE);
   }
 
   return 0 < ports.size();
 }
 
 bool
-HttpProxyPort::loadValue(std::vector<self> &ports, const char *text)
+HttpProxyPort::loadValue(std::vector<self_type> &ports, TextView text)
 {
   unsigned old_port_length = ports.size(); // remember this.
-  if (text && *text) {
-    Tokenizer tokens(", ");
-    int n_ports = tokens.Initialize(text);
-    if (n_ports > 0) {
-      for (int p = 0; p < n_ports; ++p) {
-        const char *elt = tokens[p];
-        HttpProxyPort entry;
-        if (entry.processOptions(elt)) {
-          ports.push_back(entry);
-        } else {
-          Warning("No valid definition was found in proxy port configuration element '%s'", elt);
-        }
-      }
+  while (text) {
+    auto token = text.take_prefix_at(", ");
+    HttpProxyPort entry;
+    if (entry.processOptions(token)) {
+      ports.push_back(entry);
+    } else {
+      Warning("No valid definition was found in proxy port configuration element '%.*s'", static_cast<int>(text.size()),
+              text.data());
     }
   }
   return ports.size() > old_port_length; // we added at least one port.
 }
 
 bool
-HttpProxyPort::processOptions(const char *opts)
+HttpProxyPort::processOptions(TextView opts)
 {
   bool zret           = false; // found a port?
   bool af_set_p       = false; // AF explicitly specified?
   bool host_res_set_p = false; // Host resolution order set explicitly?
   bool sp_set_p       = false; // Session protocol set explicitly?
-  bool bracket_p      = false; // found an open bracket in the input?
-  const char *value;           // Temp holder for value of a prefix option.
   IpAddr ip;                   // temp for loading IP addresses.
-  std::vector<char *> values;  // Pointers to single option values.
 
-  // Make a copy we can modify safely.
-  size_t opts_len = strlen(opts) + 1;
-  char *text      = static_cast<char *>(alloca(opts_len));
-  memcpy(text, opts, opts_len);
-
-  // Split the copy in to tokens.
-  char *token = nullptr;
-  for (char *spot = text; *spot; ++spot) {
-    if (bracket_p) {
-      if (']' == *spot) {
-        bracket_p = false;
-      }
-    } else if (':' == *spot) {
-      *spot = 0;
-      token = nullptr;
-    } else {
-      if (!token) {
-        token = spot;
-        values.push_back(token);
-      }
-      if ('[' == *spot) {
-        bracket_p = true;
+  auto text{opts};
+  while (text) {
+    TextView::size_type offset = 0;
+    bool bracket_p             = false;
+    while (offset < text.size()) {
+      offset = text.find_first_of("[:]"sv, offset); // next character of interest.
+      if (TextView::npos == offset) {
+        if (bracket_p) {
+          BW_Warning("Invalid port descriptor '{}' - left bracket without closing right bracket", opts);
+          return zret;
+        }
+        break;
+      } else if ('[' == text[offset]) {
+        if (bracket_p) {
+          BW_Warning("Invalid port descriptor '{}' - left bracket after left bracket without right bracket", opts);
+          return zret;
+        } else {
+          bracket_p = true;
+          ++offset;
+        }
+      } else if (']' == text[offset]) {
+        if (bracket_p) {
+          bracket_p = false;
+          ++offset;
+        } else {
+          BW_Warning("Invalid port descriptor {}' - right bracket without opent left bracket", opts);
+          return zret;
+        }
+      } else if (':' == text[offset]) {
+        if (bracket_p) {
+          ++offset;
+        } else {
+          break;
+        }
       }
     }
-  }
-  if (bracket_p) {
-    Warning("Invalid port descriptor '%s' - left bracket without closing right bracket", opts);
-    return zret;
-  }
+    TextView token{text.take_prefix_at(offset)};
+    if (token.empty()) {
+      continue;
+    }
 
-  for (auto item : values) {
-    if (isdigit(item[0])) { // leading digit -> port value
-      char *ptr;
-      int port = strtoul(item, &ptr, 10);
-      if (ptr == item) {
+    TextView value{token}; // updated by option prefix check, @a token remains the parsed token.
+
+    if (isdigit(token[0])) { // leading digit -> port value
+      TextView port_text{token};
+      auto port = ts::svto_radix<10>(port_text);
+      if (!port_text.empty()) {
         // really, this shouldn't happen, since we checked for a leading digit.
-        Warning("Mangled port value '%s' in port configuration '%s'", item, opts);
+        BW_Warning("Mangled port value '{}' in port configuration '{}'", token, opts);
       } else if (port <= 0 || 65536 <= port) {
-        Warning("Port value '%s' out of range (1..65535) in port configuration '%s'", item, opts);
+        BW_Warning("Port value '{}' out of range (1..65535) in port configuration '{}'", token, opts);
       } else {
-        m_port = port;
+        m_port = static_cast<in_port_t>(port);
         zret   = true;
       }
-    } else if (nullptr != (value = this->checkPrefix(item, OPT_FD_PREFIX, OPT_FD_PREFIX_LEN))) {
-      char *ptr; // tmp for syntax check.
-      int fd = strtoul(value, &ptr, 10);
-      if (ptr == value) {
-        Warning("Mangled file descriptor value '%s' in port descriptor '%s'", item, opts);
+    } else if (Validate_Prefix(value, OPT_FD_PREFIX)) {
+      int fd = ts::svto_radix<10>(value);
+      if (!value.empty()) {
+        BW_Warning("Mangled file descriptor value '{}' in port descriptor '{}'", token, opts);
       } else {
         m_fd = fd;
         zret = true;
       }
-    } else if (nullptr != (value = this->checkPrefix(item, OPT_INBOUND_IP_PREFIX, OPT_INBOUND_IP_PREFIX_LEN))) {
+    } else if (Validate_Prefix(value, OPT_INBOUND_IP_PREFIX)) {
       if (0 == ip.load(value)) {
         m_inbound_ip = ip;
       } else {
-        Warning("Invalid IP address value '%s' in port descriptor '%s'", item, opts);
+        BW_Warning("Invalid IP address value '{}' in port descriptor '{}'", token, opts);
       }
-    } else if (nullptr != (value = this->checkPrefix(item, OPT_OUTBOUND_IP_PREFIX, OPT_OUTBOUND_IP_PREFIX_LEN))) {
+    } else if (Validate_Prefix(value, OPT_OUTBOUND_IP_PREFIX)) {
       if (0 == ip.load(value)) {
         this->outboundIp(ip.family()) = ip;
       } else {
-        Warning("Invalid IP address value '%s' in port descriptor '%s'", item, opts);
+        BW_Warning("Invalid IP address value '{}' in port descriptor '{}'", token, opts);
       }
-    } else if (0 == strcasecmp(OPT_COMPRESSED, item)) {
+    } else if (0 == strcasecmp(OPT_COMPRESSED, value)) {
       m_type = TRANSPORT_COMPRESSED;
-    } else if (0 == strcasecmp(OPT_BLIND_TUNNEL, item)) {
+    } else if (0 == strcasecmp(OPT_BLIND_TUNNEL, value)) {
       m_type = TRANSPORT_BLIND_TUNNEL;
-    } else if (0 == strcasecmp(OPT_IPV6, item)) {
+    } else if (0 == strcasecmp(OPT_IPV6, value)) {
       m_family = AF_INET6;
       af_set_p = true;
-    } else if (0 == strcasecmp(OPT_IPV4, item)) {
+    } else if (0 == strcasecmp(OPT_IPV4, token)) {
       m_family = AF_INET;
       af_set_p = true;
-    } else if (0 == strcasecmp(OPT_SSL, item)) {
+    } else if (0 == strcasecmp(OPT_SSL, token)) {
       m_type = TRANSPORT_SSL;
-    } else if (0 == strcasecmp(OPT_PLUGIN, item)) {
+    } else if (0 == strcasecmp(OPT_PLUGIN, token)) {
       m_type = TRANSPORT_PLUGIN;
-    } else if (0 == strcasecmp(OPT_PROXY_PROTO, item)) {
+    } else if (0 == strcasecmp(OPT_PROXY_PROTO, token)) {
       m_proxy_protocol = true;
-    } else if (0 == strcasecmp(OPT_TRANSPARENT_INBOUND, item)) {
+    } else if (0 == strcasecmp(OPT_TRANSPARENT_INBOUND, token)) {
 #if TS_USE_TPROXY
       m_inbound_transparent_p = true;
 #else
-      Warning("Transparency requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
+      BW_Warning("Transparency requested [{}] in port descriptor '{}' but TPROXY was not configured.", token, opts);
 #endif
-    } else if (0 == strcasecmp(OPT_TRANSPARENT_OUTBOUND, item)) {
+    } else if (0 == strcasecmp(OPT_TRANSPARENT_OUTBOUND, token)) {
 #if TS_USE_TPROXY
       m_outbound_transparent_p = true;
 #else
-      Warning("Transparency requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
+      BW_Warning("Transparency requested [{}] in port descriptor '{}' but TPROXY was not configured.", token, opts);
 #endif
-    } else if (0 == strcasecmp(OPT_TRANSPARENT_FULL, item)) {
+    } else if (0 == strcasecmp(OPT_TRANSPARENT_FULL, token)) {
 #if TS_USE_TPROXY
       m_inbound_transparent_p  = true;
       m_outbound_transparent_p = true;
 #else
-      Warning("Transparency requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
+      BW_Warning("Transparency requested [{}] in port descriptor '{}' but TPROXY was not configured.", token, opts);
 #endif
-    } else if (0 == strcasecmp(OPT_TRANSPARENT_PASSTHROUGH, item)) {
+    } else if (0 == strcasecmp(OPT_TRANSPARENT_PASSTHROUGH, token)) {
 #if TS_USE_TPROXY
       m_transparent_passthrough = true;
 #else
-      Warning("Transparent pass-through requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
+      BW_Warning("Transparent pass-through requested [{}] in port descriptor '{}' but TPROXY was not configured.", token, opts);
 #endif
-    } else if (0 == strcasecmp(OPT_MPTCP, item)) {
+    } else if (0 == strcasecmp(OPT_MPTCP, token)) {
       if (mptcp_supported()) {
         m_mptcp = true;
       } else {
-        Warning("Multipath TCP requested [%s] in port descriptor '%s' but it is not supported by this host.", item, opts);
+        BW_Warning("Multipath TCP requested [{}] in port descriptor '{}' but it is not supported by this host.", token, opts);
       }
-    } else if (nullptr != (value = this->checkPrefix(item, OPT_HOST_RES_PREFIX, OPT_HOST_RES_PREFIX_LEN))) {
+    } else if (Validate_Prefix(value, OPT_HOST_RES_PREFIX)) {
       this->processFamilyPreference(value);
       host_res_set_p = true;
-    } else if (nullptr != (value = this->checkPrefix(item, OPT_PROTO_PREFIX, OPT_PROTO_PREFIX_LEN))) {
+    } else if (Validate_Prefix(value, OPT_PROTO_PREFIX)) {
       this->processSessionProtocolPreference(value);
       sp_set_p = true;
     } else {
-      Warning("Invalid option '%s' in proxy port descriptor '%s'", item, opts);
+      BW_Warning("Invalid option '{}' in proxy port descriptor '{}'", token, opts);
     }
   }
 
@@ -425,11 +437,10 @@ HttpProxyPort::processOptions(const char *opts)
 
   if (af_set_p) {
     if (in_ip_set_p && m_family != m_inbound_ip.family()) {
-      std::string_view iname{ats_ip_family_name(m_inbound_ip.family())};
-      std::string_view fname{ats_ip_family_name(m_family)};
-      Warning("Invalid port descriptor '%s' - the inbound address family [%.*s] is not the same type as the explicit family value "
-              "[%.*s]",
-              opts, static_cast<int>(iname.size()), iname.data(), static_cast<int>(fname.size()), fname.data());
+      BW_Warning(
+        "Invalid port descriptor '{}' - the inbound address family [{:s:f}] is not the same type as the explicit family value "
+        "[{}]",
+        opts, m_inbound_ip, ats_ip_family_name(m_family));
       zret = false;
     }
   } else if (in_ip_set_p) {
@@ -440,9 +451,9 @@ HttpProxyPort::processOptions(const char *opts)
   if (m_outbound_transparent_p) {
     if (host_res_set_p &&
         (m_host_res_preference[0] != HOST_RES_PREFER_CLIENT || m_host_res_preference[1] != HOST_RES_PREFER_NONE)) {
-      Warning("Outbound transparent port '%s' requires the IP address resolution ordering '%s,%s'. "
-              "This is set automatically and does not need to be set explicitly.",
-              opts, HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_CLIENT], HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_NONE]);
+      BW_Warning("Outbound transparent port '{}' requires the IP address resolution ordering '{},{}'. "
+                 "This is set automatically and does not need to be set explicitly.",
+                 opts, HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_CLIENT], HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_NONE]);
     }
     m_host_res_preference[0] = HOST_RES_PREFER_CLIENT;
     m_host_res_preference[1] = HOST_RES_PREFER_NONE;
@@ -450,7 +461,8 @@ HttpProxyPort::processOptions(const char *opts)
 
   // Transparent pass-through requires tr-in
   if (m_transparent_passthrough && !m_inbound_transparent_p) {
-    Warning("Port descriptor '%s' has transparent pass-through enabled without inbound transparency, this will be ignored.", opts);
+    BW_Warning("Port descriptor '{}' has transparent pass-through enabled without inbound transparency, this will be ignored.",
+               opts);
     m_transparent_passthrough = false;
   }
 
@@ -463,140 +475,111 @@ HttpProxyPort::processOptions(const char *opts)
 }
 
 void
-HttpProxyPort::processFamilyPreference(const char *value)
+HttpProxyPort::processFamilyPreference(TextView const &value)
 {
   parse_host_res_preference(value, m_host_res_preference);
 }
 
 void
-HttpProxyPort::processSessionProtocolPreference(const char *value)
+HttpProxyPort::processSessionProtocolPreference(TextView const &value)
 {
   m_session_protocol_preference.markAllOut();
   globalSessionProtocolNameRegistry.markIn(value, m_session_protocol_preference);
 }
 
 void
-SessionProtocolNameRegistry::markIn(const char *value, SessionProtocolSet &sp_set)
+SessionProtocolNameRegistry::markIn(TextView value, SessionProtocolSet &sp_set)
 {
-  int n; // # of tokens
-  Tokenizer tokens(" ;|,:");
-
-  n = tokens.Initialize(value);
-
-  for (int i = 0; i < n; ++i) {
-    const char *elt = tokens[i];
-
+  while (value) {
+    auto token = value.take_prefix_at(" ;|,:"sv);
     /// Check special cases
-    if (0 == strcasecmp(elt, TS_ALPN_PROTOCOL_GROUP_HTTP)) {
+    if (0 == strcasecmp(token, TS_ALPN_PROTOCOL_GROUP_HTTP)) {
       sp_set.markIn(HTTP_PROTOCOL_SET);
-    } else if (0 == strcasecmp(elt, TS_ALPN_PROTOCOL_GROUP_HTTP2)) {
+    } else if (0 == strcasecmp(token, TS_ALPN_PROTOCOL_GROUP_HTTP2)) {
       sp_set.markIn(HTTP2_PROTOCOL_SET);
     } else { // user defined - register and mark.
-      int idx = globalSessionProtocolNameRegistry.toIndex(TextView{elt, strlen(elt)});
+      int idx = globalSessionProtocolNameRegistry.toIndex(token);
       sp_set.markIn(idx);
     }
   }
 }
 
-int
-HttpProxyPort::print(char *out, size_t n)
+ts::BufferWriter &
+HttpProxyPort::print(ts::BufferWriter &w) const
 {
-  size_t zret = 0; // # of chars printed so far.
-  ip_text_buffer ipb;
   bool need_colon_p = false;
 
   if (m_inbound_ip.isValid()) {
-    zret += snprintf(out + zret, n - zret, "%s=[%s]", OPT_INBOUND_IP_PREFIX, m_inbound_ip.toString(ipb, sizeof(ipb)));
+    w.print("{}=[{}]", OPT_INBOUND_IP_PREFIX, m_inbound_ip);
     need_colon_p = true;
-  }
-  if (zret >= n) {
-    return n;
   }
 
   if (m_outbound_ip4.isValid()) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      w.write(':');
     }
-    zret += snprintf(out + zret, n - zret, "%s=[%s]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip4.toString(ipb, sizeof(ipb)));
+    w.print("{}={}", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip4);
     need_colon_p = true;
-  }
-  if (zret >= n) {
-    return n;
   }
 
   if (m_outbound_ip6.isValid()) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      w.write(':');
     }
-    zret += snprintf(out + zret, n - zret, "%s=[%s]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip6.toString(ipb, sizeof(ipb)));
+    w.print("{}=[{}]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip6);
     need_colon_p = true;
-  }
-  if (zret >= n) {
-    return n;
   }
 
   if (0 != m_port) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      w.write(':');
     }
-    zret += snprintf(out + zret, n - zret, "%d", m_port);
+    w.print("{}", m_port);
     need_colon_p = true;
-  }
-  if (zret >= n) {
-    return n;
   }
 
   if (ts::NO_FD != m_fd) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      w.write(':');
     }
-    zret += snprintf(out + zret, n - zret, "fd=%d", m_fd);
-  }
-  if (zret >= n) {
-    return n;
+    w.print("{}={}", OPT_FD_PREFIX, m_fd);
   }
 
   // After this point, all of these options require other options which we've already
   // generated so all of them need a leading colon and we can stop checking for that.
 
   if (AF_INET6 == m_family) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_IPV6);
-  }
-  if (zret >= n) {
-    return n;
+    w.write(':').write(OPT_IPV6);
   }
 
   if (TRANSPORT_BLIND_TUNNEL == m_type) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_BLIND_TUNNEL);
+    w.write(':').write(OPT_BLIND_TUNNEL);
   } else if (TRANSPORT_SSL == m_type) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_SSL);
+    w.write(':').write(OPT_SSL);
   } else if (TRANSPORT_PLUGIN == m_type) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_PLUGIN);
+    w.write(':').write(OPT_PLUGIN);
   } else if (TRANSPORT_COMPRESSED == m_type) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_COMPRESSED);
-  }
-  if (zret >= n) {
-    return n;
+    w.write(':').write(OPT_COMPRESSED);
   }
 
   if (m_proxy_protocol) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_PROXY_PROTO);
+    w.write(':').write(OPT_PROXY_PROTO);
   }
 
   if (m_outbound_transparent_p && m_inbound_transparent_p) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_FULL);
+    w.write(':').write(OPT_TRANSPARENT_FULL);
   } else if (m_inbound_transparent_p) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_INBOUND);
+    w.write(':').write(OPT_TRANSPARENT_INBOUND);
   } else if (m_outbound_transparent_p) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_OUTBOUND);
+    w.write(':').write(OPT_TRANSPARENT_OUTBOUND);
   }
 
   if (m_mptcp) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_MPTCP);
+    w.write(':').write(OPT_MPTCP);
   }
 
   if (m_transparent_passthrough) {
-    zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_PASSTHROUGH);
+    w.write(':').write(OPT_TRANSPARENT_PASSTHROUGH);
   }
 
   /* Don't print the IP resolution preferences if the port is outbound
@@ -605,8 +588,7 @@ HttpProxyPort::print(char *out, size_t n)
    */
   if (!m_outbound_transparent_p &&
       0 != memcmp(m_host_res_preference, host_res_default_preference_order, sizeof(m_host_res_preference))) {
-    zret += snprintf(out + zret, n - zret, ":%s=", OPT_HOST_RES_PREFIX);
-    zret += ts_host_res_order_to_string(m_host_res_preference, out + zret, n - zret);
+    w.print(":{}={}", OPT_HOST_RES_PREFIX, m_host_res_preference);
   }
 
   // session protocol options - look for condensed options first
@@ -621,49 +603,50 @@ HttpProxyPort::print(char *out, size_t n)
 
   // pull out groups.
   if (sp_set.contains(HTTP_PROTOCOL_SET)) {
-    zret += snprintf(out + zret, n - zret, ":%s=%s", OPT_PROTO_PREFIX, TS_ALPN_PROTOCOL_GROUP_HTTP);
+    w.print(":{}={}", OPT_PROTO_PREFIX, TS_ALPN_PROTOCOL_GROUP_HTTP);
     sp_set.markOut(HTTP_PROTOCOL_SET);
     need_colon_p = false;
   }
   if (sp_set.contains(HTTP2_PROTOCOL_SET)) {
     if (need_colon_p) {
-      zret += snprintf(out + zret, n - zret, ":%s=", OPT_PROTO_PREFIX);
+      w.print(":{}=", OPT_PROTO_PREFIX);
     } else {
-      out[zret++] = ';';
+      w.write(';');
     }
-    zret += snprintf(out + zret, n - zret, "%s", TS_ALPN_PROTOCOL_GROUP_HTTP2);
+    w.write(TS_ALPN_PROTOCOL_GROUP_HTTP2);
     sp_set.markOut(HTTP2_PROTOCOL_SET);
     need_colon_p = false;
   }
   // now enumerate what's left.
   if (!sp_set.isEmpty()) {
     if (need_colon_p) {
-      zret += snprintf(out + zret, n - zret, ":%s=", OPT_PROTO_PREFIX);
+      w.print(":{}=", OPT_PROTO_PREFIX);
     }
     bool sep_p = !need_colon_p;
-    for (int k = 0; k < SessionProtocolSet::MAX; ++k) {
+    for (unsigned k = 0; k < SessionProtocolSet::MAX; ++k) {
       if (sp_set.contains(k)) {
-        auto name{globalSessionProtocolNameRegistry.nameFor(k)};
-        zret += snprintf(out + zret, n - zret, "%s%.*s", sep_p ? ";" : "", static_cast<int>(name.size()), name.data());
+        if (sep_p) {
+          w.write(';');
+        }
         sep_p = true;
+        w.print("{}", globalSessionProtocolNameRegistry.nameFor(k));
       }
     }
   }
 
-  return std::min(zret, n);
+  return w;
 }
 
 void
 ts_host_res_global_init()
 {
+  std::string value;
   // Global configuration values.
   memcpy(host_res_default_preference_order, HOST_RES_DEFAULT_PREFERENCE_ORDER, sizeof(host_res_default_preference_order));
 
-  char *ip_resolve = REC_ConfigReadString("proxy.config.hostdb.ip_resolve");
-  if (ip_resolve) {
-    parse_host_res_preference(ip_resolve, host_res_default_preference_order);
+  if (REC_ERR_OKAY == RecGetRecordString("proxy.config.hostdb.ip_resolve", value)) {
+    parse_host_res_preference(value, host_res_default_preference_order);
   }
-  ats_free(ip_resolve);
 }
 
 // Whatever executable uses librecords must call this.

@@ -910,7 +910,6 @@ LocalManager::startProxy(const char *onetime_options)
 
     // Pass down port/fd information to traffic_server if there are any open ports.
     if (std::any_of(m_proxy_ports.begin(), m_proxy_ports.end(), [](HttpProxyPort &p) { return ts::NO_FD != p.m_fd; })) {
-      char portbuf[128];
       bool need_comma_p = false;
 
       w.write("--httpport "sv);
@@ -920,8 +919,7 @@ LocalManager::startProxy(const char *onetime_options)
             w.write(',');
           }
           need_comma_p = true;
-          p.print(portbuf, sizeof(portbuf));
-          w.write(portbuf);
+          w.print("{}", p);
         }
       }
     }

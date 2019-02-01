@@ -537,14 +537,13 @@ IpAddr::cmp(self const &that) const
 }
 
 int
-ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
+ats_ip_getbestaddrinfo(std::string_view host, IpEndpoint *ip4, IpEndpoint *ip6)
 {
   int zret = -1;
   int port = 0; // port value to assign if we find an address.
   addrinfo ai_hints;
   addrinfo *ai_result;
   std::string_view addr_text, port_text;
-  std::string_view src(host, strlen(host) + 1);
 
   if (ip4) {
     ats_ip_invalidate(ip4);
@@ -553,7 +552,7 @@ ats_ip_getbestaddrinfo(const char *host, IpEndpoint *ip4, IpEndpoint *ip6)
     ats_ip_invalidate(ip6);
   }
 
-  if (0 == ats_ip_parse(src, &addr_text, &port_text)) {
+  if (0 == ats_ip_parse(host, &addr_text, &port_text)) {
     // Copy if not terminated.
     if (0 != addr_text[addr_text.size() - 1]) {
       char *tmp = static_cast<char *>(alloca(addr_text.size() + 1));

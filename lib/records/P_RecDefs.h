@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "I_RecDefs.h"
 
 #define REC_CONFIG_FILE "records.config"
@@ -100,21 +102,21 @@ struct RecConfigMeta {
 };
 
 struct RecRecord {
-  RecT rec_type;
-  const char *name;
-  RecDataT data_type;
-  RecData data;
-  RecData data_default;
+  RecT rec_type{RECT_NULL};
+  std::string name;
+  RecDataT data_type{RECD_NULL};
+  RecData data{0};
+  RecData data_default{0};
   RecMutex lock;
-  unsigned char sync_required;
-  uint32_t version;
-  bool registered;
+  unsigned char sync_required{0};
+  uint32_t version{0};
+  bool registered{false};
   union {
     RecStatMeta stat_meta;
     RecConfigMeta config_meta;
   };
-  int order;
-  int rsb_id;
+  int order{0};
+  int rsb_id{0};
 };
 
 //-------------------------------------------------------------------------

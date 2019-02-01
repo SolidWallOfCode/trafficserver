@@ -653,7 +653,7 @@ main(int argc, const char **argv)
               ts::bwf::OptionalAffix(bind_stderr, " "sv, "--bind_stderr "sv));
 
   if (proxy_port) {
-    HttpProxyPort::loadValue(lmgmt->m_proxy_ports, proxy_port);
+    HttpProxyPort::loadValue(lmgmt->m_proxy_ports, ts::TextView{proxy_port, strlen(proxy_port)});
   }
 
   lmgmt->initMgmtProcessServer(); /* Setup p-to-p process server */

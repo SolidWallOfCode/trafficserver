@@ -1874,7 +1874,8 @@ main(int /* argc ATS_UNUSED */, const char **argv)
     // Initialize HTTP/2
     Http2::init();
 
-    if (!HttpProxyPort::loadValue(http_accept_port_descriptor)) {
+    if (!http_accept_port_descriptor ||
+        !HttpProxyPort::loadValue({http_accept_port_descriptor, strlen(http_accept_port_descriptor)})) {
       HttpProxyPort::loadConfig();
     }
     HttpProxyPort::loadDefaultIfEmpty();

@@ -292,7 +292,7 @@ send_record_get_response(int fd, const RecRecord *rec)
   if (rec) {
     type   = rec->data_type;
     rclass = rec->rec_type;
-    name   = const_cast<MgmtMarshallString>(rec->name);
+    name   = const_cast<MgmtMarshallString>(rec->name.c_str());
   } else {
     type   = RECD_NULL;
     rclass = RECT_NULL;
@@ -893,7 +893,7 @@ send_record_describe(const RecRecord *rec, void *edata)
       return;
     }
 
-    rec_name       = const_cast<char *>(rec->name);
+    rec_name       = const_cast<char *>(rec->name.c_str());
     rec_type       = rec->data_type;
     rec_class      = rec->rec_type;
     rec_version    = rec->version;

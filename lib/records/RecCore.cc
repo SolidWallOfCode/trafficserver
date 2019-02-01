@@ -21,6 +21,8 @@
   limitations under the License.
  */
 
+#include <functional>
+
 #include "tscore/ink_platform.h"
 #include "tscore/ink_memory.h"
 #include "tscore/ink_string.h"
@@ -32,8 +34,14 @@
 
 static bool g_initialized = false;
 
-RecRecord *g_records = nullptr;
-std::unordered_map<std::string, RecRecord *> g_records_ht;
+std::array<RecRecord, REC_MAX_RECORDS> g_records;
+
+/** Global mapping of record names to values.
+ * @internal When placing items in this table, the key @b must be the name in the record.
+ * This is because the key is stored as a @c string_view and the pointer in that view must
+ * point to memory that has a life time at least that of the item.
+ */
+std::unordered_map<std::string_view, RecRecord *> g_records_ht;
 ink_rwlock g_records_rwlock;
 int g_num_records = 0;
 
@@ -41,7 +49,7 @@ int g_num_records = 0;
 // register_record
 //-------------------------------------------------------------------------
 static RecRecord *
-register_record(RecT rec_type, const char *name, RecDataT data_type, RecData data_default, RecPersistT persist_type,
+register_record(RecT rec_type, std::string_view name, RecDataT data_type, RecData data_default, RecPersistT persist_type,
                 bool *updated_p = nullptr)
 {
   RecRecord *r = nullptr;
@@ -86,7 +94,9 @@ register_record(RecT rec_type, const char *name, RecDataT data_type, RecData dat
     // Set the r->data to its default value as this is a new record
     RecDataSet(r->data_type, &(r->data), &(data_default));
     RecDataSet(r->data_type, &(r->data_default), &(data_default));
-    g_records_ht.emplace(name, r);
+    // Must use name in @a r so that the view points in to the record, not
+    // the memory in the argument @a name.
+    g_records_ht.emplace(r->name, r);
 
     if (REC_TYPE_IS_STAT(r->rec_type)) {
       r->stat_meta.persist_type = persist_type;
@@ -195,9 +205,6 @@ RecCoreInit(RecModeT mode_type, Diags *_diags)
   RecConfigFileInit();
 
   g_num_records = 0;
-
-  // initialize record array for our internal stats (this can be reallocated later)
-  g_records = (RecRecord *)ats_malloc(REC_MAX_RECORDS * sizeof(RecRecord));
 
   // initialize record rwlock
   ink_rwlock_init(&g_records_rwlock);
@@ -415,6 +422,33 @@ RecGetRecordString(const char *name, char *buf, int buf_len, bool lock)
 }
 
 RecErrT
+RecGetRecordString(std::string_view name, std::string &value, bool lock_p)
+{
+  RecErrT zret = REC_ERR_FAIL;
+  // Because the context exists only in this callstack, we can avoid allocation by putting the
+  // context data in a local tuple then passing the address of that tuple as the data for
+  // the callback. Must make sure @a zret is passed by reference in the tuple so it can be
+  // updates from the callback.
+  auto context = std::make_tuple(value, std::reference_wrapper(zret));
+
+  // @c RecLookupRecord does all of the lookup and locking, making this implementation simpler.
+  RecLookupRecord(name,
+                  [](RecRecord const *r, void *data) -> void {
+                    auto *ctx = static_cast<decltype(context) *>(data);
+                    if (r->registered && RECD_STRING == r->data_type) {
+                      if (r->data.rec_string) {
+                        std::get<0>(*ctx) = r->data.rec_string;
+                      } else {
+                        std::get<0>(*ctx).resize(0);
+                      }
+                      std::get<1>(*ctx) = REC_ERR_OKAY;
+                    };
+                  },
+                  &context, lock_p);
+  return zret;
+}
+
+RecErrT
 RecGetRecordString_Xmalloc(const char *name, RecString *rec_string, bool lock)
 {
   RecErrT err;
@@ -467,11 +501,11 @@ RecGetRecordBool(const char *name, RecBool *rec_bool, bool lock)
 //-------------------------------------------------------------------------
 
 RecErrT
-RecLookupRecord(const char *name, void (*callback)(const RecRecord *, void *), void *data, bool lock)
+RecLookupRecord(std::string_view name, RecLookupCallback callback, void *data, bool lock_p)
 {
   RecErrT err = REC_ERR_FAIL;
 
-  if (lock) {
+  if (lock_p) {
     ink_rwlock_rdlock(&g_records_rwlock);
   }
 
@@ -484,7 +518,32 @@ RecLookupRecord(const char *name, void (*callback)(const RecRecord *, void *), v
     rec_mutex_release(&(r->lock));
   }
 
-  if (lock) {
+  if (lock_p) {
+    ink_rwlock_unlock(&g_records_rwlock);
+  }
+
+  return err;
+}
+
+RecErrT
+RecLookupRecord(std::string_view name, std::function<void(RecRecord *)> const &callback, bool lock_p)
+{
+  RecErrT err = REC_ERR_FAIL;
+
+  if (lock_p) {
+    ink_rwlock_rdlock(&g_records_rwlock);
+  }
+
+  if (auto it = g_records_ht.find(name); it != g_records_ht.end()) {
+    RecRecord *r = it->second;
+
+    rec_mutex_acquire(&(r->lock));
+    callback(r);
+    err = REC_ERR_OKAY;
+    rec_mutex_release(&(r->lock));
+  }
+
+  if (lock_p) {
     ink_rwlock_unlock(&g_records_rwlock);
   }
 
@@ -509,7 +568,7 @@ RecLookupMatchingRecords(unsigned rec_type, const char *match, void (*callback)(
       continue;
     }
 
-    if (regex.match(r->name) < 0) {
+    if (regex.match(r->name.c_str()) < 0) {
       continue;
     }
 
@@ -576,7 +635,7 @@ RecGetRecordDataType(const char *name, RecDataT *data_type, bool lock)
 }
 
 RecErrT
-RecGetRecordPersistenceType(const char *name, RecPersistT *persist_type, bool lock)
+RecGetRecordPersistenceType(std::string_view name, RecPersistT *persist_type, bool lock)
 {
   RecErrT err = REC_ERR_FAIL;
 
@@ -853,7 +912,7 @@ RecGetRecordSource(const char *name, RecSourceT *source, bool lock)
 // RecRegisterStat
 //-------------------------------------------------------------------------
 RecRecord *
-RecRegisterStat(RecT rec_type, const char *name, RecDataT data_type, RecData data_default, RecPersistT persist_type)
+RecRegisterStat(RecT rec_type, std::string_view name, RecDataT data_type, RecData data_default, RecPersistT persist_type)
 {
   RecRecord *r = nullptr;
 
@@ -865,7 +924,7 @@ RecRegisterStat(RecT rec_type, const char *name, RecDataT data_type, RecData dat
     // new default value.
     if ((r->stat_meta.persist_type == RECP_NULL || r->stat_meta.persist_type == RECP_PERSISTENT) &&
         persist_type == RECP_NON_PERSISTENT) {
-      RecDebug(DL_Debug, "resetting default value for formerly persisted stat '%s'", r->name);
+      RecDebug(DL_Debug, "resetting default value for formerly persisted stat '%s'", r->name.c_str());
       RecDataSet(r->data_type, &(r->data), &(data_default));
     }
 
@@ -883,7 +942,7 @@ RecRegisterStat(RecT rec_type, const char *name, RecDataT data_type, RecData dat
 // RecRegisterConfig
 //-------------------------------------------------------------------------
 RecRecord *
-RecRegisterConfig(RecT rec_type, const char *name, RecDataT data_type, RecData data_default, RecUpdateT update_type,
+RecRegisterConfig(RecT rec_type, std::string_view name, RecDataT data_type, RecData data_default, RecUpdateT update_type,
                   RecCheckT check_type, const char *check_expr, RecSourceT source, RecAccessT access_type)
 {
   RecRecord *r;
@@ -1037,7 +1096,7 @@ RecDumpRecords(RecT rec_type, RecDumpEntryCb callback, void *edata)
     RecRecord *r = &(g_records[i]);
     if ((rec_type == RECT_NULL) || (rec_type & r->rec_type)) {
       rec_mutex_acquire(&(r->lock));
-      callback(r->rec_type, edata, r->registered, r->name, r->data_type, &r->data);
+      callback(r->rec_type, edata, r->registered, r->name.c_str(), r->data_type, &r->data);
       rec_mutex_release(&(r->lock));
     }
   }

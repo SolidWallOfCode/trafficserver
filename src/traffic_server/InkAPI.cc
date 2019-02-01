@@ -8817,7 +8817,7 @@ TSPortDescriptorParse(const char *descriptor)
 {
   HttpProxyPort *port = new HttpProxyPort();
 
-  if (descriptor && port->processOptions(descriptor)) {
+  if (descriptor && port->processOptions({descriptor, strlen(descriptor)})) {
     return (TSPortDescriptor)port;
   }
 

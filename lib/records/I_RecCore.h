@@ -140,8 +140,14 @@ RecErrT RecRegisterRawStatUpdateFunc(const char *name, RecRawStatBlock *rsb, int
 // already been taken out for the callback.
 
 // RecSetRecordConvert -> WebMgmtUtils.cc::varSetFromStr()
-RecErrT RecSetRecordConvert(const char *name, const RecString rec_string, RecSourceT source, bool lock = true,
+RecErrT RecSetRecordConvert(std::string_view const &name, const RecString rec_string, RecSourceT source, bool lock = true,
                             bool inc_version = true);
+inline RecErrT
+RecSetRecordConvert(const char *name, const RecString rec_string, RecSourceT source, bool lock = true, bool inc_version = true)
+{
+  return RecSetRecordConvert(std::string_view{name ? name : ""}, rec_string, source, lock, inc_version);
+}
+
 RecErrT RecSetRecordInt(const char *name, RecInt rec_int, RecSourceT source, bool lock = true, bool inc_version = true);
 RecErrT RecSetRecordFloat(const char *name, RecFloat rec_float, RecSourceT source, bool lock = true, bool inc_version = true);
 RecErrT RecSetRecordString(const char *name, const RecString rec_string, RecSourceT source, bool lock = true,
@@ -151,6 +157,7 @@ RecErrT RecSetRecordCounter(const char *name, RecCounter rec_counter, RecSourceT
 RecErrT RecGetRecordInt(const char *name, RecInt *rec_int, bool lock = true);
 RecErrT RecGetRecordFloat(const char *name, RecFloat *rec_float, bool lock = true);
 RecErrT RecGetRecordString(const char *name, char *buf, int buf_len, bool lock = true);
+RecErrT RecGetRecordString(std::string_view name, std::string &value, bool lock_p = true);
 RecErrT RecGetRecordString_Xmalloc(const char *name, RecString *rec_string, bool lock = true);
 RecErrT RecGetRecordCounter(const char *name, RecCounter *rec_counter, bool lock = true);
 // Convenience to allow us to treat the RecInt as a single byte internally
@@ -161,14 +168,61 @@ RecErrT RecGetRecordBool(const char *name, RecBool *rec_byte, bool lock = true);
 //------------------------------------------------------------------------
 // Record Attributes Reading
 //------------------------------------------------------------------------
-typedef void (*RecLookupCallback)(const RecRecord *, void *);
+/** Signature for callback from a record lookup.
+ * The parameters are the record and the raw pointer passed to the lookup function.
+ * The record will always be valid because if not, the callback is not invoked.
+ */
+using RecLookupCallback = void (*)(const RecRecord *, void *);
 
-RecErrT RecLookupRecord(const char *name, RecLookupCallback callback, void *data, bool lock = true);
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param data Extra data to pass to @a callback.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ */
+RecErrT RecLookupRecord(std::string_view name, RecLookupCallback callback, void *data, bool lock = true);
+
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param data Extra data to pass to @a callback.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ */
+inline RecErrT
+RecLookupRecord(const char *name, RecLookupCallback callback, void *data, bool lock_p = true)
+{
+  return RecLookupRecord(std::string_view{name}, callback, data, lock_p);
+}
+
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ *
+ * The difference between this function and the function pointer overload is how additional data is
+ * made available to the callback. If the value can be passed in a single void pointer, the
+ * function pointer overload can be used. If more data is required, it is better to use this with
+ * a lambda than to deal with allocating or constructing a local object by hand to pass by
+ * void pointer.
+ */
+RecErrT RecLookupRecord(std::string_view name, std::function<void(RecRecord *)> const &callback, bool lock_p = true);
+
 RecErrT RecLookupMatchingRecords(unsigned rec_type, const char *match, RecLookupCallback callback, void *data, bool lock = true);
 
 RecErrT RecGetRecordType(const char *name, RecT *rec_type, bool lock = true);
 RecErrT RecGetRecordDataType(const char *name, RecDataT *data_type, bool lock = true);
-RecErrT RecGetRecordPersistenceType(const char *name, RecPersistT *persist_type, bool lock = true);
+RecErrT RecGetRecordPersistenceType(std::string_view name, RecPersistT *persist_type, bool lock = true);
+inline RecErrT
+RecGetRecordPersistenceType(const char *name, RecPersistT *persist_type, bool lock = true)
+{
+  return RecGetRecordPersistenceType(std::string_view{name ? name : ""}, persist_type, lock);
+}
 RecErrT RecGetRecordOrderAndId(const char *name, int *order, int *id, bool lock = true);
 RecErrT RecGetRecordUpdateType(const char *name, RecUpdateT *update_type, bool lock = true);
 RecErrT RecGetRecordCheckType(const char *name, RecCheckT *check_type, bool lock = true);
@@ -296,7 +350,12 @@ RecString REC_readString(const char *name, bool *found, bool lock = true);
 //------------------------------------------------------------------------
 // Clear Statistics
 //------------------------------------------------------------------------
-RecErrT RecResetStatRecord(const char *name);
+RecErrT RecResetStatRecord(std::string_view name);
+inline RecErrT
+RecResetStatRecord(const char *name)
+{
+  return RecResetStatRecord(std::string_view{name ? name : ""});
+}
 RecErrT RecResetStatRecord(RecT type = RECT_NULL, bool all = false);
 
 //------------------------------------------------------------------------

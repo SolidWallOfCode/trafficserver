@@ -73,7 +73,6 @@ RecMessage *
 RecMessageMarshal_Realloc(RecMessage *msg, const RecRecord *record)
 {
   int msg_ele_size;
-  int rec_name_len         = -1;
   int rec_data_str_len     = -1;
   int rec_data_def_str_len = -1;
   int rec_cfg_chk_len      = -1;
@@ -83,10 +82,8 @@ RecMessageMarshal_Realloc(RecMessage *msg, const RecRecord *record)
 
   // find out how much space we need
   msg_ele_size = sizeof(RecMessageEleHdr) + sizeof(RecRecord);
-  if (record->name) {
-    rec_name_len = strlen(record->name) + 1;
-    msg_ele_size += rec_name_len;
-  }
+  // always write something, even if it's just a terminal null.
+  msg_ele_size += record->name.size() + 1;
   if (record->data_type == RECD_STRING) {
     if (record->data.rec_string) {
       rec_data_str_len = strlen(record->data.rec_string) + 1;
@@ -127,12 +124,11 @@ RecMessageMarshal_Realloc(RecMessage *msg, const RecRecord *record)
   memcpy(p, record, sizeof(RecRecord));
   r = (RecRecord *)p;
   p += sizeof(RecRecord);
-  if (rec_name_len != -1) {
-    ink_assert((msg->o_end - ((uintptr_t)p - (uintptr_t)msg)) >= (uintptr_t)rec_name_len);
-    memcpy(p, record->name, rec_name_len);
-    r->name = (char *)((uintptr_t)p - (uintptr_t)r);
-    p += rec_name_len;
-  }
+  ink_assert((msg->o_end - (reinterpret_cast<uintptr_t>(p) - reinterpret_cast<uintptr_t>(msg)) >=
+              reinterpret_cast<uintptr_t>(record->name.size() + 1)));
+  memcpy(p, record->name.c_str(), record->name.size() + 1);
+  *reinterpret_cast<uintptr_t *>(&r->name) = reinterpret_cast<uintptr_t>(p) - reinterpret_cast<uintptr_t>(r);
+  p += record->name.size() + 1;
   if (rec_data_str_len != -1) {
     ink_assert((msg->o_end - ((uintptr_t)p - (uintptr_t)msg)) >= (uintptr_t)rec_data_str_len);
     memcpy(p, record->data.rec_string, rec_data_str_len);
@@ -204,9 +200,7 @@ RecMessageUnmarshalNext(RecMessage *msg, RecMessageItr *itr, RecRecord **record)
 
   r = (RecRecord *)((char *)eh + sizeof(RecMessageEleHdr));
 
-  if (r->name) {
-    r->name = (char *)r + (intptr_t)(r->name);
-  }
+  new (&r->name) std::string(reinterpret_cast<char *>(r) + *reinterpret_cast<uintptr_t *>(&r->name));
   if (r->data_type == RECD_STRING) {
     if (r->data.rec_string) {
       r->data.rec_string = (char *)r + (intptr_t)(r->data.rec_string);
