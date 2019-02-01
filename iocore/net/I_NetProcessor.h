@@ -180,7 +180,12 @@ public:
   */
   virtual void init() = 0;
 
-  inkcoreapi virtual NetVConnection *allocate_vc(EThread *) = 0;
+  inkcoreapi virtual NetVConnection *allocate_vc(EThread *)
+  {
+    // This is only a mitigation to tune down the noise due to "do_blocking_accept"
+    // crashing during shutdown a lot recently.
+    return nullptr;
+  }
 
   /** Private constructor. */
   NetProcessor(){};
