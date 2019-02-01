@@ -910,7 +910,7 @@ CacheVC::openReadStartEarliest(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
           f.evac_vector   = 1;
           f.use_first_key = 1;
           key             = first_key;
-          // always use od->first_dir to overwrite a directory.
+          // always use od->first_dir to overwrite a directory.e
           // If an evacuation happens while a vector is being updated
           // the evacuator changes the od->first_dir to the new directory
           // that it inserted
