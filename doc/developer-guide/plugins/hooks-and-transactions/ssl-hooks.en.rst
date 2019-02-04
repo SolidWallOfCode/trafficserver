@@ -60,6 +60,12 @@ TS_VCONN_CLOSE_HOOK
 
 This hook is invoked after the SSL handshake is done and when the IO is closing. The TSVConnArgs should be cleaned up here. A callback at this point must reenable.
 
+TS_SSL_CLIENT_HELLO_HOOK
+------------------------
+This hook is called when the client hello arrived for the TLS handshake. If called it will always be called after TS_VCONN_START_HOOK. The plugin callback can execute code to examine client hello information.
+
+TLS handshake processing will pause until the hook callback executes :c:func:`TSVConnReenable()`.
+
 TS_SSL_SERVERNAME_HOOK
 ----------------------
 
@@ -87,7 +93,7 @@ a certificate.
 TS_SSL_VERIFY_CLIENT_HOOK
 -------------------------
 
-This hook is called when a client connects to Traffic Server and presents a 
+This hook is called when a client connects to Traffic Server and presents a
 client certificate in the case of a mutual TLS handshake.  The callback can
 get the SSL object from the TSVConn argument and use that to access the client
 certificate and make any additional checks.
@@ -110,7 +116,7 @@ for pausing processing during the certificate verify callback.
 TS_VCONN_OUTBOUND_START_HOOK
 ----------------------------
 
-This hook is invoked after ATS has connected to the upstream server and before the SSL handshake has started.  This gives the plugin the option of 
+This hook is invoked after ATS has connected to the upstream server and before the SSL handshake has started.  This gives the plugin the option of
 overriding the default SSL connection options on the SSL object.
 
 In theory this hook could apply and be useful for non-SSL connections as well, but at this point this hook is only called in the SSL sequence.
@@ -139,14 +145,27 @@ TLS Hook State Diagram
      TS_VCONN_START_HOOK -> HANDSHAKE_HOOKS_PRE_INVOKE;
      HANDSHAKE_HOOKS_PRE_INVOKE -> TSVConnReenable;
      TSVConnReenable -> HANDSHAKE_HOOKS_PRE;
+     TS_SSL_CLIENT_HELLO_HOOK -> HANDSHAKE_HOOKS_CLIENT_HELLO_INVOKE;
+     HANDSHAKE_HOOKS_CLIENT_HELLO_INVOKE -> TSVConnReenable2;
+     TSVConnReenable2 -> HANDSHAKE_HOOKS_CLIENT_HELLO;
+     HANDSHAKE_HOOKS_CLIENT_HELLO -> TS_SSL_CLIENT_HELLO_HOOK;
+     HANDSHAKE_HOOKS_CLIENT_HELLO -> TS_SSL_SERVERNAME_HOOK;
      TS_SSL_SERVERNAME_HOOK -> HANDSHAKE_HOOKS_SNI;
      HANDSHAKE_HOOKS_SNI -> TS_SSL_SERVERNAME_HOOK;
      HANDSHAKE_HOOKS_SNI -> TS_SSL_CERT_HOOK;
      HANDSHAKE_HOOKS_SNI -> HANDSHAKE_HOOKS_DONE;
      HANDSHAKE_HOOKS_CERT -> TS_SSL_CERT_HOOK;
      TS_SSL_CERT_HOOK -> HANDSHAKE_HOOKS_CERT_INVOKE;
-     HANDSHAKE_HOOKS_CERT_INVOKE -> TSVConnReenable2;
-     TSVConnReenable2 -> HANDSHAKE_HOOKS_CERT;
+     HANDSHAKE_HOOKS_CERT_INVOKE -> TSVConnReenable3;
+     TSVConnReenable3 -> HANDSHAKE_HOOKS_CERT;
+
+     HANDSHAKE_HOOKS_CERT -> TS_SSL_VERIFY_CLIENT_HOOK;
+     HANDSHAKE_HOOKS_SNI -> TS_SSL_VERIFY_CLIENT_HOOK;
+     HANDSHAKE_HOOKS_PRE -> TS_SSL_VERIFY_CLIENT_HOOK;
+     TS_SSL_VERIFY_CLIENT_HOOK -> HANDSHAKE_HOOKS_VERIFY;
+     HANDSHAKE_HOOKS_VERIFY -> TS_SSL_VERIFY_CLIENT_HOOK;
+     HANDSHAKE_HOOKS_VERIFY -> HANDSHAKE_HOOKS_DONE;
+
      HANDSHAKE_HOOKS_CERT -> HANDSHAKE_HOOKS_DONE;
      HANDSHAKE_HOOKS_DONE -> TS_VCONN_CLOSE_HOOK;
 
@@ -154,6 +173,8 @@ TLS Hook State Diagram
      TS_VCONN_START_HOOK [shape=box];
      TS_SSL_VERIFY_CLIENT_HOOK [shape=box];
      HANDSHAKE_HOOKS_PRE_INVOKE [shape=box];
+     HANDSHAKE_HOOKS_CLIENT_HELLO [shape=box];
+     HANDSHAKE_HOOKS_CLIENT_HELLO_INVOKE [shape=box];
      HANDSHAKE_HOOKS_SNI [shape=box];
      HANDSHAKE_HOOKS_CERT [shape=box];
      HANDSHAKE_HOOKS_CERT_INVOKE [shape=box];
