@@ -137,6 +137,7 @@ SNIConfigParams::Initialize()
   msg << ret;
   Warning("Lua Load %s", msg.str().c_str());
   loadSNIConfig();
+  Note("ssl_server_name.config done reloading!");
   return 0;
 }
 

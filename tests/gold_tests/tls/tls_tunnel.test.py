@@ -17,6 +17,7 @@
 #  limitations under the License.
 
 import os
+import subprocess
 Test.Summary = '''
 Test tunneling based on SNI
 '''
@@ -27,9 +28,10 @@ Test.SkipUnless(
 )
 
 # Define default ATS
-ts = Test.MakeATSProcess("ts", select_ports=False)
+ts = Test.MakeATSProcess("ts", command="traffic_manager", select_ports=False)
 server_foo = Test.MakeOriginServer("server_foo", ssl=True)
 server_bar = Test.MakeOriginServer("server_bar", ssl=True)
+server2 = Test.MakeOriginServer("server2")
 
 request_foo_header = {"headers": "GET / HTTP/1.1\r\nHost: foo.com\r\n\r\n", "timestamp": "1469733493.993", "body": ""} 
 request_bar_header = {"headers": "GET / HTTP/1.1\r\nHost: bar.com\r\n\r\n", "timestamp": "1469733493.993", "body": ""}
@@ -127,5 +129,67 @@ tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Could Not Connec
 tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Not Found on Accelerato", "Should not try to remap on Traffic Server")
 tr.Processes.Default.Streams.All += Testers.ContainsExpression("HTTP/1.1 200 OK", "Should get a successful response")
 tr.Processes.Default.Streams.All += Testers.ExcludesExpression("ATS", "Do not terminate on Traffic Server")
+tr.Processes.Default.Streams.All += Testers.ContainsExpression("bar ok", "Should get a response from bar")
+
+# Update ssl_server_name file and reload
+tr = Test.AddTestRun("Update config files")
+# Update the SNI config
+snipath = ts.Disk.ssl_server_name_config.AbsPath
+recordspath = ts.Disk.records_config.AbsPath
+tr.Disk.File(snipath, id = "ssl_server_name_config", typename="ats:config"),
+tr.Disk.ssl_server_name_config.AddLines([
+  "server_config = {",
+  "{fqdn='bar.com',",
+  "  tunnel_route='localhost:{0}'".format(server_bar.Variables.SSL_Port),
+  "}}"
+])
+tr.StillRunningAfter = ts
+tr.StillRunningAfter = server_foo
+tr.StillRunningAfter = server_bar
+tr.Processes.Default.Env = ts.Env
+tr.Processes.Default.Command = 'echo Updated configs'
+tr.Processes.Default.ReturnCode = 0
+
+trreload = Test.AddTestRun("Reload config")
+trreload.StillRunningAfter = ts
+trreload.StillRunningAfter = server_foo
+trreload.StillRunningAfter = server_bar
+trreload.Processes.Default.Command = 'traffic_ctl config reload'
+# Need to copy over the environment so traffic_ctl knows where to find the unix domain socket
+trreload.Processes.Default.Env = ts.Env
+trreload.Processes.Default.ReturnCode = 0
+
+# Parking this as a ready tester on a meaningless process
+# Stall the test runs until the ssl_server_name reload has completed
+# At that point the new ssl_server_name settings are ready to go
+def ssl_server_name_reload_done(tsenv):
+  def done_reload(process, hasRunFor, **kw):
+    cmd = "grep 'ssl_server_name.config done reloading!' {0} | wc -l > {1}/test.out".format(ts.Disk.diags_log.Name, Test.RunDirectory)
+    retval = subprocess.run(cmd, shell=True, env=tsenv)
+    if retval.returncode == 0:
+      cmd ="if [ -f {0}/test.out -a \"`cat {0}/test.out`\" = \"2\" ] ; then true; else false; fi".format(Test.RunDirectory)
+      retval = subprocess.run(cmd, shell = True, env=tsenv)
+    return retval.returncode == 0
+
+  return done_reload
+
+# Should termimate on traffic_server (not tunnel)
+tr = Test.AddTestRun("foo.com no Tunnel-test")
+tr.StillRunningAfter = ts
+# Wait for the reload to complete by running the ssl_server_name_reload_done test
+tr.Processes.Default.StartBefore(server2, ready=ssl_server_name_reload_done(ts.Env))
+tr.Processes.Default.Command = "curl -v --resolve 'foo.com:{0}:127.0.0.1' -k  https://foo.com:{0}".format(ts.Variables.ssl_port)
+tr.Processes.Default.Streams.All += Testers.ContainsExpression("Not Found on Accelerato", "Terminates on on Traffic Server")
+tr.Processes.Default.Streams.All += Testers.ContainsExpression("ATS", "Terminate on Traffic Server")
+tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
+
+# Should tunnel to server_bar
+tr = Test.AddTestRun("bar.com  Tunnel-test")
+tr.Processes.Default.Command = "curl -v --resolve 'bar.com:{0}:127.0.0.1' -k  https://bar.com:{0}".format(ts.Variables.ssl_port)
+tr.ReturnCode = 0
+tr.StillRunningAfter = ts
+tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
+tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Not Found on Accelerato", "Terminates on on Traffic Server")
+tr.Processes.Default.Streams.All += Testers.ExcludesExpression("ATS", "Terminate on Traffic Server")
 tr.Processes.Default.Streams.All += Testers.ContainsExpression("bar ok", "Should get a response from bar")
 
