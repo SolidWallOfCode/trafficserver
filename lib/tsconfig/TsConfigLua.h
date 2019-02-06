@@ -209,7 +209,7 @@ public:
             zret.push(ts::Errata::Message(0, 0, "SNI Config: set element not a valid name"));
           }
         } else if (l_type == LUA_TNUMBER) {
-          _mask |= (1<<lua_tointeger(L, -1)_;
+          _mask |= (1<<lua_tointeger(L, -1));
         } else {
           zret.push(ts::Errata::Message(0, 0, "SNI Config: set element not a string."));
         }
