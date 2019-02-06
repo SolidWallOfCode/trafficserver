@@ -46,8 +46,6 @@
 #endif
 
 class FileManager;
-class ClusterCom;
-class VMap;
 
 enum ManagementPendingOperation {
   MGMT_PENDING_NONE,         // Do nothing
@@ -69,7 +67,6 @@ public:
   ~LocalManager();
 
   void initAlarm();
-  void initCCom(const AppVersionInfo &version, FileManager *files, int mcport, char *addr, int rsport);
   void initMgmtProcessServer();
   void pollMgmtProcessServer();
   void handleMgmtMsgFromProcesses(MgmtMessageHdr *mh);
@@ -98,7 +95,6 @@ public:
   void clearStats(const char *name = NULL);
 
   bool processRunning();
-  bool clusterOk();
 
   volatile bool run_proxy;
   volatile bool proxy_recoverable = true; // false if traffic_server cannot recover with a reboot
@@ -132,10 +128,7 @@ public:
 #endif
 
   Alarms *alarm_keeper;
-  VMap *virt_map;
   FileManager *configFiles;
-
-  ClusterCom *ccom;
 
   volatile pid_t watched_process_pid;
 

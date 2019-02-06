@@ -33,8 +33,6 @@
 #include "WebOverview.h"
 #include "MgmtUtils.h"
 #include "NetworkUtilsRemote.h"
-#include "ClusterCom.h"
-#include "VMap.h"
 #include "FileManager.h"
 #include "ts/I_Layout.h"
 #include "ts/I_Version.h"
@@ -464,16 +462,14 @@ main(int argc, const char **argv)
 
   bool found         = false;
   int just_started   = 0;
-  int cluster_mcport = -1, cluster_rsport = -1;
   // TODO: This seems completely incomplete, disabled for now
   //  int dump_config = 0, dump_process = 0, dump_node = 0, dump_cluster = 0, dump_local = 0;
   char *proxy_port   = nullptr;
   int proxy_backdoor = -1;
-  char *group_addr = nullptr, *tsArgs = nullptr;
+  char *tsArgs = nullptr;
   int disable_syslog = false;
   char userToRunAs[MAX_LOGIN + 1];
   RecInt fds_throttle = -1;
-  time_t ticker;
   ink_thread synthThrId;
 
   int binding_version      = 0;
@@ -482,9 +478,6 @@ main(int argc, const char **argv)
   ArgumentDescription argument_descriptions[] = {
     {"proxyOff", '-', "Disable proxy", "F", &proxy_off, nullptr, nullptr},
     {"aconfPort", '-', "Autoconf port", "I", &aconf_port_arg, "MGMT_ACONF_PORT", nullptr},
-    {"clusterMCPort", '-', "Cluster multicast port", "I", &cluster_mcport, "MGMT_CLUSTER_MC_PORT", nullptr},
-    {"clusterRSPort", '-', "Cluster reliable service port", "I", &cluster_rsport, "MGMT_CLUSTER_RS_PORT", nullptr},
-    {"groupAddr", '-', "Multicast group address", "S*", &group_addr, "MGMT_GROUP_ADDR", nullptr},
     {"path", '-', "Path to the management socket", "S*", &mgmt_path, nullptr, nullptr},
     {"recordsConf", '-', "Path to records.config", "S*", &recs_conf, nullptr, nullptr},
     {"tsArgs", '-', "Additional arguments for traffic_server", "S*", &tsArgs, nullptr, nullptr},
@@ -672,38 +665,8 @@ main(int argc, const char **argv)
     RecSetRecordInt("proxy.config.process_manager.mgmt_port", proxy_backdoor, REC_SOURCE_DEFAULT);
   }
 
-  if (cluster_rsport == -1) {
-    cluster_rsport = REC_readInteger("proxy.config.cluster.rsport", &found);
-    ink_assert(found);
-  }
-
-  if (cluster_mcport == -1) {
-    cluster_mcport = REC_readInteger("proxy.config.cluster.mcport", &found);
-    ink_assert(found);
-  }
-
-  if (!group_addr) {
-    group_addr = REC_readString("proxy.config.cluster.mc_group_addr", &found);
-    ink_assert(found);
-  }
-
-  in_addr_t min_ip        = inet_network("224.0.0.255");
-  in_addr_t max_ip        = inet_network("239.255.255.255");
-  in_addr_t group_addr_ip = inet_network(group_addr);
-
-  if (!(min_ip < group_addr_ip && group_addr_ip < max_ip)) {
-    mgmt_fatal(0, "[TrafficManager] Multi-Cast group addr '%s' is not in the permitted range of %s\n", group_addr,
-               "224.0.1.0 - 239.255.255.255");
-  }
-
-  /* TODO: Do we really need to init cluster communication? */
-  lmgmt->initCCom(appVersionInfo, configFiles, cluster_mcport, group_addr, cluster_rsport); /* Setup cluster communication */
-
   lmgmt->initMgmtProcessServer(); /* Setup p-to-p process server */
 
-  // Now that we know our cluster ip address, add the
-  //   UI record for this machine
-  overviewGenerator->addSelfRecord();
   lmgmt->listenForProxy();
 
   //
@@ -747,7 +710,6 @@ main(int argc, const char **argv)
   ink_thread_create(nullptr, ts_ctrl_main, &mgmtapiFD, 0, 0, nullptr);
   ink_thread_create(nullptr, event_callback_main, &eventapiFD, 0, 0, nullptr);
 
-  ticker = time(nullptr);
   mgmt_log("[TrafficManager] Setup complete\n");
 
   RecRegisterStatInt(RECT_NODE, "proxy.node.config.reconfigure_time", time(nullptr), RECP_NON_PERSISTENT);
@@ -793,22 +755,6 @@ main(int argc, const char **argv)
       mgmt_log("[main] Reading Configuration Files Reread\n");
     }
 
-    lmgmt->ccom->generateClusterDelta();
-
-    if (lmgmt->run_proxy && lmgmt->processRunning()) {
-      lmgmt->ccom->sendSharedData();
-      lmgmt->virt_map->lt_runGambit();
-    } else {
-      if (!lmgmt->run_proxy) { /* Down if we are not going to start another immed. */
-        /* Proxy is not up, so no addrs should be */
-        lmgmt->virt_map->downOurAddrs();
-      }
-
-      /* Proxy is not up, but we should still exchange config and alarm info */
-      lmgmt->ccom->sendSharedData(false);
-    }
-
-    lmgmt->ccom->checkPeers(&ticker);
     overviewGenerator->checkForUpdates();
 
     metrics_binding_evaluate(*binding);
@@ -1051,10 +997,6 @@ fileUpdated(char *fname, char *configName, bool incVersion)
     // just copying over the original case.
     ink_atomic_increment(&metrics_version, 1);
     mgmt_log("[fileUpdated] metrics.config file has been modified\n");
-  // vaddrs.config isn't really used any more, just copying up what it did
-  } else if (strcmp(fname, "vaddrs.config") == 0) {
-    mgmt_log("[fileUpdated] vaddrs.config updated\n");
-    lmgmt->virt_map->lt_readAListFile(fname);
   } else {
     // Signal based on the config entry that has the changed file name
     lmgmt->signalFileChange(configName);

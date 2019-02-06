@@ -112,7 +112,6 @@ public:
   void signalAlarm(alarm_t t, const char *desc, const char *ip = NULL);
   void resolveAlarm(alarm_t a, char *ip = NULL);
 
-  void constructAlarmMessage(const AppVersionInfo &version, char *ip, char *message, int max);
   void resetSeenFlag(char *ip);
   void clearUnSeen(char *ip);
 

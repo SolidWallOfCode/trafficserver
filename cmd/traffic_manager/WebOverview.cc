@@ -298,31 +298,12 @@ overviewPage::~overviewPage()
 void
 overviewPage::checkForUpdates()
 {
-  ClusterPeerInfo *tmp;
-  InkHashTableEntry *entry;
-  InkHashTableIteratorState iterator_state;
-  overviewRecord *current;
-  time_t currentTime;
   bool newHostAdded = false;
 
   // grok through the cluster communication stuff and update information
   //  about hosts in the cluster
   //
   ink_mutex_acquire(&accessLock);
-  ink_mutex_acquire(&(lmgmt->ccom->mutex));
-  currentTime = time(nullptr);
-  for (entry = ink_hash_table_iterator_first(lmgmt->ccom->peers, &iterator_state); entry != nullptr;
-       entry = ink_hash_table_iterator_next(lmgmt->ccom->peers, &iterator_state)) {
-    tmp = (ClusterPeerInfo *)ink_hash_table_entry_value(lmgmt->ccom->peers, entry);
-
-    if (ink_hash_table_lookup(nodeRecords, (InkHashTableKey)tmp->inet_address, (InkHashTableValue *)&current) == 0) {
-      this->addRecord(tmp);
-      newHostAdded = true;
-    } else {
-      current->updateStatus(currentTime, tmp);
-    }
-  }
-  ink_mutex_release(&lmgmt->ccom->mutex);
 
   // If we added a new host we must resort sortRecords
   if (newHostAdded) {
@@ -380,10 +361,6 @@ overviewPage::addSelfRecord()
 
   // We should not have been called before
   ink_assert(ourAddr == 0);
-
-  // Find out what our cluster addr is from
-  //   from cluster com
-  this->ourAddr = lmgmt->ccom->getIP();
 
   newRec     = new overviewRecord(ourAddr, true);
   newRec->up = true;
