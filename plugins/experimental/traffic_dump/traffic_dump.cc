@@ -37,9 +37,9 @@
 #include <chrono>
 #include <atomic>
 #include <string>
-#include <string_view>
+#include "ts/string_view.h"
 
-#include "tscore/ts_file.h"
+#include "ts/ts_file.h"
 #include "ts/ts.h"
 
 namespace
@@ -411,9 +411,9 @@ global_ssn_handler(TSCont contp, TSEvent event, void *edata)
   case TS_EVENT_LIFECYCLE_MSG: {
     TSPluginMsg *msg = static_cast<TSPluginMsg *>(edata);
     // String view of plugin message prefix
-    static constexpr std::string_view PLUGIN_PREFIX("traffic_dump."_sv);
+    static constexpr ts::string_view PLUGIN_PREFIX("traffic_dump."_sv);
 
-    std::string_view tag(msg->tag, strlen(msg->tag));
+    ts::string_view tag(msg->tag, strlen(msg->tag));
 
     if (tag.substr(0, PLUGIN_PREFIX.size()) == PLUGIN_PREFIX) {
       tag.remove_prefix(PLUGIN_PREFIX.size());
