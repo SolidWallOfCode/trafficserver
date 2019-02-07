@@ -26,13 +26,20 @@ ExecStart=@exp_bindir@/traffic_manager $TM_DAEMON_ARGS
 Restart=on-abort
 RestartSec=15s
 LimitNOFILE=500000
-ExecStopPost=/bin/sh -c ' \
+KillMode=mixed
+KillSignal=SIGTERM
+ExecStopPost=/bin/sh -c 'echo "Cleaning up PIDs" ; \
         export TM_PIDFILE=$(@exp_bindir@/traffic_layout 2>/dev/null | grep RUNTIMEDIR | cut -d: -f2)/manager.lock TS_PIDFILE=$(@exp_bindir@/traffic_layout 2>/dev/null | grep RUNTIMEDIR | cut -d: -f2)/server.lock ; \
         /bin/rm -f $TM_PIDFILE $TS_PIDFILE ; \
-        if [[ $? -ne 0 ]]; then echo "ERROR: Unable to delete PID"; exit 1; fi'
+        if [[ $? -ne 0 ]]; then echo "ERROR: Unable to delete PID"; exit 1; fi ; \
+	pkill -9 -f "@exp_bindir@/traffic_(manager|server)" ; \
+	[[ -z $DELAY ]] && DELAY="10s" ; \
+	sleep $DELAY ; \
+	exit $(netstat -eatn 2>&1 | egrep -c ":(80|443) .*LISTEN")'
 TimeoutStopSec=15s
 ExecReload=@exp_bindir@/traffic_ctl config reload
 KillMode=process
 
 [Install]
 WantedBy=multi-user.target
+Alias=ats.service
