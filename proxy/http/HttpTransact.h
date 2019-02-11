@@ -635,7 +635,6 @@ public:
   typedef struct _RedirectInfo {
     bool redirect_in_process;
     URL original_url;
-    URL redirect_url;
 
     _RedirectInfo() : redirect_in_process(false), original_url(), redirect_url() {}
   } RedirectInfo;
@@ -1142,7 +1141,6 @@ public:
       cache_info.object_store.destroy();
       cache_info.transform_store.destroy();
       redirect_info.original_url.destroy();
-      redirect_info.redirect_url.destroy();
 
       if (pCongestionEntry) {
         if (congestion_connection_opened == 1) {
