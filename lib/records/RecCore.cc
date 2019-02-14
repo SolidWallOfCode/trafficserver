@@ -422,6 +422,33 @@ RecGetRecordString(const char *name, char *buf, int buf_len, bool lock)
 }
 
 RecErrT
+RecGetRecordString(std::string_view name, std::string &value, bool lock_p)
+{
+  RecErrT zret = REC_ERR_FAIL;
+  // Because the context exists only in this callstack, we can avoid allocation by putting the
+  // context data in a local tuple then passing the address of that tuple as the data for
+  // the callback. Must make sure @a zret is passed by reference in the tuple so it can be
+  // updates from the callback.
+  auto context = std::make_tuple(value, std::reference_wrapper(zret));
+
+  // @c RecLookupRecord does all of the lookup and locking, making this implementation simpler.
+  RecLookupRecord(name,
+                  [](RecRecord const *r, void *data) -> void {
+                    auto *ctx = static_cast<decltype(context) *>(data);
+                    if (r->registered && RECD_STRING == r->data_type) {
+                      if (r->data.rec_string) {
+                        std::get<0>(*ctx) = r->data.rec_string;
+                      } else {
+                        std::get<0>(*ctx).resize(0);
+                      }
+                      std::get<1>(*ctx) = REC_ERR_OKAY;
+                    };
+                  },
+                  &context, lock_p);
+  return zret;
+}
+
+RecErrT
 RecGetRecordString_Xmalloc(const char *name, RecString *rec_string, bool lock)
 {
   RecErrT err;
