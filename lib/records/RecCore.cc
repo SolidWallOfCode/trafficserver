@@ -21,6 +21,8 @@
   limitations under the License.
  */
 
+#include <functional>
+
 #include "tscore/ink_platform.h"
 #include "tscore/ink_memory.h"
 #include "tscore/ink_string.h"
@@ -472,11 +474,11 @@ RecGetRecordBool(const char *name, RecBool *rec_bool, bool lock)
 //-------------------------------------------------------------------------
 
 RecErrT
-RecLookupRecord(const char *name, void (*callback)(const RecRecord *, void *), void *data, bool lock)
+RecLookupRecord(std::string_view name, RecLookupCallback callback, void *data, bool lock_p)
 {
   RecErrT err = REC_ERR_FAIL;
 
-  if (lock) {
+  if (lock_p) {
     ink_rwlock_rdlock(&g_records_rwlock);
   }
 
@@ -489,7 +491,32 @@ RecLookupRecord(const char *name, void (*callback)(const RecRecord *, void *), v
     rec_mutex_release(&(r->lock));
   }
 
-  if (lock) {
+  if (lock_p) {
+    ink_rwlock_unlock(&g_records_rwlock);
+  }
+
+  return err;
+}
+
+RecErrT
+RecLookupRecord(std::string_view name, std::function<void(RecRecord *)> const &callback, bool lock_p)
+{
+  RecErrT err = REC_ERR_FAIL;
+
+  if (lock_p) {
+    ink_rwlock_rdlock(&g_records_rwlock);
+  }
+
+  if (auto it = g_records_ht.find(name); it != g_records_ht.end()) {
+    RecRecord *r = it->second;
+
+    rec_mutex_acquire(&(r->lock));
+    callback(r);
+    err = REC_ERR_OKAY;
+    rec_mutex_release(&(r->lock));
+  }
+
+  if (lock_p) {
     ink_rwlock_unlock(&g_records_rwlock);
   }
 

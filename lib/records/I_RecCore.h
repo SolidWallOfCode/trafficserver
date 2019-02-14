@@ -165,9 +165,51 @@ RecErrT RecGetRecordBool(const char *name, RecBool *rec_byte, bool lock = true);
 //------------------------------------------------------------------------
 // Record Attributes Reading
 //------------------------------------------------------------------------
-typedef void (*RecLookupCallback)(const RecRecord *, void *);
+/** Signature for callback from a record lookup.
+ * The parameters are the record and the raw pointer passed to the lookup function.
+ * The record will always be valid because if not, the callback is not invoked.
+ */
+using RecLookupCallback = void (*)(const RecRecord *, void *);
 
-RecErrT RecLookupRecord(const char *name, RecLookupCallback callback, void *data, bool lock = true);
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param data Extra data to pass to @a callback.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ */
+RecErrT RecLookupRecord(std::string_view name, RecLookupCallback callback, void *data, bool lock = true);
+
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param data Extra data to pass to @a callback.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ */
+inline RecErrT
+RecLookupRecord(const char *name, RecLookupCallback callback, void *data, bool lock_p = true)
+{
+  return RecLookupRecord(std::string_view{name}, callback, data, lock_p);
+}
+
+/** Look for the record by @a name and invoke @a callback if found.
+ *
+ * @param name Name of the configuration record.
+ * @param callback Function to call if the record is found.
+ * @param lock_p If @c true, lock the record while invoking @c callback.
+ * @return @c REC_ERR_OKAY if the record was found, REC_ERR_FAIL if not.
+ *
+ * The difference between this function and the function pointer overload is how additional data is
+ * made available to the callback. If the value can be passed in a single void pointer, the
+ * function pointer overload can be used. If more data is required, it is better to use this with
+ * a lambda than to deal with allocating or constructing a local object by hand to pass by
+ * void pointer.
+ */
+RecErrT RecLookupRecord(std::string_view name, std::function<void(RecRecord *)> const &callback, bool lock_p = true);
+
 RecErrT RecLookupMatchingRecords(unsigned rec_type, const char *match, RecLookupCallback callback, void *data, bool lock = true);
 
 RecErrT RecGetRecordType(const char *name, RecT *rec_type, bool lock = true);
