@@ -72,7 +72,7 @@ TEST_CASE("RecHttp", "[librecords][RecHttp]")
   SECTION("ipv6-a")
   {
     TextView descriptor{"4443:ssl:ip-in=[ffee::24c3:3349:3cee:0143]"};
-    HttpProxyPort::loadValue(ports, descriptor.data());
+    HttpProxyPort::loadValue(ports, descriptor);
     REQUIRE(ports.size() == 1);
     REQUIRE(ports[0].m_port == 4443);
     REQUIRE(ports[0].m_family == AF_INET6);
@@ -82,10 +82,9 @@ TEST_CASE("RecHttp", "[librecords][RecHttp]")
   SECTION("dual-addr")
   {
     TextView descriptor{"4443:ssl:ipv6:ip-out=[ffee::24c3:3349:3cee:0143]:ip-out=10.1.2.3"};
-    HttpProxyPort::loadValue(ports, descriptor.data());
-    char buff[256];
-    ports[0].print(buff, sizeof(buff));
-    std::string_view view{buff};
+    HttpProxyPort::loadValue(ports, descriptor);
+    ts::LocalBufferWriter<256> w;
+    bwformat(w, ts::BWFSpec::DEFAULT, ports[0]);
     REQUIRE(ports.size() == 1);
     REQUIRE(ports[0].m_port == 4443);
     REQUIRE(ports[0].m_family == AF_INET6);
@@ -93,7 +92,7 @@ TEST_CASE("RecHttp", "[librecords][RecHttp]")
     REQUIRE(ports[0].m_outbound_ip6.isValid() == true);
     REQUIRE(ports[0].m_outbound_ip4.isValid() == true);
     REQUIRE(ports[0].m_inbound_ip.isValid() == false);
-    REQUIRE(view.find(":ssl") != TextView::npos);
-    REQUIRE(view.find(":proto") == TextView::npos); // it's default, should not have this.
+    REQUIRE(w.view().find(":ssl") != TextView::npos);
+    REQUIRE(w.view().find(":proto") == TextView::npos); // it's default, should not have this.
   }
 }

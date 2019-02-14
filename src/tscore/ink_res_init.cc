@@ -88,6 +88,7 @@
 #include "tscore/ink_resolver.h"
 #include "tscore/ink_inet.h"
 #include "tscore/Tokenizer.h"
+#include "tscore/BufferWriter.h"
 
 #if !defined(isascii) /* XXX - could be a function */
 #define isascii(c) (!(c & 0200))
@@ -586,25 +587,22 @@ ink_res_init(ink_res_state statp,         ///< State object to update.
 }
 
 void
-parse_host_res_preference(const char *value, HostResPreferenceOrder order)
+parse_host_res_preference(ts::TextView value, HostResPreferenceOrder order)
 {
-  Tokenizer tokens(";/|");
+  using namespace std::literals;
+
   // preference from the config string.
   int np = 0;                        // index in to @a m_host_res_preference
   bool found[N_HOST_RES_PREFERENCE]; // redundancy check array
-  int n;                             // # of tokens
-  int i;                             // index
 
-  n = tokens.Initialize(value);
-
-  for (i = 0; i < N_HOST_RES_PREFERENCE; ++i) {
-    found[i] = false;
+  for (auto &f : found) {
+    f = false;
   }
 
-  for (i = 0; i < n && np < N_HOST_RES_PREFERENCE_ORDER; ++i) {
-    const char *elt = tokens[i];
+  while (value && np < N_HOST_RES_PREFERENCE_ORDER) {
+    auto token = value.take_prefix_at(";/|"sv);
     // special case none/only because that terminates the sequence.
-    if (0 == strcasecmp(elt, HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_NONE])) {
+    if (0 == strcasecmp(token, HOST_RES_PREFERENCE_STRING[HOST_RES_PREFER_NONE])) {
       found[HOST_RES_PREFER_NONE] = true;
       order[np]                   = HOST_RES_PREFER_NONE;
       break;
@@ -612,7 +610,7 @@ parse_host_res_preference(const char *value, HostResPreferenceOrder order)
       // scan the other types
       HostResPreference ep = HOST_RES_PREFER_NONE;
       for (int ip = HOST_RES_PREFER_NONE + 1; ip < N_HOST_RES_PREFERENCE; ++ip) {
-        if (0 == strcasecmp(elt, HOST_RES_PREFERENCE_STRING[ip])) {
+        if (0 == strcasecmp(token, HOST_RES_PREFERENCE_STRING[ip])) {
           ep = static_cast<HostResPreference>(ip);
           break;
         }
@@ -638,22 +636,26 @@ parse_host_res_preference(const char *value, HostResPreferenceOrder order)
   }
 }
 
-int
-ts_host_res_order_to_string(HostResPreferenceOrder const &order, char *out, int size)
+namespace ts
 {
-  int zret   = 0;
+BufferWriter &
+bwformat(BufferWriter &w, BWFSpec const &spec, HostResPreferenceOrder const &order)
+{
   bool first = true;
   for (auto i : order) {
-    /* Note we use a semi-colon here because this must be compatible
-     * with the -httpport command line option which uses comma to
-     * separate port descriptors so we cannot use that to separate
+    /* Note we use a semi-colon here because this must be compatible with the -httpport command line
+     * option which uses comma to separate port descriptors so we cannot use that to separate
      * resolution key words.
      */
-    zret += snprintf(out + zret, size - zret, "%s%s", !first ? ";" : "", HOST_RES_PREFERENCE_STRING[i]);
+    if (!first) {
+      w.write(';');
+    }
+    first = false;
+    w.print("{}", HOST_RES_PREFERENCE_STRING[i]);
     if (HOST_RES_PREFER_NONE == i) {
       break;
     }
-    first = false;
   }
-  return zret;
+  return w;
 }
+} // namespace ts

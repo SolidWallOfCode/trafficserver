@@ -68,11 +68,11 @@
 
 #pragma once
 
-#include "tscore/ink_platform.h"
-#include "tscore/ink_inet.h"
-
 #include <resolv.h>
 #include <arpa/nameser.h>
+#include "tscore/ink_platform.h"
+#include "tscore/ink_inet.h"
+#include "tscore/BufferWriterForward.h"
 
 #if defined(openbsd)
 #define NS_INT16SZ INT16SZ
@@ -190,7 +190,7 @@ extern HostResStyle ats_host_res_match(sockaddr const *addr);
 
 /** Parse a host resolution configuration string.
  */
-extern void parse_host_res_preference(const char *value,           ///< [in] Configuration string.
+extern void parse_host_res_preference(ts::TextView value,          ///< [in] Configuration string.
                                       HostResPreferenceOrder order /// [out] Order to update.
 );
 
@@ -278,10 +278,8 @@ int ink_ns_name_ntop(const u_char *src, char *dst, size_t dstsiz);
  */
 void ts_host_res_global_init();
 
-/** Generate a string representation of a host resolution preference ordering.
-    @return The length of the string.
- */
-int ts_host_res_order_to_string(HostResPreferenceOrder const &order, ///< order to print
-                                char *out,                           ///< Target buffer for string.
-                                int size                             ///< Size of buffer.
-);
+namespace ts
+{
+/// Format @a order into a @c BufferWriter.
+BufferWriter &bwformat(BufferWriter &w, BWFSpec const &spec, HostResPreferenceOrder const &order);
+} // namespace ts

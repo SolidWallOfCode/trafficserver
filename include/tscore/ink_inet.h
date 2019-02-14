@@ -1096,7 +1096,12 @@ ats_ip_pton(const char *text, ///< [in] text.
 
 /** Get the best address info for @a name.
 
-    @name is passed to @c getaddrinfo which does a host lookup if @a
+    @param host Name of the host.
+    @param ip4 [out] Storage for IPv4 address, if found.
+    @param ip6 [out] Storage for IPv6 address, if found.
+    @return 0 if an address was found, non-zero otherwise.
+
+    @a host is passed to @c getaddrinfo which does a host lookup if @a
     name is not in IP address format. The results are examined for the
     "best" addresses. This is only significant for the host name case
     (for IP address data, there is at most one result). The preference is
@@ -1113,16 +1118,11 @@ ats_ip_pton(const char *text, ///< [in] text.
     discarded. It is legal for both to be @c nullptr in which case this
     is just a format check.
 
-    @return 0 if an address was found, non-zero otherwise.
-
     @see ats_ip_pton
     @see getaddrinfo
  */
 
-int ats_ip_getbestaddrinfo(const char *name, ///< [in] Address name (IPv4, IPv6, or host name)
-                           IpEndpoint *ip4,  ///< [out] Storage for IPv4 address.
-                           IpEndpoint *ip6   ///< [out] Storage for IPv6 address
-);
+int ats_ip_getbestaddrinfo(std::string_view name, IpEndpoint *ip4, IpEndpoint *ip6);
 
 /** Generic IP address hash function.
  */
