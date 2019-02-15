@@ -670,7 +670,7 @@ TSPluginInit(int argc, const char *argv[])
 
   // Setup the global hook
   TSReleaseAssert(TSHttpTxnArgIndexReserve("xdebug", "xdebug header requests", &XArgIndex) == TS_SUCCESS);
-  TSReleaseAssert(TSHttpTxnArgIndexReserve("bodyTransform", "BodyBuilder*", &XArgIndex) == TS_SUCCESS);
+  TSReleaseAssert(TSHttpTxnArgIndexReserve("bodyTransform", "BodyBuilder*", &BodyBuilderArgIndex) == TS_SUCCESS);
   TSReleaseAssert(XInjectHeadersCont = TSContCreate(XInjectResponseHeaders, nullptr));
   TSReleaseAssert(XDeleteDebugHdrCont = TSContCreate(XDeleteDebugHdr, nullptr));
   TSHttpHookAdd(TS_HTTP_READ_REQUEST_HDR_HOOK, TSContCreate(XScanRequestHeaders, nullptr));
