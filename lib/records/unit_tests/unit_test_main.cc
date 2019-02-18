@@ -26,31 +26,6 @@
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
-#include "tscore/Diags.h"
-#include "tscore/BufferWriter.h"
-#include "tscore/ink_resolver.h"
-#include "test_Diags.h"
-
-#define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
-
-Diags *diags = new CatchDiags;
-extern void ts_session_protocol_well_known_name_indices_init();
-
-int
-main(int argc, char *argv[])
-{
-  // Global data initialization needed for the unit tests.
-  ts_session_protocol_well_known_name_indices_init();
-  // Cheat for ts_host_res_global_init as there's no records.config to check for non-default.
-  memcpy(host_res_default_preference_order, HOST_RES_DEFAULT_PREFERENCE_ORDER, sizeof(host_res_default_preference_order));
-
-  int result = Catch::Session().run(argc, argv);
-
-  // global clean-up...
-
-  return result;
-}
 
 Diags *diags = new CatchDiags;
 extern void ts_session_protocol_well_known_name_indices_init();

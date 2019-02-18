@@ -40,6 +40,7 @@ SessionProtocolNameRegistry globalSessionProtocolNameRegistry;
 
 /* Protocol session well-known protocol names.
    These are also used for NPN setup.
+   Exported to the C API, therefore must be C style strings.
 */
 
 const char *const TS_ALPN_PROTOCOL_HTTP_0_9 = IP_PROTO_TAG_HTTP_0_9.data();
@@ -78,6 +79,12 @@ SessionProtocolSet DEFAULT_TLS_SESSION_PROTOCOL_SET;
 
 namespace
 {
+/** Generate a warning using BW formatting.
+ *
+ * @tparam Args Types of data arguments.
+ * @param format BW format string.
+ * @param args Data arguments.
+ */
 template <typename... Args>
 void
 BW_Warning(TextView format, Args &&... args)
@@ -87,6 +94,15 @@ BW_Warning(TextView format, Args &&... args)
   Warning("%s", text.c_str());
 }
 
+/** Check for @a prefix and remove if present.
+ *
+ * @param token [in,out] View to check and update.
+ * @param prefix [in] Prefix to check.
+ * @return @c true if the prefix was present and removed from @a token,
+ * otherwise @c false and @a token is unchanged.
+ *
+ * If @a token contains a '-' or '=' character after the prefix, that is removed.
+ */
 bool
 Validate_Prefix(TextView &token, TextView const &prefix)
 {
@@ -165,12 +181,12 @@ RecHttpLoadIpMap(const char *value_name, IpMap &ipmap)
   IpAddr raddr;
   void *payload = nullptr;
 
-  if (REC_ERR_OKAY == RecGetRecordString(std::string_view{value_name}, value)) {
+  if (REC_ERR_OKAY == RecGetRecordString(value_name, value)) {
     Debug("config", "RecHttpLoadIpMap: parsing the name [%s] and value [%s] to an IpMap", value_name, value.c_str());
     TextView text{value};
     while (text) {
-      auto token{text.take_prefix_at(", "sv)};
-      if (token.trim_if(&isspace).empty()) {
+      auto token{text.take_prefix_at(", "sv).trim_if(&isspace)};
+      if (token.empty()) {
         continue;
       }
       Debug("config", "RecHttpLoadIpMap: marking the value [%.*s] to an IpMap entry", static_cast<int>(token.size()), token.data());
@@ -179,24 +195,30 @@ RecHttpLoadIpMap(const char *value_name, IpMap &ipmap)
       }
     }
   }
-  Debug("config", "RecHttpLoadIpMap: parsed %zu IpMap entries", ipmap.count());
+  Debug("config", "RecHttpLoadIpMap: parsed %" PRIu64 " IpMap entries", ipmap.count());
 }
 
 // "_PREFIX" means the option contains additional data.
 // Each has a corresponding _LEN value that is the length of the option text.
 // Options without _PREFIX are just flags with no additional data.
 
-const char *const HttpProxyPort::OPT_IPV6                    = "ipv6";
-const char *const HttpProxyPort::OPT_IPV4                    = "ipv4";
-const char *const HttpProxyPort::OPT_TRANSPARENT_INBOUND     = "tr-in";
-const char *const HttpProxyPort::OPT_TRANSPARENT_OUTBOUND    = "tr-out";
-const char *const HttpProxyPort::OPT_TRANSPARENT_FULL        = "tr-full";
-const char *const HttpProxyPort::OPT_TRANSPARENT_PASSTHROUGH = "tr-pass";
-const char *const HttpProxyPort::OPT_SSL                     = "ssl";
-const char *const HttpProxyPort::OPT_PROXY_PROTO             = "pp";
-const char *const HttpProxyPort::OPT_PLUGIN                  = "plugin";
-const char *const HttpProxyPort::OPT_BLIND_TUNNEL            = "blind";
-const char *const HttpProxyPort::OPT_MPTCP                   = "mptcp";
+const TextView HttpProxyPort::OPT_FD_PREFIX               = "fd";     ///< Prefix for file descriptor value.
+const TextView HttpProxyPort::OPT_OUTBOUND_IP_PREFIX      = "ip-out"; ///< Prefix for inbound IP address.
+const TextView HttpProxyPort::OPT_INBOUND_IP_PREFIX       = "ip-in";  ///< Prefix for outbound IP address.
+const TextView HttpProxyPort::OPT_IPV6                    = "ipv6";
+const TextView HttpProxyPort::OPT_IPV4                    = "ipv4";
+const TextView HttpProxyPort::OPT_TRANSPARENT_INBOUND     = "tr-in";
+const TextView HttpProxyPort::OPT_TRANSPARENT_OUTBOUND    = "tr-out";
+const TextView HttpProxyPort::OPT_TRANSPARENT_FULL        = "tr-full";
+const TextView HttpProxyPort::OPT_TRANSPARENT_PASSTHROUGH = "tr-pass";
+const TextView HttpProxyPort::OPT_SSL                     = "ssl";
+const TextView HttpProxyPort::OPT_PROXY_PROTO             = "pp";
+const TextView HttpProxyPort::OPT_PLUGIN                  = "plugin";
+const TextView HttpProxyPort::OPT_BLIND_TUNNEL            = "blind";
+const TextView HttpProxyPort::OPT_COMPRESSED              = "compressed"; ///< Compressed.
+const TextView HttpProxyPort::OPT_HOST_RES_PREFIX         = "ip-resolve"; ///< Set DNS family preference.
+const TextView HttpProxyPort::OPT_PROTO_PREFIX            = "proto";      ///< Transport layer protocols.
+const TextView HttpProxyPort::OPT_MPTCP                   = "mptcp";
 
 namespace
 {
@@ -210,15 +232,6 @@ HttpProxyPort::Group GLOBAL_DATA;
 HttpProxyPort::Group &HttpProxyPort::m_global = GLOBAL_DATA;
 
 HttpProxyPort::HttpProxyPort()
-  : m_fd(ts::NO_FD),
-    m_type(TRANSPORT_DEFAULT),
-    m_port(0),
-    m_family(AF_INET),
-    m_proxy_protocol(false),
-    m_inbound_transparent_p(false),
-    m_outbound_transparent_p(false),
-    m_transparent_passthrough(false),
-    m_mptcp(false)
 {
   memcpy(m_host_res_preference, host_res_default_preference_order, sizeof(m_host_res_preference));
 }
@@ -232,32 +245,16 @@ HttpProxyPort::hasSSL(Group const &ports)
 const HttpProxyPort *
 HttpProxyPort::findHttp(Group const &ports, uint16_t family)
 {
-  bool check_family_p   = ats_is_ip(family);
-  const self_type *zret = nullptr;
-  for (int i = 0, n = ports.size(); i < n && !zret; ++i) {
-    const self_type &p = ports[i];
+  bool check_family_p = ats_is_ip(family);
+  for (auto const &p : ports) {
     if (p.m_port &&                               // has a valid port
         TRANSPORT_DEFAULT == p.m_type &&          // is normal HTTP
         (!check_family_p || p.m_family == family) // right address family
     ) {
-      zret = &p;
+      return &p;
     };
   }
-  return zret;
-}
-
-const char *
-HttpProxyPort::checkPrefix(const char *src, char const *prefix, size_t prefix_len)
-{
-  const char *zret = nullptr;
-  if (0 == strncasecmp(prefix, src, prefix_len)) {
-    src += prefix_len;
-    if ('-' == *src || '=' == *src) {
-      ++src; // permit optional '-' or '='
-    }
-    zret = src;
-  }
-  return zret;
+  return nullptr;
 }
 
 bool
@@ -292,8 +289,7 @@ HttpProxyPort::loadValue(std::vector<self_type> &ports, TextView text)
     if (entry.processOptions(token)) {
       ports.push_back(entry);
     } else {
-      Warning("No valid definition was found in proxy port configuration element '%.*s'", static_cast<int>(text.size()),
-              text.data());
+      BW_Warning("No valid definition was found in proxy port configuration element '{}'", text);
     }
   }
   return ports.size() > old_port_length; // we added at least one port.
@@ -311,7 +307,8 @@ HttpProxyPort::processOptions(TextView opts)
   auto text{opts};
   while (text) {
     TextView::size_type offset = 0;
-    bool bracket_p             = false;
+    // Brackets act like quotes - anything inside [] is literal.
+    bool bracket_p = false;
     while (offset < text.size()) {
       offset = text.find_first_of("[:]"sv, offset); // next character of interest.
       if (TextView::npos == offset) {
@@ -325,8 +322,8 @@ HttpProxyPort::processOptions(TextView opts)
           BW_Warning("Invalid port descriptor '{}' - left bracket after left bracket without right bracket", opts);
           return zret;
         } else {
-          bracket_p = true;
           ++offset;
+          offset = text.find(']', offset);
         }
       } else if (']' == text[offset]) {
         if (bracket_p) {
@@ -516,6 +513,12 @@ ts::BufferWriter &
 HttpProxyPort::print(ts::BufferWriter &w) const
 {
   bool need_colon_p = false;
+  auto write_colon  = [&]() -> void {
+    if (need_colon_p) {
+      w.write(':');
+    }
+    need_colon_p = true;
+  };
 
   if (m_inbound_ip.isValid()) {
     w.print("{}=[{}]", OPT_INBOUND_IP_PREFIX, m_inbound_ip);
@@ -523,33 +526,22 @@ HttpProxyPort::print(ts::BufferWriter &w) const
   }
 
   if (m_outbound_ip4.isValid()) {
-    if (need_colon_p) {
-      w.write(':');
-    }
+    write_colon();
     w.print("{}={}", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip4);
-    need_colon_p = true;
   }
 
   if (m_outbound_ip6.isValid()) {
-    if (need_colon_p) {
-      w.write(':');
-    }
+    write_colon();
     w.print("{}=[{}]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip6);
-    need_colon_p = true;
   }
 
   if (0 != m_port) {
-    if (need_colon_p) {
-      w.write(':');
-    }
+    write_colon();
     w.print("{}", m_port);
-    need_colon_p = true;
   }
 
   if (ts::NO_FD != m_fd) {
-    if (need_colon_p) {
-      w.write(':');
-    }
+    write_colon();
     w.print("{}={}", OPT_FD_PREFIX, m_fd);
   }
 
@@ -637,7 +629,7 @@ HttpProxyPort::print(ts::BufferWriter &w) const
           w.write(';');
         }
         sep_p = true;
-        w.print("{}", globalSessionProtocolNameRegistry.nameFor(k));
+        w.write(globalSessionProtocolNameRegistry.nameFor(k));
       }
     }
   }

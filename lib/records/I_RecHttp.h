@@ -205,32 +205,30 @@ protected:
   int m_n = 0;                       ///< Number of names stored in the array.
   std::array<TextView, MAX> m_names; ///< Registered names.
   ts::MemArena m_arena;              ///< Storage for non-constant strings.
-
-  static uint8_t const F_ALLOCATED = 0x1; ///< Flag for allocated by this instance.
 };
 
 extern SessionProtocolNameRegistry globalSessionProtocolNameRegistry;
 
 /** Description of an proxy port.
 
-    This consolidates the options needed for proxy ports, both data
-    and parsing. It provides a static global set of ports for
-    convenience although it can be used with an externally provided
+    This consolidates the options needed for proxy ports, both data and parsing. It provides a
+    static global set of ports for convenience although it can be used with an externally provided
     set.
 
-    Options are described by a colon separated list of keywords
-    without spaces. The options are applied in left to right order. If
-    options do not conflict the order is irrelevant.
+    Options are described by a colon separated list of keywords without spaces. The options are
+    applied in left to right order. If options do not conflict the order is irrelevant.
 
-    IPv6 addresses must be enclosed by brackets. Unfortunate but colon is
-    so overloaded there's no other option.
+    IPv6 addresses must be enclosed by brackets. Unfortunate but colon is so overloaded there's no
+    other option.
  */
 struct HttpProxyPort {
 private:
   using self_type = HttpProxyPort; ///< Self reference type.
 public:
   /// Explicitly supported collection of proxy ports.
-  using Group = std::vector<self_type>;
+  using Group        = std::vector<self_type>;
+  using TextView     = ts::TextView;
+  using BufferWriter = ts::BufferWriter;
 
   /// Type of transport on the connection.
   enum TransportType {
@@ -242,20 +240,20 @@ public:
     TRANSPORT_PLUGIN        /// < Protocol plugin connection
   };
 
-  int m_fd;             ///< Pre-opened file descriptor if present.
-  TransportType m_type; ///< Type of connection.
-  in_port_t m_port;     ///< Port on which to listen.
-  uint8_t m_family;     ///< IP address family.
+  int m_fd             = ts::NO_FD;         ///< Pre-opened file descriptor if present.
+  TransportType m_type = TRANSPORT_DEFAULT; ///< Type of connection.
+  in_port_t m_port     = 0;                 ///< Port on which to listen.
+  uint8_t m_family     = AF_INET;           ///< IP address family.
   /// True if proxy protocol is required on incoming requests.
-  bool m_proxy_protocol;
+  bool m_proxy_protocol = false;
   /// True if inbound connects (from client) are transparent.
-  bool m_inbound_transparent_p;
+  bool m_inbound_transparent_p = false;
   /// True if outbound connections (to origin servers) are transparent.
-  bool m_outbound_transparent_p;
+  bool m_outbound_transparent_p = false;
   // True if transparent pass-through is enabled on this port.
-  bool m_transparent_passthrough;
+  bool m_transparent_passthrough = false;
   /// True if MPTCP is enabled on this port.
-  bool m_mptcp;
+  bool m_mptcp = false;
   /// Local address for inbound connections (listen address).
   IpAddr m_inbound_ip;
   /// Local address for outbound connections (to origin server).
@@ -295,7 +293,7 @@ public:
    * @param opts Text to process.
    * @return @c true if any ports were processed, @c false if not.
    */
-  bool processOptions(ts::TextView opts);
+  bool processOptions(TextView opts);
 
   /** Global instance.
 
@@ -343,7 +341,7 @@ public:
    *
    * @note This is used primarily internally but is available if needed.
    */
-  static bool loadValue(std::vector<self_type> &ports, ts::TextView text);
+  static bool loadValue(std::vector<self_type> &ports, TextView text);
 
   /** Load ports from a @a value string into the global ports.
 
@@ -352,7 +350,7 @@ public:
 
       @return @c true if a valid port was found, @c false if none.
   */
-  static bool loadValue(ts::TextView value);
+  static bool loadValue(TextView value);
 
   /// Load default value if @a ports is empty.
   /// @return @c true if the default was needed / loaded.
@@ -384,50 +382,39 @@ public:
    * @param w The output buffer writer.
    * @return @a w
    */
-  ts::BufferWriter &print(ts::BufferWriter &w) const;
+  BufferWriter &print(BufferWriter &w) const;
 
-  static constexpr ts::TextView PORTS_CONFIG_NAME = "proxy.config.http.server_ports"; ///< New unified port descriptor.
+  static constexpr TextView PORTS_CONFIG_NAME = "proxy.config.http.server_ports"; ///< New unified port descriptor.
 
   /// Default value if no other values can be found.
-  static constexpr ts::TextView DEFAULT_VALUE = "8080";
+  static constexpr TextView DEFAULT_VALUE = "8080";
 
   // Keywords (lower case versions, but compares should be case insensitive)
-  static constexpr ts::TextView OPT_FD_PREFIX          = "fd";      ///< Prefix for file descriptor value.
-  static constexpr ts::TextView OPT_OUTBOUND_IP_PREFIX = "ip-out";  ///< Prefix for inbound IP address.
-  static constexpr ts::TextView OPT_INBOUND_IP_PREFIX  = "ip-in";   ///< Prefix for outbound IP address.
-  static const char *const OPT_IPV6;                                ///< IPv6.
-  static const char *const OPT_IPV4;                                ///< IPv4
-  static const char *const OPT_TRANSPARENT_INBOUND;                 ///< Inbound transparent.
-  static const char *const OPT_TRANSPARENT_OUTBOUND;                ///< Outbound transparent.
-  static const char *const OPT_TRANSPARENT_FULL;                    ///< Full transparency.
-  static const char *const OPT_TRANSPARENT_PASSTHROUGH;             ///< Pass-through non-HTTP.
-  static const char *const OPT_SSL;                                 ///< SSL (experimental)
-  static const char *const OPT_PROXY_PROTO;                         ///< Proxy Protocol
-  static const char *const OPT_PLUGIN;                              ///< Protocol Plugin handle (experimental)
-  static const char *const OPT_BLIND_TUNNEL;                        ///< Blind tunnel.
-  static constexpr ts::TextView OPT_COMPRESSED      = "compressed"; ///< Compressed.
-  static constexpr ts::TextView OPT_HOST_RES_PREFIX = "ip-resolve"; ///< Set DNS family preference.
-  static constexpr ts::TextView OPT_PROTO_PREFIX    = "proto";      ///< Transport layer protocols.
-  static const char *const OPT_MPTCP;                               ///< MPTCP.
+  static const TextView OPT_FD_PREFIX;               ///< Prefix for file descriptor value.
+  static const TextView OPT_OUTBOUND_IP_PREFIX;      ///< Prefix for inbound IP address.
+  static const TextView OPT_INBOUND_IP_PREFIX;       ///< Prefix for outbound IP address.
+  static const TextView OPT_IPV6;                    ///< IPv6.
+  static const TextView OPT_IPV4;                    ///< IPv4
+  static const TextView OPT_TRANSPARENT_INBOUND;     ///< Inbound transparent.
+  static const TextView OPT_TRANSPARENT_OUTBOUND;    ///< Outbound transparent.
+  static const TextView OPT_TRANSPARENT_FULL;        ///< Full transparency.
+  static const TextView OPT_TRANSPARENT_PASSTHROUGH; ///< Pass-through non-HTTP.
+  static const TextView OPT_SSL;                     ///< SSL (experimental)
+  static const TextView OPT_PROXY_PROTO;             ///< Proxy Protocol
+  static const TextView OPT_PLUGIN;                  ///< Protocol Plugin handle (experimental)
+  static const TextView OPT_BLIND_TUNNEL;            ///< Blind tunnel.
+  static const TextView OPT_COMPRESSED;              ///< Compressed.
+  static const TextView OPT_HOST_RES_PREFIX;         ///< Set DNS family preference.
+  static const TextView OPT_PROTO_PREFIX;            ///< Transport layer protocols.
+  static const TextView OPT_MPTCP;                   ///< MPTCP.
 
   static std::vector<self_type> &m_global; ///< Global ("default") data.
 
 protected:
   /// Process @a value for DNS resolution family preferences.
-  void processFamilyPreference(ts::TextView const &value);
+  void processFamilyPreference(TextView const &value);
   /// Process @a value for session protocol preferences.
-  void processSessionProtocolPreference(ts::TextView const &value);
-
-  /** Check a prefix option and find the value.
-      @return The address of the start of the value, or @c nullptr if the prefix doesn't match.
-  */
-
-  const char *checkPrefix(char const *src ///< Input text
-                          ,
-                          const char *prefix ///< Keyword prefix
-                          ,
-                          size_t prefix_len ///< Length of keyword prefix.
-  );
+  void processSessionProtocolPreference(TextView const &value);
 };
 
 inline bool

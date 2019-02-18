@@ -18,6 +18,8 @@
   the License.
  */
 
+#pragma once
+
 #include "tscore/Diags.h"
 
 class CatchDiags : public Diags
