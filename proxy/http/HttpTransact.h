@@ -636,7 +636,7 @@ public:
     bool redirect_in_process;
     URL original_url;
 
-    _RedirectInfo() : redirect_in_process(false), original_url(), redirect_url() {}
+    _RedirectInfo() : redirect_in_process(false), original_url() {}
   } RedirectInfo;
 
   struct ConnectionAttributes {
