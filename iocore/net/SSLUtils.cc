@@ -1715,7 +1715,7 @@ setClientCertLevel(SSL *ssl, uint8_t certLevel)
 }
 
 SSL_CTX *
-SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMultCertSettings, Vec<X509 *> &certList)
+SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMultCertSettings, std::vector<X509 *> &cert_list)
 {
   int server_verify_client;
   SSL_CTX *ctx                 = SSLDefaultServerContext();
@@ -1836,7 +1836,7 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
           X509_free(cert);
           goto fail;
         }
-        certList.push_back(cert);
+        cert_list.push_back(cert);
         if (SSLConfigParams::load_ssl_file_cb) {
           SSLConfigParams::load_ssl_file_cb(completeServerCertPath.c_str(), CONFIG_FLAG_UNVERSIONED);
         }
@@ -1846,6 +1846,11 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
         const char *keyPath = key_tok.getNext();
         if (!SSLPrivateKeyHandler(ctx, params, completeServerCertPath, keyPath)) {
           goto fail;
+        }
+
+        cert_list.push_back(cert);
+        if (SSLConfigParams::load_ssl_file_cb) {
+          SSLConfigParams::load_ssl_file_cb(completeServerCertPath.c_str(), CONFIG_FLAG_UNVERSIONED);
         }
 
         // Must load all the intermediate certificates before starting the next chain
@@ -2034,6 +2039,12 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
   if (SSLConfigParams::ssl_ocsp_enabled) {
     Debug("ssl", "ssl ocsp stapling is enabled");
     SSL_CTX_set_tlsext_status_cb(ctx, ssl_callback_ocsp_stapling);
+
+    for (auto cert : cert_list) {
+      if (!ssl_stapling_init_cert(ctx, cert, setting_cert)) {
+        Warning("failed to configure SSL_CTX for OCSP Stapling info for certificate at %s", setting_cert);
+      }
+    }
   } else {
     Debug("ssl", "ssl ocsp stapling is disabled");
   }
@@ -2053,8 +2064,8 @@ fail:
     EVP_MD_CTX_free(digest);
   SSL_CLEAR_PW_REFERENCES(ctx)
   SSLReleaseContext(ctx);
-  for (unsigned int i = 0; i < certList.length(); i++) {
-    X509_free(certList[i]);
+  for (auto cert : cert_list) {
+    X509_free(cert);
   }
 
   return nullptr;
@@ -2063,9 +2074,9 @@ fail:
 SSL_CTX *
 SSLCreateServerContext(const SSLConfigParams *params)
 {
-  Vec<X509 *> cert_list;
+  std::vector<X509 *> cert_list;
   SSL_CTX *ctx = SSLInitServerContext(params, nullptr, cert_list);
-  ink_assert(cert_list.length() == 0);
+  ink_assert(cert_list.empty());
   return ctx;
 }
 
@@ -2076,7 +2087,7 @@ SSLCreateServerContext(const SSLConfigParams *params)
 static SSL_CTX *
 ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, const ssl_user_config *sslMultCertSettings)
 {
-  Vec<X509 *> cert_list;
+  std::vector<X509 *> cert_list;
   SSL_CTX *ctx                   = SSLInitServerContext(params, sslMultCertSettings, cert_list);
   ssl_ticket_key_block *keyblock = nullptr;
   bool inserted                  = false;
@@ -2087,8 +2098,8 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
   }
 
   const char *certname = sslMultCertSettings->cert.get();
-  for (unsigned i = 0; i < cert_list.length(); ++i) {
-    if (0 > SSLCheckServerCertNow(cert_list[i], certname)) {
+  for (auto cert : cert_list) {
+    if (0 > SSLCheckServerCertNow(cert, certname)) {
       /* At this point, we know cert is bad, and we've already printed a
          descriptive reason as to why cert is bad to the log file */
       Debug("ssl", "Marking certificate as NOT VALID: %s", certname);
@@ -2131,30 +2142,12 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
 #endif
   }
 
-#ifdef TS_USE_TLS_OCSP
-  if (SSLConfigParams::ssl_ocsp_enabled) {
-    Debug("ssl", "ssl ocsp stapling is enabled");
-    SSL_CTX_set_tlsext_status_cb(ctx, ssl_callback_ocsp_stapling);
-    for (unsigned i = 0; i < cert_list.length(); ++i) {
-      if (!ssl_stapling_init_cert(ctx, cert_list[i], certname)) {
-        Warning("fail to configure SSL_CTX for OCSP Stapling info for certificate at %s", (const char *)certname);
-      }
-    }
-  } else {
-    Debug("ssl", "ssl ocsp stapling is disabled");
-  }
-#else
-  if (SSLConfigParams::ssl_ocsp_enabled) {
-    Warning("fail to enable ssl ocsp stapling, this openssl version does not support it");
-  }
-#endif /* HAVE_OPENSSL_OCSP_STAPLING */
-
   // Insert additional mappings. Note that this maps multiple keys to the same value, so when
   // this code is updated to reconfigure the SSL certificates, it will need some sort of
   // refcounting or alternate way of avoiding double frees.
   Debug("ssl", "importing SNI names from %s", (const char *)certname);
-  for (unsigned i = 0; i < cert_list.length(); ++i) {
-    if (ssl_index_certificate(lookup, SSLCertContext(ctx, sslMultCertSettings->opt), cert_list[i], certname)) {
+  for (auto cert : cert_list) {
+    if (ssl_index_certificate(lookup, SSLCertContext(ctx, sslMultCertSettings->opt), cert, certname)) {
       inserted = true;
     }
   }
@@ -2170,7 +2163,7 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
     ctx = nullptr;
   }
 
-  for (unsigned int i = 0; i < cert_list.length(); i++) {
+  for (unsigned int i = 0; i < cert_list.size(); i++) {
     X509_free(cert_list[i]);
   }
 
