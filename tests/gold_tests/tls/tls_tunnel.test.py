@@ -28,7 +28,7 @@ Test.SkipUnless(
 )
 
 # Define default ATS
-ts = Test.MakeATSProcess("ts", command="traffic_manager", select_ports=False)
+ts = Test.MakeATSProcess("ts", command="traffic_manager", select_ports=True, enable_tls=True)
 server_foo = Test.MakeOriginServer("server_foo", ssl=True)
 server_bar = Test.MakeOriginServer("server_bar", ssl=True)
 server2 = Test.MakeOriginServer("server2")
@@ -49,8 +49,6 @@ ts.addSSLfile("ssl/server.pem")
 ts.addSSLfile("ssl/server.key")
 ts.addSSLfile("ssl/signer.pem")
 ts.addSSLfile("ssl/signer.key")
-
-ts.Variables.ssl_port = 4443
 
 # Need no remap rules.  Everything should be proccessed by ssl_server_name
 
@@ -93,7 +91,7 @@ tr.Processes.Default.Command = "curl -v --resolve 'foo.com:{0}:127.0.0.1' -k  ht
 tr.ReturnCode = 0
 tr.Processes.Default.StartBefore(server_foo)
 tr.Processes.Default.StartBefore(server_bar)
-tr.Processes.Default.StartBefore(Test.Processes.ts, ready=When.PortOpen(ts.Variables.ssl_port))
+tr.Processes.Default.StartBefore(Test.Processes.ts)
 tr.StillRunningAfter = ts
 tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Could Not Connect", "Curl attempt should have succeeded")
 tr.Processes.Default.Streams.All += Testers.ExcludesExpression("Not Found on Accelerato", "Should not try to remap on Traffic Server")
