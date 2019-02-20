@@ -22,11 +22,6 @@
 #ifndef __P_SSLUTILS_H__
 #define __P_SSLUTILS_H__
 
-#include "ts/ink_config.h"
-#include "ts/Diags.h"
-#include "P_SSLClientUtils.h"
-#include <ts/TextView.h>
-
 #define OPENSSL_THREAD_DEFINES
 
 // BoringSSL does not have this include file
@@ -35,8 +30,13 @@
 #endif
 #include <openssl/ssl.h>
 
+#include "ts/ink_config.h"
+#include "ts/Diags.h"
+
+#include "P_SSLClientUtils.h"
+#include "P_SSLCertLookup.h"
+
 struct SSLConfigParams;
-struct SSLCertLookup;
 class SSLNetVConnection;
 struct RecRawStatBlock;
 
@@ -119,11 +119,64 @@ extern RecRawStatBlock *ssl_rsb;
     RecSetRawStatCount(ssl_rsb, (x), 0); \
   } while (0)
 
-// Create a default SSL server context.
-SSL_CTX *SSLDefaultServerContext();
+/**
+   @brief Gather user provided settings from ssl_multicert.config in to this single struct
+ */
+struct SSLMultiCertConfigParams {
+  SSLMultiCertConfigParams() : opt(SSLCertContext::OPT_NONE)
+  {
+    REC_ReadConfigInt32(session_ticket_enabled, "proxy.config.ssl.server.session_ticket.enable");
+  }
+
+  int session_ticket_enabled; ///< session ticket enabled
+  ats_scoped_str addr;        ///< IPv[64] address to match
+  ats_scoped_str cert;        ///< certificate
+  ats_scoped_str first_cert;  ///< the first certificate name when multiple cert files are in 'ssl_cert_name'
+  ats_scoped_str ca;          ///< CA public certificate
+  ats_scoped_str key;         ///< Private key
+  ats_scoped_str dialog;      ///< Private key dialog
+  ats_scoped_str servername;  ///< Destination server
+  SSLCertContext::Option opt; ///< SSLCertContext special handling option
+};
+
+/**
+    @brief Load SSL certificates from ssl_multicert.config and setup SSLCertLookup for SSLCertificateConfig
+ */
+class SSLMultiCertConfigLoader
+{
+public:
+  SSLMultiCertConfigLoader(const SSLConfigParams *p) : _params(p) {}
+
+  bool load(SSLCertLookup *lookup);
+
+  virtual SSL_CTX *default_server_ssl_ctx();
+  virtual SSL_CTX *init_server_ssl_ctx(std::vector<X509 *> &certList, const SSLMultiCertConfigParams *sslMultCertSettings);
+
+  static bool load_certs(SSL_CTX *ctx, std::vector<X509 *> &certList, const SSLConfigParams *params,
+                         const SSLMultiCertConfigParams *ssl_multi_cert_params);
+  static bool set_session_id_context(SSL_CTX *ctx, const SSLConfigParams *params,
+                                     const SSLMultiCertConfigParams *sslMultCertSettings);
+
+  static bool index_certificate(SSLCertLookup *lookup, SSLCertContext const &cc, X509 *cert, const char *certname);
+  static int check_server_cert_now(X509 *cert, const char *certname);
+  static void clear_pw_references(SSL_CTX *ssl_ctx);
+
+protected:
+  const SSLConfigParams *_params;
+
+private:
+  virtual SSL_CTX *_store_ssl_ctx(SSLCertLookup *lookup, const SSLMultiCertConfigParams *ssl_multi_cert_params);
+  virtual void _set_handshake_callbacks(SSL_CTX *ctx);
+};
 
 // Create a new SSL server context fully configured.
+// Used by TS API (TSSslServerContextCreate)
 SSL_CTX *SSLCreateServerContext(const SSLConfigParams *params);
+
+// Release SSL_CTX and the associated data. This works for both
+// client and server contexts and gracefully accepts nullptr.
+// Used by TS API (TSSslContextDestroy)
+void SSLReleaseContext(SSL_CTX *ctx);
 
 // Initialize the SSL library.
 void SSLInitializeLibrary();
@@ -133,10 +186,6 @@ void SSLPostConfigInitialize();
 
 // Initialize SSL statistics.
 void SSLInitializeStatistics();
-
-// Release SSL_CTX and the associated data. This works for both
-// client and server contexts and gracefully accepts nullptr.
-void SSLReleaseContext(SSL_CTX *ctx);
 
 // Wrapper functions to SSL I/O routines
 ssl_error_t SSLWriteBuffer(SSL *ssl, const void *buf, int64_t nbytes, int64_t &nwritten);
@@ -164,9 +213,6 @@ const char *SSLErrorName(int ssl_error);
 
 // Log a SSL network buffer.
 void SSLDebugBufferPrint(const char *tag, const char *buffer, unsigned buflen, const char *message);
-
-// Load the SSL certificate configuration.
-bool SSLParseCertificateConfiguration(const SSLConfigParams *params, SSLCertLookup *lookup);
 
 // Attach a SSL NetVC back pointer to a SSL session.
 void SSLNetVCAttach(SSL *ssl, SSLNetVConnection *vc);

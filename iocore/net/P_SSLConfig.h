@@ -31,11 +31,15 @@
 #ifndef __P_SSLCONFIG_H__
 #define __P_SSLCONFIG_H__
 
-#include "ProxyConfig.h"
-#include "SSLSessionCache.h"
-#include "ts/ink_inet.h"
 #include <openssl/rand.h>
-#include "P_SSLCertLookup.h"
+
+#include "ts/ink_inet.h"
+#include "ts/IpMap.h"
+
+#include "ProxyConfig.h"
+
+#include "SSLSessionCache.h"
+
 #include "LuaSNIConfig.h"
 
 struct SSLCertLookup;

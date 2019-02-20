@@ -24,8 +24,9 @@
 #ifndef __P_SSLCERTLOOKUP_H__
 #define __P_SSLCERTLOOKUP_H__
 
+#include <openssl/ssl.h>
+
 #include "ProxyConfig.h"
-#include "P_SSLUtils.h"
 
 struct SSLConfigParams;
 struct SSLContextStorage;
