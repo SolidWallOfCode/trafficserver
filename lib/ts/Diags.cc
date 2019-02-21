@@ -252,6 +252,8 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
     }
   }
 
+  format_writer.print("{thread-name} ");
+
   //////////////////////////////////
   // append the diag level prefix //
   //////////////////////////////////
