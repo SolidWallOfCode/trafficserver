@@ -1899,7 +1899,16 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
         goto fail;
       }
     }
+
+#if defined(SSL_OP_NO_TICKET)
+    // Session tickets are enabled by default. Disable if explicitly requested.
+    if (sslMultCertSettings->session_ticket_enabled == 0) {
+      SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
+      Debug("ssl", "ssl session ticket is disabled");
+    }
+#endif
   }
+
   if (params->clientCertLevel != 0) {
     if (params->serverCACertFilename != nullptr && params->serverCACertPath != nullptr) {
       if ((!SSL_CTX_load_verify_locations(ctx, params->serverCACertFilename, params->serverCACertPath)) ||
@@ -2060,6 +2069,10 @@ SSLCreateServerContext(const SSLConfigParams *params)
   return ctx;
 }
 
+/**
+   Insert SSLCertContext (SSL_CTX ans options) into SSLCertLookup with key.
+   Do NOT call SSL_CTX_set_* functions from here. SSL_CTX should be set up by SSLInitServerContext().
+ */
 static SSL_CTX *
 ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, const ssl_user_config *sslMultCertSettings)
 {
@@ -2118,15 +2131,7 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
 #endif
   }
 
-#if defined(SSL_OP_NO_TICKET)
-  // Session tickets are enabled by default. Disable if explicitly requested.
-  if (sslMultCertSettings->session_ticket_enabled == 0) {
-    SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
-    Debug("ssl", "ssl session ticket is disabled");
-  }
-#endif
-
-#ifdef HAVE_OPENSSL_OCSP_STAPLING
+#ifdef TS_USE_TLS_OCSP
   if (SSLConfigParams::ssl_ocsp_enabled) {
     Debug("ssl", "ssl ocsp stapling is enabled");
     SSL_CTX_set_tlsext_status_cb(ctx, ssl_callback_ocsp_stapling);
