@@ -4493,10 +4493,6 @@ TSContScheduleOnPool(TSCont contp, TSHRTime timeout, TSThreadPool tp)
     ink_assert(!"not reached");
   }
 
-  if (i->getThreadAffinity() == nullptr) {
-    i->setThreadAffinity(this_event_thread());
-  }
-
   EventType etype;
 
   switch (tp) {
@@ -4586,10 +4582,6 @@ TSContScheduleEveryOnPool(TSCont contp, TSHRTime every, TSThreadPool tp)
 
   if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
     ink_assert(!"not reached");
-  }
-
-  if (i->getThreadAffinity() == nullptr) {
-    i->setThreadAffinity(this_event_thread());
   }
 
   EventType etype;
