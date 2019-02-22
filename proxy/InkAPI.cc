@@ -4568,29 +4568,10 @@ TSContScheduleOnThread(TSCont contp, TSHRTime timeout, TSEventThread ethread)
 }
 
 TSAction
-TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */)
+TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */, TSThreadPool tp)
 {
-  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
-
-  FORCE_PLUGIN_SCOPED_MUTEX(contp);
-
-  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
-
-  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
-    ink_assert(!"not reached");
-  }
-
-  EThread *eth = i->getThreadAffinity();
-  if (eth == nullptr) {
-    eth = this_event_thread();
-    i->setThreadAffinity(eth);
-  }
-
-  TSAction action = reinterpret_cast<TSAction>(eth->schedule_every(i, HRTIME_MSECONDS(every)));
-
-  /* This is a hack. Should be handled in ink_types */
-  action = (TSAction)((uintptr_t)action | 0x1);
-  return action;
+  // For backwards compatability, mapping the original Schedule call to the new one
+  return TSContScheduleEveryOnPool(contp, every, tp);
 }
 
 TSAction

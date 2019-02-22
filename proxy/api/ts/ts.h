@@ -1206,7 +1206,7 @@ tsapi void *TSContDataGet(TSCont contp);
 tsapi TSAction TSContSchedule(TSCont contp, TSHRTime timeout, TSThreadPool tp);
 tsapi TSAction TSContScheduleOnPool(TSCont contp, TSHRTime timeout, TSThreadPool tp);
 tsapi TSAction TSContScheduleOnThread(TSCont contp, TSHRTime timeout, TSEventThread ethread);
-tsapi TSAction TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */);
+tsapi TSAction TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */, TSThreadPool tp);
 tsapi TSAction TSContScheduleEveryOnPool(TSCont contp, TSHRTime every /* millisecs */, TSThreadPool tp);
 tsapi TSAction TSContScheduleEveryOnThread(TSCont contp, TSHRTime every /* millisecs */, TSEventThread ethread);
 tsapi TSReturnCode TSContThreadAffinitySet(TSCont contp, TSEventThread ethread);
