@@ -4474,34 +4474,10 @@ TSContDataGet(TSCont contp)
 }
 
 TSAction
-TSContSchedule(TSCont contp, TSHRTime timeout)
+TSContSchedule(TSCont contp, TSHRTime timeout, TSThreadPool tp)
 {
-  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
-
-  FORCE_PLUGIN_SCOPED_MUTEX(contp);
-
-  INKContInternal *i = reinterpret_cast<INKContInternal *>(contp);
-
-  if (ink_atomic_increment(static_cast<int *>(&i->m_event_count), 1) < 0) {
-    ink_assert(!"not reached");
-  }
-
-  EThread *eth = i->getThreadAffinity();
-  if (eth == nullptr) {
-    eth = this_event_thread();
-    i->setThreadAffinity(eth);
-  }
-
-  TSAction action;
-  if (timeout == 0) {
-    action = reinterpret_cast<TSAction>(eth->schedule_imm(i));
-  } else {
-    action = reinterpret_cast<TSAction>(eth->schedule_in(i, HRTIME_MSECONDS(timeout)));
-  }
-
-  /* This is a hack. Should be handled in ink_types */
-  action = (TSAction)((uintptr_t)action | 0x1);
-  return action;
+  // For backwards compatability, mapping the original Schedule call to the new one
+  return TSContScheduleOnPool(contp, timeout, tp);
 }
 
 TSAction

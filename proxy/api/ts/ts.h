@@ -1203,7 +1203,7 @@ tsapi TSCont TSContCreate(TSEventFunc funcp, TSMutex mutexp);
 tsapi void TSContDestroy(TSCont contp);
 tsapi void TSContDataSet(TSCont contp, void *data);
 tsapi void *TSContDataGet(TSCont contp);
-tsapi TSAction TSContSchedule(TSCont contp, TSHRTime timeout);
+tsapi TSAction TSContSchedule(TSCont contp, TSHRTime timeout, TSThreadPool tp);
 tsapi TSAction TSContScheduleOnPool(TSCont contp, TSHRTime timeout, TSThreadPool tp);
 tsapi TSAction TSContScheduleOnThread(TSCont contp, TSHRTime timeout, TSEventThread ethread);
 tsapi TSAction TSContScheduleEvery(TSCont contp, TSHRTime every /* millisecs */);
