@@ -4500,6 +4500,7 @@ TSContScheduleOnPool(TSCont contp, TSHRTime timeout, TSThreadPool tp)
   EventType etype;
 
   switch (tp) {
+  case TS_THREAD_POOL_DEFAULT:
   case TS_THREAD_POOL_NET:
     etype = ET_NET;
     break;
@@ -4594,6 +4595,7 @@ TSContScheduleEveryOnPool(TSCont contp, TSHRTime every, TSThreadPool tp)
   EventType etype;
 
   switch (tp) {
+  case TS_THREAD_POOL_DEFAULT:
   case TS_THREAD_POOL_NET:
     etype = ET_NET;
     break;

@@ -31,6 +31,8 @@ Enum typedef.
 Enumeration Members
 ===================
 
+.. c:member:: TSThreadPool TS_THREAD_POOL_DEFAULT
+
 .. c:member:: TSThreadPool TS_THREAD_POOL_NET
 
 .. c:member:: TSThreadPool TS_THREAD_POOL_TASK
@@ -47,4 +49,3 @@ Enumeration Members
 
 Description
 ===========
-
