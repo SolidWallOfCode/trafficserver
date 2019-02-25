@@ -678,6 +678,8 @@ Lretry:
   if (thread->mutex == cont->mutex) {
     thread->schedule_in(c, MUTEX_RETRY_DELAY);
   } else {
+    // Make sure the affinity thread is set before casting off to dns thread
+    c->setThreadAffinity(thread);
     dnsProcessor.thread->schedule_imm(c);
   }
 
@@ -1773,6 +1775,7 @@ int
 HostDBContinuation::set_check_pending_dns()
 {
   Queue<HostDBContinuation> &q = hostDB.pending_dns_for_hash(md5.hash);
+  this->setThreadAffinity(this_ethread());
   HostDBContinuation *c        = q.head;
   for (; c; c = (HostDBContinuation *)c->link.next) {
     if (md5.hash == c->md5.hash) {
@@ -1802,7 +1805,7 @@ HostDBContinuation::remove_trigger_pending_dns()
     c = n;
   }
   while ((c = qq.dequeue())) {
-    // resume all queued HostDBCont in their native threads to avoid locking issues.
+    // resume all queued HostDBCont in the thread associated with the netvc to avoid locking issues.
     eventProcessor.schedule_imm(c);
   }
 }
