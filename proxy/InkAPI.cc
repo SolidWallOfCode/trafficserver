@@ -9118,17 +9118,21 @@ TSHttpEventNameLookup(TSEvent event)
 class TSSslCallback : public Continuation
 {
 public:
-  TSSslCallback(SSLNetVConnection *vc) : Continuation(vc->mutex), m_vc(vc) { SET_HANDLER(&TSSslCallback::event_handler); }
+  TSSslCallback(SSLNetVConnection *vc, TSEvent event) : Continuation(vc->mutex), m_vc(vc), m_event(event) 
+  { 
+    SET_HANDLER(&TSSslCallback::event_handler); 
+  }
   int
   event_handler(int event, void *)
   {
-    m_vc->reenable(m_vc->nh);
+    m_vc->reenable(m_vc->nh, m_event);
     delete this;
     return 0;
   }
 
 private:
   SSLNetVConnection *m_vc;
+  TSEvent m_event;
 };
 
 /// SSL Hooks
@@ -9292,6 +9296,12 @@ TSVConnIsSsl(TSVConn sslp)
 void
 TSVConnReenable(TSVConn vconn)
 {
+  TSVConnReenableEx(vconn, TS_EVENT_CONTINUE);
+}
+
+void
+TSVConnReenableEx(TSVConn vconn, TSEvent event)
+{
   NetVConnection *vc        = reinterpret_cast<NetVConnection *>(vconn);
   SSLNetVConnection *ssl_vc = dynamic_cast<SSLNetVConnection *>(vc);
   // We really only deal with a SSLNetVConnection at the moment
@@ -9306,13 +9316,13 @@ TSVConnReenable(TSVConn vconn)
       // deadlock or it ends up interacting with the wrong NetHandler).
       MUTEX_TRY_LOCK(trylock, ssl_vc->mutex, eth);
       if (trylock.is_locked()) {
-        ssl_vc->reenable(ssl_vc->nh);
+        ssl_vc->reenable(ssl_vc->nh, event);
       } else {
         reschedule = true;
       }
     }
     if (reschedule) {
-      ssl_vc->thread->schedule_imm(new TSSslCallback(ssl_vc));
+      ssl_vc->thread->schedule_imm(new TSSslCallback(ssl_vc, event));
     }
   }
 }
