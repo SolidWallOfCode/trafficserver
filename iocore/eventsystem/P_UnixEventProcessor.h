@@ -77,9 +77,9 @@ EventProcessor::schedule(Event *e, EventType etype, bool fast_signal)
   } else {
     ethread = this_ethread();
     // Is the current thread eligible?
-    if (ethread->is_event_type(etype)) {
+    if (ethread != nullptr && ethread->is_event_type(etype)) {
       e->ethread = ethread;
-    } else { 
+    } else {
       e->ethread = assign_thread(etype);
     }
     if (e->continuation->getThreadAffinity() == nullptr) {
