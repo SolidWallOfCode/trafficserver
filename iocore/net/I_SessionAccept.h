@@ -56,7 +56,12 @@ struct HttpProxyPort;
 class SessionAccept : public Continuation
 {
 public:
-  SessionAccept(ProxyMutex *amutex) : Continuation(amutex) { SET_HANDLER(&SessionAccept::mainEvent); }
+  SessionAccept(ProxyMutex *amutex, HttpProxyPort *pport = nullptr) : Continuation(amutex),
+  proxyPort(pport)
+  {
+    SET_HANDLER(&SessionAccept::mainEvent);
+  }
+
   ~SessionAccept() {}
   /**
     Accept a new connection on this session.

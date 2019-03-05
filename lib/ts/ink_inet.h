@@ -1156,6 +1156,11 @@ ats_ip_pton(const char *text, ///< [in] text.
     @see getaddrinfo
  */
 
+int ats_ip_getbestaddrinfo2(ts::string_view host, ///< [in] Address name (IPv4, IPv6, or host name)
+                            IpEndpoint *ip4,      ///< [out] Storage for IPv4 address.
+                            IpEndpoint *ip6       ///< [out] Storage for IPv6 address
+                            );
+
 int ats_ip_getbestaddrinfo(const char *name, ///< [in] Address name (IPv4, IPv6, or host name)
                            IpEndpoint *ip4,  ///< [out] Storage for IPv4 address.
                            IpEndpoint *ip6   ///< [out] Storage for IPv6 address

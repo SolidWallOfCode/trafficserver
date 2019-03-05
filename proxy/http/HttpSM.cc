@@ -291,6 +291,9 @@ HttpVCTable::cleanup_all()
 
 static int next_sm_id = 0;
 
+std::atomic_size_t HttpSM::m_v4GlobalAddressIndex {0};
+std::atomic_size_t HttpSM::m_v6GlobalAddressIndex {0};
+
 HttpSM::HttpSM()
   : Continuation(nullptr),
     sm_id(-1),
@@ -5141,6 +5144,10 @@ HttpSM::do_http_server_open(bool raw)
   set_tls_options(opt, t_state.txn_conf);
 
   if (ua_session) {
+    if (!t_state.api_outbound_addr_set && !ua_session->is_outbound_transparent()) {
+      select_local_outbound_addr();
+    }
+
     opt.local_port = ua_session->get_outbound_port();
 
     const IpAddr &outbound_ip = AF_INET6 == opt.ip_family ? ua_session->get_outbound_ip6() : ua_session->get_outbound_ip4();
@@ -5219,6 +5226,38 @@ HttpSM::do_http_server_open(bool raw)
   }
 
   return;
+}
+
+void
+HttpSM::select_local_outbound_addr()
+{
+  const HttpProxyPort *pProxyPort = ua_session->get_parent()->get_proxy_port();
+  uint16_t family = t_state.current.server->dst_addr.sa.sa_family;
+
+  const IpAddr *addr = (pProxyPort) ? pProxyPort->getOutboundAddress(family) : nullptr;
+  if (addr == nullptr) {
+    if (family == AF_INET && HttpConfig::m_master.outbound_ip4.size()) {
+      size_t index = m_v4GlobalAddressIndex++;
+      size_t sz    = HttpConfig::m_master.outbound_ip4.size();
+      addr = &HttpConfig::m_master.outbound_ip4[index % sz];
+    }
+    else if (family == AF_INET6 && HttpConfig::m_master.outbound_ip6.size()) {
+      size_t index = m_v6GlobalAddressIndex++;
+      size_t sz    = HttpConfig::m_master.outbound_ip6.size();
+      addr = &HttpConfig::m_master.outbound_ip6[index % sz];
+    }
+  }
+
+  if (addr) {
+    ua_session->set_outbound_ip(*addr);
+    if (addr->isIp4()) {
+      ua_session->get_parent()->outbound_ip4 = *addr;
+    }
+    else if (addr->isIp6()) {
+      ua_session->get_parent()->outbound_ip6 = *addr;
+    }
+  }
+
 }
 
 void

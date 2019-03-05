@@ -30,12 +30,19 @@
 #include <ts/Vec.h>
 #include <ts/apidefs.h>
 
+#include <vector>
+#include <atomic>
+
 /// Load default inbound IP addresses from the configuration file.
 void RecHttpLoadIp(const char *name, ///< Name of value in configuration file.
                    IpAddr &ip4,      ///< [out] IPv4 address.
                    IpAddr &ip6       ///< [out] Ipv6 address.
                    );
 
+void RecHttpLoadIps(const char *value_name,       ///< Name of value in configuration file.
+                    std::vector<IpAddr> &ip4List, ///< [out] IPv4 addresses.
+                    std::vector<IpAddr> &ip6List  ///< [out] IPv6 addresses.
+                    );
 /** A set of session protocols.
     This depends on using @c SessionProtocolNameRegistry to get the indices.
 */
@@ -246,10 +253,10 @@ public:
   bool m_transparent_passthrough;
   /// Local address for inbound connections (listen address).
   IpAddr m_inbound_ip;
-  /// Local address for outbound connections (to origin server).
-  IpAddr m_outbound_ip4;
-  /// Local address for outbound connections (to origin server).
-  IpAddr m_outbound_ip6;
+  /// List of local addresses for outbound connections (to origin server).
+  std::vector<IpAddr> m_outbound_ip4;
+  /// List of local addresses for outbound connections (to origin server).
+  std::vector<IpAddr> m_outbound_ip6;
   /// Ordered preference for DNS resolution family ( @c FamilyPrefence )
   /// A value of @c PREFER_NONE indicates that entry and subsequent ones
   /// are invalid.
@@ -259,14 +266,37 @@ public:
   /// Enabled session transports for this port.
   SessionProtocolSet m_session_protocol_preference;
 
+  /// Outbound address index to select outbound address in round robin
+  class AddressIndexes {
+   public:
+    AddressIndexes() {}
+    // We need to define the copy constructor and the = operator because
+    // the copy constructor for std::atomic is deleted and we need a copy
+    // constructor because HttpProxyPort's copy constructor is invoked
+    AddressIndexes(const AddressIndexes &src) :
+    m_ipv4(src.m_ipv4.load()), m_ipv6(src.m_ipv6.load()) {}
+
+    AddressIndexes & operator = (const AddressIndexes &rhs)
+    {
+      m_ipv4 = rhs.m_ipv4.load();
+      m_ipv6 = rhs.m_ipv6.load();
+      return *this;
+    }
+
+    /// V4 Address Index
+    std::atomic_size_t m_ipv4 {0};
+    /// V6 Address Index
+    std::atomic_size_t m_ipv6 {0};
+  };
+
+  mutable AddressIndexes m_indexes;
+
   /// Default constructor.
   HttpProxyPort();
 
-  /** Select the local outbound address object.
-
-      @return The IP address for @a family
+  /** Append the ip to the local outbound addresses list
   */
-  IpAddr &outboundIp(uint16_t family ///< IP address family.
+  void outboundIp(const IpAddr &ip ///< outbound IP address
                      );
 
   /// Check for SSL port.
@@ -373,6 +403,12 @@ public:
             size_t n   ///< Maximum output length.
             );
 
+  /** The outbound address to use (if there is a port specific one)
+      for the upstream connection
+      @return The outbound IP address we should use
+  */
+  const IpAddr *getOutboundAddress(uint16_t family) const;
+
   static const char *const PORTS_CONFIG_NAME; ///< New unified port descriptor.
 
   /// Default value if no other values can be found.
@@ -426,16 +462,15 @@ HttpProxyPort::isPlugin() const
   return TRANSPORT_PLUGIN == m_type;
 }
 
-inline IpAddr &
-HttpProxyPort::outboundIp(uint16_t family)
+inline void
+HttpProxyPort::outboundIp(const IpAddr &ip)
 {
-  static IpAddr invalid; // dummy to make compiler happy about return.
-  if (AF_INET == family)
-    return m_outbound_ip4;
-  else if (AF_INET6 == family)
-    return m_outbound_ip6;
-  ink_release_assert(!"Invalid family for outbound address on proxy port.");
-  return invalid; // never happens but compiler insists.
+  if (ip.family() == AF_INET)
+    m_outbound_ip4.push_back(ip);
+  else if (ip.family() == AF_INET6)
+    m_outbound_ip6.push_back(ip);
+  else
+    ink_release_assert(!"Invalid family for outbound address on proxy port.");
 }
 
 inline bool

@@ -229,6 +229,18 @@ public:
     return vc ? vc->protocol_contains(tag_prefix) : nullptr;
   }
 
+  void
+  set_proxy_port(const HttpProxyPort *port)
+  {
+    f_proxy_port = port;
+  }
+
+  const HttpProxyPort*
+  get_proxy_port()
+  {
+    return f_proxy_port;
+  }
+
   void set_session_active();
   void clear_session_active();
 
@@ -296,6 +308,9 @@ private:
   bool m_active;
 
   friend void TSHttpSsnDebugSet(TSHttpSsn, int);
+
+  /// The server port for which this session was created
+  const HttpProxyPort *f_proxy_port;
 };
 
 #endif // __PROXY_CLIENT_SESSION_H__

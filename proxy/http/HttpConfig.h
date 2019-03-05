@@ -797,7 +797,7 @@ public:
 
 public:
   IpAddr inbound_ip4, inbound_ip6;
-  IpAddr outbound_ip4, outbound_ip6;
+  std::vector<IpAddr> outbound_ip4, outbound_ip6;
 
   MgmtInt server_max_connections;
   MgmtInt origin_min_keep_alive_connections; // TODO: This one really ought to be overridable, but difficult right now.

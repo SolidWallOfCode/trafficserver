@@ -1757,10 +1757,10 @@ main(int /* argc ATS_UNUSED */, const char **argv)
   */
   IpEndpoint machine_addr;
   ink_zero(machine_addr);
-  if (HttpConfig::m_master.outbound_ip4.isValid()) {
-    machine_addr.assign(HttpConfig::m_master.outbound_ip4);
-  } else if (HttpConfig::m_master.outbound_ip6.isValid()) {
-    machine_addr.assign(HttpConfig::m_master.outbound_ip6);
+  if (HttpConfig::m_master.outbound_ip4.size()) {
+    machine_addr.assign(HttpConfig::m_master.outbound_ip4[0]);
+  } else if (HttpConfig::m_master.outbound_ip6.size()) {
+    machine_addr.assign(HttpConfig::m_master.outbound_ip6[0]);
   } else if (HttpConfig::m_master.inbound_ip4.isValid()) {
     machine_addr.assign(HttpConfig::m_master.inbound_ip4);
   } else if (HttpConfig::m_master.inbound_ip6.isValid()) {

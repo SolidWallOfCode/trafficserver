@@ -40,7 +40,7 @@
 // CONFIG proxy.config.http.server_ports STRING 80:proto=http2 443:ssl:proto=h2-12
 
 struct Http2SessionAccept : public SessionAccept {
-  explicit Http2SessionAccept(const HttpSessionAccept::Options &);
+  explicit Http2SessionAccept(const HttpSessionAccept::Options &, HttpProxyPort *pport = nullptr);
   ~Http2SessionAccept();
 
   bool accept(NetVConnection *, MIOBuffer *, IOBufferReader *);

@@ -5737,6 +5737,7 @@ TSHttpTxnOutgoingAddrSet(TSHttpTxn txnp, const struct sockaddr *addr)
 
   sm->ua_session->set_outbound_port(ats_ip_port_host_order(addr));
   sm->ua_session->set_outbound_ip(IpAddr(addr));
+  sm->t_state.api_outbound_addr_set = true;
   return TS_SUCCESS;
 }
 

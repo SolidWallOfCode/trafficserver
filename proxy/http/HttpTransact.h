@@ -954,6 +954,7 @@ public:
     bool api_req_cacheable;
     bool api_resp_cacheable;
     bool api_server_addr_set;
+    bool api_outbound_addr_set;
     bool stale_icp_lookup;
     UpdateCachedObject_t api_update_cached_object;
     LockUrl_t api_lock_url;
@@ -1067,6 +1068,7 @@ public:
         api_req_cacheable(false),
         api_resp_cacheable(false),
         api_server_addr_set(false),
+        api_outbound_addr_set(false),
         stale_icp_lookup(false),
         api_update_cached_object(UPDATE_CACHED_OBJECT_NONE),
         api_lock_url(LOCK_URL_FIRST),

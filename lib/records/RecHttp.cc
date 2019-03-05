@@ -30,7 +30,10 @@
 #include <ts/ink_inet.h>
 #include <ts/string_view.h>
 
+#include <string>
+
 SessionProtocolNameRegistry globalSessionProtocolNameRegistry;
+
 
 /* Protocol session well-known protocol names.
    These are also used for NPN setup.
@@ -70,6 +73,29 @@ SessionProtocolSet HTTP2_PROTOCOL_SET;
 SessionProtocolSet DEFAULT_NON_TLS_SESSION_PROTOCOL_SET;
 SessionProtocolSet DEFAULT_TLS_SESSION_PROTOCOL_SET;
 
+// Common code to parse IP addresses separated by the given delimiters
+// Called by RecHttpLoadIps and HttpProxyPort::processOptions
+static void
+parseIPAddresses(const char *value, const std::string &delimiters,
+    const std::string &prefix, std::function<void (IpEndpoint &ip4,
+    IpEndpoint &ip6)> callback)
+{
+  ts::TextView content(value, strlen(value));
+  while (content) {
+    ts::TextView token{content.take_prefix_at(delimiters)};
+    content.trim(delimiters);
+    IpEndpoint tmp4, tmp6;
+    // For backwards compatibility we need to support the use of host names
+    // for the address to bind.
+    if (0 == ats_ip_getbestaddrinfo2(token, &tmp4, &tmp6)) {
+      callback(tmp4, tmp6);
+    } else {
+      Warning("'%s:%s' has a value '%.*s' that is not recognized as an IP address, ignored.",
+        prefix.c_str(), value, static_cast<int>(token.size()), token.data());
+    }
+  }
+}
+
 void
 RecHttpLoadIp(const char *value_name, IpAddr &ip4, IpAddr &ip6)
 {
@@ -103,6 +129,28 @@ RecHttpLoadIp(const char *value_name, IpAddr &ip4, IpAddr &ip6)
         Warning("'%s' has an value '%s' that is not recognized as an IP address, ignored.", value_name, host);
       }
     }
+  }
+}
+
+void
+RecHttpLoadIps(const char *value_name, std::vector<IpAddr> &ip4List, std::vector<IpAddr> &ip6List)
+{
+  char value[1024];
+  ip4List.clear();
+  ip6List.clear();
+
+  if (REC_ERR_OKAY == RecGetRecordString(value_name, value, sizeof(value))) {
+    parseIPAddresses(value, ", ", value_name,
+      [&ip4List, &ip6List] (IpEndpoint &ip4, IpEndpoint &ip6) -> void
+      {
+        if (ats_is_ip4(&ip4)) {
+          ip4List.push_back(IpAddr(ip4));
+        }
+        if (ats_is_ip6(&ip6)) {
+          ip6List.push_back(IpAddr(ip6));
+        }
+      }
+    );
   }
 }
 
@@ -327,11 +375,17 @@ HttpProxyPort::processOptions(const char *opts)
         Warning("Invalid IP address value '%s' in port descriptor '%s'", item, opts);
       }
     } else if (nullptr != (value = this->checkPrefix(item, OPT_OUTBOUND_IP_PREFIX, OPT_OUTBOUND_IP_PREFIX_LEN))) {
-      if (0 == ip.load(value)) {
-        this->outboundIp(ip.family()) = ip;
-      } else {
-        Warning("Invalid IP address value '%s' in port descriptor '%s'", item, opts);
-      }
+      parseIPAddresses(value, ";", OPT_OUTBOUND_IP_PREFIX,
+        [this] (IpEndpoint &ip4, IpEndpoint &ip6) -> void
+        {
+          if (ats_is_ip4(&ip4)) {
+            this->outboundIp(IpAddr(ip4));
+          }
+          if (ats_is_ip6(&ip6)) {
+            this->outboundIp(IpAddr(ip6));
+          }
+        }
+      );
     } else if (0 == strcasecmp(OPT_COMPRESSED, item)) {
       m_type = TRANSPORT_COMPRESSED;
     } else if (0 == strcasecmp(OPT_BLIND_TUNNEL, item)) {
@@ -436,6 +490,31 @@ HttpProxyPort::processSessionProtocolPreference(const char *value)
   globalSessionProtocolNameRegistry.markIn(value, m_session_protocol_preference);
 }
 
+const IpAddr *
+HttpProxyPort::getOutboundAddress(uint16_t family) const
+{
+  if (family == AF_INET && m_outbound_ip4.size()) {
+    // Optimizing the common case
+    if (m_outbound_ip4.size() == 1) {
+      return &m_outbound_ip4.front();
+    }
+    size_t index = m_indexes.m_ipv4++;
+    size_t sz    = m_outbound_ip4.size();
+    return &m_outbound_ip4[index % sz];
+  }
+  else if (family == AF_INET6 && m_outbound_ip6.size()) {
+    // Optimizing the common case
+    if (m_outbound_ip6.size() == 1) {
+      return &m_outbound_ip6.front();
+    }
+    size_t index = m_indexes.m_ipv6++;
+    size_t sz    = m_outbound_ip6.size();
+    return &m_outbound_ip6[index % sz];
+  }
+
+  return nullptr;
+}
+
 void
 SessionProtocolNameRegistry::markIn(const char *value, SessionProtocolSet &sp_set)
 {
@@ -459,6 +538,13 @@ SessionProtocolNameRegistry::markIn(const char *value, SessionProtocolSet &sp_se
   }
 }
 
+size_t
+addColonIfRoom(char *out, size_t n, size_t index)
+{
+   index += snprintf(out + index, n - index, ":");
+   return index;
+}
+
 int
 HttpProxyPort::print(char *out, size_t n)
 {
@@ -474,31 +560,64 @@ HttpProxyPort::print(char *out, size_t n)
     return n;
   }
 
-  if (m_outbound_ip4.isValid()) {
-    if (need_colon_p) {
-      out[zret++] = ':';
+  bool addedV4 = false;
+  for (const auto &ip: m_outbound_ip4) {
+    if (!addedV4) {
+      if (need_colon_p) {
+        zret = addColonIfRoom(out, n, zret);
+        if (zret >= n) {
+          return n;
+        }
+      }
+      zret += snprintf(out + zret, n - zret, "%s=[%s", OPT_OUTBOUND_IP_PREFIX, ip.toString(ipb, sizeof(ipb)));
+      addedV4 = true;
+      need_colon_p = true;
     }
-    zret += snprintf(out + zret, n - zret, "%s=[%s]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip4.toString(ipb, sizeof(ipb)));
-    need_colon_p = true;
-  }
-  if (zret >= n) {
-    return n;
+    else {
+      zret += snprintf(out + zret, n - zret, " %s", ip.toString(ipb, sizeof(ipb)));
+    }
+
+    if (zret >= n) {
+      return n;
+    }
   }
 
-  if (m_outbound_ip6.isValid()) {
-    if (need_colon_p) {
-      out[zret++] = ':';
-    }
-    zret += snprintf(out + zret, n - zret, "%s=[%s]", OPT_OUTBOUND_IP_PREFIX, m_outbound_ip6.toString(ipb, sizeof(ipb)));
-    need_colon_p = true;
+  if (addedV4) {
+    zret += snprintf(out + zret, n - zret, "]");
   }
-  if (zret >= n) {
-    return n;
+
+  bool addedV6 = false;
+  for (const auto &ip: m_outbound_ip6) {
+    if (!addedV6) {
+      if (need_colon_p) {
+        zret = addColonIfRoom(out, n, zret);
+        if (zret >= n) {
+          return n;
+        }
+      }
+      zret += snprintf(out + zret, n - zret, "%s=[%s", OPT_OUTBOUND_IP_PREFIX, ip.toString(ipb, sizeof(ipb)));
+      addedV6 = true;
+      need_colon_p = true;
+    }
+    else {
+      zret += snprintf(out + zret, n - zret, " %s", ip.toString(ipb, sizeof(ipb)));
+    }
+
+    if (zret >= n) {
+      return n;
+    }
+  }
+
+  if (addedV6) {
+    zret += snprintf(out + zret, n - zret, "]");
   }
 
   if (0 != m_port) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      zret = addColonIfRoom(out, n, zret);
+      if (zret >= n) {
+        return n;
+      }
     }
     zret += snprintf(out + zret, n - zret, "%d", m_port);
     need_colon_p = true;
@@ -509,7 +628,10 @@ HttpProxyPort::print(char *out, size_t n)
 
   if (ts::NO_FD != m_fd) {
     if (need_colon_p) {
-      out[zret++] = ':';
+      zret = addColonIfRoom(out, n, zret);
+      if (zret >= n) {
+        return n;
+      }
     }
     zret += snprintf(out + zret, n - zret, "fd=%d", m_fd);
   }
@@ -547,9 +669,15 @@ HttpProxyPort::print(char *out, size_t n)
   } else if (m_outbound_transparent_p) {
     zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_OUTBOUND);
   }
+  if (zret >= n) {
+    return n;
+  }
 
   if (m_transparent_passthrough) {
     zret += snprintf(out + zret, n - zret, ":%s", OPT_TRANSPARENT_PASSTHROUGH);
+  }
+  if (zret >= n) {
+    return n;
   }
 
   /* Don't print the IP resolution preferences if the port is outbound
@@ -560,6 +688,9 @@ HttpProxyPort::print(char *out, size_t n)
       0 != memcmp(m_host_res_preference, host_res_default_preference_order, sizeof(m_host_res_preference))) {
     zret += snprintf(out + zret, n - zret, ":%s=", OPT_HOST_RES_PREFIX);
     zret += ts_host_res_order_to_string(m_host_res_preference, out + zret, n - zret);
+  }
+  if (zret >= n) {
+    return n;
   }
 
   // session protocol options - look for condensed options first
@@ -578,26 +709,42 @@ HttpProxyPort::print(char *out, size_t n)
     sp_set.markOut(HTTP_PROTOCOL_SET);
     need_colon_p = false;
   }
+  if (zret >= n) {
+    return n;
+  }
+
   if (sp_set.contains(HTTP2_PROTOCOL_SET)) {
     if (need_colon_p) {
       zret += snprintf(out + zret, n - zret, ":%s=", OPT_PROTO_PREFIX);
     } else {
       out[zret++] = ';';
     }
+    if (zret >= n) {
+      return n;
+    }
     zret += snprintf(out + zret, n - zret, "%s", TS_ALPN_PROTOCOL_GROUP_HTTP2);
     sp_set.markOut(HTTP2_PROTOCOL_SET);
     need_colon_p = false;
+  }
+  if (zret >= n) {
+    return n;
   }
   // now enumerate what's left.
   if (!sp_set.isEmpty()) {
     if (need_colon_p) {
       zret += snprintf(out + zret, n - zret, ":%s=", OPT_PROTO_PREFIX);
     }
+    if (zret >= n) {
+      return n;
+    }
     bool sep_p = !need_colon_p;
     for (int k = 0; k < SessionProtocolSet::MAX; ++k) {
       if (sp_set.contains(k)) {
         zret += snprintf(out + zret, n - zret, "%s%s", sep_p ? ";" : "", globalSessionProtocolNameRegistry.nameFor(k));
         sep_p = true;
+      }
+      if (zret >= n) {
+        return n;
       }
     }
   }
@@ -733,3 +880,4 @@ SessionProtocolNameRegistry::nameFor(int idx) const
 {
   return 0 <= idx && idx < static_cast<int>(m_n) ? m_names[idx] : nullptr;
 }
+

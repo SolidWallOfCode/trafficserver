@@ -166,18 +166,6 @@ MakeHttpProxyAcceptor(HttpProxyAcceptor &acceptor, HttpProxyPort &port, unsigned
   accept_opt.setTransparentPassthrough(port.m_transparent_passthrough);
   accept_opt.setSessionProtocolPreference(port.m_session_protocol_preference);
 
-  if (port.m_outbound_ip4.isValid()) {
-    accept_opt.outbound_ip4 = port.m_outbound_ip4;
-  } else if (HttpConfig::m_master.outbound_ip4.isValid()) {
-    accept_opt.outbound_ip4 = HttpConfig::m_master.outbound_ip4;
-  }
-
-  if (port.m_outbound_ip6.isValid()) {
-    accept_opt.outbound_ip6 = port.m_outbound_ip6;
-  } else if (HttpConfig::m_master.outbound_ip6.isValid()) {
-    accept_opt.outbound_ip6 = HttpConfig::m_master.outbound_ip6;
-  }
-
   // OK the way this works is that the fallback for each port is a protocol
   // probe acceptor. For SSL ports, we can stack a NPN+ALPN acceptor in front
   // of that, and these ports will fall back to the probe if no NPN+ALPN endpoint
@@ -190,12 +178,13 @@ MakeHttpProxyAcceptor(HttpProxyAcceptor &acceptor, HttpProxyPort &port, unsigned
   probe->proxyPort                  = &port;
 
   if (port.m_session_protocol_preference.intersects(HTTP_PROTOCOL_SET)) {
-    http = new HttpSessionAccept(accept_opt);
+    http = new HttpSessionAccept(accept_opt, &port);
     probe->registerEndpoint(ProtocolProbeSessionAccept::PROTO_HTTP, http);
   }
 
   if (port.m_session_protocol_preference.intersects(HTTP2_PROTOCOL_SET)) {
-    probe->registerEndpoint(ProtocolProbeSessionAccept::PROTO_HTTP2, new Http2SessionAccept(accept_opt));
+    probe->registerEndpoint(ProtocolProbeSessionAccept::PROTO_HTTP2,
+        new Http2SessionAccept(accept_opt, &port));
   }
 
   if (port.isSSL()) {
@@ -219,7 +208,7 @@ MakeHttpProxyAcceptor(HttpProxyAcceptor &acceptor, HttpProxyPort &port, unsigned
 
     // HTTP2
     if (port.m_session_protocol_preference.contains(TS_ALPN_PROTOCOL_INDEX_HTTP_2_0)) {
-      Http2SessionAccept *acc = new Http2SessionAccept(accept_opt);
+      Http2SessionAccept *acc = new Http2SessionAccept(accept_opt, &port);
 
       ssl->registerEndpoint(TS_ALPN_PROTOCOL_HTTP_2_0, acc);
     }
@@ -317,6 +306,9 @@ start_HttpProxyServer()
   for (int i = 0, n = proxy_ports.length(); i < n; ++i) {
     HttpProxyAcceptor &acceptor = HttpProxyAcceptors[i];
     HttpProxyPort &port         = proxy_ports[i];
+    char portbuf[2048];
+    port.print(portbuf, sizeof(portbuf));
+    Debug("http_seq", "port = %s", portbuf);
     if (port.isSSL()) {
       if (nullptr == sslNetProcessor.main_accept(acceptor._accept, port.m_fd, acceptor._net_opt)) {
         return;

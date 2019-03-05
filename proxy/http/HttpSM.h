@@ -444,6 +444,7 @@ protected:
   void do_hostdb_reverse_lookup();
   void do_cache_lookup_and_read();
   void do_http_server_open(bool raw = false);
+  void select_local_outbound_addr();
   void send_origin_throttled_response();
   void do_setup_post_tunnel(HttpVC_t to_vc_type);
   void do_cache_prepare_write();
@@ -604,6 +605,12 @@ public:
 private:
   int _client_connection_id = -1, _client_transaction_id = -1;
   PostDataBuffers _postbuf;
+
+  /// Outbound address index (v4) if there are no port specific addresses
+  static std::atomic_size_t m_v4GlobalAddressIndex;
+  /// Outbound address index (v6) if there are no port specific addresses
+  static std::atomic_size_t m_v6GlobalAddressIndex;
+
 };
 
 // Function to get the cache_sm object - YTS Team, yamsat

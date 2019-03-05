@@ -35,7 +35,8 @@ ProxyClientSession::ProxyClientSession()
     hooks_on(true),
     in_destroy(false),
     con_id(0),
-    m_active(false)
+    m_active(false),
+    f_proxy_port(nullptr)
 {
   ink_zero(this->user_args);
 }

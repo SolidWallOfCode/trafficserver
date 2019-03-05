@@ -62,14 +62,6 @@ public:
   int transport_type;
   /// Set the transport type.
   self &setTransportType(int);
-  /// Local address to bind for outbound connections.
-  IpAddr outbound_ip4;
-  /// Local address to bind for outbound connections.
-  IpAddr outbound_ip6;
-  /// Set the outbound IP address to @a ip.
-  self &setOutboundIp(IpAddr &ip);
-  /// Set the outbound IP address to @a ip.
-  self &setOutboundIp(IpEndpoint *ip);
   /// Local port for outbound connection.
   uint16_t outbound_port;
   /// Set outbound port.
@@ -106,26 +98,6 @@ inline HttpSessionAcceptOptions &
 HttpSessionAcceptOptions::setTransportType(int type)
 {
   transport_type = type;
-  return *this;
-}
-
-inline HttpSessionAcceptOptions &
-HttpSessionAcceptOptions::setOutboundIp(IpAddr &ip)
-{
-  if (ip.isIp4())
-    outbound_ip4 = ip;
-  else if (ip.isIp6())
-    outbound_ip6 = ip;
-  return *this;
-}
-
-inline HttpSessionAcceptOptions &
-HttpSessionAcceptOptions::setOutboundIp(IpEndpoint *ip)
-{
-  if (ip->isIp4())
-    outbound_ip4 = *ip;
-  else if (ip->isIp6())
-    outbound_ip6 = *ip;
   return *this;
 }
 
@@ -198,7 +170,7 @@ public:
       initialization order issues. It is important to pick up data that is read
       from the config file and a static is initialized long before that point.
   */
-  HttpSessionAccept(Options const &opt = Options()) : SessionAccept(NULL), detail::HttpSessionAcceptOptions(opt) // copy these.
+  HttpSessionAccept(Options const &opt = Options(), HttpProxyPort *pport = nullptr) : SessionAccept(nullptr, pport), detail::HttpSessionAcceptOptions(opt) // copy these.
   {
     SET_HANDLER(&HttpSessionAccept::mainEvent);
     return;
