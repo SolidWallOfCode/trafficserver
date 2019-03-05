@@ -37,6 +37,7 @@
 #include "ts/ink_defs.h"
 #include "ts/ink_assert.h"
 #include "ts/Arena.h"
+#include "ts/string_view.h"
 #include "HdrToken.h"
 
 // Objects in the heap must currently be aligned to 8 byte boundaries,
@@ -233,6 +234,26 @@ public:
         m_ronly_heap[i].m_locked        = false;
       }
     }
+  }
+
+  // Working function to copy strings into a new heap
+  // Unlike the HDR_MOVE_STR macro, this function will call
+  // allocate_str which will update the new_heap to create more space
+  // if there is not originally sufficient space
+  inline ts::string_view
+  localize(const ts::string_view &string)
+  {
+    auto length = string.length();
+    if (length > 0) {
+      char *new_str = this->allocate_str(length);
+      if (new_str) {
+        memcpy(new_str, string.data(), length);
+      } else {
+        length = 0;
+      }
+      return {new_str, length};
+    }
+    return {nullptr, 0};
   }
 
   // Sanity Check Functions
