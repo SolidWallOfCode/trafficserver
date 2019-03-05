@@ -21,6 +21,8 @@ if BUILD_TRAFFIC_TOP
 AM_CPPFLAGS += \
   $(iocore_include_dirs) \
   -I$(abs_top_srcdir)/lib \
+  -I$(abs_top_srcdir)/lib/records \
+  -I$(abs_top_srcdir)/mgmt \
   -I$(abs_top_srcdir)/mgmt/api/include \
   @CURL_CFLAGS@ \
   @CURSES_CFLAGS@
@@ -41,6 +43,10 @@ AM_CXXFLAGS += -Wl,--add-needed
 traffic_top_LDADD = \
   $(top_builddir)/mgmt/api/libtsmgmt.la \
   $(top_builddir)/lib/ts/libtsutil.la \
+  $(top_builddir)/lib/records/librecords_p.a \
+  $(top_builddir)/mgmt/libmgmt_p.la \
+  $(top_builddir)/iocore/eventsystem/libinkevent.a \
+  $(top_builddir)/proxy/shared/libUglyLogStubs.a \
   @CURL_LIBS@ \
   @CURSES_LIBS@ \
   @LIBTCL@ @HWLOC_LIBS@
