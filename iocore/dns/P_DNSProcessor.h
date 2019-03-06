@@ -153,6 +153,7 @@ struct DNSEntry : public Continuation {
   Event *timeout;
   Ptr<HostEnt> result_ent;
   DNSHandler *dnsH;
+  DNSRequest *e_request;
   bool written_flag;
   bool once_written_flag;
   bool last;
@@ -179,6 +180,7 @@ struct DNSEntry : public Continuation {
       timeout(0),
       result_ent(0),
       dnsH(0),
+      e_request(nullptr),
       written_flag(false),
       once_written_flag(false),
       last(false)
@@ -205,9 +207,9 @@ struct DNSHandler : public Continuation {
   IpEndpoint local_ipv4; ///< Local V4 address if set.
   int ifd[MAX_NAMED];
   int n_con;
-  DNSConnection con[MAX_NAMED];
+  DNSRequestMap con[MAX_NAMED];
   Queue<DNSEntry> entries;
-  Queue<DNSConnection> triggered;
+  Queue<DNSRequest> triggered;
   int in_flight;
   int name_server;
   int in_write_dns;
@@ -262,6 +264,7 @@ struct DNSHandler : public Continuation {
              (HRTIME_SECONDS(dns_failover_try_period + failover_soon_number[i] * FAILOVER_SOON_RETRY))));
   }
 
+  void prune_stalehealthchecks();
   void recv_dns(int event, Event *e);
   int startEvent(int event, Event *e);
   int startEvent_sdns(int event, Event *e);
@@ -270,11 +273,13 @@ struct DNSHandler : public Continuation {
   void open_con(sockaddr const *addr, bool failed = false, int icon = 0);
   void failover();
   void rr_failure(int ndx);
-  void recover();
+  void recover(int prev_ndx);
   void retry_named(int ndx, ink_hrtime t, bool reopen = true);
   void try_primary_named(bool reopen = true);
-  void switch_named(int ndx);
+  void switch_named(int ndx, int prev_ndx);
   uint16_t get_query_id();
+void do_healthcheck(int nameserver_index, const int qtype, const char *qname, char *querybuf, int buflen);
+  void move_entries(int ndx, bool rr);
 
   void
   release_query_id(uint16_t qid)

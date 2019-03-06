@@ -73,7 +73,7 @@ typedef PollDescriptor *EventLoop;
 
 class UnixNetVConnection;
 class UnixUDPConnection;
-struct DNSConnection;
+struct DNSRequest;
 struct NetAccept;
 struct EventIO {
   int fd;
@@ -85,11 +85,11 @@ struct EventIO {
   union {
     Continuation *c;
     UnixNetVConnection *vc;
-    DNSConnection *dnscon;
+    DNSRequest *dnsreq;
     NetAccept *na;
     UnixUDPConnection *uc;
   } data;
-  int start(EventLoop l, DNSConnection *vc, int events);
+  int start(EventLoop l, DNSRequest *vc, int events);
   int start(EventLoop l, NetAccept *vc, int events);
   int start(EventLoop l, UnixNetVConnection *vc, int events);
   int start(EventLoop l, UnixUDPConnection *vc, int events);
@@ -415,7 +415,7 @@ write_disable(NetHandler *nh, UnixNetVConnection *vc)
 }
 
 TS_INLINE int
-EventIO::start(EventLoop l, DNSConnection *vc, int events)
+EventIO::start(EventLoop l, DNSRequest *vc, int events)
 {
   type = EVENTIO_DNS_CONNECTION;
   return start(l, vc->fd, (Continuation *)vc, events);
@@ -447,7 +447,7 @@ EventIO::close()
     ink_assert(!"case");
   // fallthrough
   case EVENTIO_DNS_CONNECTION:
-    return data.dnscon->close();
+    return data.dnsreq->close();
     break;
   case EVENTIO_NETACCEPT:
     return data.na->server.close();

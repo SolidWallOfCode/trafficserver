@@ -417,7 +417,6 @@ void
 DNSHandler::open_con(sockaddr const *target, bool failed, int icon)
 {
   ip_port_text_buffer ip_text;
-  PollDescriptor *pd = get_PollDescriptor(dnsProcessor.thread);
 
   if (!icon && target) {
     ats_ip_copy(&ip, target);
@@ -425,36 +424,21 @@ DNSHandler::open_con(sockaddr const *target, bool failed, int icon)
     target = &ip.sa;
   }
 
-  Debug("dns", "open_con: opening connection %s", ats_ip_nptop(target, ip_text, sizeof ip_text));
+  Debug("dns", "open_con: Initializing name server %s", ats_ip_nptop(target, ip_text, sizeof ip_text));
 
-  if (con[icon].fd != NO_FD) { // Remove old FD from epoll fd
-    con[icon].close();
-  }
+  DNSRequest::Options opt;
+  opt
+    .setNonBlockingConnect(true)
+    .setNonBlockingIo(true)
+    .setUseTcp(false)
+    .setBindRandomPort(true)
+    .setLocalIpv6(&local_ipv6.sa)
+    .setLocalIpv4(&local_ipv4.sa);
 
-  if (con[icon].connect(target, DNSConnection::Options()
-                                  .setNonBlockingConnect(true)
-                                  .setNonBlockingIo(true)
-                                  .setUseTcp(false)
-                                  .setBindRandomPort(true)
-                                  .setLocalIpv6(&local_ipv6.sa)
-                                  .setLocalIpv4(&local_ipv4.sa)) < 0) {
-    Warning("dns: opening connection %s FAILED for %d", ip_text, icon);
-    if (!failed) {
-      if (dns_ns_rr)
-        rr_failure(icon);
-      else
-        failover();
-    }
-    return;
-  } else {
-    ns_down[icon] = 0;
-    if (con[icon].eio.start(pd, &con[icon], EVENTIO_READ) < 0) {
-      Error("[iocore_dns] open_con: Failed to add %d server to epoll list\n", icon);
-    } else {
-      con[icon].num = icon;
-      Debug("dns", "opening connection %s SUCCEEDED for %d", ip_text, icon);
-    }
-  }
+  con[icon].initialize(target, opt);
+  ns_down[icon] = 0;
+  con[icon].num = icon;
+  Debug("dns", "open_con: Initialized name server %s index = %d", ip_text, icon);
 }
 
 void
@@ -542,12 +526,23 @@ _ink_res_mkquery(ink_res_state res, char *qname, int qtype, char *buffer)
 }
 
 void
-DNSHandler::recover()
+DNSHandler::recover(int prev_nameserver)
 {
   ip_text_buffer buff;
   Warning("connection to DNS server %s restored", ats_ip_ntop(&ip.sa, buff, sizeof(buff)));
   name_server = 0;
-  switch_named(name_server);
+  switch_named(name_server, prev_nameserver);
+}
+
+void
+DNSHandler::do_healthcheck(int nameserver_index, const int qtype, const char *qname, char *querybuf, int buflen)
+{
+  DNSRequest *req = nullptr;
+  int res = con[nameserver_index].sendRequest(qtype, qname, querybuf, buflen, true, req);
+  if (res != buflen) {
+    Warning("dns: Failed to send healthcheck query: %d != %d, nameserver= %d", res, buflen, nameserver_index);
+  }
+  Debug("dns", "ping result = %d", res);
 }
 
 void
@@ -556,18 +551,17 @@ DNSHandler::retry_named(int ndx, ink_hrtime t, bool reopen)
   if (reopen && ((t - last_primary_reopen) > DNS_PRIMARY_REOPEN_PERIOD)) {
     Debug("dns", "retry_named: reopening DNS connection for index %d", ndx);
     last_primary_reopen = t;
-    con[ndx].close();
     open_con(&m_res->nsaddr_list[ndx].sa, true, ndx);
   }
 
   char buffer[MAX_DNS_PACKET_LEN];
   Debug("dns", "trying to resolve '%s' from DNS connection, ndx %d", try_server_names[try_servers], ndx);
+  const char *qname = try_server_names[try_servers];
   int r       = _ink_res_mkquery(m_res, try_server_names[try_servers], T_A, buffer);
   try_servers = (try_servers + 1) % countof(try_server_names);
   ink_assert(r >= 0);
   if (r >= 0) { // looking for a bounce
-    int res = socketManager.send(con[ndx].fd, buffer, r, 0);
-    Debug("dns", "ping result = %d", res);
+    do_healthcheck(ndx, T_A, qname, buffer, r);
   }
 }
 
@@ -585,6 +579,7 @@ DNSHandler::try_primary_named(bool reopen)
 
     last_primary_retry = t;
     Debug("dns", "trying to resolve '%s' from primary DNS connection", try_server_names[try_servers]);
+    const char *qname = try_server_names[try_servers];
     int r = _ink_res_mkquery(m_res, try_server_names[try_servers], T_A, buffer);
     // if try_server_names[] is not full, round-robin within the
     // filled entries.
@@ -594,20 +589,40 @@ DNSHandler::try_primary_named(bool reopen)
       try_servers = (try_servers + 1) % countof(try_server_names);
     ink_assert(r >= 0);
     if (r >= 0) { // looking for a bounce
-      int res = socketManager.send(con[0].fd, buffer, r, 0);
-      Debug("dns", "ping result = %d", res);
+      do_healthcheck(0, T_A, qname, buffer, r);
     }
   }
 }
 
 void
-DNSHandler::switch_named(int ndx)
+DNSHandler::move_entries(int ndx, bool rr)
 {
+  int moved = 0;
+  // move outstanding requests that were sent to this nameserver to another
   for (DNSEntry *e = entries.head; e; e = (DNSEntry *)e->link.next) {
-    e->written_flag = false;
-    if (e->retries < dns_retries)
-      ++(e->retries); // give them another chance
+    if (e->which_ns == ndx || ndx == -1) {
+      e->written_flag = false;
+      con[e->which_ns].releaseRequest(e->e_request);
+      e->e_request = nullptr;
+      if (e->retries < dns_retries)
+        ++(e->retries); // give them another chance
+
+      if (rr) {
+        --in_flight;
+        DNS_DECREMENT_DYN_STAT(dns_in_flight_stat);
+      }
+
+      ++moved;
+    }
   }
+
+  Debug("dns", "Moved %d entries off current nameserver for retrying", moved);
+}
+
+void
+DNSHandler::switch_named(int ndx, int prev_ndx)
+{
+  move_entries(prev_ndx, false);
   in_flight = 0;
   received_one(ndx); // reset failover counters
 }
@@ -625,6 +640,7 @@ DNSHandler::failover()
     if (max_nscount > MAX_NAMED)
       max_nscount            = MAX_NAMED;
     sockaddr const *old_addr = &m_res->nsaddr_list[name_server].sa;
+    int prev_nameserver      = name_server;
     name_server              = (name_server + 1) % max_nscount;
     Debug("dns", "failover: failing over to name_server=%d", name_server);
 
@@ -640,10 +656,9 @@ DNSHandler::failover()
     open_con(&target.sa, true, name_server);
     if (n_con <= name_server)
       n_con = name_server + 1;
-    switch_named(name_server);
+    switch_named(name_server, prev_nameserver);
   } else {
     ip_text_buffer buff;
-    con[name_server].eio.stop();
     con[name_server].close();
     Warning("failover: connection to DNS server %s lost, retrying", ats_ip_ntop(&ip.sa, buff, sizeof(buff)));
   }
@@ -680,24 +695,10 @@ DNSHandler::rr_failure(int ndx)
     Warning("connection to all DNS servers lost, retrying");
     // actual retries will be done in retry_named called from mainEvent
     // mark any outstanding requests as not sent for later retry
-    for (DNSEntry *e = entries.head; e; e = (DNSEntry *)e->link.next) {
-      e->written_flag = false;
-      if (e->retries < dns_retries)
-        ++(e->retries); // give them another chance
-      --in_flight;
-      DNS_DECREMENT_DYN_STAT(dns_in_flight_stat);
-    }
+    move_entries(-1, true);
   } else {
     // move outstanding requests that were sent to this nameserver to another
-    for (DNSEntry *e = entries.head; e; e = (DNSEntry *)e->link.next) {
-      if (e->which_ns == ndx) {
-        e->written_flag = false;
-        if (e->retries < dns_retries)
-          ++(e->retries); // give them another chance
-        --in_flight;
-        DNS_DECREMENT_DYN_STAT(dns_in_flight_stat);
-      }
-    }
+    move_entries(ndx, true);
   }
 }
 
@@ -723,67 +724,85 @@ good_rcode(char *buff)
 void
 DNSHandler::recv_dns(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 {
-  DNSConnection *dnsc = nullptr;
+  DNSRequest *dnsc = nullptr;
   ip_text_buffer ipbuff1, ipbuff2;
 
-  while ((dnsc = (DNSConnection *)triggered.dequeue())) {
-    while (true) {
-      IpEndpoint from_ip;
-      socklen_t from_length = sizeof(from_ip);
+  while ((dnsc = (DNSRequest *)triggered.dequeue())) {
+    IpEndpoint from_ip;
+    socklen_t from_length = sizeof(from_ip);
 
-      if (!hostent_cache)
-        hostent_cache = dnsBufAllocator.alloc();
-      HostEnt *buf    = hostent_cache;
+    if (!hostent_cache)
+      hostent_cache = dnsBufAllocator.alloc();
+    HostEnt *buf    = hostent_cache;
 
-      int res = socketManager.recvfrom(dnsc->fd, buf->buf, MAX_DNS_PACKET_LEN, 0, &from_ip.sa, &from_length);
+    int res = socketManager.recvfrom(dnsc->fd, buf->buf, MAX_DNS_PACKET_LEN, 0, &from_ip.sa, &from_length);
+    DNSRequestMap *map = dnsc->_map;
+    bool was_healthcheck = dnsc->for_healthcheck;
+    map->releaseRequest(dnsc);
 
-      if (res == -EAGAIN)
+    if (res == -EAGAIN)
+      break;
+    if (res <= 0) {
+      Debug("dns", "named error: %d", res);
+
+      if (was_healthcheck)
         break;
-      if (res <= 0) {
-        Debug("dns", "named error: %d", res);
-        if (dns_ns_rr)
-          rr_failure(dnsc->num);
-        else if (dnsc->num == name_server)
-          failover();
-        break;
-      }
 
-      // verify that this response came from the correct server
-      if (!ats_ip_addr_eq(&dnsc->ip.sa, &from_ip.sa)) {
-        Warning("unexpected DNS response from %s (expected %s)", ats_ip_ntop(&from_ip.sa, ipbuff1, sizeof ipbuff1),
-                ats_ip_ntop(&dnsc->ip.sa, ipbuff2, sizeof ipbuff2));
-        continue;
+      if (dns_ns_rr)
+        rr_failure(map->num);
+      else if (map->num == name_server)
+        failover();
+      break;
+    }
+
+    // verify that this response came from the correct server
+    if (map->m_target != from_ip) {
+      Warning("unexpected DNS response from %s (expected %s)", ats_ip_ntop(&from_ip.sa, ipbuff1, sizeof ipbuff1),
+              ats_ip_ntop(&map->m_target.sa, ipbuff2, sizeof ipbuff2));
+      continue;
+    }
+    hostent_cache    = nullptr;
+    buf->packet_size = res;
+    Debug("dns", "received packet size = %d", res);
+    if (dns_ns_rr) {
+      Debug("dns", "round-robin: nameserver %d DNS response code = %d", map->num, get_rcode(buf));
+      if (good_rcode(buf->buf)) {
+        received_one(map->num);
+        if (ns_down[map->num]) {
+          Warning("connection to DNS server %s restored",
+                  ats_ip_ntop(&m_res->nsaddr_list[map->num].sa, ipbuff1, sizeof ipbuff1));
+          ns_down[map->num] = 0;
+        }
       }
-      hostent_cache    = nullptr;
-      buf->packet_size = res;
-      Debug("dns", "received packet size = %d", res);
-      if (dns_ns_rr) {
-        Debug("dns", "round-robin: nameserver %d DNS response code = %d", dnsc->num, get_rcode(buf));
+    } else {
+      if (!map->num) {
+        Debug("dns", "primary DNS response code = %d", get_rcode(buf));
         if (good_rcode(buf->buf)) {
-          received_one(dnsc->num);
-          if (ns_down[dnsc->num]) {
-            Warning("connection to DNS server %s restored",
-                    ats_ip_ntop(&m_res->nsaddr_list[dnsc->num].sa, ipbuff1, sizeof ipbuff1));
-            ns_down[dnsc->num] = 0;
-          }
+          if (name_server)
+            recover(name_server);
+          else
+            received_one(name_server);
         }
-      } else {
-        if (!dnsc->num) {
-          Debug("dns", "primary DNS response code = %d", get_rcode(buf));
-          if (good_rcode(buf->buf)) {
-            if (name_server)
-              recover();
-            else
-              received_one(name_server);
-          }
-        }
-      }
-      Ptr<HostEnt> protect_hostent = make_ptr(buf);
-      if (dns_process(this, buf, res)) {
-        if (dnsc->num == name_server)
-          received_one(name_server);
       }
     }
+
+    if (was_healthcheck) {
+      break;
+    }
+
+    Ptr<HostEnt> protect_hostent = make_ptr(buf);
+    if (dns_process(this, buf, res)) {
+      if (map->num == name_server)
+        received_one(name_server);
+    }
+  }
+}
+
+void
+DNSHandler::prune_stalehealthchecks()
+{
+  for (int i = 0; i < n_con; i++) {
+    con[i].pruneStaleHealthCheckConnections();
   }
 }
 
@@ -791,6 +810,7 @@ DNSHandler::recv_dns(int /* event ATS_UNUSED */, Event * /* e ATS_UNUSED */)
 int
 DNSHandler::mainEvent(int event, Event *e)
 {
+  prune_stalehealthchecks();
   recv_dns(event, e);
   if (dns_ns_rr) {
     ink_hrtime t = Thread::get_hrtime();
@@ -805,7 +825,7 @@ DNSHandler::mainEvent(int event, Event *e)
     }
     for (int i = 0; i < n_con; i++) {
       if (!ns_down[i] && failover_soon(i)) {
-        Debug("dns", "mainEvent: nameserver = %d failover soon", name_server);
+        Debug("dns", "mainEvent: nameserver = %d failover soon", i);
         if (failover_now(i))
           rr_failure(i);
         else {
@@ -983,9 +1003,9 @@ write_dns_event(DNSHandler *h, DNSEntry *e)
     h->release_query_id(e->id[dns_retries - e->retries]);
   }
   e->id[dns_retries - e->retries] = i;
-  Debug("dns", "send query (qtype=%d) for %s to fd %d", e->qtype, e->qname, h->con[h->name_server].fd);
 
-  int s = socketManager.send(h->con[h->name_server].fd, blob._b, r, 0);
+  DNSRequest *req = nullptr;
+  int s = h->con[h->name_server].sendRequest(e->qtype, e->qname, blob._b, r, false, req);
   if (s != r) {
     Warning("dns: send() failed: qname = %s, %d != %d, nameserver= %d", e->qname, s, r, h->name_server);
     // changed if condition from 'r < 0' to 's < 0' - 8/2001 pas
@@ -1001,6 +1021,7 @@ write_dns_event(DNSHandler *h, DNSEntry *e)
   e->written_flag      = true;
   e->which_ns          = h->name_server;
   e->once_written_flag = true;
+  e->e_request         = req;
   ++h->in_flight;
   DNS_INCREMENT_DYN_STAT(dns_in_flight_stat);
 
@@ -1086,6 +1107,8 @@ DNSEntry::mainEvent(int event, Event *e)
       Debug("dns", "marking %s as not-written", qname);
       written_flag = false;
       --(dnsH->in_flight);
+      dnsH->con[which_ns].releaseRequest(e_request);
+      e_request = nullptr;
       DNS_DECREMENT_DYN_STAT(dns_in_flight_stat);
     }
     timeout = nullptr;
@@ -1310,6 +1333,7 @@ dns_process(DNSHandler *handler, HostEnt *buf, int len)
   // It is no longer in flight
   //
   e->written_flag = false;
+  e->e_request = nullptr; // The caller recv_dns frees up the conn after reading from it
   --(handler->in_flight);
   DNS_DECREMENT_DYN_STAT(dns_in_flight_stat);
 
