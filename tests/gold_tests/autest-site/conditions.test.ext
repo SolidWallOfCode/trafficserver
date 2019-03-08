@@ -57,9 +57,24 @@ def PluginExists(self, pluginname):
     path = os.path.join(self.Variables.PLUGINDIR, pluginname)
     return self.Condition(lambda: os.path.isfile(path) == True, path + " not found." )
 
+#test if test is in list in Unix env var TS_AU_TEST_ALLOW
+def InEnvAllowList(self, test_name, msg):
+
+    evar_name = "TS_AU_TEST_ALLOW"
+    evar = os.environ.get(evar_name, msg)
+    if (evar == None):
+        evar = ""
+
+    pos = str(" " + evar + " ").find(" " + test_name + " ")
+
+    return self.Condition(
+        lambda: pos >= 0, msg + ", and " +  test_name + " not in blank-delimited list of tests in environment variable " + evar_name
+    )
+
 
 ExtendCondition(HasOpenSSLVersion)
 ExtendCondition(HasATSFeature)
 ExtendCondition(HasCurlFeature)
 ExtendCondition(PluginExists)
+ExtendCondition(InEnvAllowList)
 

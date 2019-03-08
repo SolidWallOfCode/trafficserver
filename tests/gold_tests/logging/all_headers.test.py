@@ -22,6 +22,9 @@ import subprocess
 Test.Summary = '''
 Test new "all headers" log fields
 '''
+
+Test.SkipUnless(Condition.InEnvAllowList("all_headers", "Skipped due to YTSATS-2686"))
+
 # need Curl
 Test.SkipUnless(
     Condition.HasProgram(
