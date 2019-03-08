@@ -27,6 +27,9 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <atomic>
+#include <mutex>
+#include <queue>
 #include <ts/ts.h>
 
 #include "publisher.h"
@@ -68,5 +71,8 @@ int init_subscriber();
 int SSL_session_callback(TSCont contp, TSEvent event, void *edata);
 
 std::string hex_str(std::string str);
+
+extern std::queue<pthread_t> plugin_threads;
+extern std::mutex pt_mutex;
 
 extern ssl_session_param ssl_param; // almost everything one needs is stored in here

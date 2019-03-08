@@ -30,6 +30,9 @@
 #include "common.h"
 #include "ssl_utils.h"
 
+std::queue<pthread_t> plugin_threads;
+std::mutex pt_mutex;
+
 std::string
 hex_str(std::string str)
 {
@@ -42,6 +45,27 @@ hex_str(std::string str)
   return hex_str;
 }
 
+static int
+shutdown_handler(TSCont contp, TSEvent event, void *edata)
+{
+  if ((event == TS_EVENT_LIFECYCLE_SHUTDOWN)) {
+
+    std::lock_guard<std::mutex> lock(pt_mutex);
+
+    while (!plugin_threads.empty()) {
+
+      pthread_t th = plugin_threads.front();
+
+      // Cancel the threads, then call join to make sure they actually are stopped.
+      pthread_cancel(th);
+      pthread_join(th, nullptr);
+
+      plugin_threads.pop();
+    }
+  }
+  return 0;
+}
+
 void
 TSPluginInit(int argc, const char *argv[])
 {
@@ -50,6 +74,8 @@ TSPluginInit(int argc, const char *argv[])
   info.plugin_name   = (char *)("ats_session_reuse");
   info.vendor_name   = (char *)("ats");
   info.support_email = (char *)("ats-devel@oath.com");
+
+  TSLifecycleHookAdd(TS_LIFECYCLE_SHUTDOWN_HOOK, TSContCreate(shutdown_handler, nullptr));
 
 #if (TS_VERSION_NUMBER >= 7000000)
   if (TSPluginRegister(&info) != TS_SUCCESS) {

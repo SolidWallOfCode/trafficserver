@@ -39,6 +39,13 @@
 void *
 setup_subscriber(void *arg)
 {
+  {
+    std::lock_guard<std::mutex> lock(pt_mutex);
+    plugin_threads.push(::pthread_self());
+  }
+  ::pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
+  ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
+
   RedisSubscriber *me = static_cast<RedisSubscriber *>(arg);
   me->run();
   return (void *)1;
