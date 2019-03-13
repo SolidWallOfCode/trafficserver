@@ -92,7 +92,6 @@ ts.Disk.records_config.update({
     'proxy.config.url_remap.pristine_host_hdr': 1
 })
 
-<<<<<<< HEAD
 ts.Disk.ssl_server_name_config.AddLines([
   "server_config = {",
   "{ fqdn='bar.com',",
