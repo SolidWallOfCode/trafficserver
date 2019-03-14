@@ -26,7 +26,7 @@ Test different combinations of TLS handshake hooks to ensure they are applied co
 
 Test.SkipUnless(Condition.HasProgram("grep", "grep needs to be installed on system for this test to work"))
 
-ts = Test.MakeATSProcess("ts", select_ports=False)
+ts = Test.MakeATSProcess("ts", select_ports=True, enable_tls=True)
 server = Test.MakeOriginServer("server", ssl=True)
 request_header = {"headers": "GET / HTTP/1.1\r\nHost: www.example.com\r\n\r\n", "timestamp": "1469733493.993", "body": ""}
 # desired response form the origin server
@@ -36,7 +36,6 @@ server.addResponse("sessionlog.json", request_header, response_header)
 ts.addSSLfile("ssl/server.pem")
 ts.addSSLfile("ssl/server.key")
 
-ts.Variables.ssl_port = 4443
 ts.Disk.records_config.update({
     'proxy.config.diags.debug.enabled': 1,
     'proxy.config.diags.debug.tags': 'ssl_verify_test',
@@ -55,19 +54,21 @@ ts.Disk.ssl_multicert_config.AddLine(
 )
 
 ts.Disk.remap_config.AddLine(
-    'map https://foo.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.Port,ts.Variables.ssl_port)
+    'map https://foo.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.SSL_Port, ts.Variables.ssl_port)
 )
 ts.Disk.remap_config.AddLine(
-    'map https://bar.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.Port,ts.Variables.ssl_port)
+    'map https://bar.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.SSL_Port, ts.Variables.ssl_port)
 )
 ts.Disk.remap_config.AddLine(
-    'map https://random.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.Port,ts.Variables.ssl_port)
+    'map https://random.com:{1}/ https://127.0.0.1:{0}'.format(server.Variables.SSL_Port,ts.Variables.ssl_port)
 )
 
-ts.Disk.ssl_server_name_yaml.AddLine(
-  '- fqdn: bar.com')
-ts.Disk.ssl_server_name_yaml.AddLine(
-  '  verify_server_policy: PERMISSIVE')
+ts.Disk.ssl_server_name_config.AddLine(
+"server_config = { ")
+ts.Disk.ssl_server_name_config.AddLine(
+  "{ fqdn='bar.com',",)
+ts.Disk.ssl_server_name_config.AddLine(
+  "  verify_server_policy='PERMISSIVE'}}")
 
 Test.PreparePlugin(os.path.join(Test.Variables.AtsTestToolsDir, 'plugins', 'ssl_verify_test.cc'), ts, '-count=2 -bad=random.com -bad=bar.com')
 
