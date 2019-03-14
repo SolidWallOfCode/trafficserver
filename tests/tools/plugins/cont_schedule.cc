@@ -62,8 +62,8 @@ TSContSchedule_handler_1(TSCont contp, TSEvent event, void *edata)
     } else {
       TSDebug(DEBUG_TAG_HDL, "[%s] scheduling continuation", plugin_name);
       TSContThreadAffinitySet(contp_new, test_thread);
-      TSContSchedule(contp_new, 0);
-      TSContSchedule(contp_new, 100);
+      TSContSchedule(contp_new, 0, TS_THREAD_POOL_NET);
+      TSContSchedule(contp_new, 100, TS_THREAD_POOL_NET);
     }
   } else if (check_thread == nullptr) {
     TSDebug(DEBUG_TAG_CHK, "fail [schedule delay not applied]");
