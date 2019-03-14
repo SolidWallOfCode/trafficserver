@@ -472,8 +472,8 @@ NetHandler::waitForActivity(ink_hrtime timeout)
         Debug("iocore_net_main", "Unhandled epoll event: 0x%04x", get_ev_events(pd, x));
       }
     } else if (epd->type == EVENTIO_DNS_CONNECTION) {
-      if (epd->data.dnsreq != nullptr) {
-        epd->data.dnsreq->trigger(); // Make sure the DNSHandler for this con knows we triggered
+      if (epd->data.dnscon != nullptr) {
+        epd->data.dnscon->trigger(); // Make sure the DNSHandler for this con knows we triggered
 #if defined(USE_EDGE_TRIGGER)
         epd->refresh(EVENTIO_READ);
 #endif

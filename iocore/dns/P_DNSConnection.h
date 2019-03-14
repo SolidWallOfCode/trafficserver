@@ -25,24 +25,20 @@
 
   P_DNSConnection.h
   Description:
-  struct DNSRequest
+  struct DNSConnection
   **************************************************************************/
 
 #ifndef __P_DNSCONNECTION_H__
 #define __P_DNSCONNECTION_H__
 
-#include <unordered_set>
 #include "I_EventSystem.h"
-
-using std::unordered_set;
 
 //
 // Connection
 //
 struct DNSHandler;
-struct DNSRequestMap;
 
-struct DNSRequest {
+struct DNSConnection {
   /// Options for connecting.
   struct Options {
     typedef Options self; ///< Self reference type.
@@ -77,15 +73,14 @@ struct DNSRequest {
   };
 
   int fd;
-  LINK(DNSRequest, link);
+  IpEndpoint ip;
+  int num;
+  LINK(DNSConnection, link);
   EventIO eio;
+  InkRand generator;
   DNSHandler *handler;
-  DNSRequestMap *_map;
-  ink_hrtime start_time;
-  bool for_healthcheck;
 
-  void init(DNSHandler *a_handler, DNSRequestMap *cmap, bool healthcheck = false);
-  int open(sockaddr const *addr, Options const &opt = DEFAULT_OPTIONS);
+  int connect(sockaddr const *addr, Options const &opt = DEFAULT_OPTIONS);
   /*
                 bool non_blocking_connect = NON_BLOCKING_CONNECT,
                 bool use_tcp = CONNECT_WITH_TCP, bool non_blocking = NON_BLOCKING, bool bind_random_port = BIND_ANY_PORT);
@@ -93,89 +88,52 @@ struct DNSRequest {
   int close();
   void trigger();
 
-  virtual ~DNSRequest();
-  DNSRequest();
+  virtual ~DNSConnection();
+  DNSConnection();
 
   static Options const DEFAULT_OPTIONS;
 };
 
-inline DNSRequest::Options::Options()
+inline DNSConnection::Options::Options()
   : _non_blocking_connect(true), _non_blocking_io(true), _use_tcp(false), _bind_random_port(true), _local_ipv6(0), _local_ipv4(0)
 {
 }
 
-inline DNSRequest::Options &
-DNSRequest::Options::setNonBlockingIo(bool p)
+inline DNSConnection::Options &
+DNSConnection::Options::setNonBlockingIo(bool p)
 {
   _non_blocking_io = p;
   return *this;
 }
-inline DNSRequest::Options &
-DNSRequest::Options::setNonBlockingConnect(bool p)
+inline DNSConnection::Options &
+DNSConnection::Options::setNonBlockingConnect(bool p)
 {
   _non_blocking_connect = p;
   return *this;
 }
-inline DNSRequest::Options &
-DNSRequest::Options::setUseTcp(bool p)
+inline DNSConnection::Options &
+DNSConnection::Options::setUseTcp(bool p)
 {
   _use_tcp = p;
   return *this;
 }
-inline DNSRequest::Options &
-DNSRequest::Options::setBindRandomPort(bool p)
+inline DNSConnection::Options &
+DNSConnection::Options::setBindRandomPort(bool p)
 {
   _bind_random_port = p;
   return *this;
 }
-inline DNSRequest::Options &
-DNSRequest::Options::setLocalIpv4(sockaddr const *ip)
+inline DNSConnection::Options &
+DNSConnection::Options::setLocalIpv4(sockaddr const *ip)
 {
   _local_ipv4 = ip;
   return *this;
 }
-inline DNSRequest::Options &
-DNSRequest::Options::setLocalIpv6(sockaddr const *ip)
+inline DNSConnection::Options &
+DNSConnection::Options::setLocalIpv6(sockaddr const *ip)
 {
   _local_ipv6 = ip;
   return *this;
-}
-
-class DNSRequestMap
-{
- public:
-  void initialize(sockaddr const *target, DNSRequest::Options &opt);
-  void close();
-  int sendRequest(const int qtype,
-      const char *qname,
-      char *query,
-      const int len,
-      bool hc,
-      DNSRequest *&request);
-  DNSRequest *getRequest(bool health_check = false);
-  bool releaseRequest(DNSRequest *conn);
-  void pruneStaleHealthCheckConnections();
-
-  DNSHandler *handler;
-  IpEndpoint m_target;
-  DNSRequest::Options m_opt;
-
-  unordered_set<DNSRequest *> m_requests;
-  unordered_set<DNSRequest *> m_healthCheckRequests;
-  int num;
-
-  DNSRequestMap();
-  DNSRequestMap(const DNSRequestMap &) = delete;
-  DNSRequestMap &operator=(const DNSRequestMap &) = delete;
-
-};
-
-inline
-DNSRequestMap::DNSRequestMap()
-:
-handler(nullptr)
-{
-  ats_ip_invalidate(&m_target);
 }
 
 #endif /*_P_DNSConnection_h*/
