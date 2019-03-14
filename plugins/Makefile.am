@@ -77,6 +77,10 @@ include experimental/tls_bridge/Makefile.inc
 include experimental/ts_lua/Makefile.inc
 include experimental/url_sig/Makefile.inc
 
+if BUILD_SSL_SESSION_REUSE_PLUGIN
+include experimental/ssl_session_reuse/Makefile.inc
+endif
+
 if BUILD_MEMCACHED_REMAP_PLUGIN
 include experimental/memcached_remap/Makefile.inc
 endif
