@@ -131,7 +131,7 @@ UnixNetProcessor::init()
 // TODO: The following was necessary only for Solaris, should examine more.
 NetVCOptions const Connection::DEFAULT_OPTIONS;
 NetProcessor::AcceptOptions const NetProcessor::DEFAULT_ACCEPT_OPTIONS;
-DNSRequest::Options const DNSRequest::DEFAULT_OPTIONS;
+DNSConnection::Options const DNSConnection::DEFAULT_OPTIONS;
 
 // TODO: This is even uglier, this actually gets called here when "defined".
 NetProcessor::AcceptOptions &
