@@ -2546,7 +2546,6 @@ HttpSM::state_cache_open_write(int event, void *data)
       pending_action->cancel();
     }
     if ((pending_action = ua_session->adjust_thread(this, event, data))) {
-      ink_release_assert(false);
       return 0; // Go away if we reschedule
     }
   }
