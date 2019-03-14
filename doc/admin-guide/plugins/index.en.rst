@@ -135,6 +135,7 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
    Header Frequency <header_freq.en>
    HIPES <hipes.en>
    Hook Trace <hook-trace.en>
+   JA3 Fingerprint <ja3_fingerprint.en>
    Memcache <memcache.en>
    Metalink <metalink.en>
    Money Trace <money_trace.en>
@@ -177,6 +178,9 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
 
 :doc:`HIPES <hipes.en>`
    Adds support for HTTP Pipes.
+
+:doc:`JA3 Fingerprint <ja3_fingerprint.en>`
+   Calculates JA3 Fingerprints for incoming SSL traffic.
 
 :doc:`Memcache <memcache.en>`
    Implements the memcache protocol for cache contents.
