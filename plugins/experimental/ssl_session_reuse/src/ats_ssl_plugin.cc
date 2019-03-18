@@ -30,8 +30,7 @@
 #include "common.h"
 #include "ssl_utils.h"
 
-std::queue<pthread_t> plugin_threads;
-std::mutex pt_mutex;
+PluginThreads plugin_threads;
 
 std::string
 hex_str(std::string str)
@@ -49,19 +48,7 @@ static int
 shutdown_handler(TSCont contp, TSEvent event, void *edata)
 {
   if ((event == TS_EVENT_LIFECYCLE_SHUTDOWN)) {
-
-    std::lock_guard<std::mutex> lock(pt_mutex);
-
-    while (!plugin_threads.empty()) {
-
-      pthread_t th = plugin_threads.front();
-
-      // Cancel the threads, then call join to make sure they actually are stopped.
-      pthread_cancel(th);
-      pthread_join(th, nullptr);
-
-      plugin_threads.pop();
-    }
+    plugin_threads.terminate();
   }
   return 0;
 }

@@ -38,10 +38,7 @@
 void *
 RedisPublisher::start_worker_thread(void *arg)
 {
-  {
-    std::lock_guard<std::mutex> lock(pt_mutex);
-    plugin_threads.push(::pthread_self());
-  }
+  plugin_threads.store(::pthread_self());
   ::pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
   ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, nullptr);
 
