@@ -15,9 +15,9 @@
 #  limitations under the License.
 
 # Only build if LIB_HIREDIS is set to a non-empty value
-pkglib_LTLIBRARIES += experimental/ssl_session_reuse/ssl_session_reuse.la
+pkglib_LTLIBRARIES += experimental/ssl_session_reuse/asf_ssl_session_reuse.la
 
-experimental_ssl_session_reuse_ssl_session_reuse_la_SOURCES = \
+experimental_ssl_session_reuse_asf_ssl_session_reuse_la_SOURCES = \
          experimental/ssl_session_reuse/src/openssl_utils.cc \
          experimental/ssl_session_reuse/src/session_process.cc  \
          experimental/ssl_session_reuse/src/ssl_init.cc \
@@ -30,5 +30,5 @@ experimental_ssl_session_reuse_ssl_session_reuse_la_SOURCES = \
          experimental/ssl_session_reuse/src/subscriber.cc \
   	 experimental/ssl_session_reuse/src/ats_ssl_plugin.cc
 
-experimental_ssl_session_reuse_ssl_session_reuse_la_LIBADD = @LIB_HIREDIS@ 
+experimental_ssl_session_reuse_asf_ssl_session_reuse_la_LIBADD = @LIB_HIREDIS@ 
 
