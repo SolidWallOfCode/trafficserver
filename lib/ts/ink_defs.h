@@ -132,13 +132,4 @@ int ink_login_name_max();
 hwloc_topology_t ink_get_topology();
 #endif
 
-/** Constants.
- */
-#ifdef __cplusplus
-namespace ts
-{
-static const int NO_FD = -1; ///< No or invalid file descriptor.
-}
-#endif
-
 #endif /*__ink_defs_h*/
