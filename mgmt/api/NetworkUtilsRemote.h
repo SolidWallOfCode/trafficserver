@@ -36,6 +36,7 @@
 #define _NETWORK_UTILS_REMOTE_H_
 
 #include "mgmtapi.h"
+#include "ts/apidefs.h"
 #include "NetworkMessage.h"
 #include "EventCallback.h"
 

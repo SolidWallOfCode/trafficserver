@@ -24,6 +24,7 @@
 
 #include <ts/ts.h>
 #include <string.h>
+#include <ts/apidefs.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -62,7 +63,7 @@ Config::loadConfig(const std::string &filename)
     size_t n = info.st_size;
     std::string config_data;
     config_data.resize(n);
-    if (read(fd, const_cast<char *>(config_data.data()), n) != n) {
+    if (read(fd, const_cast<char *>(config_data.data()), n) != static_cast<int>(n)) {
       close(fd);
       return success;
     }
