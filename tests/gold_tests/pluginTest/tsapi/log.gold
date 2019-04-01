@@ -1,0 +1,14 @@
+Global: event=60011
+Global: event=60002
+TSHttpTxnEffectiveUrlStringGet():  http://mYhOsT.teSt:SERVER_PORT/
+TSHttpHdrEffectiveUrlBufGet():  http://myhost.test:SERVER_PORT/
+Transaction: event=60002
+TSHttpTxnEffectiveUrlStringGet():  http://mYhOsT.teSt:SERVER_PORT/
+TSHttpHdrEffectiveUrlBufGet():  http://myhost.test:SERVER_PORT/
+Global: event=60011
+Global: event=60002
+TSHttpTxnEffectiveUrlStringGet():  https://myhost.test:SERVER_PORT/
+TSHttpHdrEffectiveUrlBufGet():  https://myhost.test:SERVER_PORT/
+Transaction: event=60002
+TSHttpTxnEffectiveUrlStringGet():  https://myhost.test:SERVER_PORT/
+TSHttpHdrEffectiveUrlBufGet():  https://myhost.test:SERVER_PORT/
