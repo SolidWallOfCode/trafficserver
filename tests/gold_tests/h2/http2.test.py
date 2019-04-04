@@ -20,6 +20,9 @@ import os
 Test.Summary = '''
 Test a basic remap of a http connection
 '''
+
+Test.SkipUnless(Condition.InEnvAllowList("http2", "Skipped due to YTSATS-2719"))
+
 # need Curl
 Test.SkipUnless(
     Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"),
