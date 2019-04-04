@@ -27,7 +27,7 @@
 #include <sstream>
 #include <stdlib.h>   // for abort
 #include <ts/ts.h>    // for debug
-#include <inttypes.h> // for PRIu64
+#include <cinttypes>  // for PRIu64
 #include <string.h>
 
 // debug messages viewable by setting 'proxy.config.diags.debug.tags'
