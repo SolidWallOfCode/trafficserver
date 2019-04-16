@@ -24,8 +24,11 @@ Test.Summary = '''
 Test for verify of runroot from traffic_layout.
 '''
 Test.ContinueOnFail = True
-Test.SkipUnless(Test.Variables.BINDIR.startswith(Test.Variables.PREFIX),
-                "need to guarantee bin path starts with prefix for runroot")
+
+if Test.Variables.BINDIR.startswith(Test.Variables.PREFIX):
+    Test.SkipUnless(Condition.InEnvAllowList("runroot_verify", "Skipped due to YTSATS-2741"))
+else:
+    Test.SkipIf(Condition.true("need to guarantee bin path starts with prefix for runroot"))
 
 # create runroot
 path = os.path.join(Test.RunDirectory, "runroot")
