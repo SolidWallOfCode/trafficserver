@@ -528,6 +528,12 @@ Http2ClientSession::state_process_frame_read(int event, VIO *vio, bool inside_fr
   }
 
   while (this->sm_reader->read_avail() >= (int64_t)HTTP2_FRAME_HEADER_LEN) {
+    // Cancel reading if there was an error
+    if (connection_state.tx_error_code.code != static_cast<uint32_t>(Http2ErrorCode::HTTP2_ERROR_NO_ERROR)) {
+      DebugHttp2Ssn("reading a frame has been canceled (%u)", connection_state.tx_error_code.code);
+      break;
+    }
+
     Http2ErrorCode err = Http2ErrorCode::HTTP2_ERROR_NO_ERROR;
     if (this->connection_state.get_stream_error_rate() > std::min(1.0, Http2::stream_error_rate_threshold * 2.0)) {
       ip_port_text_buffer ipb;
