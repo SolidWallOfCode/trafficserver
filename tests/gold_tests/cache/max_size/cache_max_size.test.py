@@ -23,6 +23,7 @@ Test proxy.config.cache.max_doc_size config variable.
 '''
 
 Test.SkipUnless(
+    Condition.InEnvAllowList("cache_max_size", "Skipped due to YTSATS-2686"),
     Condition.HasProgram(
         "curl", "Curl need to be installed on system for this test to work"),
     Condition.HasProgram("netstat", "netstat need to be installed on system for this test to work"),
