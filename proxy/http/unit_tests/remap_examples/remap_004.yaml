@@ -1,0 +1,18 @@
+{
+  "url_rewrite": {
+  "rules": [
+    { "target": "http://one.example",
+      "replacement": "http://one.test"
+    },
+      [
+        { "enable": "bob" },
+        { "target": "http://two.example",
+          "replacement": "http://two.test"
+        },
+        { "target": "http://three.example",
+          "replacement": "http://three.test"
+        }
+      ]
+    ]
+  }
+}
