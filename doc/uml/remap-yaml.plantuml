@@ -1,0 +1,58 @@
+' Licensed under the Apache License, Version 2.0 (the "License");
+' You may not use this file except in compliance with the License.
+' You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+' Unless required by  applicable law or agreed to in writing, software distributed under the License is distributed
+' on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+' See the License for the specific language governing permissions and limitations under the License.
+
+@startuml
+
+hide empty members
+
+rules "1" *-- url_rewrite
+filters "1" *-- url_rewrite
+
+directive_group "1" *-- rules
+filter_define_group "1" *-- filters
+
+directive "1" *-- directive_group
+directive_list "1" *-- directive_group
+
+directive_group "+" *-- directive_list
+
+filter_enable_directive "1" *-- directive
+filter_disable_directive "1" *-- directive
+rule "1" *-- directive
+
+filter_disable_group "1" *-- filter_disable_directive
+
+filter_enable_group "1" *-- filter_enable_directive
+
+filter_use "1" *-- filter_enable_group
+filter_use_list "1" *-- filter_enable_group
+
+filter_use "+" *-- filter_use_list
+
+filter_ref "1" *-- filter_disable_group
+filter_ref_list "1" *-- filter_disable_group
+
+filter_ref "+" *-- filter_ref_list
+
+filter_ref "1" *-- filter_use
+filter_define "1" *-- filter_use
+
+filter_define "1" *-- filter_define_group
+filter_define_list "1" *-- filter_define_group
+
+filter_define "+" *-- filter_define_list
+
+plugin "+" *-- plugin_list
+
+plugin_list "1" *-- plugin_group
+plugin "1" *-- plugin_group
+
+plugin_group "1" *-- rule
+filter_enable_group "1" *-- rule
+referrer_data "1" *-- rule
+
+@enduml
