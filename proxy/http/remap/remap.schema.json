@@ -12,15 +12,12 @@
       "description": "Root tag for URL rewrite configuration",
       "type": "object",
       "properties": {
-        "rules": {
-          "$ref": "#/definitions/url_rewrite/directive_group"
-        },
-        "filters": {
-          "$ref": "#/definitions/url_rewrite/filter_define_group"
-        }
+        "rules": { "$ref": "#/definitions/url_rewrite/directive_group" },
+        "filters": { "$ref": "#/definitions/url_rewrite/filter_define_group" }
       }
     }
   },
+
   "definitions": {
     "url_rewrite": {
       "ip_range": {
@@ -41,30 +38,30 @@
           }
         ]
       },
+
       "action": {
         "description": "Filtering result.",
         "type": "string",
-        "enum": [
-          "deny",
-          "allow"
-        ]
+        "enum": [ "deny", "allow" ]
       },
-      "method_set": {
-        "description": "Methods to check.",
+
+      "method": {
+        "description": "HTTP method name.",
+        "type": "string"
+      },
+
+      "method_list": {
+        "description": "List of HTTP method names.",
+        "type": "array",
+        "minItems": 1,
+        "items": { "$ref": "#/definitions/url_rewrite/method" }
+      },
+
+      "method_group": {
+        "description": "Methods to match for access control.",
         "oneOf": [
-          {
-            "type": "string",
-            "description": "Method name"
-          },
-          {
-            "type": "array",
-            "description": "List of method names.",
-            "minItems": 1,
-            "items": {
-              "type": "string",
-              "description": "Method name"
-            }
-          }
+          { "$ref": "#/definitions/url_rewrite/method" },
+          { "$ref": "#/definitions/url_rewrite/method_list" }
         ]
       },
 
@@ -76,42 +73,26 @@
             "description": "Name of the filter.",
             "type": "string"
           },
-          "action": {
-            "$ref": "#/definitions/url_rewrite/action"
-          },
-          "method": {
-            "$ref": "#/definitions/url_rewrite/method_set"
-          },
-          "proxy_addr": {
-            "$ref": "#/definitions/url_rewrite/ip_range"
-          },
-          "src_addr": {
-            "$ref": "#/definitions/url_rewrite/ip_range"
-          }
+          "action": { "$ref": "#/definitions/url_rewrite/action" },
+          "method": { "$ref": "#/definitions/url_rewrite/method_set" },
+          "proxy_addr": { "$ref": "#/definitions/url_rewrite/ip_range" },
+          "src_addr": { "$ref": "#/definitions/url_rewrite/ip_range" }
         },
-        "required": [
-          "name", "action"
-        ]
+        "required": [ "name", "action" ]
       },
 
       "filter_define_list": {
         "description": "List of explicit named filter definitions.",
           "type": "array",
           "minItems": 1,
-          "items": {
-            "$ref": "#/definitions/url_rewrite/filter_define"
-          }
+          "items": { "$ref": "#/definitions/url_rewrite/filter_define" }
       },
 
       "filter_define_group": {
         "description": "Explicit named filter definition(s).",
         "oneOf": [
-          {
-            "$ref": "#/definitions/url_rewrite/filter_define"
-          },
-          {
-            "$ref": "#/definitions/url_rewrite/filter_define_list"
-          }
+          { "$ref": "#/definitions/url_rewrite/filter_define" },
+          { "$ref": "#/definitions/url_rewrite/filter_define_list" }
         ]
       },
 
@@ -122,12 +103,8 @@
 
       "filter_use": {
         "oneOf": [
-          {
-            "$ref": "#/definitions/url_rewrite/filter_ref"
-          },
-          {
-            "$ref": "#/definitions/url_rewrite/filter_define"
-          }
+          { "$ref": "#/definitions/url_rewrite/filter_ref" },
+          { "$ref": "#/definitions/url_rewrite/filter_define" }
         ]
       },
 
@@ -173,13 +150,12 @@
             "description": "Arguments to pass to plugin during rule initialization",
             "type": "array",
             "items": {
+              "description": "Plugin initialization argument.",
               "type": "string"
             }
           }
         },
-        "required": [
-          "path"
-        ]
+        "required": [ "path" ]
       },
 
       "plugin_list": {
@@ -208,24 +184,20 @@
           "match": {
             "description": "Regular expressions (PCRE compliant) to match the Referer field value.",
             "type": "array",
+            "minItems": 1,
             "items": {
               "description": "A regular expression",
               "type": "string"
             },
-            "minItems": 1
           }
         },
-        "required": [
-          "redirect",
-          "match"
-        ]
+        "required": [ "redirect", "match" ]
       },
+
       "rule_option": {
         "description": "Optional feature for a rule.",
         "type": "string",
-        "enum": [
-          "reverse"
-        ]
+        "enum": [ "reverse" ]
       },
 
       "rule": {
@@ -243,15 +215,11 @@
           "options": {
             "description": "Rule options to enable for this rule.",
             "oneOf": [
-              {
-                "$ref": "#/definitions/url_rewrite/rule_option"
-              },
+              { "$ref": "#/definitions/url_rewrite/rule_option" },
               {
                 "type": "array",
-                "items": {
-                  "$ref": "#/definitions/url_rewrite/rule_option"
-                },
-                "minItems": 1
+                "minItems": 1,
+                "items": { "$ref": "#/definitions/url_rewrite/rule_option" },
               }
             ]
           },
@@ -263,29 +231,18 @@
             "description": "Specify a local port for a rule.",
             "type": "number"
           },
-          "plugins": {
-            "$ref": "#/definitions/url_rewrite/plugin_list"
-          },
-          "referer": {
-            "$ref": "#/definitions/url_rewrite/referer_data"
-          },
-          "filters": {
-            "$ref": "#/definitions/url_rewrite/filter_enable_group"
-          }
+          "plugins": { "$ref": "#/definitions/url_rewrite/plugin_list" },
+          "referer": { "$ref": "#/definitions/url_rewrite/referer_data" },
+          "filters": { "$ref": "#/definitions/url_rewrite/filter_enable_group" }
         },
-        "required": [
-          "target",
-          "replacement"
-        ]
+        "required": [ "target", "replacement" ]
       },
 
       "filter_enable_directive": {
         "description": "Filter(s) to enable.",
         "type": "object",
         "properties": {
-          "enable": {
-            "$ref": "#/definitions/url_rewrite/filter_enable_group"
-          }
+          "enable": { "$ref": "#/definitions/url_rewrite/filter_enable_group" }
         },
         "required": [ "enable" ]
       },
@@ -294,24 +251,16 @@
         "description": "Filter(s) to disable.",
         "type": "object",
         "properties": {
-          "disable": {
-            "$ref": "#/definitions/url_rewrite/filter_disable_group"
-          }
+          "disable": { "$ref": "#/definitions/url_rewrite/filter_disable_group" }
         },
         "required": [ "disable" ]
       },
 
       "directive": {
         "oneOf": [
-          {
-            "$ref": "#/definitions/url_rewrite/filter_enable_directive"
-          },
-          {
-            "$ref": "#/definitions/url_rewrite/filter_disable_directive"
-          },
-          {
-            "$ref": "#/definitions/url_rewrite/rule"
-          }
+          { "$ref": "#/definitions/url_rewrite/filter_enable_directive" },
+          { "$ref": "#/definitions/url_rewrite/filter_disable_directive" },
+          { "$ref": "#/definitions/url_rewrite/rule" }
         ]
       },
 
@@ -319,19 +268,13 @@
         "description": "List of directives.",
         "type": "array",
         "minItems": 1,
-        "items": {
-          "$ref": "#/definitions/url_rewrite/directive_group"
-        }
+        "items": { "$ref": "#/definitions/url_rewrite/directive_group" }
       },
 
       "directive_group": {
         "oneOf": [
-          {
-            "$ref": "#/definitions/url_rewrite/directive"
-          },
-          {
-            "$ref": "#/definitions/url_rewrite/directive_list"
-          }
+          { "$ref": "#/definitions/url_rewrite/directive" },
+          { "$ref": "#/definitions/url_rewrite/directive_list" }
         ]
       }
     }
