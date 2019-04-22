@@ -70,7 +70,7 @@ ts.Disk.ssl_server_name_config.AddLine(
 ts.Disk.ssl_server_name_config.AddLine(
   "  verify_server_policy='PERMISSIVE'}}")
 
-Test.PreparePlugin(os.path.join(Test.Variables.AtsTestToolsDir, 'plugins', 'ssl_verify_test.cc'), ts, '-count=2 -bad=random.com -bad=bar.com')
+Test.PreparePlugin(os.path.join(Test.Variables.AtsTestToolsDir, 'plugins', 'ssl_verify_test.cc'), ts, '-count=2 -bad=random.com -bad=bar.com', tsxs_args='-lstdc++')
 
 tr = Test.AddTestRun("request good name")
 tr.Processes.Default.StartBefore(server)
