@@ -193,26 +193,6 @@ HttpVCTable::remove_entry(HttpVCTableEntry *e)
     free_MIOBuffer(e->write_buffer);
     e->write_buffer = nullptr;
   }
-  if (e->read_vio != nullptr && e->read_vio->_cont == sm) {
-    // Cleanup dangling i/o
-    if (e == sm->get_ua_entry() && sm->get_ua_session() != nullptr) {
-      e->read_vio = sm->get_ua_session()->do_io_read(nullptr, 0, nullptr);
-    } else if (e == sm->get_server_entry() && sm->get_server_session()) {
-      e->read_vio = sm->get_server_session()->do_io_read(nullptr, 0, nullptr);
-    } else {
-      ink_release_assert(false);
-    }
-  }
-  if (e->write_vio != nullptr && e->write_vio->_cont == sm) {
-    // Cleanup dangling i/o
-    if (e == sm->get_ua_entry() && sm->get_ua_session()) {
-      e->write_vio = sm->get_ua_session()->do_io_write(nullptr, 0, nullptr);
-    } else if (e == sm->get_server_entry() && sm->get_server_session()) {
-      e->write_vio = sm->get_server_session()->do_io_write(nullptr, 0, nullptr);
-    } else {
-      ink_release_assert(false);
-    }
-  }
   e->read_vio   = nullptr;
   e->write_vio  = nullptr;
   e->vc_handler = nullptr;
