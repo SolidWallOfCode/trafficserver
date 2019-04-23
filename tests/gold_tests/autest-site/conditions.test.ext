@@ -71,10 +71,14 @@ def InEnvAllowList(self, test_name, msg):
         lambda: pos >= 0, msg + ", and " +  test_name + " not in blank-delimited list of tests in environment variable " + evar_name
     )
 
+#test if predicate function returns true
+def General(self, predicate, msg):
+    return self.Condition(predicate, msg)
 
 ExtendCondition(HasOpenSSLVersion)
 ExtendCondition(HasATSFeature)
 ExtendCondition(HasCurlFeature)
 ExtendCondition(PluginExists)
 ExtendCondition(InEnvAllowList)
+ExtendCondition(General)
 

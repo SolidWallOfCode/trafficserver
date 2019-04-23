@@ -17,13 +17,30 @@
 #  limitations under the License.
 
 import os
+import subprocess
+import re
+
 Test.Summary = '''
 Forwarding a non-HTTP protocol out of TLS
 '''
 
-# need Curl
+# Check for sufficiently new nc (netcat) version.
+def CheckNetcatVersion():
+    output = subprocess.check_output('nc --version 2>&1 || true', shell = True)
+    out_str = output.decode('utf-8')
+    match_obj = re.search(r'(\d+)\.(\d+)', out_str)
+    if not match_obj:
+        # Version is so old it does not support --version option.
+        return False
+    major = int(match_obj.group(1))
+    if major != 6:
+        return major > 6
+    return int(match_obj.group(2)) >= 40
+
+# need Curl and minimum version of nc (netcat)
 Test.SkipUnless(
-    Condition.HasProgram("curl", "Curl need to be installed on system for this test to work")
+    Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"),
+    Condition.General(CheckNetcatVersion, "nc command (netcat) version must be at least 6.40")
 )
 
 # Define default ATS
