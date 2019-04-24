@@ -21,8 +21,9 @@ import uuid
 Test.Summary = '''
 Test that incrementing the cache generation acts like a cache clear
 '''
+Test.SkipUnless(Condition.InEnvAllowList("cache-generation-clear", "Skipped due to YTSATS-2686"),
 # need Curl
-Test.SkipUnless(Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"))
+                Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"))
 Test.ContinueOnFail = True
 # Define default ATS
 ts = Test.MakeATSProcess("ts", command="traffic_manager")
