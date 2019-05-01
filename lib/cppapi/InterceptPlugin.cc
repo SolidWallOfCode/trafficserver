@@ -192,6 +192,17 @@ InterceptPlugin::getRequestHeaders()
   return state_->request_headers_;
 }
 
+TSSslConnection
+InterceptPlugin::getSslConnection()
+{
+  if (!state_->net_vc_) {
+    LOG_ERROR("");
+    return nullptr;
+  }
+
+  return TSVConnSSLConnectionGet(state_->net_vc_);
+}
+
 bool
 InterceptPlugin::doRead()
 {

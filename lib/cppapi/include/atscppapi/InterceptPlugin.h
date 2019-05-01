@@ -70,6 +70,8 @@ public:
   /** Should be called only after request header has completely been consumed */
   Headers &getRequestHeaders();
 
+  TSSslConnection getSslConnection(); 
+
   virtual ~InterceptPlugin();
 
   struct State; /** Internal use only */
