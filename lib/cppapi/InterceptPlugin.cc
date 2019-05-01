@@ -196,7 +196,7 @@ TSSslConnection
 InterceptPlugin::getSslConnection()
 {
   if (!state_->net_vc_) {
-    LOG_ERROR("");
+    LOG_ERROR("Intercept Plugin is not ready to provide SSL Connection");
     return nullptr;
   }
 
