@@ -676,7 +676,7 @@ Lretry:
   c->init(md5, opt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::probeEvent);
 
-  thread->schedule_in(c, MUTEX_RETRY_DELAY);
+  c->timeout = thread->schedule_in(c, MUTEX_RETRY_DELAY);
 
   return &c->action;
 }
@@ -782,7 +782,7 @@ HostDBProcessor::getSRVbyname_imm(Continuation *cont, process_srv_info_pfn proce
   c->init(md5, copt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::probeEvent);
 
-  thread->schedule_in(c, MUTEX_RETRY_DELAY);
+  c->timeout = thread->schedule_in(c, MUTEX_RETRY_DELAY);
 
   return &c->action;
 }
@@ -856,7 +856,7 @@ HostDBProcessor::getbyname_imm(Continuation *cont, process_hostdb_info_pfn proce
   c->init(md5, copt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::probeEvent);
 
-  thread->schedule_in(c, HOST_DB_RETRY_PERIOD);
+  c->timeout = thread->schedule_in(c, HOST_DB_RETRY_PERIOD);
 
   return &c->action;
 }
@@ -1693,6 +1693,11 @@ HostDBContinuation::probeEvent(int /* event ATS_UNUSED */, Event *e)
 {
   ink_assert(!link.prev && !link.next);
   EThread *t = e ? e->ethread : this_ethread();
+
+  if (timeout) {
+    timeout->cancel(this);
+    timeout = nullptr;
+  }
 
   MUTEX_TRY_LOCK(lock, action.mutex, t);
 
