@@ -1438,14 +1438,16 @@ Http2ConnectionState::send_a_data_frame(Http2Stream *stream, size_t &payload_len
 }
 
 void
-Http2ConnectionState::send_data_frames(Http2Stream *stream)
+Http2ConnectionState::send_data_frames(Http2Stream *stream, bool &stream_deleted)
 {
+  stream_deleted = false;
   // To follow RFC 7540 must not send more frames other than priority on
   // a closed stream.  So we return without sending
   if (stream->get_state() == Http2StreamState::HTTP2_STREAM_STATE_HALF_CLOSED_LOCAL ||
       stream->get_state() == Http2StreamState::HTTP2_STREAM_STATE_CLOSED) {
     Http2StreamDebug(this->ua_session, stream->get_id(), "Shutdown half closed local stream");
     this->delete_stream(stream);
+    stream_deleted = true;
     return;
   }
 
@@ -1461,6 +1463,7 @@ Http2ConnectionState::send_data_frames(Http2Stream *stream)
       // See 'closed' state written at [RFC 7540] 5.1.
       Http2StreamDebug(this->ua_session, stream->get_id(), "Shutdown stream");
       this->delete_stream(stream);
+      stream_deleted = true;
     }
   }
 

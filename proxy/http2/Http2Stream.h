@@ -189,7 +189,7 @@ public:
   void transaction_done() override;
 
   void restart_sending();
-  void send_response_body();
+  void send_response_body(bool &stream_deleted);
   void push_promise(URL &url, const MIMEField *accept_encoding);
 
   // Stream level window size
