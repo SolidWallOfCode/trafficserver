@@ -29,6 +29,7 @@
 #include <vector>
 #include <string>
 #include <iosfwd>
+#include <tuple>
 #include <ts/string_view.h>
 
 #include <ts/ink_std_compat.h>
@@ -392,6 +393,10 @@ public:
   std::ostream &operator>>(std::ostream &stream) const override;
   /// Output the buffer contents to the file for file descriptor @a fd.
   ssize_t operator>>(int fd) const override;
+
+  // Overrides for co-variance
+  template <typename... Rest> self_type &print(TextView fmt, Rest &&... rest);
+  template <typename... Args> self_type &print(BWFormat const &fmt, Args &&... args);
 
 protected:
   char *const _buf;      ///< Output buffer.
@@ -866,6 +871,20 @@ inline FixedBufferWriter::FixedBufferWriter(char *buffer, size_t capacity) : _bu
 }
 
 inline FixedBufferWriter::FixedBufferWriter(std::nullptr_t) : _buf(nullptr), _capacity(0) {}
+
+template <typename... Args>
+inline auto
+FixedBufferWriter::print(TextView fmt, Args &&... args) -> self_type &
+{
+  return static_cast<self_type &>(this->super_type::printv(fmt, std::forward_as_tuple(args...)));
+}
+
+template <typename... Args>
+inline auto
+FixedBufferWriter::print(BWFormat const &fmt, Args &&... args) -> self_type &
+{
+  return static_cast<self_type &>(this->super_type::printv(fmt, std::forward_as_tuple(args...)));
+}
 
 } // end namespace ts
 
