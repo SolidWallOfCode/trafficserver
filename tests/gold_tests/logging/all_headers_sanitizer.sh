@@ -14,12 +14,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# Spaz that it is, Trafficserver will pseudo-randomly change the order of headers. So it's necessary to get the header / value
-# pairs on different lines and then do a sort, before comparing to a gold file.
-
-sed 's/{{\([^{]\)/\
-{{\1/g' | \
-sed 's/\([^}]\)}}/\1}}\
-/g' | \
-sed 's/ {/\
-{/g' | sort
+sed 's/ ___FS___ /\
+/g' | sed 's/^{//' | sed 's/}$//' | while read LN
+do
+    # For lines that contain a full set of messaage headers, get
+    # individual headers on separate lines, then sort the lines.
+    #
+    echo $LN | sed 's/}}/}}\
+/g' | sort
+done

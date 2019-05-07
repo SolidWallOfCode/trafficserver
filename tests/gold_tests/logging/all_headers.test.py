@@ -23,8 +23,6 @@ Test.Summary = '''
 Test new "all headers" log fields
 '''
 
-Test.SkipUnless(Condition.InEnvAllowList("all_headers", "Skipped due to YTSATS-2686"))
-
 # need Curl
 Test.SkipUnless(
     Condition.HasProgram(
@@ -46,6 +44,9 @@ response_header = {"headers": "HTTP/1.1 200 OK\r\nConnection: close\r\nCache-con
 server.addResponse("sessionlog.json", request_header, response_header)
 
 ts.Disk.records_config.update({
+    # Do not accept connections from clients until cache subsystem is operational.
+    'proxy.config.http.wait_for_cache': 1,
+
     'proxy.config.diags.debug.enabled': 0,
     'proxy.config.diags.debug.tags': 'http|dns',
 })
@@ -58,7 +59,7 @@ ts.Disk.remap_config.AddLine(
 #
 ts.Disk.logging_config.AddLines(
      '''custom = format {
-  Format = " %<cqah> %<pssc> %<psah> %<ssah> %<pqah> %<cssah> "
+  Format = "%<cqah> ___FS___ %<pssc> ___FS___ %<psah> ___FS___ %<ssah> ___FS___ %<pqah> ___FS___ %<cssah> ___FS___ END_TXN"
 }
  
 log.ascii {
@@ -108,10 +109,10 @@ tr.Processes.Default.ReturnCode = 0
 #
 tr = Test.AddTestRun()
 tr.DelayStart = 10
-tr.Processes.Default.Command = '. {0} < {1} | python {2} {4} > {3}'.format(
+tr.Processes.Default.Command = 'python {0} {4} < {2} | . {1} > {3}'.format(
+    os.path.join(Test.TestDirectory, 'all_headers_sanitizer.py'),
     os.path.join(Test.TestDirectory, 'all_headers_sanitizer.sh'),
     os.path.join(ts.Variables.LOGDIR, 'test_all_headers.log'),
-    os.path.join(Test.TestDirectory, 'all_headers_sanitizer.py'),
     os.path.join(ts.Variables.LOGDIR, 'test_all_headers.log.san'),
     server.Variables.Port)
 tr.Processes.Default.ReturnCode = 0
