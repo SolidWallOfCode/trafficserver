@@ -24,13 +24,16 @@ the server from accepting connection till the cache is loaded
 '''
 # need Curl
 Test.SkipUnless(Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"))
-Test.SkipIf(Condition.true("This test fails at the moment as is turned off"))
+
 Test.ContinueOnFail = True
 # Define default ATS
 ts = Test.MakeATSProcess("ts")
 
 # setup some config file for this server
 ts.Disk.records_config.update({
+    # Do not accept connections from clients until cache subsystem is operational.
+    'proxy.config.http.wait_for_cache': 1,
+
     'proxy.config.body_factory.enable_customizations': 3,  # enable domain specific body factory
     'proxy.config.http.cache.generation': -1,  # Start with cache turned off
     'proxy.config.config_update_interval_ms': 1,

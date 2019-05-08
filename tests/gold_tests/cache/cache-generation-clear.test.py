@@ -21,7 +21,7 @@ import uuid
 Test.Summary = '''
 Test that incrementing the cache generation acts like a cache clear
 '''
-Test.SkipUnless(Condition.InEnvAllowList("cache-generation-clear", "Skipped due to YTSATS-2686"),
+Test.SkipUnless(
 # need Curl
                 Condition.HasProgram("curl", "Curl need to be installed on system for this test to work"))
 Test.ContinueOnFail = True
@@ -30,6 +30,9 @@ ts = Test.MakeATSProcess("ts", command="traffic_manager")
 
 # setup some config file for this server
 ts.Disk.records_config.update({
+    # Do not accept connections from clients until cache subsystem is operational.
+    'proxy.config.http.wait_for_cache': 1,
+
     'proxy.config.body_factory.enable_customizations': 3,  # enable domain specific body factory
     'proxy.config.http.cache.generation': -1,  # Start with cache turned off
     'proxy.config.config_update_interval_ms': 1,
