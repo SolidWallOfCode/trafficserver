@@ -23,7 +23,6 @@ Test proxy.config.cache.max_doc_size config variable.
 '''
 
 Test.SkipUnless(
-    Condition.InEnvAllowList("cache_max_size", "Skipped due to YTSATS-2686"),
     Condition.HasProgram(
         "curl", "Curl need to be installed on system for this test to work"),
     Condition.HasProgram("netstat", "netstat need to be installed on system for this test to work"),
@@ -83,6 +82,9 @@ def curl(ts, idx):
 def tsCommon(ts):
 
     ts.Disk.records_config.update({
+        # Do not accept connections from clients until cache subsystem is operational.
+        'proxy.config.http.wait_for_cache': 1,
+
         'proxy.config.diags.debug.enabled': 0
     })
 
