@@ -22,18 +22,21 @@
 Accept Processing
 *****************
 
-Accept processing is mechanism that accepts inbound connections. This starts with the proxy
-ports as defined by :ts:cv:`proxy.config.http.server_ports`. Each descriptor creates a proxy
-port to accept inbound connections. :ts:cv: `proxy.config.accept_threads` sets the number of
-threads to use for each proxy port.
+Accept processing is the mechanism that accepts inbound connections. This starts with the proxy
+ports as defined by :ts:cv:`proxy.config.http.server_ports`. Each descriptor creates a proxy port to
+accept inbound connections. :ts:cv: `proxy.config.accept_threads` sets the number of threads to use
+for each proxy port.
 
 If the number of accept threads is positive, then that many instance of :code:`NetAccept` are
 created for each proxy port, each :code:`NetAccept` running in a distinct thread.
 
-If the number of accept threads isn't postive (i.e., 0 or negative), then the accept logic is
+If the number of accept threads is 0 or negative the accept logic is
 scheduled on the ``ET_NET`` threads. For each proxy port, a :code:`NetAccept` is created for each
 ``ET_NET`` thread, and is scheduled to run periodically. The timing is determined by
 :ts:cv:`proxy.config.net.accept_period`.
+
+For each :code:`NetAccept` an action is created. This action handles the initial connection
+setup for the proxy.
 
 .. figure:: /uml/images/accept_classes.svg
    :align: center
