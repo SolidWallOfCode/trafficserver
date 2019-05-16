@@ -577,7 +577,7 @@ SSLTicketParams::LoadTicket()
   SSLTicketKeyConfig::scoped_config ticket_params;
   if (ticket_params) {
     last_load_time      = ticket_params->load_time;
-    no_default_keyblock = ticket_params->default_global_keyblock != nullptr;
+    no_default_keyblock = ticket_params->default_global_keyblock == nullptr;
   }
 
   if (REC_ReadConfigStringAlloc(ticket_key_filename, "proxy.config.ssl.server.ticket_key.filename") == REC_ERR_OKAY &&
@@ -604,6 +604,7 @@ SSLTicketParams::LoadTicket()
     return false;
   }
   default_global_keyblock = keyblock;
+  load_time = time(NULL);
 
   Debug("ssl", "ticket key reloaded from %s", ticket_key_filename);
   return true;
