@@ -55,36 +55,26 @@ Cache::open_read(Continuation *cont, const CacheKey *key, CacheFragType type, co
       c->frag_type                            = type;
       CACHE_INCREMENT_DYN_STAT(c->base_stat + CACHE_STAT_ACTIVE);
     }
-    // If a CacheVC was created but there wasn't an ODE, force one, because it is required
-    // to have an ODE to do disk I/O. Must do this under stripe lock.
-    if (c != nullptr && nullptr == c->od)
-      c->od = vol->open_entry(key, true);
+    // If the stripe is locked and something was found, things to do while the strip lock is held.
+    if (lock.is_locked() && c != nullptr) {
+      c->dir            = result;
+      c->last_collision = last_collision;
+      SET_CONTINUATION_HANDLER(c, &CacheVC::stateReadInit);
+      // Found something, going to do I/O, so force the ODE.
+      if (c->od == nullptr)
+        c->od = vol->open_entry(key, true);
+      c->stateReadInit(EVENT_IMMEDIATE, nullptr);
+    }
   }
   // -- STRIPE LOCK DROPPED --
   if (c == nullptr) { // got the lock but didn't find it in the open dir entries or the directory
     CACHE_INCREMENT_DYN_STAT(cache_read_failure_stat);
     cont->handleEvent(CACHE_EVENT_OPEN_READ_FAILED, reinterpret_cast<void *>(-ECACHE_NO_DOC));
     return ACTION_RESULT_DONE;
+  } else { // missed the lock, keep probing
+    SET_CONTINUATION_HANDLER(c, &CacheVC::stateProbe);
+    vol->do_try_lock(c);
   }
-  // Prepare to examine or load the first doc.
-  c->dir            = result;
-  c->last_collision = last_collision;
-  SET_CONTINUATION_HANDLER(c, &CacheVC::stateReadFirstDoc);
-  CacheOpState opr = vol->do_lock_try(c);
-  return (CacheOpResult::WAIT == opr) ? &c->_action : ACTION_RESULT_DONE;
-
-  switch (c->do_read_call(&c->key)) {
-  case EVENT_DONE:
-    return ACTION_RESULT_DONE;
-  case EVENT_RETURN:
-    goto Lcallreturn;
-  default:
-    return &c->_action;
-  }
-
-Lcallreturn:
-  if (c->handleEvent(AIO_EVENT_DONE, nullptr) == EVENT_DONE)
-    return ACTION_RESULT_DONE;
   return &c->_action;
 }
 
@@ -939,7 +929,7 @@ CacheVC::stateProbe(int ecode, Event* event)
 }
 
 int
-CacheVC::stateReadInit(int ecaode, Event* event)
+CacheVC::stateReadInit(int ecode, Event* event)
 {
   if (_action.cancelled)
     return free_CacheVC(this);
