@@ -88,36 +88,6 @@
 #endif
 #endif
 
-/*
- * struct ssl_user_config: gather user provided settings from ssl_multicert.config in to this single struct
-   * ssl_ticket_enabled - session ticket enabled
-   * ssl_cert_name - certificate
-   * dest_ip - IPv[64] address to match
-   * ssl_cert_name - certificate
-   * first_cert - the first certificate name when multiple cert files are in 'ssl_cert_name'
-   * ssl_ca_name - CA public certificate
-   * ssl_key_name - Private key
-   * ticket_key_name - session key file. [key_name (16Byte) + HMAC_secret (16Byte) + AES_key (16Byte)]
-   * ssl_key_dialog - Private key dialog
-   * servername - Destination server
-   */
-struct ssl_user_config {
-  ssl_user_config() : opt(SSLCertContext::OPT_NONE)
-  {
-    REC_ReadConfigInt32(session_ticket_enabled, "proxy.config.ssl.server.session_ticket.enable");
-  }
-
-  int session_ticket_enabled;
-  ats_scoped_str addr;
-  ats_scoped_str cert;
-  ats_scoped_str first_cert;
-  ats_scoped_str ca;
-  ats_scoped_str key;
-  ats_scoped_str dialog;
-  ats_scoped_str servername;
-  SSLCertContext::Option opt;
-};
-
 SSLSessionCache *session_cache; // declared extern in P_SSLConfig.h
 
 // Check if the ticket_key callback #define is available, and if so, enable session tickets.
@@ -1245,7 +1215,8 @@ SSLInitializeStatistics()
   // initialize stat name->index hash table
   ssl_cipher_name_table = ink_hash_table_create(InkHashTableKeyType_Word);
 
-  ctx     = SSLDefaultServerContext();
+  SSLMultiCertConfigLoader loader(nullptr);
+  ctx     = loader.default_server_ssl_ctx();
   ssl     = SSL_new(ctx);
   ciphers = SSL_get_ciphers(ssl);
 
@@ -1473,24 +1444,24 @@ SSLDebugBufferPrint(const char *tag, const char *buffer, unsigned buflen, const 
 }
 
 SSL_CTX *
-SSLDefaultServerContext()
+SSLMultiCertConfigLoader::default_server_ssl_ctx()
 {
   return SSL_CTX_new(SSLv23_server_method());
 }
 
 static bool
-SSLPrivateKeyHandler(SSL_CTX *ctx, const SSLConfigParams *params, const ats_scoped_str &completeServerCertPath, const char *keyPath)
+SSLPrivateKeyHandler(SSL_CTX *ctx, const SSLConfigParams *params, const std::string &completeServerCertPath, const char *keyPath)
 {
   ENGINE *e = ENGINE_get_default_RSA();
   if (e != nullptr) {
-    const char *argkey = (keyPath == nullptr || keyPath[0] == '\0') ? completeServerCertPath : keyPath;
+    const char *argkey = (keyPath == nullptr || keyPath[0] == '\0') ? completeServerCertPath.c_str() : keyPath;
     if (!SSL_CTX_use_PrivateKey(ctx, ENGINE_load_private_key(e, argkey, nullptr, nullptr))) {
       SSLError("failed to load server private key from engine");
     }
   } else if (!keyPath) {
     // assume private key is contained in cert obtained from multicert file.
-    if (!SSL_CTX_use_PrivateKey_file(ctx, completeServerCertPath, SSL_FILETYPE_PEM)) {
-      SSLError("failed to load server private key from %s", (const char *)completeServerCertPath);
+    if (!SSL_CTX_use_PrivateKey_file(ctx, completeServerCertPath.c_str(), SSL_FILETYPE_PEM)) {
+      SSLError("failed to load server private key from %s", completeServerCertPath.c_str());
       return false;
     }
   } else if (params->serverKeyPathOnly != nullptr) {
@@ -1515,18 +1486,21 @@ SSLPrivateKeyHandler(SSL_CTX *ctx, const SSLConfigParams *params, const ats_scop
   return true;
 }
 
-static int
-SSLCheckServerCertNow(X509 *cert, const char *certname)
+/**
+   returns 0 on OK or negative value on failure and update log as appropriate.
+
+   Will check:
+   - if file exists, and has read permissions
+   - for truncation or other PEM read fail
+   - current time is between notBefore and notAfter dates of certificate
+   if anything is not kosher, a negative value is returned and appropriate error logged.
+
+   @static
+ */
+int
+SSLMultiCertConfigLoader::check_server_cert_now(X509 *cert, const char *certname)
 {
   int timeCmpValue;
-
-  // SSLCheckServerCertNow() -  returns 0 on OK or negative value on failure
-  // and update log as appropriate.
-  // Will check:
-  // - if file exists, and has read permissions
-  // - for truncation or other PEM read fail
-  // - current time is between notBefore and notAfter dates of certificate
-  // if anything is not kosher, a negative value is returned and appropriate error logged.
 
   if (!cert) {
     // a truncated certificate would fall into here
@@ -1573,11 +1547,14 @@ asn1_strdup(ASN1_STRING *s)
   return ats_strndup((const char *)ASN1_STRING_get0_data(s), ASN1_STRING_length(s));
 }
 
-// Given a certificate and it's corresponding SSL_CTX context, insert hash
-// table aliases for subject CN and subjectAltNames DNS without wildcard,
-// insert trie aliases for those with wildcard.
-static bool
-ssl_index_certificate(SSLCertLookup *lookup, SSLCertContext const &cc, X509 *cert, const char *certname)
+/**
+   Given a certificate and it's corresponding SSL_CTX context, insert hash
+   table aliases for subject CN and subjectAltNames DNS without wildcard,
+   insert trie aliases for those with wildcard.
+   @static
+*/
+bool
+SSLMultiCertConfigLoader::index_certificate(SSLCertLookup *lookup, SSLCertContext const &cc, X509 *cert, const char *certname)
 {
   X509_NAME *subject = nullptr;
   bool inserted      = false;
@@ -1677,8 +1654,8 @@ ssl_callback_info(const SSL *ssl, int where, int ret)
   }
 }
 
-static void
-ssl_set_handshake_callbacks(SSL_CTX *ctx)
+void
+SSLMultiCertConfigLoader::_set_handshake_callbacks(SSL_CTX *ctx)
 {
 #if TS_USE_TLS_SNI
 // Make sure the callbacks are set
@@ -1722,17 +1699,17 @@ setClientCertLevel(SSL *ssl, uint8_t certLevel)
   SSL_set_verify_depth(ssl, params->verify_depth); // might want to make configurable at some point.
 }
 
+/**
+   Initialize SSL_CTX for server
+   This is public function because of used by SSLCreateServerContext.
+ */
 SSL_CTX *
-SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMultCertSettings, Vec<X509 *> &certList)
+SSLMultiCertConfigLoader::init_server_ssl_ctx(std::vector<X509 *> &cert_list, const SSLMultiCertConfigParams *sslMultCertSettings)
 {
+  const SSLConfigParams *params = this->_params;
+
   int server_verify_client;
-  ats_scoped_str completeServerCertPath;
-  SSL_CTX *ctx                 = SSLDefaultServerContext();
-  EVP_MD_CTX *digest           = EVP_MD_CTX_new();
-  STACK_OF(X509_NAME) *ca_list = nullptr;
-  unsigned char hash_buf[EVP_MAX_MD_SIZE];
-  unsigned int hash_len    = 0;
-  const char *setting_cert = sslMultCertSettings ? sslMultCertSettings->cert.get() : nullptr;
+  SSL_CTX *ctx = this->default_server_ssl_ctx();
 
   // disable selected protocols
   SSL_CTX_set_options(ctx, params->ssl_ctx_options);
@@ -1813,79 +1790,8 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
     }
 
     if (sslMultCertSettings->cert) {
-      SimpleTokenizer cert_tok((const char *)sslMultCertSettings->cert, SSL_CERT_SEPARATE_DELIM);
-      SimpleTokenizer key_tok((sslMultCertSettings->key ? (const char *)sslMultCertSettings->key : ""), SSL_CERT_SEPARATE_DELIM);
-
-      if (sslMultCertSettings->key && cert_tok.getNumTokensRemaining() != key_tok.getNumTokensRemaining()) {
-        Error("the number of certificates in ssl_cert_name and ssl_key_name doesn't match");
+      if (!SSLMultiCertConfigLoader::load_certs(ctx, cert_list, params, sslMultCertSettings)) {
         goto fail;
-      }
-      SimpleTokenizer ca_tok("", SSL_CERT_SEPARATE_DELIM);
-      if (sslMultCertSettings->ca) {
-        ca_tok.setString(sslMultCertSettings->ca);
-        if (cert_tok.getNumTokensRemaining() != ca_tok.getNumTokensRemaining()) {
-          Error("the number of certificates in ssl_cert_name and ssl_ca_name doesn't match");
-          goto fail;
-        }
-      }
-
-      for (const char *certname = cert_tok.getNext(); certname; certname = cert_tok.getNext()) {
-        completeServerCertPath = Layout::relative_to(params->serverCertPathOnly, certname);
-        scoped_BIO bio(BIO_new_file(completeServerCertPath, "r"));
-        X509 *cert = nullptr;
-        if (bio) {
-          cert = PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr);
-        }
-        if (!bio || !cert) {
-          SSLError("failed to load certificate chain from %s", (const char *)completeServerCertPath);
-          goto fail;
-        }
-        if (!SSL_CTX_use_certificate(ctx, cert)) {
-          SSLError("Failed to assign cert from %s to SSL_CTX", (const char *)completeServerCertPath);
-          X509_free(cert);
-          goto fail;
-        }
-        certList.push_back(cert);
-        if (SSLConfigParams::load_ssl_file_cb) {
-          SSLConfigParams::load_ssl_file_cb(completeServerCertPath, CONFIG_FLAG_UNVERSIONED);
-        }
-        // Load up any additional chain certificates
-        SSL_CTX_add_extra_chain_cert_bio(ctx, bio);
-
-        const char *keyPath = key_tok.getNext();
-        if (!SSLPrivateKeyHandler(ctx, params, completeServerCertPath, keyPath)) {
-          goto fail;
-        }
-
-        // Must load all the intermediate certificates before starting the next chain
-
-        // First, load any CA chains from the global chain file.  This should probably
-        // eventually be a comma separated list too.  For now we will load it in all chains even
-        // though it only makes sense in one chain
-        if (params->serverCertChainFilename) {
-          ats_scoped_str completeServerCertChainPath(
-            Layout::relative_to(params->serverCertPathOnly, params->serverCertChainFilename));
-          if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCertChainPath)) {
-            SSLError("failed to load global certificate chain from %s", (const char *)completeServerCertChainPath);
-            goto fail;
-          }
-          if (SSLConfigParams::load_ssl_file_cb) {
-            SSLConfigParams::load_ssl_file_cb(completeServerCertChainPath, CONFIG_FLAG_UNVERSIONED);
-          }
-        }
-
-        // Now, load any additional certificate chains specified in this entry.
-        if (sslMultCertSettings->ca) {
-          const char *ca_name = ca_tok.getNext();
-          ats_scoped_str completeServerCertChainPath(Layout::relative_to(params->serverCertPathOnly, ca_name));
-          if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCertChainPath)) {
-            SSLError("failed to load certificate chain from %s", (const char *)completeServerCertChainPath);
-            goto fail;
-          }
-          if (SSLConfigParams::load_ssl_file_cb) {
-            SSLConfigParams::load_ssl_file_cb(completeServerCertChainPath, CONFIG_FLAG_UNVERSIONED);
-          }
-        }
       }
     }
 
@@ -1908,7 +1814,16 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
         goto fail;
       }
     }
+
+#if defined(SSL_OP_NO_TICKET)
+    // Session tickets are enabled by default. Disable if explicitly requested.
+    if (sslMultCertSettings->session_ticket_enabled == 0) {
+      SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
+      Debug("ssl", "ssl session ticket is disabled");
+    }
+#endif
   }
+
   if (params->clientCertLevel != 0) {
     if (params->serverCACertFilename != nullptr && params->serverCACertPath != nullptr) {
       if ((!SSL_CTX_load_verify_locations(ctx, params->serverCACertFilename, params->serverCACertPath)) ||
@@ -1931,50 +1846,7 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
     SSL_CTX_set_verify_depth(ctx, params->verify_depth); // might want to make configurable at some point.
   }
 
-  // Set the list of CA's to send to client if we ask for a client
-  // certificate
-  if (params->serverCACertFilename) {
-    ca_list = SSL_load_client_CA_file(params->serverCACertFilename);
-    if (ca_list) {
-      SSL_CTX_set_client_CA_list(ctx, ca_list);
-    }
-  }
-
-  if (EVP_DigestInit_ex(digest, evp_md_func, nullptr) == 0) {
-    SSLError("EVP_DigestInit_ex failed");
-    goto fail;
-  }
-
-  if (nullptr != setting_cert) {
-    Debug("ssl", "Using '%s' in hash for session id context", sslMultCertSettings->cert.get());
-    if (EVP_DigestUpdate(digest, sslMultCertSettings->cert, strlen(setting_cert)) == 0) {
-      SSLError("EVP_DigestUpdate failed");
-      goto fail;
-    }
-  }
-
-  if (ca_list != nullptr) {
-    size_t num_certs = sk_X509_NAME_num(ca_list);
-
-    for (size_t i = 0; i < num_certs; i++) {
-      X509_NAME *name = sk_X509_NAME_value(ca_list, i);
-      if (X509_NAME_digest(name, evp_md_func, hash_buf /* borrow our final hash buffer. */, &hash_len) == 0 ||
-          EVP_DigestUpdate(digest, hash_buf, hash_len) == 0) {
-        SSLError("Adding X509 name to digest failed");
-        goto fail;
-      }
-    }
-  }
-
-  if (EVP_DigestFinal_ex(digest, hash_buf, &hash_len) == 0) {
-    SSLError("EVP_DigestFinal_ex failed");
-    goto fail;
-  }
-  EVP_MD_CTX_free(digest);
-  digest = NULL;
-
-  if (SSL_CTX_set_session_id_context(ctx, hash_buf, hash_len) == 0) {
-    SSLError("SSL_CTX_set_session_id_context failed");
+  if (!SSLMultiCertConfigLoader::set_session_id_context(ctx, params, sslMultCertSettings)) {
     goto fail;
   }
 
@@ -2012,13 +1884,9 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
   }
 
   ssl_context_enable_ecdh(ctx);
-#define SSL_CLEAR_PW_REFERENCES(CTX)                      \
-  {                                                       \
-    SSL_CTX_set_default_passwd_cb(CTX, nullptr);          \
-    SSL_CTX_set_default_passwd_cb_userdata(CTX, nullptr); \
-  }
+
   if (sslMultCertSettings && sslMultCertSettings->dialog) {
-    SSL_CLEAR_PW_REFERENCES(ctx);
+    SSLMultiCertConfigLoader::clear_pw_references(ctx);
   }
   SSL_CTX_set_info_callback(ctx, ssl_callback_info);
 
@@ -2034,6 +1902,13 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
   if (SSLConfigParams::ssl_ocsp_enabled) {
     Debug("ssl", "ssl ocsp stapling is enabled");
     SSL_CTX_set_tlsext_status_cb(ctx, ssl_callback_ocsp_stapling);
+    const char *cert_name = sslMultCertSettings ? sslMultCertSettings->cert.get() : nullptr;
+
+    for (auto cert : cert_list) {
+      if (!ssl_stapling_init_cert(ctx, cert, cert_name)) {
+        Warning("failed to configure SSL_CTX for OCSP Stapling info for certificate at %s", cert_name);
+      }
+    }
   } else {
     Debug("ssl", "ssl ocsp stapling is disabled");
   }
@@ -2046,15 +1921,14 @@ SSLInitServerContext(const SSLConfigParams *params, const ssl_user_config *sslMu
   if (SSLConfigParams::init_ssl_ctx_cb) {
     SSLConfigParams::init_ssl_ctx_cb(ctx, true);
   }
+
   return ctx;
 
 fail:
-  if (digest)
-    EVP_MD_CTX_free(digest);
-  SSL_CLEAR_PW_REFERENCES(ctx)
+  SSLMultiCertConfigLoader::clear_pw_references(ctx);
   SSLReleaseContext(ctx);
-  for (unsigned int i = 0; i < certList.length(); i++) {
-    X509_free(certList[i]);
+  for (auto cert : cert_list) {
+    X509_free(cert);
   }
 
   return nullptr;
@@ -2063,17 +1937,24 @@ fail:
 SSL_CTX *
 SSLCreateServerContext(const SSLConfigParams *params)
 {
-  Vec<X509 *> cert_list;
-  SSL_CTX *ctx = SSLInitServerContext(params, nullptr, cert_list);
-  ink_assert(cert_list.length() == 0);
+  SSLMultiCertConfigLoader loader(params);
+  std::vector<X509 *> cert_list;
+
+  SSL_CTX *ctx = loader.init_server_ssl_ctx(cert_list, nullptr);
+  ink_assert(cert_list.empty());
+
   return ctx;
 }
 
-static SSL_CTX *
-ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, const ssl_user_config *sslMultCertSettings)
+/**
+   Insert SSLCertContext (SSL_CTX ans options) into SSLCertLookup with key.
+   Do NOT call SSL_CTX_set_* functions from here. SSL_CTX should be set up by SSLMultiCertConfigLoader::init_server_ssl_ctx().
+ */
+SSL_CTX *
+SSLMultiCertConfigLoader::_store_ssl_ctx(SSLCertLookup *lookup, const SSLMultiCertConfigParams *sslMultCertSettings)
 {
-  Vec<X509 *> cert_list;
-  SSL_CTX *ctx                   = SSLInitServerContext(params, sslMultCertSettings, cert_list);
+  std::vector<X509 *> cert_list;
+  SSL_CTX *ctx                   = this->init_server_ssl_ctx(cert_list, sslMultCertSettings);
   ssl_ticket_key_block *keyblock = nullptr;
   bool inserted                  = false;
 
@@ -2083,8 +1964,8 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
   }
 
   const char *certname = sslMultCertSettings->cert.get();
-  for (unsigned i = 0; i < cert_list.length(); ++i) {
-    if (0 > SSLCheckServerCertNow(cert_list[i], certname)) {
+  for (auto cert : cert_list) {
+    if (0 > SSLMultiCertConfigLoader::check_server_cert_now(cert, certname)) {
       /* At this point, we know cert is bad, and we've already printed a
          descriptive reason as to why cert is bad to the log file */
       Debug("ssl", "Marking certificate as NOT VALID: %s", certname);
@@ -2103,7 +1984,7 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
       if (lookup->insert(sslMultCertSettings->addr, SSLCertContext(ctx, sslMultCertSettings->opt, keyblock)) >= 0) {
         inserted            = true;
         lookup->ssl_default = ctx;
-        ssl_set_handshake_callbacks(ctx);
+        this->_set_handshake_callbacks(ctx);
       }
     } else {
       IpEndpoint ep;
@@ -2127,38 +2008,12 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
 #endif
   }
 
-#if defined(SSL_OP_NO_TICKET)
-  // Session tickets are enabled by default. Disable if explicitly requested.
-  if (sslMultCertSettings->session_ticket_enabled == 0) {
-    SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
-    Debug("ssl", "ssl session ticket is disabled");
-  }
-#endif
-
-#ifdef HAVE_OPENSSL_OCSP_STAPLING
-  if (SSLConfigParams::ssl_ocsp_enabled) {
-    Debug("ssl", "ssl ocsp stapling is enabled");
-    SSL_CTX_set_tlsext_status_cb(ctx, ssl_callback_ocsp_stapling);
-    for (unsigned i = 0; i < cert_list.length(); ++i) {
-      if (!ssl_stapling_init_cert(ctx, cert_list[i], certname)) {
-        Warning("fail to configure SSL_CTX for OCSP Stapling info for certificate at %s", (const char *)certname);
-      }
-    }
-  } else {
-    Debug("ssl", "ssl ocsp stapling is disabled");
-  }
-#else
-  if (SSLConfigParams::ssl_ocsp_enabled) {
-    Warning("fail to enable ssl ocsp stapling, this openssl version does not support it");
-  }
-#endif /* HAVE_OPENSSL_OCSP_STAPLING */
-
   // Insert additional mappings. Note that this maps multiple keys to the same value, so when
   // this code is updated to reconfigure the SSL certificates, it will need some sort of
   // refcounting or alternate way of avoiding double frees.
   Debug("ssl", "importing SNI names from %s", (const char *)certname);
-  for (unsigned i = 0; i < cert_list.length(); ++i) {
-    if (ssl_index_certificate(lookup, SSLCertContext(ctx, sslMultCertSettings->opt), cert_list[i], certname)) {
+  for (auto cert : cert_list) {
+    if (SSLMultiCertConfigLoader::index_certificate(lookup, SSLCertContext(ctx, sslMultCertSettings->opt), cert, certname)) {
       inserted = true;
     }
   }
@@ -2174,7 +2029,7 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
     ctx = nullptr;
   }
 
-  for (unsigned int i = 0; i < cert_list.length(); i++) {
+  for (unsigned int i = 0; i < cert_list.size(); i++) {
     X509_free(cert_list[i]);
   }
 
@@ -2182,7 +2037,7 @@ ssl_store_ssl_context(const SSLConfigParams *params, SSLCertLookup *lookup, cons
 }
 
 static bool
-ssl_extract_certificate(const matcher_line *line_info, ssl_user_config &sslMultCertSettings)
+ssl_extract_certificate(const matcher_line *line_info, SSLMultiCertConfigParams &sslMultCertSettings)
 {
   for (int i = 0; i < MATCHER_MAX_TOKENS; ++i) {
     const char *label;
@@ -2245,8 +2100,10 @@ ssl_extract_certificate(const matcher_line *line_info, ssl_user_config &sslMultC
 }
 
 bool
-SSLParseCertificateConfiguration(const SSLConfigParams *params, SSLCertLookup *lookup)
+SSLMultiCertConfigLoader::load(SSLCertLookup *lookup)
 {
+  const SSLConfigParams *params = this->_params;
+
   char *tok_state = nullptr;
   char *line      = nullptr;
   ats_scoped_str file_buf;
@@ -2284,7 +2141,7 @@ SSLParseCertificateConfiguration(const SSLConfigParams *params, SSLCertLookup *l
     }
 
     if (*line != '\0' && *line != '#') {
-      ssl_user_config sslMultiCertSettings;
+      SSLMultiCertConfigParams sslMultiCertSettings;
       const char *errPtr;
 
       errPtr = parseConfigLine(line, &line_info, &sslCertTags);
@@ -2296,7 +2153,7 @@ SSLParseCertificateConfiguration(const SSLConfigParams *params, SSLCertLookup *l
         if (ssl_extract_certificate(&line_info, sslMultiCertSettings)) {
           // There must be a certificate specified unless the tunnel action is set
           if (sslMultiCertSettings.cert || sslMultiCertSettings.opt != SSLCertContext::OPT_TUNNEL) {
-            ssl_store_ssl_context(params, lookup, &sslMultiCertSettings);
+            this->_store_ssl_ctx(lookup, &sslMultiCertSettings);
           } else {
             Warning("No ssl_cert_name specified and no tunnel action set");
           }
@@ -2311,9 +2168,9 @@ SSLParseCertificateConfiguration(const SSLConfigParams *params, SSLCertLookup *l
   // bootstrap the SSL handshake so that we can subsequently do the SNI lookup to switch to the real
   // context.
   if (lookup->ssl_default == nullptr) {
-    ssl_user_config sslMultiCertSettings;
+    SSLMultiCertConfigParams sslMultiCertSettings;
     sslMultiCertSettings.addr = ats_strdup("*");
-    if (ssl_store_ssl_context(params, lookup, &sslMultiCertSettings) == nullptr) {
+    if (this->_store_ssl_ctx(lookup, &sslMultiCertSettings) == nullptr) {
       Error("failed set default context");
       return false;
     }
@@ -2520,4 +2377,171 @@ SSLConnect(SSL *ssl)
   }
 
   return ssl_error;
+}
+
+/**
+   Load certificats to SSL_CTX
+   @static
+ */
+bool
+SSLMultiCertConfigLoader::load_certs(SSL_CTX *ctx, std::vector<X509 *> &cert_list, const SSLConfigParams *params,
+                                     const SSLMultiCertConfigParams *sslMultCertSettings)
+{
+  SimpleTokenizer cert_tok((const char *)sslMultCertSettings->cert, SSL_CERT_SEPARATE_DELIM);
+  SimpleTokenizer key_tok((sslMultCertSettings->key ? (const char *)sslMultCertSettings->key : ""), SSL_CERT_SEPARATE_DELIM);
+
+  if (sslMultCertSettings->key && cert_tok.getNumTokensRemaining() != key_tok.getNumTokensRemaining()) {
+    Error("the number of certificates in ssl_cert_name and ssl_key_name doesn't match");
+    return false;
+  }
+  SimpleTokenizer ca_tok("", SSL_CERT_SEPARATE_DELIM);
+  if (sslMultCertSettings->ca) {
+    ca_tok.setString(sslMultCertSettings->ca);
+    if (cert_tok.getNumTokensRemaining() != ca_tok.getNumTokensRemaining()) {
+      Error("the number of certificates in ssl_cert_name and ssl_ca_name doesn't match");
+      return false;
+    }
+  }
+
+  for (const char *certname = cert_tok.getNext(); certname; certname = cert_tok.getNext()) {
+    std::string completeServerCertPath = Layout::relative_to(params->serverCertPathOnly, certname);
+    scoped_BIO bio(BIO_new_file(completeServerCertPath.c_str(), "r"));
+    X509 *cert = nullptr;
+    if (bio) {
+      cert = PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr);
+    }
+    if (!bio || !cert) {
+      SSLError("failed to load certificate chain from %s", completeServerCertPath.c_str());
+      return false;
+    }
+    if (!SSL_CTX_use_certificate(ctx, cert)) {
+      SSLError("Failed to assign cert from %s to SSL_CTX", completeServerCertPath.c_str());
+      X509_free(cert);
+      return false;
+    }
+
+    // Load up any additional chain certificates
+    SSL_CTX_add_extra_chain_cert_bio(ctx, bio);
+
+    const char *keyPath = key_tok.getNext();
+    if (!SSLPrivateKeyHandler(ctx, params, completeServerCertPath, keyPath)) {
+      return false;
+    }
+
+    cert_list.push_back(cert);
+    if (SSLConfigParams::load_ssl_file_cb) {
+      SSLConfigParams::load_ssl_file_cb(completeServerCertPath.c_str(), CONFIG_FLAG_UNVERSIONED);
+    }
+
+    // Must load all the intermediate certificates before starting the next chain
+
+    // First, load any CA chains from the global chain file.  This should probably
+    // eventually be a comma separated list too.  For now we will load it in all chains even
+    // though it only makes sense in one chain
+    if (params->serverCertChainFilename) {
+      ats_scoped_str completeServerCertChainPath(Layout::relative_to(params->serverCertPathOnly, params->serverCertChainFilename));
+      if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCertChainPath)) {
+        SSLError("failed to load global certificate chain from %s", (const char *)completeServerCertChainPath);
+        return false;
+      }
+      if (SSLConfigParams::load_ssl_file_cb) {
+        SSLConfigParams::load_ssl_file_cb(completeServerCertChainPath, CONFIG_FLAG_UNVERSIONED);
+      }
+    }
+
+    // Now, load any additional certificate chains specified in this entry.
+    if (sslMultCertSettings->ca) {
+      const char *ca_name = ca_tok.getNext();
+      if (ca_name != nullptr) {
+        ats_scoped_str completeServerCertChainPath(Layout::relative_to(params->serverCertPathOnly, ca_name));
+        if (!SSL_CTX_add_extra_chain_cert_file(ctx, completeServerCertChainPath)) {
+          SSLError("failed to load certificate chain from %s", (const char *)completeServerCertChainPath);
+          return false;
+        }
+        if (SSLConfigParams::load_ssl_file_cb) {
+          SSLConfigParams::load_ssl_file_cb(completeServerCertChainPath, CONFIG_FLAG_UNVERSIONED);
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+    Set session_id context for session reuse
+    @static
+ */
+bool
+SSLMultiCertConfigLoader::set_session_id_context(SSL_CTX *ctx, const SSLConfigParams *params,
+                                                 const SSLMultiCertConfigParams *sslMultCertSettings)
+{
+  EVP_MD_CTX *digest           = EVP_MD_CTX_new();
+  STACK_OF(X509_NAME) *ca_list = nullptr;
+  unsigned char hash_buf[EVP_MAX_MD_SIZE];
+  unsigned int hash_len    = 0;
+  const char *setting_cert = sslMultCertSettings ? sslMultCertSettings->cert.get() : nullptr;
+  bool result              = false;
+
+  // Set the list of CA's to send to client if we ask for a client certificate
+  if (params->serverCACertFilename) {
+    ca_list = SSL_load_client_CA_file(params->serverCACertFilename);
+    if (ca_list) {
+      SSL_CTX_set_client_CA_list(ctx, ca_list);
+    }
+  }
+
+  if (EVP_DigestInit_ex(digest, evp_md_func, nullptr) == 0) {
+    SSLError("EVP_DigestInit_ex failed");
+    goto fail;
+  }
+
+  if (nullptr != setting_cert) {
+    Debug("ssl", "Using '%s' in hash for session id context", sslMultCertSettings->cert.get());
+    if (EVP_DigestUpdate(digest, sslMultCertSettings->cert, strlen(setting_cert)) == 0) {
+      SSLError("EVP_DigestUpdate failed");
+      goto fail;
+    }
+  }
+
+  if (ca_list != nullptr) {
+    size_t num_certs = sk_X509_NAME_num(ca_list);
+
+    for (size_t i = 0; i < num_certs; i++) {
+      X509_NAME *name = sk_X509_NAME_value(ca_list, i);
+      if (X509_NAME_digest(name, evp_md_func, hash_buf /* borrow our final hash buffer. */, &hash_len) == 0 ||
+          EVP_DigestUpdate(digest, hash_buf, hash_len) == 0) {
+        SSLError("Adding X509 name to digest failed");
+        goto fail;
+      }
+    }
+  }
+
+  if (EVP_DigestFinal_ex(digest, hash_buf, &hash_len) == 0) {
+    SSLError("EVP_DigestFinal_ex failed");
+    goto fail;
+  }
+
+  if (SSL_CTX_set_session_id_context(ctx, hash_buf, hash_len) == 0) {
+    SSLError("SSL_CTX_set_session_id_context failed");
+    goto fail;
+  }
+
+  result = true;
+
+fail:
+  EVP_MD_CTX_free(digest);
+
+  return result;
+}
+
+/**
+   Clear password in SSL_CTX
+   @static
+ */
+void
+SSLMultiCertConfigLoader::clear_pw_references(SSL_CTX *ssl_ctx)
+{
+  SSL_CTX_set_default_passwd_cb(ssl_ctx, nullptr);
+  SSL_CTX_set_default_passwd_cb_userdata(ssl_ctx, nullptr);
 }
