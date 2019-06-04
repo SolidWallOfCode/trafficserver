@@ -24,6 +24,8 @@ Test.Summary = '''
 Test different combinations of TLS handshake hooks to ensure they are applied consistently.
 '''
 
+Test.SkipUnless(Condition.InEnvAllowList("tls_hooks_client_verify", "Skipped due to YTSATS-2788"))
+
 Test.SkipUnless(Condition.HasProgram("grep", "grep needs to be installed on system for this test to work"))
 
 ts = Test.MakeATSProcess("ts", select_ports=True, enable_tls=True)
