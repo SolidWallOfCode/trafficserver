@@ -735,6 +735,7 @@ uint32_t Http2::zombie_timeout_in          = 0;
 uint32_t Http2::max_settings_per_frame     = 7;
 uint32_t Http2::max_settings_per_minute    = 14;
 uint32_t Http2::max_settings_frames_per_minute = 14;
+uint32_t Http2::max_ping_per_minute            = 60;
 
 void
 Http2::init()

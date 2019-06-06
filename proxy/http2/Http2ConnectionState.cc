@@ -645,6 +645,16 @@ rcv_ping_frame(Http2ConnectionState &cstate, const Http2Frame &frame)
                       "ping bad length");
   }
 
+  // Update ping count per minute
+  cstate.increment_received_ping_count();
+  // Close this conection if its ping count received exceeds a limit
+  if (cstate.get_received_ping_count() > Http2::max_ping_per_minute) {
+    Http2StreamDebug(cstate.ua_session, stream_id, "Observed too frequent ping: %u ping within a last minute",
+                     cstate.get_received_ping_count());
+    return Http2Error(Http2ErrorClass::HTTP2_ERROR_CLASS_CONNECTION, Http2ErrorCode::HTTP2_ERROR_ENHANCE_YOUR_CALM,
+                      "recv ping too frequent ping");
+  }
+
   // An endpoint MUST NOT respond to PING frames containing this flag.
   if (frame.header().flags & HTTP2_FLAGS_PING_ACK) {
     return Http2Error(Http2ErrorClass::HTTP2_ERROR_CLASS_NONE);
@@ -1893,6 +1903,28 @@ uint32_t
 Http2ConnectionState::get_received_settings_frame_count()
 {
   return this->settings_frame_count[0] + this->settings_frame_count[1];
+}
+
+void
+Http2ConnectionState::increment_received_ping_count()
+{
+  ink_hrtime hrtime_sec = Thread::get_hrtime() / HRTIME_SECOND;
+  uint8_t counter_index = ((hrtime_sec % 60) >= 30);
+
+  if ((hrtime_sec - 60) > this->ping_count_last_update) {
+    this->ping_count[0] = 0;
+    this->ping_count[1] = 0;
+  } else if (counter_index != ((this->ping_count_last_update % 60) >= 30)) {
+    this->ping_count[counter_index] = 0;
+  }
+  ++this->ping_count[counter_index];
+  this->ping_count_last_update = hrtime_sec;
+}
+
+uint32_t
+Http2ConnectionState::get_received_ping_count()
+{
+  return this->ping_count[0] + this->ping_count[1];
 }
 
 // Return min_concurrent_streams_in when current client streams number is larger than max_active_streams_in.

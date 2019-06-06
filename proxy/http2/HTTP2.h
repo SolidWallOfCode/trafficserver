@@ -382,6 +382,7 @@ public:
   static uint32_t max_settings_per_frame;
   static uint32_t max_settings_per_minute;
   static uint32_t max_settings_frames_per_minute;
+  static uint32_t max_ping_per_minute;
 
   static void init();
 };
