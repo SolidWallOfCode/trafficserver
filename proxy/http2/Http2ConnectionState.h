@@ -331,6 +331,8 @@ public:
   }
   void increment_received_settings_count(uint32_t count);
   uint32_t get_received_settings_count();
+  void increment_received_settings_frame_count();
+  uint32_t get_received_settings_frame_count();
 
 private:
   Http2ConnectionState(const Http2ConnectionState &);            // noncopyable
@@ -361,8 +363,10 @@ private:
 
   // Counter for settings received within last 60 seconds
   // Each item holds a count for 30 seconds.
-  uint16_t settings_count[2]            = {0};
-  ink_hrtime settings_count_last_update = 0;
+  uint16_t settings_count[2]                  = {0};
+  ink_hrtime settings_count_last_update       = 0;
+  uint16_t settings_frame_count[2]            = {0};
+  ink_hrtime settings_frame_count_last_update = 0;
 
   // NOTE: Id of stream which MUST receive CONTINUATION frame.
   //   - [RFC 7540] 6.2 HEADERS
