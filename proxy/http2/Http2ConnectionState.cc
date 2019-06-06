@@ -1727,6 +1727,7 @@ Http2ConnectionState::send_rst_stream_frame(Http2StreamId id, Http2ErrorCode ec)
 
   if (ec != Http2ErrorCode::HTTP2_ERROR_NO_ERROR) {
     HTTP2_INCREMENT_THREAD_DYN_STAT(HTTP2_STAT_STREAM_ERRORS_COUNT, this_ethread());
+    ++stream_error_count;
   }
 
   Http2Frame rst_stream(HTTP2_FRAME_TYPE_RST_STREAM, id, 0);

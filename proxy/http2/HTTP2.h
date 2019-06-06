@@ -383,6 +383,7 @@ public:
   static uint32_t max_settings_per_minute;
   static uint32_t max_settings_frames_per_minute;
   static uint32_t max_ping_per_minute;
+  static float stream_error_rate_threshold;
 
   static void init();
 };

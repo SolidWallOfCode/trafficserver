@@ -251,6 +251,17 @@ public:
     post_stream_count = count;
   }
 
+  double
+  get_stream_error_rate() const
+  {
+    int total = get_stream_requests();
+    if (total > 0) {
+      return (double)stream_error_count / (double)total;
+    } else {
+      return 0;
+    }
+  }
+
   // Connection level window size
   ssize_t client_rwnd, server_rwnd;
 
@@ -362,6 +373,9 @@ private:
   // Counter for current active streams and streams in the process of shutting down
   uint32_t total_client_streams_count;
   uint32_t post_stream_count;
+
+  // Counter for stream errors ATS sent
+  uint32_t stream_error_count = 0;
 
   // Counter for frames received within last 60 seconds
   // Each item holds a count for 30 seconds.

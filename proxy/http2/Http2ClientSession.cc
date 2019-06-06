@@ -528,9 +528,17 @@ Http2ClientSession::state_process_frame_read(int event, VIO *vio, bool inside_fr
   }
 
   while (this->sm_reader->read_avail() >= (int64_t)HTTP2_FRAME_HEADER_LEN) {
+    Http2ErrorCode err = Http2ErrorCode::HTTP2_ERROR_NO_ERROR;
+    if (this->connection_state.get_stream_error_rate() > std::min(1.0, Http2::stream_error_rate_threshold * 2.0)) {
+      ip_port_text_buffer ipb;
+      const char *client_ip = ats_ip_ntop(get_client_addr(), ipb, sizeof(ipb));
+      Error("HTTP/2 session error client_ip=%s session_id=%" PRId64
+            " closing a connection, because its stream error rate (%f) is too high",
+            client_ip, connection_id(), this->connection_state.get_stream_error_rate());
+      err = Http2ErrorCode::HTTP2_ERROR_ENHANCE_YOUR_CALM;
+    }
     // Return if there was an error
-    Http2ErrorCode err;
-    if (do_start_frame_read(err) < 0) {
+    if (err > Http2ErrorCode::HTTP2_ERROR_NO_ERROR || do_start_frame_read(err) < 0) {
       // send an error if specified.  Otherwise, just go away
       if (err > Http2ErrorCode::HTTP2_ERROR_NO_ERROR) {
         SCOPED_MUTEX_LOCK(lock, this->connection_state.mutex, this_ethread());
