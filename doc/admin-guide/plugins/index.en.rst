@@ -128,6 +128,7 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
    Buffer Upload <buffer_upload.en>
    Cache Key Manipulation <cachekey.en>
    Cache Promote <cache_promote.en>
+   Cert Reporting Tool <cert_reporting_tool.en>
    Collapsed-Forwarding <collapsed_forwarding.en>
    Epic <epic.en>
    Escalate <escalate.en>
@@ -159,6 +160,9 @@ directory of the |TS| source tree. Experimental plugins can be compiled by passi
 
 :doc:`Cache Promote <cache_promote.en>`
    Provides additional control over when an object should be allowed into the cache.
+
+:doc:`Cert Reporting Tool <cert_reporting_tool.en>`
+   Examines and logs information on loaded certificates.
 
 :doc:`Collapsed-Forwarding <collapsed_forwarding.en>`
    Allows to Collapse multiple Concurrent requests by downloading once from the Origin and serving

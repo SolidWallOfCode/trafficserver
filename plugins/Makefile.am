@@ -52,6 +52,7 @@ include experimental/cache_promote/Makefile.inc
 include experimental/cache_range_requests/Makefile.inc
 include experimental/cachekey/Makefile.inc
 include experimental/collapsed_connection/Makefile.inc
+include experimental/cert_reporting_tool/Makefile.inc
 include experimental/collapsed_forwarding/Makefile.inc
 include experimental/custom_redirect/Makefile.inc
 include experimental/epic/Makefile.inc
