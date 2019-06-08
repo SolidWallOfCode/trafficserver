@@ -138,6 +138,8 @@ public:
     SET_HANDLER(&Http2ConnectionState::main_event_handler);
   }
 
+  ProxyError rx_error_code;
+  ProxyError tx_error_code;
   Http2ClientSession *ua_session;
   HpackHandle *local_hpack_handle;
   HpackHandle *remote_hpack_handle;
@@ -251,6 +253,17 @@ public:
     post_stream_count = count;
   }
 
+  double
+  get_stream_error_rate() const
+  {
+    int total = get_stream_requests();
+    if (total > 0) {
+      return (double)stream_error_count / (double)total;
+    } else {
+      return 0;
+    }
+  }
+
   // Connection level window size
   ssize_t client_rwnd, server_rwnd;
 
@@ -329,6 +342,12 @@ public:
   {
     shutdown_state = state;
   }
+  void increment_received_settings_count(uint32_t count);
+  uint32_t get_received_settings_count();
+  void increment_received_settings_frame_count();
+  uint32_t get_received_settings_frame_count();
+  void increment_received_ping_count();
+  uint32_t get_received_ping_count();
 
 private:
   Http2ConnectionState(const Http2ConnectionState &);            // noncopyable
@@ -356,6 +375,18 @@ private:
   // Counter for current active streams and streams in the process of shutting down
   uint32_t total_client_streams_count;
   uint32_t post_stream_count;
+
+  // Counter for stream errors ATS sent
+  uint32_t stream_error_count = 0;
+
+  // Counter for frames received within last 60 seconds
+  // Each item holds a count for 30 seconds.
+  uint16_t settings_count[2]                  = {0};
+  ink_hrtime settings_count_last_update       = 0;
+  uint16_t settings_frame_count[2]            = {0};
+  ink_hrtime settings_frame_count_last_update = 0;
+  uint16_t ping_count[2]                      = {0};
+  ink_hrtime ping_count_last_update           = 0;
 
   // NOTE: Id of stream which MUST receive CONTINUATION frame.
   //   - [RFC 7540] 6.2 HEADERS
