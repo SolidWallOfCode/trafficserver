@@ -23,7 +23,7 @@ import subprocess
 Test.Summary = '''
 Test FORWARDED header.
 '''
-Test.SkipIf(Condition.true("Disabled for 7.1.x, requires 8.0 test features"))
+
 Test.SkipUnless(
     Condition.HasATSFeature('TS_USE_TLS_ALPN'),
     Condition.HasCurlFeature('http2'),
