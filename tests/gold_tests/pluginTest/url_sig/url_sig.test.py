@@ -22,7 +22,6 @@ Test.Summary = '''
 Test url_sig plugin
 '''
 
-Test.SkipIf(Condition.true("Disabled for 7.1.x, requires 8.0 test features"))
 Test.SkipUnless(
     Condition.HasATSFeature('TS_USE_TLS_ALPN'),
     Condition.HasProgram("netstat", "netstat needs to be installed on system for this test to work")
