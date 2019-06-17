@@ -410,6 +410,26 @@ TSError(const char *fmt, ...)
   va_end(args);
 }
 
+tsapi void
+TSEmergency(const char *fmt, ...)
+{
+  va_list args;
+
+  va_start(args, fmt);
+  EmergencyV(fmt, args);
+  va_end(args);
+}
+
+tsapi void
+TSFatal(const char *fmt, ...)
+{
+  va_list args;
+
+  va_start(args, fmt);
+  FatalV(fmt, args);
+  va_end(args);
+}
+
 // Assert in debug AND optim
 void
 _TSReleaseAssert(const char *text, const char *file, int line)
@@ -9120,9 +9140,9 @@ TSHttpEventNameLookup(TSEvent event)
 class TSSslCallback : public Continuation
 {
 public:
-  TSSslCallback(SSLNetVConnection *vc, TSEvent event) : Continuation(vc->mutex), m_vc(vc), m_event(event) 
-  { 
-    SET_HANDLER(&TSSslCallback::event_handler); 
+  TSSslCallback(SSLNetVConnection *vc, TSEvent event) : Continuation(vc->mutex), m_vc(vc), m_event(event)
+  {
+    SET_HANDLER(&TSSslCallback::event_handler);
   }
   int
   event_handler(int event, void *)
