@@ -6884,8 +6884,8 @@ TSVIO
 TSVConnRead(TSVConn connp, TSCont contp, TSIOBuffer bufp, int64_t nbytes)
 {
   sdk_assert(sdk_sanity_check_iocore_structure(connp) == TS_SUCCESS);
-  sdk_assert(sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
-  sdk_assert(sdk_sanity_check_iocore_structure(bufp) == TS_SUCCESS);
+  sdk_assert(contp == nullptr || sdk_sanity_check_iocore_structure(contp) == TS_SUCCESS);
+  sdk_assert(bufp == nullptr || sdk_sanity_check_iocore_structure(bufp) == TS_SUCCESS);
   sdk_assert(nbytes >= 0);
 
   FORCE_PLUGIN_SCOPED_MUTEX(contp);
