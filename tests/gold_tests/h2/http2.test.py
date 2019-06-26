@@ -30,7 +30,7 @@ Test.SkipUnless(
 )
 Test.ContinueOnFail = True
 # Define default ATS
-ts = Test.MakeATSProcess("ts", select_ports=False)
+ts = Test.MakeATSProcess("ts", select_ports=True, enable_tls=True)
 server = Test.MakeOriginServer("server")
 
 
@@ -63,7 +63,6 @@ server.addResponse("sessionlog.json", request_header2, response_header2)
 ts.addSSLfile("ssl/server.pem")
 ts.addSSLfile("ssl/server.key")
 
-ts.Variables.ssl_port = 4443
 ts.Disk.remap_config.AddLine(
     'map / http://127.0.0.1:{0}'.format(server.Variables.Port)
 )
@@ -72,6 +71,7 @@ ts.Disk.ssl_multicert_config.AddLine(
     'dest_ip=* ssl_cert_name=server.pem ssl_key_name=server.key'
 )
 ts.Disk.records_config.update({
+    'proxy.config.http2.enabled': 1,    # this option is for VZM-internal only
     'proxy.config.diags.debug.enabled': 1,
     'proxy.config.diags.debug.tags': 'http2',
     'proxy.config.ssl.server.cert.path': '{0}'.format(ts.Variables.SSLDir),
@@ -93,7 +93,7 @@ tr.Processes.Default.Command = 'python3 h2client.py -p {0}'.format(ts.Variables.
 tr.Processes.Default.ReturnCode = 0
 # time delay as proxy.config.http.wait_for_cache could be broken
 tr.Processes.Default.StartBefore(server)
-tr.Processes.Default.StartBefore(Test.Processes.ts, ready=When.PortOpen(ts.Variables.ssl_port))
+tr.Processes.Default.StartBefore(Test.Processes.ts)
 tr.Processes.Default.Streams.stdout = "gold/remap-200.gold"
 tr.StillRunningAfter = server
 
