@@ -149,6 +149,20 @@ struct ChunkedHandler {
   bool process_chunked_content();
   bool generate_chunked_content();
 
+  /// Check if currently reading inside a chunk.
+  bool in_chunk() {
+    switch (state) {
+      case CHUNK_READ_SIZE:
+      case CHUNK_READ_TRAILER_BLANK:
+      case CHUNK_READ_TRAILER_CR:
+      case CHUNK_READ_TRAILER_LINE:
+      case CHUNK_READ_DONE:
+        return false;
+      default: break;
+    }
+    return true;
+  }
+
 private:
   void read_size();
   void read_chunk();

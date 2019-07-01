@@ -7630,7 +7630,8 @@ std::array<ts::string_view, TS_CONFIG_LAST_ENTRY> SDK_Overridable_Configs = {{"p
                                                              "proxy.config.ssl.client.verify.server.properties",
                                                              "proxy.config.ssl.client.sni_policy",
                                                              "proxy.config.ssl.client.private_key.filename",
-                                                             "proxy.config.ssl.client.CA.cert.filename"}};
+                                                             "proxy.config.ssl.client.CA.cert.filename",
+                                                             "proxy.config.http.chunking.accept_truncated_content"}};
 
 
 REGRESSION_TEST(SDK_API_OVERRIDABLE_CONFIGS)(RegressionTest *test, int /* atype ATS_UNUSED */, int *pstatus)
