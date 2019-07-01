@@ -110,7 +110,9 @@ public:
     /// @endcond
 
     /// Default constructor, uninitialized.
-    NumericType();
+    constexpr NumericType();
+    /// Copy constructor.
+    constexpr NumericType(NumericType const& that) = default;
     //! Construct from implementation type.
     NumericType(
       raw_type const t ///< Initialized value.
@@ -154,7 +156,7 @@ private:
 };
 
 // Method definitions.
-template < typename T, typename X > NumericType<T,X>::NumericType() { }
+template < typename T, typename X > constexpr NumericType<T,X>::NumericType() { }
 template < typename T, typename X > NumericType<T,X>::NumericType(raw_type const t) : _t(t) { }
 template < typename T, typename X > NumericType<T,X>& NumericType<T,X>::operator = (raw_type const t) { _t = t; return *this; }
 template < typename T, typename X > NumericType<T,X>& NumericType<T,X>::operator = (self const& that) { _t = that._t; return *this; }

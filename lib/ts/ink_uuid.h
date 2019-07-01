@@ -32,6 +32,7 @@ class ATSUuid
 public:
   // Constructors
   ATSUuid() : _version(TS_UUID_UNDEFINED) {}
+  constexpr ATSUuid(ATSUuid const& that) = default;
   ATSUuid &operator=(const ATSUuid other);
 
   // Initialize the UUID from a string
