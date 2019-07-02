@@ -474,7 +474,8 @@ HTTPValTE *http_parse_te(const char *buf, int len, Arena *arena);
 class HTTPVersion
 {
 public:
-  HTTPVersion();
+  constexpr HTTPVersion();
+  constexpr HTTPVersion(HTTPVersion const& that) = default;
   explicit HTTPVersion(int32_t version);
   HTTPVersion(int ver_major, int ver_minor);
 
@@ -668,7 +669,7 @@ private:
 /*-------------------------------------------------------------------------
   -------------------------------------------------------------------------*/
 
-inline HTTPVersion::HTTPVersion() : m_version(HTTP_VERSION(1, 0))
+inline constexpr HTTPVersion::HTTPVersion() : m_version(HTTP_VERSION(1, 0))
 {
 }
 

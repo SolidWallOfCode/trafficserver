@@ -85,6 +85,8 @@ struct Connection {
   bool is_connected; ///< Flag for already connected.
   int sock_type;
 
+  Connection(Connection const &) = delete;
+
   /** Create and initialize the socket for this connection.
 
       A socket is created and the options specified by @a opt are
@@ -142,11 +144,6 @@ struct Connection {
    * Move control of the socket from the argument object orig to the current object.
    */
   void move(Connection &);
-
-private:
-  // Don't want copy constructors to avoid having the deconstructor on
-  // temporarly copies close the file descriptor too soon. Use move instead
-  Connection(Connection const &);
 
 protected:
   void _cleanup();

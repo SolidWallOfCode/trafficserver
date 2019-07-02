@@ -52,6 +52,8 @@ protected:
 public:
   /// Default constructor (empty buffer).
   constexpr MemSpan();
+  /// Copy constructor.
+  constexpr MemSpan(self_type const& that) = default;
 
   /** Construct explicitly with a pointer and size.
    */
