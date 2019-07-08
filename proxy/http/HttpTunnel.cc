@@ -565,6 +565,18 @@ HttpTunnel::reset()
   }
 #endif
 
+  // Make sure to cancel out any IO operations
+  for (int i = 0; i < MAX_PRODUCERS; ++i) {
+    if (producers[i].alive && producers[i].read_vio) {
+      producers[i].vc->do_io_read(NULL, 0, 0);
+    }
+  }
+  for (int j = 0; j < MAX_CONSUMERS; ++j) {
+    if (consumers[j].alive && consumers[j].write_vio) {
+      consumers[j].vc->do_io_write(NULL, 0, 0);
+    }
+  }
+
   num_producers = 0;
   num_consumers = 0;
   memset(consumers, 0, sizeof(consumers));
