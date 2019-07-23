@@ -1,4 +1,5 @@
 
+{{Accept-Encoding}:{identity}}
 {{Accept}:{*/*}}
 {{Host}:{127.0.0.1__TS_PORT__}}
 {{User-Agent}:{007}}
@@ -20,6 +21,7 @@
 {{Content-Length}:{3}}
 
 ({__VIA__}}
+{{Accept-Encoding}:{identity}}
 {{Accept}:{*/*}}
 {{Client-ip}:{127.0.0.1}}
 {{Host}:{127.0.0.1__TS_PORT__}}

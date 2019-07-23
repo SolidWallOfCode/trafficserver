@@ -1295,8 +1295,8 @@ HttpTransactHeaders::normalize_accept_encoding(const OverridableHttpConfigParams
           header->field_value_set(ae_field, "gzip", 4);
           Debug("http_trans", "[Headers::normalize_accept_encoding] normalized Accept-Encoding to gzip");
         } else {
-          header->field_delete(ae_field);
-          Debug("http_trans", "[Headers::normalize_accept_encoding] removed non-gzip Accept-Encoding");
+          header->field_value_set(ae_field, "identity", 8);
+          Debug("http_trans", "[Headers::normalize_accept_encoding] normalized non-gzip Accept-Encoding to identity");
         }
       } else if (normalize_ae == 2) {
         // Force Accept-Encoding header to br (Brotli) or no header.
@@ -1307,8 +1307,8 @@ HttpTransactHeaders::normalize_accept_encoding(const OverridableHttpConfigParams
           header->field_value_set(ae_field, "gzip", 4);
           Debug("http_trans", "[Headers::normalize_accept_encoding] normalized Accept-Encoding to gzip");
         } else {
-          header->field_delete(ae_field);
-          Debug("http_trans", "[Headers::normalize_accept_encoding] removed non-br Accept-Encoding");
+          header->field_value_set(ae_field, "identity", 8);
+          Debug("http_trans", "[Headers::normalize_accept_encoding] normalized non-gzip Accept-Encoding to identity");
         }
       } else {
         static bool logged = false;
@@ -1318,6 +1318,11 @@ HttpTransactHeaders::normalize_accept_encoding(const OverridableHttpConfigParams
           logged = true;
         }
       }
+    } else {
+      ae_field = header->field_create(MIME_FIELD_ACCEPT_ENCODING, MIME_LEN_ACCEPT_ENCODING);
+      header->field_attach(ae_field);
+      header->field_value_set(ae_field, "identity", 8);
+      Debug("http_trans", "[Headers::normalize_accept_encoding] normalized no Accept-Encoding to identity");
     }
   }
 }

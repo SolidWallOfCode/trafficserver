@@ -1,11 +1,11 @@
 X-Au-Test: www.no-oride.com
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
 gzip
 -
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
@@ -25,20 +25,20 @@ gzip, br
 gzip;q=0.3, whatever;q=0.666, br;q=0.7
 -
 X-Au-Test: www.ae-1.com
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
 gzip
 -
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
 gzip
 -
 X-Au-Test: www.ae-2.com
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
@@ -77,20 +77,20 @@ gzip, br
 gzip;q=0.3, whatever;q=0.666, br;q=0.7
 -
 X-Au-Test: www.ae-1.com
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
 gzip
 -
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
 gzip
 -
 X-Au-Test: www.ae-2.com
-ACCEPT-ENCODING MISSING
+identity
 -
 gzip
 -
