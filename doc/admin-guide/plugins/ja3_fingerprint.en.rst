@@ -29,7 +29,9 @@ Description
 
 ``JA3 Fingerprint`` calculates JA3 fingerprints for incoming SSL traffic. "JA3 is a method for creating SSL/TLS client fingerprints" by concatenating values in ClientHello packet and MD5 hash the result to produce a 32 character fingerprint. Malwares tend to use the same encryption code/client, which makes it an effective way to detect malicious clients. More info about ja3 is available: https://github.com/salesforce/ja3.
 
-The calculated JA3 fingerprints are then appended to upstream request (to be processed at upstream) and/or logged locally (depending on the config).
+The calculated JA3 fingerprints are then appended to upstream request in the field ``X-JA3-Sig``
+(to be processed at upstream). If multiple dups exist for the field name, it will append to the last 
+occurrence; if none exists, it will add such a field to the headers. The signatures can also be logged locally.
 
 Plugin Configuration
 ====================
