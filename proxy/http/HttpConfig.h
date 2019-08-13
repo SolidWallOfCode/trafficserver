@@ -527,6 +527,7 @@ struct OverridableHttpConfigParams {
   //   * Place all MgmtByte configs before all other configs
   MgmtByte maintain_pristine_host_hdr;
   MgmtByte chunking_enabled;
+  MgmtByte chunking_accept_truncated_content = 0;
 
   ////////////////////////////////
   //  Negative Response Caching //

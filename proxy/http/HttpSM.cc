@@ -1478,7 +1478,7 @@ plugins required to work with sni_routing.
         ink_assert(pending_action == nullptr);
         pending_action = mutex->thread_holding->schedule_in(this, HRTIME_MSECONDS(10));
         return 0;
-      } 
+      }
 
       DebugSM("http", "[%" PRId64 "] calling plugin on hook %s at hook %p", sm_id, HttpDebugNames::get_api_hook_name(cur_hook_id),
               cur_hook);
@@ -3005,7 +3005,11 @@ bool
 HttpSM::is_http_server_eos_truncation(HttpTunnelProducer *p)
 {
   if ((p->do_dechunking || p->do_chunked_passthru) && p->chunked_handler.truncation) {
-    return true;
+    /* The upstream is truncated unless the override var allows it and the stream is
+     * not in the middle of a chunk. Note a @c true return value means "truncated".
+     * A @c false return means "ignore the truncation".
+     */
+    return t_state.txn_conf->chunking_accept_truncated_content == 0 || p->chunked_handler.in_chunk();
   }
 
   //////////////////////////////////////////////////////////////

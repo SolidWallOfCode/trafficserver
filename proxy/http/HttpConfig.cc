@@ -970,7 +970,7 @@ HttpConfig::startup()
 
   HttpConfigEstablishOverload(c.origin_min_keep_alive_connections, "proxy.config.http.origin_min_keep_alive_connections");
   HttpConfigEstablishOverload(c.origin_min_keep_alive_connections, "proxy.config.http.per_server.min_keep_alive");
-  
+
   HttpEstablishStaticConfigByte(c.oride.attach_server_session_to_client, "proxy.config.http.attach_server_session_to_client");
   HttpEstablishStaticConfigByte(c.oride.safe_requests_retryable, "proxy.config.http.safe_requests_retryable");
 
@@ -1000,6 +1000,7 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.oride.keep_alive_enabled_out, "proxy.config.http.keep_alive_enabled_out");
   HttpEstablishStaticConfigByte(c.oride.chunking_enabled, "proxy.config.http.chunking_enabled");
   HttpEstablishStaticConfigLongLong(c.oride.http_chunking_size, "proxy.config.http.chunking.size");
+  HttpEstablishStaticConfigByte(c.oride.chunking_accept_truncated_content, "proxy.config.http.chunking.accept_truncated_content");
   HttpEstablishStaticConfigByte(c.oride.flow_control_enabled, "proxy.config.http.flow_control.enabled");
   HttpEstablishStaticConfigLongLong(c.oride.flow_high_water_mark, "proxy.config.http.flow_control.high_water");
   HttpEstablishStaticConfigLongLong(c.oride.flow_low_water_mark, "proxy.config.http.flow_control.low_water");
@@ -1325,6 +1326,7 @@ HttpConfig::reconfigure()
   params->oride.auth_server_session_private = INT_TO_BOOL(m_master.oride.auth_server_session_private);
 
   params->oride.http_chunking_size = m_master.oride.http_chunking_size;
+  params->oride.chunking_accept_truncated_content = m_master.oride.chunking_accept_truncated_content;
 
   params->oride.post_check_content_length_enabled = INT_TO_BOOL(m_master.oride.post_check_content_length_enabled);
 

@@ -8269,6 +8269,9 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
   case TS_CONFIG_HTTP_CHUNKING_ENABLED:
     ret = _memberp_to_generic(&overridableHttpConfig->chunking_enabled, conv);
     break;
+  case TS_CONFIG_HTTP_CHUNKING_ACCEPT_TRUNCATED_CONTENT:
+    ret = _memberp_to_generic(&overridableHttpConfig->chunking_accept_truncated_content, conv);
+    break;
   case TS_CONFIG_HTTP_NEGATIVE_CACHING_ENABLED:
     ret = _memberp_to_generic(&overridableHttpConfig->negative_caching_enabled, conv);
     break;
@@ -8855,6 +8858,7 @@ static const std::unordered_map<ts::string_view, OV_Pair> Overridable_Map(
    {"proxy.config.ssl.client.cert.path", OV_Pair{TS_CONFIG_SSL_CERT_FILEPATH, TS_RECORDDATATYPE_STRING}},
    {"proxy.config.http.allow_half_open", OV_Pair{TS_CONFIG_HTTP_ALLOW_HALF_OPEN, TS_RECORDDATATYPE_INT}},
    {"proxy.config.http.chunking_enabled", OV_Pair{TS_CONFIG_HTTP_CHUNKING_ENABLED, TS_RECORDDATATYPE_INT}},
+   { "proxy.config.http.chunking.accept_truncated_content", OV_Pair{ TS_CONFIG_HTTP_CHUNKING_ACCEPT_TRUNCATED_CONTENT, TS_RECORDDATATYPE_INT }},
    {"proxy.config.http.cache.generation", OV_Pair{TS_CONFIG_HTTP_CACHE_GENERATION, TS_RECORDDATATYPE_INT}},
    {"proxy.config.http.insert_client_ip", OV_Pair{TS_CONFIG_HTTP_ANONYMIZE_INSERT_CLIENT_IP, TS_RECORDDATATYPE_INT}},
    {"proxy.config.http.insert_forwarded", OV_Pair{TS_CONFIG_HTTP_INSERT_FORWARDED, TS_RECORDDATATYPE_STRING}},
