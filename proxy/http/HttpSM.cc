@@ -1458,7 +1458,7 @@ plugins required to work with sni_routing.
       api_next = API_RETURN_DEFERED_SERVER_ERROR;
       break;
     case HTTP_API_REWIND_STATE_MACHINE:
-      DebugSM("http", "REWIND");
+      SMDebug("http", "REWIND");
       callout_state = HTTP_API_NO_CALLOUT;
       set_next_state();
       return 0;
@@ -8002,7 +8002,8 @@ HttpSM::find_proto_string(HTTPVersion version) const
 }
 
 void
-HttpSM::rewind_state_machine() {
+HttpSM::rewind_state_machine()
+{
   callout_state = HTTP_API_REWIND_STATE_MACHINE;
 }
 
