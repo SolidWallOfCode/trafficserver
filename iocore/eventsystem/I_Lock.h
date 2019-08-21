@@ -490,11 +490,13 @@ public:
     ProxyMutex *am, EThread *t)
     : m(am), locked_p(true)
   {
-    Mutex_lock(
+    if (am) {
+      Mutex_lock(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t);
+        m.get(), t);
+    }
   }
 
   MutexLock(
@@ -504,18 +506,21 @@ public:
     Ptr<ProxyMutex> &am, EThread *t)
     : m(am), locked_p(true)
   {
-    Mutex_lock(
+    if (am) {
+      Mutex_lock(
 #ifdef DEBUG
-      location, ahandler,
+        location, ahandler,
 #endif // DEBUG
-      m.get(), t);
+        m.get(), t);
+    }
   }
 
   void
   release()
   {
-    if (locked_p)
+    if (locked_p && m) {
       Mutex_unlock(m, m->thread_holding);
+    }
     locked_p = false;
   }
 
@@ -584,7 +589,7 @@ public:
       lock_acquired = true;
     }
   }
-  
+
 
   MutexTryLock(
 #ifdef DEBUG
