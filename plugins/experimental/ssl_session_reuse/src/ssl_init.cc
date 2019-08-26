@@ -94,11 +94,12 @@ ssl_session_param::~ssl_session_param()
 
 /*
  Read the redis auth key from file ssl_param.redis_auth_key_file in retKeyBuff
-
+ Return length of key read.
  */
 int
 get_redis_auth_key(char *retKeyBuff, int buffSize)
 {
+  int retval = 0;
   // Get the Key
   if (ssl_param.redis_auth_key_file.length()) {
     int fd = open(ssl_param.redis_auth_key_file.c_str(), O_RDONLY);
@@ -114,11 +115,11 @@ get_redis_auth_key(char *retKeyBuff, int buffSize)
       }
       memset(retKeyBuff, 0, buffSize);
       strncpy(retKeyBuff, key_data.c_str(), read_len);
+      retval = key_data.length();
     }
   } else {
     TSError("can not get redis auth key");
-    return 0; /* error */
   }
 
-  return 1; /* ok */
+  return retval;
 }
