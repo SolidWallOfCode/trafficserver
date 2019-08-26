@@ -439,7 +439,8 @@ STEK_init_keys()
 {
   ssl_ticket_key_t initKey;
 
-  if (!get_redis_auth_key(channel_key, MAX_REDIS_KEYSIZE)) {
+  channel_key_length = get_redis_auth_key(channel_key, MAX_REDIS_KEYSIZE);
+  if (channel_key_length <= 0) {
     TSError("STEK_init_keys: could not get redis authentication key");
     return -1;
   }

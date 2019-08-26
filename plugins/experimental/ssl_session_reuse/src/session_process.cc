@@ -35,6 +35,8 @@
 
 #include "common.h"
 
+const uint64_t protocol_version = 2;
+
 const unsigned char salt[] = {115, 97, 108, 117, 0, 85, 137, 229};
 
 int
@@ -55,10 +57,10 @@ encrypt_session(const char *session_data, int32_t session_data_len, const unsign
 
   pBuf = new char[len_all];
 
-  // Put in a fixed experation time of 7 hours, just to have communication consistency with the original
-  // protocol
-  int64_t expire_time = time(nullptr) + 2 * 3600;
-  memcpy(pBuf + offset, &expire_time, sizeof(expire_time));
+  // Transition the expiration time into a protocol version field.
+  // Keeping it unnecessarily long at 64 bits to have consistency with previous version
+  // Version 1, had a fixed expiration time of 2*3600 seconds
+  memcpy(pBuf + offset, &protocol_version, sizeof(protocol_version));
   offset += sizeof(int64_t);
 
   memcpy(pBuf + offset, &session_data_len, sizeof(int32_t));
@@ -131,7 +133,7 @@ decrypt_session(const std::string &encrypted_data, const unsigned char *key, int
   int decrypted_buffer_size    = 0;
   int decrypted_msg_len        = 0;
   unsigned char *decrypted_msg = nullptr;
-  int ret                      = 0;
+  int ret                      = -1;
 
   // Initialize context
   // Initialize context
@@ -165,18 +167,22 @@ decrypt_session(const std::string &encrypted_data, const unsigned char *key, int
   // Retrieve ssl_session
   ssl_sess_ptr = (unsigned char *)decrypted_msg;
 
-  // Skip the expiration time.  Just a place holder to interact with the old version
-  ssl_sess_ptr += sizeof(int64_t);
+  // The first 64 bits are now the protocol version.  Make sure it matches what we expect
+  if (protocol_version == *(reinterpret_cast<uint64_t *>(ssl_sess_ptr))) {
 
-  // Length
-  ret = *(int32_t *)ssl_sess_ptr;
-  ssl_sess_ptr += sizeof(int32_t);
-  TSDebug(PLUGIN, "Decrypted buffer of size %d from buffer of size %d\n", ret, session_data_len);
-  // If there is less data than the maxiumum buffer size, reduce accordingly
-  if (ret < session_data_len) {
-    session_data_len = ret;
+    // Move beyond the protocol version
+    ssl_sess_ptr += sizeof(int64_t);
+
+    // Length
+    ret = *(int32_t *)ssl_sess_ptr;
+    ssl_sess_ptr += sizeof(int32_t);
+    TSDebug(PLUGIN, "Decrypted buffer of size %d from buffer of size %d\n", ret, session_data_len);
+    // If there is less data than the maxiumum buffer size, reduce accordingly
+    if (ret < session_data_len) {
+      session_data_len = ret;
+    }
+    memcpy(session_data, ssl_sess_ptr, session_data_len);
   }
-  memcpy(session_data, ssl_sess_ptr, session_data_len);
 
 Cleanup:
 
