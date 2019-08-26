@@ -1849,6 +1849,7 @@ SSLNetVConnection::callHooks(TSEvent eventId)
   }
 
   if (curHook != nullptr) {
+    SCOPED_MUTEX_LOCK(lock, curHook->m_cont->mutex, this_ethread());
     curHook->invoke(eventId, this);
     reenabled =
       (this->sslHandshakeHookState != HANDSHAKE_HOOKS_CERT_INVOKE && this->sslHandshakeHookState != HANDSHAKE_HOOKS_PRE_INVOKE &&
