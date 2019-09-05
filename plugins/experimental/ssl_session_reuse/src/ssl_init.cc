@@ -69,17 +69,18 @@ init_ssl_params(const std::string &conf)
   TSDebug(PLUGIN, "init_ssl_params: Rotation interval (ssl_param.key_update_interval)set to %d\n", ssl_param.key_update_interval);
   TSDebug(PLUGIN, "init_ssl_params: cluster_name set to %s", ssl_param.cluster_name.c_str());
 
+  ssl_param.pub = new RedisPublisher(conf);
+  if ((!ssl_param.pub) || (!ssl_param.pub->is_good())) {
+    TSError("Construct RedisPublisher error.");
+    return -1;
+  }
+
   int ret = STEK_init_keys();
   if (ret < 0) {
     TSError("init keys failure. %s", conf.c_str());
     return -1;
   }
 
-  ssl_param.pub = new RedisPublisher(conf);
-  if ((!ssl_param.pub) || (!ssl_param.pub->is_good())) {
-    TSError("Construct RedisPublisher error.");
-    return -1;
-  }
   return 0;
 }
 
