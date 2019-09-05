@@ -1216,7 +1216,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
   if (event == EVENT_INTERVAL) {
     if (!action.continuation) {
       // give up on insert, it has been too long
-      remove_trigger_pending_dns();
+      hostDB.pending_dns_for_hash(md5.hash).remove(this);
       hostdb_cont_free(this);
       return EVENT_DONE;
     }
@@ -1476,9 +1476,8 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
     // wake up everyone else who is waiting
     remove_trigger_pending_dns();
 
-    // all done
+    // all done, or at least scheduled to be all done
     //
-    hostdb_cont_free(this);
     return EVENT_DONE;
   }
 }
