@@ -5787,12 +5787,7 @@ TSHttpTxnServerAddrSet(TSHttpTxn txnp, struct sockaddr const *addr)
   sdk_assert(sdk_sanity_check_txn(txnp) == TS_SUCCESS);
 
   HttpSM *sm = reinterpret_cast<HttpSM *>(txnp);
-  if (ats_ip_copy(&sm->t_state.server_info.dst_addr.sa, addr)) {
-    sm->t_state.api_server_addr_set = true;
-    return TS_SUCCESS;
-  } else {
-    return TS_ERROR;
-  }
+  return sm->t_state.dns_info.set_upstream_address(addr) ? TS_SUCCESS : TS_ERROR;
 }
 
 void
@@ -7349,7 +7344,7 @@ TSHostLookupResultAddrGet(TSHostLookupResult lookup_result)
 {
   sdk_assert(sdk_sanity_check_hostlookup_structure(lookup_result) == TS_SUCCESS);
   HostDBInfo *di = reinterpret_cast<HostDBInfo *>(lookup_result);
-  return di->ip();
+  return di->addr();
 }
 
 /*
@@ -8392,6 +8387,9 @@ _memberp_to_generic(MgmtFloat *ptr, MgmtConverter const *&conv) -> typename std:
 static void *
 _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overridableHttpConfig, MgmtConverter const *&conv)
 {
+  // External converters.
+  extern const MgmtConverter HostDBDownServerCacheTimeConv;
+
   void *ret = nullptr;
   conv      = nullptr;
 
@@ -8544,7 +8542,8 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     ret = _memberp_to_generic(&overridableHttpConfig->post_connect_attempts_timeout, conv);
     break;
   case TS_CONFIG_HTTP_DOWN_SERVER_CACHE_TIME:
-    ret = _memberp_to_generic(&overridableHttpConfig->down_server_timeout, conv);
+    conv = &HostDBDownServerCacheTimeConv;
+    ret  = &overridableHttpConfig->down_server_timeout;
     break;
   case TS_CONFIG_HTTP_DOWN_SERVER_ABORT_THRESHOLD:
     ret = _memberp_to_generic(&overridableHttpConfig->client_abort_threshold, conv);

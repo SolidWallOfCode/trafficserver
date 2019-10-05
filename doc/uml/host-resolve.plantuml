@@ -1,0 +1,12 @@
+' SPDX-License-Identifier: Apache-2.0
+
+@startuml
+
+state HttpSM {
+  state do_http_server_open {
+    state "start" as start {
+    }
+  }
+}
+
+@enduml
