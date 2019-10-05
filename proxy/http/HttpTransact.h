@@ -289,14 +289,6 @@ public:
     HTTP_TRANSACT_MAGIC_SEPARATOR = 0x12345678
   };
 
-  enum LookingUp_t {
-    ORIGIN_SERVER,
-    UNDEFINED_LOOKUP,
-    PARENT_PROXY,
-    INCOMING_ROUTER,
-    HOST_NONE,
-  };
-
   enum ProxyMode_t {
     UNDEFINED_MODE,
     GENERIC_PROXY,
@@ -587,8 +579,8 @@ public:
   };
 
   typedef struct _CurrentInfo {
-    ProxyMode_t mode                           = UNDEFINED_MODE;
-    LookingUp_t request_to                     = UNDEFINED_LOOKUP;
+    ProxyMode_t mode = UNDEFINED_MODE;
+    //    ResolveInfo::UpstreamResolveStyle request_to                     = ResolveInfo::UNDEFINED_LOOKUP;
     ConnectionAttributes *server               = nullptr;
     ink_time_t now                             = 0;
     ServerState_t state                        = STATE_UNDEFINED;
@@ -626,15 +618,18 @@ public:
     bool lookup_success         = false;
     char *lookup_name           = nullptr;
     char srv_hostname[MAXDNAME] = {0};
-    LookingUp_t looking_up      = UNDEFINED_LOOKUP;
-    bool srv_lookup_success     = false;
-    short srv_port              = 0;
+    //    ResolveInfo::UpstreamResolveStyle looking_up      = ResolveInfo::UNDEFINED_LOOKUP;
+    bool srv_lookup_success = false;
+    short srv_port          = 0;
     HostDBApplicationInfo srv_app;
 
     /*** Set to true by default.  If use_client_target_address is set
      * to 1, this value will be set to false if the client address is
      * not in the DNS pool */
     bool lookup_validated = true;
+
+    /// Lookup token, used when reporting on connection results.
+    void *lookup_token = nullptr;
 
     _DNSLookupInfo() {}
   } DNSLookupInfo;
@@ -679,7 +674,7 @@ public:
 
     HttpConfigParams *http_config_param = nullptr;
     CacheLookupInfo cache_info;
-    DNSLookupInfo dns_info;
+    ResolveInfo dns_info;
     RedirectInfo redirect_info;
     OutboundConnTrack::TxnState outbound_conn_track_state;
     unsigned int updated_server_version   = HostDBApplicationInfo::HTTP_VERSION_UNDEFINED;
@@ -738,8 +733,6 @@ public:
     int orig_scheme          = scheme; // pre-mapped scheme
     int method               = 0;
     int cause_of_death_errno = -UNKNOWN_INTERNAL_ERROR; // in
-    Ptr<HostDBInfo> hostdb_entry;                       // Pointer to the entry we are referencing in hostdb-- to keep our ref
-    HostDBInfo host_db_info;                            // in
 
     ink_time_t client_request_time    = UNDEFINED_TIME; // internal
     ink_time_t request_sent_time      = UNDEFINED_TIME; // internal
@@ -781,7 +774,6 @@ public:
     bool api_server_request_body_set              = false;
     bool api_req_cacheable                        = false;
     bool api_resp_cacheable                       = false;
-    bool api_server_addr_set                      = false;
     UpdateCachedObject_t api_update_cached_object = UPDATE_CACHED_OBJECT_NONE;
     StateMachineAction_t saved_update_next_action = SM_ACTION_UNDEFINED;
     CacheAction_t saved_update_cache_action       = CACHE_DO_UNDEFINED;
@@ -827,6 +819,7 @@ public:
     init()
     {
       parent_params = ParentConfig::acquire();
+      new (&dns_info) decltype(dns_info); // reset to default state.
     }
 
     // Constructor
@@ -853,7 +846,8 @@ public:
       via_string[VIA_DETAIL_SERVER_DESCRIPTOR] = VIA_DETAIL_SERVER_DESCRIPTOR_STRING;
       via_string[MAX_VIA_INDICES]              = '\0';
 
-      memset((void *)&host_db_info, 0, sizeof(host_db_info));
+//      memset(user_args, 0, sizeof(user_args));
+//      memset((void *)&host_db_info, 0, sizeof(host_db_info));
     }
 
     void
@@ -883,7 +877,8 @@ public:
       url_map.clear();
       arena.reset();
       unmapped_url.clear();
-      hostdb_entry.clear();
+      //      hostdb_entry.clear();
+      dns_info.~ResolveInfo();
       outbound_conn_track_state.clear();
 
       delete[] ranges;

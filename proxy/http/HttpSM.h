@@ -481,7 +481,7 @@ protected:
   void handle_server_setup_error(int event, void *data);
   void handle_http_server_open();
   void handle_post_failure();
-  void mark_host_failure(HostDBInfo *info, time_t time_down);
+  void mark_host_failure(HostDBInfo *info, ts_clock_time time_down);
   void mark_server_down_on_client_abort();
   void release_server_session(bool serve_from_cache = false);
   void set_ua_abort(HttpTransact::AbortState_t ua_abort, int event);

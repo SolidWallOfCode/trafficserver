@@ -455,7 +455,7 @@ inline bool
 HttpTransact::is_server_negative_cached(State *s)
 {
   if (s->host_db_info.app.http_data.last_failure != 0 &&
-      s->host_db_info.app.http_data.last_failure + s->txn_conf->down_server_timeout > s->client_request_time) {
+      s->host_db_info.app.last_fail_time() + s->txn_conf->down_server_timeout > ts_clock::from_time_t(s->client_request_time)) {
     return true;
   } else {
     // Make sure some nasty clock skew has not happened
@@ -463,7 +463,7 @@ HttpTransact::is_server_negative_cached(State *s)
     //   future we should tolerate bogus last failure times.  This sets
     //   the upper bound to the time that we would ever consider a server
     //   down to 2*down_server_timeout
-    if (s->client_request_time + s->txn_conf->down_server_timeout < s->host_db_info.app.http_data.last_failure) {
+    if (ts_clock::from_time_t(s->client_request_time) + s->txn_conf->down_server_timeout < s->host_db_info.app.last_fail_time()) {
       s->host_db_info.app.http_data.last_failure = 0;
       ink_assert(!"extreme clock skew");
       return true;

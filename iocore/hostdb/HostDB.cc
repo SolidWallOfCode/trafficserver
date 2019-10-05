@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <http/HttpConfig.h>
 
 HostDBProcessor hostDBProcessor;
 int HostDBProcessor::hostdb_strict_round_robin = 0;
@@ -65,6 +66,33 @@ int hostdb_disable_reverse_lookup                  = 0;
 int hostdb_max_iobuf_index                         = BUFFER_SIZE_INDEX_32K;
 
 ClassAllocator<HostDBContinuation> hostDBContAllocator("hostDBContAllocator");
+
+/// Configuration / API conversion.
+extern const MgmtConverter HostDBDownServerCacheTimeConv;
+const MgmtConverter HostDBDownServerCacheTimeConv(
+  [](void *data) -> MgmtInt {
+    return static_cast<MgmtInt>(static_cast<decltype(OverridableHttpConfigParams::down_server_timeout) *>(data)->count());
+  },
+  [](void *data, MgmtInt i) -> void {
+    using timer_type                 = decltype(OverridableHttpConfigParams::down_server_timeout);
+    *static_cast<timer_type *>(data) = timer_type{i};
+  });
+
+bool
+HostDBDownServerCacheTimeCB(const char *, RecDataT type, RecData data, void *)
+{
+  if (RECD_INT == type) {
+    (*HostDBDownServerCacheTimeConv.store_int)(&HttpConfig::m_master.oride.down_server_timeout, data.rec_int);
+    return true;
+  }
+  return false;
+}
+
+void
+HostDB_Config_Init()
+{
+  Enable_Config_Var("proxy.config.http.down_server.cache_time", &HostDBDownServerCacheTimeCB, nullptr);
+}
 
 // Static configuration information
 
@@ -1781,6 +1809,87 @@ HostDBInfo::rr()
   return reinterpret_cast<HostDBRoundRobin *>(reinterpret_cast<char *>(this) + this->app.rr.offset);
 }
 
+HostDBInfo *
+HostDBInfo::select_best_http(ResolveInfo *info, ts_clock_time now)
+{
+  if (this->round_robin) {
+    auto rr = this->rr();
+    if (info->client_target_addr) {
+      info->lookup_validated = rr->find_ip(info->client_target_addr) != nullptr;
+      return this;
+    }
+    info->lookup_validated = (info->client_target_addr == nullptr) || nullptr != rr->find_ip(info->client_target_addr);
+    return rr->select_best_http(info->client_remote_addr, now, info->fail_window);
+  }
+  return this;
+}
+
+HostDBInfo *
+HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ts_clock_time now, ts_seconds fail_window)
+{
+  bool bad = (rrcount <= 0 || static_cast<unsigned int>(rrcount) > hostdb_round_robin_max_count || good <= 0 ||
+              static_cast<unsigned>(good) > hostdb_round_robin_max_count);
+
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return nullptr;
+  }
+
+  int best_any = 0;
+  int best_up  = -1;
+
+  // Basic round robin, increment current and mod with how many we have
+  if (HostDBProcessor::hostdb_strict_round_robin) {
+    Debug("hostdb", "Using strict round robin");
+    // Check that the host we selected is alive
+    for (int i = 0; i < good; i++) {
+      best_any = current++ % good;
+      if (!info(best_any).is_dead(now, fail_window)) {
+        best_up = best_any;
+        break;
+      }
+    }
+  } else if (HostDBProcessor::hostdb_timed_round_robin > 0) {
+    Debug("hostdb", "Using timed round-robin for HTTP");
+    if (now > timed_rr_ctime + ts_seconds(HostDBProcessor::hostdb_timed_round_robin)) {
+      Debug("hostdb", "Timed interval expired.. rotating");
+      ++current;
+      timed_rr_ctime = now;
+    }
+    for (int i = 0; i < good; i++) {
+      best_any = (current + i) % good;
+      if (!info(best_any).is_dead(now, fail_window)) {
+        best_up = best_any;
+        break;
+      }
+    }
+    Debug("hostdb", "Using %d for best_up", best_up);
+  } else {
+    Debug("hostdb", "Using default round robin");
+    unsigned int best_hash_any = 0;
+    unsigned int best_hash_up  = 0;
+    for (int i = 0; i < good; i++) {
+      sockaddr const *ip = info(i).ip();
+      unsigned int h     = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+      if (best_hash_any <= h) {
+        best_any      = i;
+        best_hash_any = h;
+      }
+      if (best_hash_up <= h && !info(i).is_dead(now, fail_window)) {
+        best_up      = i;
+        best_hash_up = h;
+      }
+    }
+  }
+
+  if (best_up != -1) {
+    ink_assert(best_up >= 0 && best_up < good);
+    return &info(best_up);
+  }
+  ink_assert(best_any >= 0 && best_any < good);
+  return &info(best_any);
+}
+
 struct ShowHostDB;
 using ShowHostDBEventHandler = int (ShowHostDB::*)(int, Event *);
 struct ShowHostDB : public ShowCont {
@@ -1917,7 +2026,7 @@ struct ShowHostDB : public ShowCont {
       // Let's display the hash.
       CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", r->app.allotment.application1));
       CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", r->app.allotment.application2));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure));
+      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure.load()));
       if (!rr) {
         CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No"));
         CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No"));
@@ -1947,7 +2056,7 @@ struct ShowHostDB : public ShowCont {
 
       CHECK_SHOW(show("\"%s\":\"%u\",", "app1", r->app.allotment.application1));
       CHECK_SHOW(show("\"%s\":\"%u\",", "app2", r->app.allotment.application2));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure));
+      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure.load()));
       if (!rr) {
         CHECK_SHOW(show("\"%s\":\"%s\",", "stale", r->is_ip_stale() ? "yes" : "no"));
         CHECK_SHOW(show("\"%s\":\"%s\",", "timedout", r->is_ip_timeout() ? "yes" : "no"));

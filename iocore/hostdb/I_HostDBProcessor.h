@@ -23,6 +23,9 @@
 
 #pragma once
 
+#include <chrono>
+#include <atomic>
+
 #include "tscore/HashFNV.h"
 #include "tscore/ink_time.h"
 #include "tscore/CryptoHash.h"
@@ -45,6 +48,7 @@
 // Data
 //
 struct HostDBContinuation;
+struct ResolveInfo;
 
 //
 // The host database stores host information, most notably the
@@ -106,11 +110,11 @@ union HostDBApplicationInfo {
   //                       and failed to contact the host //
   //////////////////////////////////////////////////////////
   struct http_server_attr {
+    std::atomic<uint64_t> last_failure;
     unsigned int http_version : 3;
     unsigned int keepalive_timeout : 6;
     unsigned int fail_count : 8;
     unsigned int unused1 : 8;
-    unsigned int last_failure : 32;
   } http_data;
 
   enum HttpVersion_t {
@@ -123,6 +127,23 @@ union HostDBApplicationInfo {
   struct application_data_rr {
     unsigned int offset;
   } rr;
+
+  ts_clock_time
+  last_fail_time() const
+  {
+    return ts_clock_time{ts_seconds(http_data.last_failure)};
+  }
+
+  HostDBApplicationInfo() { ink_zero(*this); }
+
+  HostDBApplicationInfo(HostDBApplicationInfo const &that) { memcpy(this, &that, sizeof(that)); }
+
+  HostDBApplicationInfo &
+  operator=(HostDBApplicationInfo const &that)
+  {
+    memcpy(this, &that, sizeof(that));
+    return *this;
+  }
 };
 
 struct HostDBRoundRobin;
@@ -280,24 +301,34 @@ struct HostDBInfo : public RefCountObj {
    * Given the current time `now` and the fail_window, determine if this real is alive
    */
   bool
-  is_alive(ink_time_t now, int32_t fail_window)
+  is_alive(ts_clock_time now, ts_seconds fail_window)
   {
-    unsigned int last_failure = app.http_data.last_failure;
+    return ts_time_zero == app.last_fail_time();
+  }
 
-    if (last_failure == 0 || (unsigned int)(now - fail_window) > last_failure) {
-      return true;
-    } else {
-      // Entry is marked down.  Make sure some nasty clock skew
-      //  did not occur.  Use the retry time to set an upper bound
-      //  as to how far in the future we should tolerate bogus last
-      //  failure times.  This sets the upper bound that we would ever
-      //  consider a server down to 2*down_server_timeout
-      if ((unsigned int)(now + fail_window) < last_failure) {
-        app.http_data.last_failure = 0;
-        return false;
-      }
-      return false;
+  bool
+  is_zombie(ts_clock_time now, ts_seconds fail_window)
+  {
+    auto last_fail = app.last_fail_time();
+    return last_fail != ts_time_zero && last_fail + fail_window >= now;
+  }
+
+  bool
+  is_dead(ts_clock_time now, ts_seconds fail_window)
+  {
+    auto last_fail = app.last_fail_time();
+    return last_fail != ts_time_zero && last_fail + fail_window < now;
+  }
+
+  bool
+  select(ts_clock_time now, ts_seconds fail_window)
+  {
+    auto last_failure = app.http_data.last_failure.load();
+    if (last_failure != 0) {
+      return ts_clock::from_time_t(last_failure) + fail_window >= now &&
+             app.http_data.last_failure.compare_exchange_strong(last_failure, ts_clock::to_time_t(now));
     }
+    return true; // Ready to go!
   }
 
   bool
@@ -371,17 +402,21 @@ struct HostDBInfo : public RefCountObj {
 private:
   // The value of this will be -1 for objects that are not created by the alloc() static member function.
   int _iobuffer_index;
+
+  HostDBInfo *select_best_http(ResolveInfo *info, ts_clock_time now);
 };
 
 struct HostDBRoundRobin {
+  HostDBRoundRobin() = default;
+
   /** Total number (to compute space used). */
   short rrcount = 0;
 
   /** Number which have not failed a connect. */
   short good = 0;
 
-  unsigned short current    = 0;
-  ink_time_t timed_rr_ctime = 0;
+  unsigned short current = 0;
+  ts_clock_time timed_rr_ctime;
 
   // This is the equivalent of a variable length array, we can't use a VLA because
   // HostDBInfo is a non-POD type-- so this is the best we can do.
@@ -413,9 +448,21 @@ struct HostDBRoundRobin {
       @return The selected entry or @c nullptr if @a addr wasn't present.
    */
   HostDBInfo *select_next(sockaddr const *addr);
-  HostDBInfo *select_best_http(sockaddr const *client_ip, ink_time_t now, int32_t fail_window);
-  HostDBInfo *select_best_srv(char *target, InkRand *rand, ink_time_t now, int32_t fail_window);
-  HostDBRoundRobin() {}
+
+  /** Select the best upstream address from the round robin record.
+   *
+   * @param client_ip Remote inbound IP address.
+   * @param now Current time.
+   * @param fail_window Down server window.
+   * @return The selected host record, or @c nullptr if there are no host records.
+   *
+   * @a client_ip is used to do hashing on the upstream addresses such that different clients
+   * get different permutations of the hosts in the record.
+   *
+   * The returned host record will be down iff all hosts in the record are down.
+   */
+  HostDBInfo *select_best_http(sockaddr const *client_ip, ts_clock_time now, ts_seconds fail_window);
+  HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_clock_time now, ts_seconds fail_window);
 };
 
 struct HostDBCache;
@@ -426,6 +473,88 @@ struct HostDBHash;
 typedef void (Continuation::*cb_process_result_pfn)(HostDBInfo *r);
 
 Action *iterate(Continuation *cont);
+
+/** Information for doing host resolution.
+ *
+ * This is effectively a state object for an upstream resolution / connection.
+ *
+ */
+struct ResolveInfo {
+  using self_type = ResolveInfo; ///< Self reference type.
+
+  /// Not quite sure what this is for.
+  enum UpstreamResolveStyle {
+    UNDEFINED_LOOKUP,
+    ORIGIN_SERVER,
+    PARENT_PROXY,
+  };
+
+  /** Origin server address source selection.
+
+      If config says to use CTA (client target addr) state is
+      OS_ADDR_TRY_CLIENT, otherwise it remains the default. If the
+      connect fails then we switch to a USE. We go to USE_HOSTDB if
+      (1) the HostDB lookup is successful and (2) some address other
+      than the CTA is available to try. Otherwise we keep retrying
+      on the CTA (USE_CLIENT) up to the max retry value.  In essence
+      we try to treat the CTA as if it were another RR value in the
+      HostDB record.
+   */
+  enum class OS_Addr {
+    TRY_DEFAULT, ///< Initial state, use what config says.
+    TRY_HOSTDB,  ///< Try HostDB data.
+    TRY_CLIENT,  ///< Try client target addr.
+    USE_HOSTDB,  ///< Force use of HostDB target address.
+    USE_CLIENT   ///< Use client target addr, no fallback.
+  };
+
+  /// Keep a reference to the base HostDB object, so it doesn't get GC'd.
+  Ptr<HostDBInfo> entry;
+
+  /// The currently resolved address.
+  IpEndpoint addr;
+
+  int attempts = 0;            ///< Number of connection attempts.
+  ts_seconds fail_window{300}; ///< Down server blackout time.
+
+  OS_Addr os_addr_style       = OS_Addr::TRY_DEFAULT;
+  HostResStyle host_res_style = HOST_RES_IPV4;
+
+  char *lookup_name               = nullptr;
+  char srv_hostname[MAXDNAME]     = {0};
+  UpstreamResolveStyle looking_up = UNDEFINED_LOOKUP;
+  bool srv_lookup_success         = false;
+  in_port_t srv_port              = 0;
+  HostDBApplicationInfo srv_app;
+  const sockaddr *client_remote_addr = nullptr; ///< Client IP address for round robin selection.
+  const sockaddr *client_target_addr = nullptr; ///< Set if trying a transparent connection.
+
+  /// Flag for whether @a addr is valid.
+  bool lookup_success = false;
+
+  /// Flag for @a addr being set externally.
+  bool api_addr_set_p = false;
+
+  /*** Set to true by default.  If use_client_target_address is set
+   * to 1, this value will be set to false if the client address is
+   * not in the DNS pool */
+  bool lookup_validated = true;
+
+  /// If upstream was in zombie mode.
+  bool is_zombie = false;
+
+  ResolveInfo() = default;
+
+  bool
+  set_upstream_address(const sockaddr *sa)
+  {
+    if (ats_ip_copy(&addr, sa)) {
+      api_addr_set_p = true;
+      return true;
+    }
+    return false;
+  }
+};
 
 /** The Host Database access interface. */
 struct HostDBProcessor : public Processor {

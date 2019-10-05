@@ -262,76 +262,8 @@ HostDBRoundRobin::find_target(const char *target)
 }
 
 inline HostDBInfo *
-HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ink_time_t now, int32_t fail_window)
-{
-  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
-              (unsigned int)good > hostdb_round_robin_max_count);
-
-  if (bad) {
-    ink_assert(!"bad round robin size");
-    return nullptr;
-  }
-
-  int best_any = 0;
-  int best_up  = -1;
-
-  // Basic round robin, increment current and mod with how many we have
-  if (HostDBProcessor::hostdb_strict_round_robin) {
-    Debug("hostdb", "Using strict round robin");
-    // Check that the host we selected is alive
-    for (int i = 0; i < good; i++) {
-      best_any = current++ % good;
-      if (info(best_any).is_alive(now, fail_window)) {
-        best_up = best_any;
-        break;
-      }
-    }
-  } else if (HostDBProcessor::hostdb_timed_round_robin > 0) {
-    Debug("hostdb", "Using timed round-robin for HTTP");
-    if ((now - timed_rr_ctime) > HostDBProcessor::hostdb_timed_round_robin) {
-      Debug("hostdb", "Timed interval expired.. rotating");
-      ++current;
-      timed_rr_ctime = now;
-    }
-    for (int i = 0; i < good; i++) {
-      best_any = (current + i) % good;
-      if (info(best_any).is_alive(now, fail_window)) {
-        best_up = best_any;
-        break;
-      }
-    }
-    Debug("hostdb", "Using %d for best_up", best_up);
-  } else {
-    Debug("hostdb", "Using default round robin");
-    unsigned int best_hash_any = 0;
-    unsigned int best_hash_up  = 0;
-    for (int i = 0; i < good; i++) {
-      sockaddr const *ip = info(i).ip();
-      unsigned int h     = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
-      if (best_hash_any <= h) {
-        best_any      = i;
-        best_hash_any = h;
-      }
-      if (info(i).is_alive(now, fail_window)) {
-        if (best_hash_up <= h) {
-          best_up      = i;
-          best_hash_up = h;
-        }
-      }
-    }
-  }
-
-  if (best_up != -1) {
-    ink_assert(best_up >= 0 && best_up < good);
-    return &info(best_up);
-  } else {
-    ink_assert(best_any >= 0 && best_any < good);
-    return &info(best_any);
-  }
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ink_time_t now, int32_t fail_window)
+HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, std::chrono::system_clock::time_point now,
+                                  std::chrono::seconds fail_window)
 {
   bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
               (unsigned int)good > hostdb_round_robin_max_count);

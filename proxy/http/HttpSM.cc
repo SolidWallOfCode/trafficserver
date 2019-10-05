@@ -1818,7 +1818,7 @@ HttpSM::state_http_server_open(int event, void *data)
     }
 
     attach_server_session(session);
-    if (t_state.current.request_to == HttpTransact::PARENT_PROXY) {
+    if (t_state.dns_info.looking_up == ResolveInfo::PARENT_PROXY) {
       session->to_parent_proxy = true;
       HTTP_INCREMENT_DYN_STAT(http_current_parent_proxy_connections_stat);
       HTTP_INCREMENT_DYN_STAT(http_total_parent_proxy_connections_stat);
@@ -2160,7 +2160,7 @@ void
 HttpSM::process_srv_info(HostDBInfo *r)
 {
   SMDebug("dns_srv", "beginning process_srv_info");
-  t_state.hostdb_entry = Ptr<HostDBInfo>(r);
+  //  t_state.hostdb_entry = Ptr<HostDBInfo>(r);
 
   /* we didn't get any SRV records, continue w normal lookup */
   if (!r || !r->is_srv || !r->round_robin) {
@@ -2172,8 +2172,8 @@ HttpSM::process_srv_info(HostDBInfo *r)
     HostDBRoundRobin *rr = r->rr();
     HostDBInfo *srv      = nullptr;
     if (rr) {
-      srv = rr->select_best_srv(t_state.dns_info.srv_hostname, &mutex->thread_holding->generator, ink_local_time(),
-                                static_cast<int>(t_state.txn_conf->down_server_timeout));
+      srv = rr->select_best_srv(t_state.dns_info.srv_hostname, &mutex->thread_holding->generator, std::chrono::system_clock::now(),
+                                t_state.txn_conf->down_server_timeout);
     }
     if (!srv) {
       t_state.dns_info.srv_lookup_success = false;
@@ -2196,32 +2196,25 @@ void
 HttpSM::process_hostdb_info(HostDBInfo *r)
 {
   // Increment the refcount to our item, since we are pointing at it
-  t_state.hostdb_entry = Ptr<HostDBInfo>(r);
+  //  t_state.hostdb_entry = Ptr<HostDBInfo>(r);
 
-  sockaddr const *client_addr = nullptr;
-  bool use_client_addr        = t_state.http_config_param->use_client_target_addr == 1 && t_state.client_info.is_transparent &&
-                         t_state.dns_info.os_addr_style == HttpTransact::DNSLookupInfo::OS_Addr::OS_ADDR_TRY_DEFAULT;
+  bool use_client_addr = t_state.http_config_param->use_client_target_addr == 1 && t_state.client_info.is_transparent &&
+                         t_state.dns_info.os_addr_style == ResolveInfo::OS_Addr::TRY_DEFAULT;
+  t_state.dns_info.client_target_addr = nullptr;
   if (use_client_addr) {
     NetVConnection *vc = ua_txn ? ua_txn->get_netvc() : nullptr;
     if (vc) {
-      client_addr = vc->get_local_addr();
-      // Regardless of whether the client address matches the DNS record or not,
-      // we want to use that address.  Therefore, we copy over the client address
-      // info and skip the assignment from the DNS cache
-      ats_ip_copy(t_state.host_db_info.ip(), client_addr);
-      t_state.dns_info.os_addr_style  = HttpTransact::DNSLookupInfo::OS_Addr::OS_ADDR_TRY_CLIENT;
-      t_state.dns_info.lookup_success = true;
-      // Leave ret unassigned, so we don't overwrite the host_db_info
-    } else {
-      use_client_addr = false;
+      t_state.dns_info.client_target_addr = vc->get_local_addr();
+      t_state.dns_info.os_addr_style      = ResolveInfo::OS_Addr::TRY_CLIENT;
     }
   }
 
   if (r && !r->is_failed()) {
-    ink_time_t now                    = ink_local_time();
-    HostDBInfo *ret                   = nullptr;
-    t_state.dns_info.lookup_success   = true;
-    t_state.dns_info.lookup_validated = true;
+    auto now                            = std::chrono::system_clock::now();
+    t_state.dns_info.lookup_success     = true;
+    t_state.dns_info.lookup_validated   = true;
+    t_state.dns_info.client_remote_addr = &t_state.client_info.src_addr.sa;
+    HostDBInfo *ret                     = r->select_best_http(&t_state.dns_info, now);
 
     HostDBRoundRobin *rr = r->round_robin ? r->rr() : nullptr;
     if (rr) {
@@ -2233,17 +2226,17 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
         // Since the time elapsed between current time and client_request_time
         // may be very large, we cannot use client_request_time to approximate
         // current time when calling select_best_http().
-        ret = rr->select_best_http(&t_state.client_info.src_addr.sa, now, static_cast<int>(t_state.txn_conf->down_server_timeout));
+        ret = rr->select_best_http(&t_state.client_info.src_addr.sa, now, t_state.txn_conf->down_server_timeout);
         // set the srv target`s last_failure
         if (t_state.dns_info.srv_lookup_success) {
-          uint32_t last_failure = 0xFFFFFFFF;
+          uint64_t last_failure = std::numeric_limits<uint64_t>::max();
           for (int i = 0; i < rr->rrcount && last_failure != 0; ++i) {
             if (last_failure > rr->info(i).app.http_data.last_failure) {
               last_failure = rr->info(i).app.http_data.last_failure;
             }
           }
 
-          if (last_failure != 0 && static_cast<uint32_t>(now - t_state.txn_conf->down_server_timeout) < last_failure) {
+          if (last_failure != 0 && now < ts_clock_time(ts_seconds(last_failure) + t_state.txn_conf->down_server_timeout)) {
             HostDBApplicationInfo app;
             app.allotment.application1 = 0;
             app.allotment.application2 = 0;
@@ -2394,7 +2387,7 @@ HttpSM::state_mark_os_down(int event, void *data)
     }
 
     if (mark_down) {
-      mark_host_failure(mark_down, t_state.request_sent_time);
+      mark_host_failure(mark_down, ts_clock::from_time_t(t_state.request_sent_time));
     }
   }
   // We either found our entry or we did not.  Either way find
@@ -4257,7 +4250,7 @@ HttpSM::do_hostdb_update_if_necessary()
   // Check to see if we need to report or clear a connection failure
   if (t_state.current.server->had_connect_fail()) {
     issue_update |= 1;
-    mark_host_failure(&t_state.host_db_info, t_state.client_request_time);
+    mark_host_failure(&t_state.host_db_info, ts_clock::from_time_t(t_state.client_request_time));
   } else {
     if (t_state.host_db_info.app.http_data.last_failure != 0) {
       t_state.host_db_info.app.http_data.last_failure = 0;
@@ -5327,7 +5320,7 @@ HttpSM::do_transform_open()
 }
 
 void
-HttpSM::mark_host_failure(HostDBInfo *info, time_t time_down)
+HttpSM::mark_host_failure(HostDBInfo *info, ts_clock_time time_down)
 {
   char addrbuf[INET6_ADDRPORTSTRLEN];
 
@@ -5347,10 +5340,10 @@ HttpSM::mark_host_failure(HostDBInfo *info, time_t time_down)
     }
   }
 
-  info->app.http_data.last_failure = time_down;
+  info->app.http_data.last_failure = ts_clock::to_time_t(time_down);
 
 #ifdef DEBUG
-  ink_assert(ink_local_time() + t_state.txn_conf->down_server_timeout > time_down);
+  ink_assert(std::chrono::system_clock::now() + t_state.txn_conf->down_server_timeout > time_down);
 #endif
 
   SMDebug("http", "[%" PRId64 "] hostdb update marking IP: %s as down", sm_id,
@@ -7386,13 +7379,12 @@ HttpSM::set_next_state()
       SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for API supplied target %s.",
               ats_ip_ntop(&t_state.server_info.dst_addr, ipb, sizeof(ipb)));
       // this seems wasteful as we will just copy it right back
-      ats_ip_copy(t_state.host_db_info.ip(), &t_state.server_info.dst_addr);
+      ats_ip_copy(t_state.dns_info.addr, &t_state.server_info.dst_addr);
       t_state.dns_info.lookup_success = true;
       call_transact_and_set_next_state(nullptr);
       break;
-    } else if (0 == ats_ip_pton(t_state.dns_info.lookup_name, t_state.host_db_info.ip()) &&
-               ats_is_ip_loopback(t_state.host_db_info.ip())) {
-      // If it's 127.0.0.1 or ::1 don't bother with hostdb
+    } else if (0 == ats_ip_pton(t_state.dns_info.lookup_name, t_state.dns_info.addr) && ats_is_ip_loopback(t_state.dns_info.addr)) {
+      // If it's 127.0.0.0/8 or ::1 don't bother with hostdb
       SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for %s because it's loopback",
               t_state.dns_info.lookup_name);
       t_state.dns_info.lookup_success = true;
@@ -7402,18 +7394,19 @@ HttpSM::set_next_state()
                t_state.parent_result.result != PARENT_SPECIFIED && t_state.client_info.is_transparent &&
                t_state.dns_info.os_addr_style == HttpTransact::DNSLookupInfo::OS_Addr::OS_ADDR_TRY_DEFAULT &&
                ats_is_ip(addr = ua_txn->get_netvc()->get_local_addr())) {
-      /* If the connection is client side transparent and the URL
-       * was not remapped/directed to parent proxy, we can use the
-       * client destination IP address instead of doing a DNS
-       * lookup. This is controlled by the 'use_client_target_addr'
-       * configuration parameter.
+      /* If the connection is client side transparent and the URL was not remapped/directed to
+       * parent proxy, we can use the client destination IP address instead of doing a DNS lookup.
+       * This is controlled by the 'use_client_target_addr' configuration parameter.
        */
       if (is_debug_tag_set("dns")) {
         ip_text_buffer ipb;
         SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for client supplied target %s.",
                 ats_ip_ntop(addr, ipb, sizeof(ipb)));
       }
-      ats_ip_copy(t_state.host_db_info.ip(), addr);
+      ats_ip_copy(t_state.dns_info.addr, addr);
+      t_state.dns_info.lookup_success = true;
+      t_state.dns_info.os_addr_style  = HttpTransact::DNSLookupInfo::OS_Addr::OS_ADDR_TRY_CLIENT;
+
       if (t_state.hdr_info.client_request.version_get() == HTTPVersion(0, 9)) {
         t_state.host_db_info.app.http_data.http_version = HostDBApplicationInfo::HTTP_VERSION_09;
       } else if (t_state.hdr_info.client_request.version_get() == HTTPVersion(1, 0)) {
@@ -7422,10 +7415,6 @@ HttpSM::set_next_state()
         t_state.host_db_info.app.http_data.http_version = HostDBApplicationInfo::HTTP_VERSION_11;
       }
 
-      t_state.dns_info.lookup_success = true;
-      // cache this result so we don't have to unreliably duplicate the
-      // logic later if the connect fails.
-      t_state.dns_info.os_addr_style = HttpTransact::DNSLookupInfo::OS_Addr::OS_ADDR_TRY_CLIENT;
       call_transact_and_set_next_state(nullptr);
       break;
     } else if (t_state.parent_result.result == PARENT_UNDEFINED && t_state.dns_info.lookup_success) {

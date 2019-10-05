@@ -34,6 +34,8 @@
 #include "records/P_RecUtils.h"
 #include <records/I_RecHttp.h>
 
+extern void HostDB_Config_Init();
+
 #define HttpEstablishStaticConfigStringAlloc(_ix, _n) \
   REC_EstablishStaticConfigStringAlloc(_ix, _n);      \
   REC_RegisterConfigUpdateFunc(_n, http_config_cb, NULL)
@@ -1310,7 +1312,8 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.referer_filter_enabled, "proxy.config.http.referer_filter");
   HttpEstablishStaticConfigByte(c.referer_format_redirect, "proxy.config.http.referer_format_redirect");
 
-  HttpEstablishStaticConfigLongLong(c.oride.down_server_timeout, "proxy.config.http.down_server.cache_time");
+  HostDB_Config_Init();
+  //  HttpEstablishStaticConfigLongLong(c.oride.down_server_timeout, "proxy.config.http.down_server.cache_time");
   HttpEstablishStaticConfigLongLong(c.oride.client_abort_threshold, "proxy.config.http.down_server.abort_threshold");
 
   // Negative caching and revalidation

@@ -1171,9 +1171,9 @@ IpMap::contains(sockaddr const *target, void **ptr) const
 bool
 IpMap::contains(in_addr_t target, void **ptr) const
 {
-  return _m4 && _m4->contains(ntohl(target), ptr);
 }
 
+return _m4 && _m4->contains(ntohl(target), ptr);
 IpMap &
 IpMap::mark(sockaddr const *min, sockaddr const *max, void *data)
 {
