@@ -183,34 +183,41 @@ Enable_Config_Var(std::string_view const &name, bool (*cb)(const char *, RecData
                   &ctx);
 }
 
-// [amc] Not sure which is uglier, this switch or having a micro-function for each var.
-// Oh, how I long for when we can use C++eleventy lambdas without compiler problems!
-// I think for 5.0 when the BC stuff is yanked, we should probably revert this to independent callbacks.
-static int
-http_server_session_sharing_cb(const char *name, RecDataT dtype, RecData data, void *cookie)
+extern const MgmtConverter SessionSharingMatchConv;
+const MgmtConverter SessionSharingMatchConv{
+  [](void *data) -> MgmtInt { return static_cast<MgmtInt>(*static_cast<TSServerSessionSharingMatchType *>(data)); },
+  [](void *data, MgmtInt i) -> void {
+    // Problem - the InkAPITest requires being able to set an arbitrary value, so this can either
+    // correctly clamp or pass the regression tests. Currently it passes the tests.
+    //    *static_cast<decltype(TxnConfig::match) *>(data) = std::clamp(static_cast<decltype(TxnConfig::match)>(i), MATCH_IP,
+    //    MATCH_BOTH);
+    *static_cast<TSServerSessionSharingMatchType *>(data) = static_cast<TSServerSessionSharingMatchType>(i);
+  },
+  nullptr,
+  nullptr,
+  [](void *data) -> std::string_view {
+    auto t = *static_cast<MgmtByte *>(data);
+    return t < 0 || t > TS_SERVER_OUTBOUND_MATCH_BOTH ? "Invalid" : SessionSharingMatchStrings[t]._key;
+  },
+  [](void *data, std::string_view src) -> void {
+    MgmtByte &match = *static_cast<MgmtByte *>(data);
+    http_config_enum_search(src.data(), SessionSharingMatchStrings, match);
+  }};
+
+bool
+Server_Session_Sharing_CB(const char *name, RecDataT dtype, RecData data, void *cookie)
 {
-  bool valid_p        = true;
-  HttpConfigParams *c = static_cast<HttpConfigParams *>(cookie);
-
-  if (0 == strcasecmp("proxy.config.http.server_session_sharing.match", name)) {
-    MgmtByte &match = c->oride.server_session_sharing_match;
-    if (RECD_INT == dtype) {
-      match = static_cast<TSServerSessionSharingMatchType>(data.rec_int);
-    } else if (RECD_STRING == dtype && http_config_enum_search(data.rec_string, SessionSharingMatchStrings, match)) {
-      // empty
-    } else {
-      valid_p = false;
-    }
-  } else {
-    valid_p = false;
+  switch (dtype) {
+  case RECD_INT:
+    SessionSharingMatchConv.store_int(&HttpConfig::m_master.oride.server_session_sharing_match, data.rec_int);
+    return true;
+  case RECD_STRING:
+    SessionSharingMatchConv.store_string(&HttpConfig::m_master.oride.server_session_sharing_match, data.rec_string);
+    return true;
+  default:
+    break;
   }
-
-  // Signal an update if valid value arrived.
-  if (valid_p) {
-    http_config_cb(name, dtype, data, cookie);
-  }
-
-  return REC_ERR_OKAY;
+  return false;
 }
 
 static int
@@ -1056,10 +1063,8 @@ HttpConfig::startup()
   HttpEstablishStaticConfigByte(c.oride.request_buffer_enabled, "proxy.config.http.request_buffer_enabled");
   HttpEstablishStaticConfigByte(c.strict_uri_parsing, "proxy.config.http.strict_uri_parsing");
 
-  // [amc] This is a bit of a mess, need to figure out to make this cleaner.
-  RecRegisterConfigUpdateCb("proxy.config.http.server_session_sharing.match", &http_server_session_sharing_cb, &c);
-  http_config_enum_read("proxy.config.http.server_session_sharing.match", SessionSharingMatchStrings,
-                        c.oride.server_session_sharing_match);
+  Enable_Config_Var("proxy.config.http.server_session_sharing.match", Server_Session_Sharing_CB, nullptr);
+
   http_config_enum_read("proxy.config.http.server_session_sharing.pool", SessionSharingPoolStrings, c.server_session_sharing_pool);
 
   RecRegisterConfigUpdateCb("proxy.config.http.insert_forwarded", &http_insert_forwarded_cb, &c);

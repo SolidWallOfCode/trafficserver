@@ -398,6 +398,7 @@ static ClassAllocator<INKContInternal> INKContAllocator("INKContAllocator");
 static ClassAllocator<INKVConnInternal> INKVConnAllocator("INKVConnAllocator");
 static ClassAllocator<MIMEFieldSDKHandle> mHandleAllocator("MIMEFieldSDKHandle");
 
+extern const MgmtConverter SessionSharingMatchConv;
 ////////////////////////////////////////////////////////////////////
 //
 // API error logging
@@ -8259,7 +8260,8 @@ _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overr
     ret = _memberp_to_generic(&overridableHttpConfig->keep_alive_post_out, conv);
     break;
   case TS_CONFIG_HTTP_SERVER_SESSION_SHARING_MATCH:
-    ret = _memberp_to_generic(&overridableHttpConfig->server_session_sharing_match, conv);
+    ret  = &overridableHttpConfig->server_session_sharing_match;
+    conv = &SessionSharingMatchConv;
     break;
   case TS_CONFIG_NET_SOCK_RECV_BUFFER_SIZE_OUT:
     ret = _memberp_to_generic(&overridableHttpConfig->sock_recv_buffer_size_out, conv);
