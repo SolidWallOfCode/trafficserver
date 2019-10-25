@@ -32,7 +32,7 @@
 #define PLUGIN_NAME "remap_stats"
 #define DEBUG_TAG PLUGIN_NAME
 
-#define MAX_STAT_LENGTH (1 << 8)
+static constexpr size_t MAX_STAT_LENGTH = 1 << 8;
 
 struct config_t {
   bool post_remap_host;
@@ -80,40 +80,28 @@ stat_add(const char *name, TSMgmtInt amount, TSStatPersistence persist_type, TSM
   }
 }
 
-static char *
+char *
 get_effective_host(TSHttpTxn txn)
 {
-  char *effective_url, *tmp;
-  const char *host;
-  int len;
-  TSMBuffer buf;
-  TSMLoc url_loc;
-
-  buf = TSMBufferCreate();
-  if (TS_SUCCESS != TSUrlCreate(buf, &url_loc)) {
-    TSDebug(DEBUG_TAG, "unable to create url");
-    TSMBufferDestroy(buf);
-    return NULL;
+  TSMBuffer creq_buf;
+  TSMLoc creq_loc;
+  if (TS_SUCCESS == TSHttpTxnClientReqGet(txn, &creq_buf, &creq_loc)) {
+    int length;
+    auto ptr = TSHttpHdrHostGet(creq_buf, creq_loc, &length);
+    return TSstrndup(ptr, length);
   }
-  tmp = effective_url = TSHttpTxnEffectiveUrlStringGet(txn, &len);
-  TSUrlParse(buf, url_loc, (const char **)(&tmp), (const char *)(effective_url + len));
-  TSfree(effective_url);
-  host = TSUrlHostGet(buf, url_loc, &len);
-  tmp  = TSstrndup(host, len);
-  TSHandleMLocRelease(buf, TS_NULL_MLOC, url_loc);
-  TSMBufferDestroy(buf);
-  return tmp;
+  return nullptr;
 }
 
 static int
 handle_read_req_hdr(TSCont cont, TSEvent event ATS_UNUSED, void *edata)
 {
-  TSHttpTxn txn = (TSHttpTxn)edata;
+  TSHttpTxn txn = static_cast<TSHttpTxn>(edata);
   config_t *config;
   void *txnd;
 
   config = static_cast<config_t *>(TSContDataGet(cont));
-  txnd   = (void *)get_effective_host(txn); // low bit left 0 because we do not know that remap succeeded yet
+  txnd   = get_effective_host(txn); // low bit left 0 because we do not know that remap succeeded yet
   TSHttpTxnArgSet(txn, config->txn_slot, txnd);
 
   TSHttpTxnReenable(txn, TS_EVENT_HTTP_CONTINUE);
@@ -143,7 +131,7 @@ handle_post_remap(TSCont cont, TSEvent event ATS_UNUSED, void *edata)
 }
 
 static void
-create_stat_name(ts::LocalBufferWriter<MAX_STAT_LENGTH> &stat_name, std::string_view h, std::string_view b)
+create_stat_name(ts::FixedBufferWriter &stat_name, std::string_view h, std::string_view b)
 {
   stat_name.reset().reduce(1);
   stat_name.print("plugin.{}.{}.{}", PLUGIN_NAME, h, b);
