@@ -477,6 +477,7 @@ Action *iterate(Continuation *cont);
 /** Information for doing host resolution.
  *
  * This is effectively a state object for an upstream resolution / connection.
+ * A primitive version of the IP address generator concept.
  *
  */
 struct ResolveInfo {
@@ -491,14 +492,11 @@ struct ResolveInfo {
 
   /** Origin server address source selection.
 
-      If config says to use CTA (client target addr) state is
-      OS_ADDR_TRY_CLIENT, otherwise it remains the default. If the
-      connect fails then we switch to a USE. We go to USE_HOSTDB if
-      (1) the HostDB lookup is successful and (2) some address other
-      than the CTA is available to try. Otherwise we keep retrying
-      on the CTA (USE_CLIENT) up to the max retry value.  In essence
-      we try to treat the CTA as if it were another RR value in the
-      HostDB record.
+      If config says to use CTA (client target addr) state is OS_ADDR_TRY_CLIENT, otherwise it
+      remains the default. If the connect fails then we switch to a USE. We go to USE_HOSTDB if (1)
+      the HostDB lookup is successful and (2) some address other than the CTA is available to try.
+      Otherwise we keep retrying on the CTA (USE_CLIENT) up to the max retry value.  In essence we
+      try to treat the CTA as if it were another RR value in the HostDB record.
    */
   enum class OS_Addr {
     TRY_DEFAULT, ///< Initial state, use what config says.
@@ -517,17 +515,18 @@ struct ResolveInfo {
   int attempts = 0;            ///< Number of connection attempts.
   ts_seconds fail_window{300}; ///< Down server blackout time.
 
-  OS_Addr os_addr_style       = OS_Addr::TRY_DEFAULT;
-  HostResStyle host_res_style = HOST_RES_IPV4;
-
-  char *lookup_name               = nullptr;
-  char srv_hostname[MAXDNAME]     = {0};
-  UpstreamResolveStyle looking_up = UNDEFINED_LOOKUP;
-  bool srv_lookup_success         = false;
-  in_port_t srv_port              = 0;
-  HostDBApplicationInfo srv_app;
+  char *lookup_name                  = nullptr;
+  char srv_hostname[MAXDNAME]        = {0};
   const sockaddr *client_remote_addr = nullptr; ///< Client IP address for round robin selection.
   const sockaddr *client_target_addr = nullptr; ///< Set if trying a transparent connection.
+  HostDBApplicationInfo srv_app;
+  in_port_t srv_port = 0;
+
+  OS_Addr os_addr_style           = OS_Addr::TRY_DEFAULT;
+  HostResStyle host_res_style     = HOST_RES_IPV4;
+  UpstreamResolveStyle looking_up = UNDEFINED_LOOKUP;
+
+  bool srv_lookup_success = false;
 
   /// Flag for whether @a addr is valid.
   bool lookup_success = false;

@@ -2195,8 +2195,7 @@ HttpSM::process_srv_info(HostDBInfo *r)
 void
 HttpSM::process_hostdb_info(HostDBInfo *r)
 {
-  // Increment the refcount to our item, since we are pointing at it
-  //  t_state.hostdb_entry = Ptr<HostDBInfo>(r);
+  t_state.dns_info.entry = r; // protect entry.
 
   bool use_client_addr = t_state.http_config_param->use_client_target_addr == 1 && t_state.client_info.is_transparent &&
                          t_state.dns_info.os_addr_style == ResolveInfo::OS_Addr::TRY_DEFAULT;
