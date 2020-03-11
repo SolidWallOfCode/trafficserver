@@ -618,10 +618,11 @@ typedef enum {
 /// Values for per server outbound connection tracking group definition.
 /// See proxy.config.http.per_server.match
 typedef enum {
-  TS_SERVER_OUTBOUND_MATCH_IP,
-  TS_SERVER_OUTBOUND_MATCH_PORT,
-  TS_SERVER_OUTBOUND_MATCH_HOST,
-  TS_SERVER_OUTBOUND_MATCH_BOTH
+  TS_SERVER_OUTBOUND_MATCH_IP,      ///< Match by IP address & port.
+  TS_SERVER_OUTBOUND_MATCH_PORT,    ///< Match by remote outbound port.
+  TS_SERVER_OUTBOUND_MATCH_HOST,    ///< Match by host name.
+  TS_SERVER_OUTBOUND_MATCH_BOTH,    ///< Match by host name and IP address & port.
+  TS_SERVER_OUTBOUND_MATCH_HOST_ANY ///< Match by host name, overriding other match settings.
 } TSOutboundConnectionMatchType;
 #endif
 

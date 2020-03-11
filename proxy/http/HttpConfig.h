@@ -43,6 +43,7 @@
 #endif
 
 #include "tscore/ink_platform.h"
+#include "ts/apidefs.h"
 #include "tscore/ink_inet.h"
 #include "tscore/IpMap.h"
 #include "tscore/Regex.h"

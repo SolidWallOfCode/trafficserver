@@ -31,6 +31,7 @@
 #include <mutex>
 #include "tscore/ink_platform.h"
 #include "tscore/ink_config.h"
+#include "ts/apidefs.h"
 #include "tscore/ink_mutex.h"
 #include "tscore/ink_inet.h"
 #include "tscore/IntrusiveHashMap.h"
@@ -59,10 +60,11 @@ public:
 
   /// Definition of an upstream server group equivalence class.
   enum MatchType {
-    MATCH_IP   = TS_SERVER_OUTBOUND_MATCH_IP,   ///< Match by IP address.
-    MATCH_PORT = TS_SERVER_OUTBOUND_MATCH_PORT, ///< Match by IP address and port.
-    MATCH_HOST = TS_SERVER_OUTBOUND_MATCH_HOST, ///< Match by hostname (FQDN).
-    MATCH_BOTH = TS_SERVER_OUTBOUND_MATCH_BOTH, ///< Hostname, IP Address and port.
+    MATCH_IP       = TS_SERVER_OUTBOUND_MATCH_IP,       ///< Match by IP address.
+    MATCH_PORT     = TS_SERVER_OUTBOUND_MATCH_PORT,     ///< Match by IP address and port.
+    MATCH_HOST     = TS_SERVER_OUTBOUND_MATCH_HOST,     ///< Match by hostname (FQDN).
+    MATCH_BOTH     = TS_SERVER_OUTBOUND_MATCH_BOTH,     ///< Hostname, IP Address and port.
+    MATCH_HOST_ANY = TS_SERVER_OUTBOUND_MATCH_HOST_ANY, ///< Match by hostname, ignoring address.
   };
 
   /// String equivalents for @c MatchType.
@@ -91,6 +93,7 @@ public:
   static constexpr std::string_view CONFIG_VAR_QUEUE_SIZE{"proxy.config.http.per_server.connection.queue_size"_sv};
   static constexpr std::string_view CONFIG_VAR_QUEUE_DELAY{"proxy.config.http.per_server.connection.queue_delay"_sv};
   static constexpr std::string_view CONFIG_VAR_ALERT_DELAY{"proxy.config.http.per_server.connection.alert_delay"_sv};
+  static constexpr std::string_view CONFIG_VAR_HOST_MATCH_ANY{"proxy.config.http.per_server.connection.hosts"_sv};
 
   /// A record for the outbound connection count.
   /// These are stored per outbound session equivalence class, as determined by the session matching.
@@ -212,14 +215,17 @@ public:
    * although data inside the groups is volatile.
    */
   static void get(std::vector<Group const *> &groups);
+
   /** Write the connection tracking data to JSON.
    * @return string containing a JSON encoding of the table.
    */
   static std::string to_json_string();
+
   /** Write the groups to @a f.
    * @param f Output file.
    */
   static void dump(FILE *f);
+
   /** Do global initialization.
    *
    * This sets up the global configuration and any configuration update callbacks needed. It is presumed
@@ -272,8 +278,63 @@ protected:
     static bool equal(key_type lhs, key_type rhs);
   };
 
+  /// Provide for fast lookup of domains and domain prefixes.
+  class DomainTrie
+  {
+    /// Data store in for each domain/prefix.
+    struct Node {
+      using Children = std::unordered_map<std::string_view, Node *, std::hash<std::string>>;
+      Children children;           ///< Next nodes based on FQDN token.
+      bool match_exact_p  = false; ///< This node matches exactly.
+      bool match_prefix_p = false; ///< This node matches as a prefix.
+      unsigned limit      = 0;     ///< Connection limit, 0 => disabled.
+    };
+
+  public:
+    /** Find a node based on a @a fqdn.
+     *
+     * @param fqdn Search target.
+     * @return The corresponding @c Node or @c nullptr if not found.
+     */
+    Node *
+    find(ts::TextView fqdn)
+    {
+      Node *node = &_root;
+      while (!fqdn.empty()) {
+        auto token = fqdn.take_suffix_at('.');
+        auto spot  = node->children.find(token);
+        if (spot == node->children.end()) {
+          return node->match_prefix_p ? node : nullptr;
+        }
+      }
+      return node->match_exact_p ? node : nullptr;
+    }
+
+    Node *
+    insert(ts::TextView fqdn)
+    {
+      Node *node = &_root;
+      while (fqdn) {
+        auto token = fqdn.split_prefix_at('.');
+        auto spot  = node->children.find(token);
+        if (spot == node->children.end()) {
+          auto nn = new Node;
+          node->children.insert({token, nn});
+          node = nn;
+        } else {
+          node = spot->second;
+        }
+      }
+      return node;
+    }
+
+  protected:
+    Node _root;
+  };
+
   /// Internal implementation class instance.
   struct Imp {
+    DomainTrie _domains;              ///< Domains that are match any.
     IntrusiveHashMap<Linkage> _table; ///< Hash table of upstream groups.
     std::mutex _mutex;                ///< Lock for insert & find.
   };

@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <deque>
+#include "ts/apidefs.h"
 #include <records/P_RecDefs.h>
 #include <HttpConfig.h>
 #include "HttpConnectionCount.h"
@@ -174,12 +175,29 @@ OutboundConnTrack::config_init(GlobalConfig *global, TxnConfig *txn)
   Enable_Config_Var(CONFIG_VAR_QUEUE_SIZE, &Config_Update_Conntrack_Queue_Size, global);
   Enable_Config_Var(CONFIG_VAR_QUEUE_DELAY, &Config_Update_Conntrack_Queue_Delay, global);
   Enable_Config_Var(CONFIG_VAR_ALERT_DELAY, &Config_Update_Conntrack_Alert_Delay, global);
+
+  // Set up "match any" host values.
+  char buffer[2048];
+  if (REC_ERR_OKAY == RecGetRecordString(CONFIG_VAR_HOST_MATCH_ANY.data(), buffer, sizeof(buffer))) {
+    ts::TextView content{buffer, strlen(buffer)};
+    while (content) {
+      auto token = content.take_prefix_at(',').trim_if(&isspace);
+      auto limit = token.split_suffix_at('=');
+      if (limit) {
+      }
+    }
+  }
 }
 
 OutboundConnTrack::TxnState
 OutboundConnTrack::obtain(TxnConfig const &txn_cnf, std::string_view fqdn, IpEndpoint const &addr)
 {
   TxnState zret;
+
+  // Check if it's a host match any domain
+  if (auto node = _imp._domains.find(fqdn); node != nullptr) {
+  }
+
   CryptoHash hash;
   CryptoContext().hash_immediate(hash, fqdn.data(), fqdn.size());
   Group::Key key{addr, hash, txn_cnf.match};
@@ -207,12 +225,15 @@ OutboundConnTrack::Group::equal(const Key &lhs, const Key &rhs)
       zret = ats_ip_addr_port_eq(&lhs._addr.sa, &rhs._addr.sa);
       break;
     case MATCH_HOST:
+    case MATCH_HOST_ANY:
       zret = lhs._hash == rhs._hash;
       break;
     case MATCH_BOTH:
       zret = (lhs._hash == rhs._hash && ats_ip_addr_port_eq(&lhs._addr.sa, &rhs._addr.sa));
       break;
     }
+  } else if ((lhs._match_type == MATCH_HOST_ANY || rhs._match_type == MATCH_HOST_ANY) && lhs._hash == rhs._hash) {
+    zret = true;
   }
 
   if (is_debug_tag_set(DEBUG_TAG)) {
@@ -433,10 +454,13 @@ bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group::Key con
     w.print("{:s} {}", key._match_type, key._hash);
     break;
   case OutboundConnTrack::MATCH_PORT:
-    w.print("{:s} {}", key._match_type, key._addr);
+    w.print("{:s} {::p}", key._match_type, key._addr);
     break;
   case OutboundConnTrack::MATCH_IP:
-    w.print("{:s} {::a}", key._match_type, key._addr);
+    w.print("{:s} {::ap}", key._match_type, key._addr);
+    break;
+  case OutboundConnTrack::MATCH_HOST_ANY:
+    w.print("{:s} {}", key._match_type, key._hash);
     break;
   }
   return w;
@@ -451,6 +475,9 @@ bwformat(BufferWriter &w, BWFSpec const &spec, OutboundConnTrack::Group const &g
     break;
   case OutboundConnTrack::MATCH_HOST:
     w.print("{:s} {}", g._match_type, g._fqdn);
+    break;
+  case OutboundConnTrack::MATCH_HOST_ANY:
+    w.print("{:s} {},*", g._match_type, g._fqdn);
     break;
   case OutboundConnTrack::MATCH_PORT:
     w.print("{:s} {}", g._match_type, g._addr);
