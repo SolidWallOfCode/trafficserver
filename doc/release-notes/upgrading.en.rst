@@ -20,7 +20,7 @@
 .. _upgrading:
 
 Upgrading to ATS v9.x
-======================
+=====================
 
 .. toctree::
    :maxdepth: 1
@@ -31,7 +31,11 @@ Remapping
 One of the biggest changes in ATS v9.0.0 is that URL rewrites, as specified in a :file:`remap.config` rule, now always happens
 **before** all plugins are executed. This can have significant impact on behavior, since plugins might now see a different URL than
 they did in prior versions. In particular, plugins modifying the cache key could have serious problems (see the section below for
-details).
+details). This can also require changes in the configuration for the :ref:`header_rewrite <admin-plugins-header-rewrite>` plugin.
+
+Relevant pull requests:
+
+*  `PR 4964 <https://github.com/apache/trafficserver/pull/4964>`__
 
 YAML
 ----
@@ -119,6 +123,42 @@ Renamed or modified APIs
 
 * ``TSHttpTxnServerPush()`` now returns a :c:type:`TSReturnCode`
 
+The "transaction arguments" support has been generalized and the previous plugin API calls deprecated. The new API is
+
+*  :c:func:`TSUserArgGet`
+*  :c:func:`TSUserArgSet`
+*  :c:func:`TSUserArgIndexReserve`
+*  :c:func:`TSuserArgIndexLookup`
+*  :c:func:`TSUserArgIndexNameLookup`
+*  :c:type:`TSUserArgType`
+
+These replace
+
+*  :code:`TSHttpTxnArgGet`
+*  :code:`TSHttpTxnArgSet`
+*  :code:`TSHttpTxnArgIndexReserve`
+*  :code:`TSHttpTxnArgIndexLookup`
+*  :code:`TSHttpTxnArgIndexNameLookup`
+*  :code:`TSHttpSsnArgGet`
+*  :code:`TSHttpSsnArgSet`
+*  :code:`TSHttpSsnArgIndexReserve`
+*  :code:`TSHttpSsnArgIndexLookup`
+*  :code:`TSHttpSsnArgIndexNameLookup`
+*  :code:`TSVConnArgGet`
+*  :code:`TSVConnArgSet`
+*  :code:`TSVConnArgIndexReserve`
+*  :code:`TSVConnArgIndexLookup`
+*  :code:`TSVConnArgIndexNameLookup`
+
+Upgrading the code is straight forward, the new API is almost a drop in replacement for the old one. The various specialized calls are replaced by the parallel new API. For :c:func:`TSUserArgGet` and :c:func:`TSUserArgSet` this is all that needs to be done. For the other functions, an additional argument needs to be added as the first argument. This argumnt will be one of the enumerations of :c:type:`TSUserArgType`. The transaction based calls use :c:macro:`TS_USER_ARGS_TXN` and the session based calls use :c:macro:`TS_USER_ARGS_SSN`. For virtual connections use :c:macro:`TS_USER_ARGS_VCONN`.
+
+The new feature available are "user args", which are proxy level arguents. These can be used to pass data between plugins that is not dependent on a session or transaction.
+
+The argument indices are independent per type, therefore reserving an index for one type does not reserve it for any other type. This had already been done in ATS 8 for transaction and session arguments. This change generalizes that for all argument types, while also adding the "user" arguments.
+
+Relevant pull requests:
+
+*  `PR 6468 <https://github.com/apache/trafficserver/pull/6468>`__
 
 Cache
 -----
@@ -146,8 +186,29 @@ header_rewrite
 * The `%{PATH}` directive is now removed, and instead you want to use `%{CLIENT-URL:PATH}`. This was done to unify the behavior of
   these operators, rather than having this one-off directive.
 
+Dynamic remap plugin reloading
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Plugins used in :file:`remap.config` can be reloaded. This means the actual DSO and code, not the configuration. Due to limitations in the underlying support for loading DSOs, it is not possible to truly reload a DSO that has already been loaded into a process. For this reason the reloading logic makes a copy of the DSO and loads that. If the DSO needs to be reloaded, another copy is made andthat loaded.
+
+This has implications primarily for *mixed mode* plugins, that is plugins that are loaded as both remap plugins and global plugins. The key effect is that static variables are **not** shared between the global code and the remap code because from the point of view of the operating system these are different DSOs. This can have some very subtle and hard to diagnose effects. Even if this could be overcome, after a reload there would be two DSOs sharing slightly different code while assuming it was identical. This is unlikely to end well.
+
+This behavior can be globally disabled by setting :ts:cv:`proxy.config.remap.dynamic_reload_mode` to 0.
+
+Going forward, if this feature is not disabled, mixed mode plugins will likely need to be split into two DSOs, one for the global "side" and another for the remap side. The remap DSO would then depend on the global DSO, which would make the static data in the global DSO reliably available to the remap DSO.
+
+Relevant pull requests:
+
+*  `PR 5282 <https://github.com/apache/trafficserver/pull/5282>`__
+*  `PR 5970 <https://github.com/apache/trafficserver/pull/5970>`__
+*  `PR 6071 <https://github.com/apache/trafficserver/pull/6071>`__
+*  `PR 6421 <https://github.com/apache/trafficserver/pull/6421>`__
+
 Platform specific
 -----------------
 
 Solaris is no longer a supported platform, but the code is still there. However, it's unlikely to work, and unless someone takes on
 ownership of this Platform, it will be removed from the source in ATS v10.0.0. For more details, see issue #5553.
+
+The cache in this releases of ATS is compatible with previous versions of ATS. You would not expect
+to lose your cache, or have to reinitialize the cache when upgrading.
