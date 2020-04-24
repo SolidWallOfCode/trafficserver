@@ -726,10 +726,10 @@ public:
     bool is_websocket        = false;
     bool did_upgrade_succeed = false;
 
-    char *internal_msg_buffer                       = nullptr; // out
-    char *internal_msg_buffer_type                  = nullptr; // out
-    int64_t internal_msg_buffer_size                = 0;       // out
-    int64_t internal_msg_buffer_fast_allocator_size = -1;
+    /// Internal buffer to serve instead of upstream or cache.
+    MIOBuffer internal_msg_buffer{DEFAULT_SMALL_BUFFER_SIZE, "internal msg buffer"};
+    /// Content type for @a internal_msg_buffer
+    std::string internal_msg_buffer_type;
 
     int scheme               = -1;     // out
     int next_hop_scheme      = scheme; // out
@@ -854,13 +854,30 @@ public:
       memset((void *)&host_db_info, 0, sizeof(host_db_info));
     }
 
+    /** CLear the internal message buffer and set the default block size.
+     *
+     * @param idx Default block size in bytes.
+     *
+     * @note The default block size is limited by the largest IOBuffer block size -
+     * larger values are clipped to that size.
+     */
+    void
+    clear_internal_msg_buffer(size_t size = default_small_iobuffer_size)
+    {
+      internal_msg_buffer.clear();
+      // Gah. If the size is smaller than the smallest buffer, treat it as an index.
+      // Otherwise assume it's a size and get the index.
+      internal_msg_buffer.size_index = (size < MAX_BUFFER_SIZE_INDEX) ? size : buffer_size_to_index(size);
+      internal_msg_buffer_type.clear();
+    }
+
     void
     destroy()
     {
       m_magic = HTTP_TRANSACT_MAGIC_DEAD;
 
-      free_internal_msg_buffer();
-      ats_free(internal_msg_buffer_type);
+      internal_msg_buffer.clear();
+      internal_msg_buffer_type.clear();
 
       ParentConfig::release(parent_params);
       parent_params = nullptr;
@@ -898,20 +915,6 @@ public:
         txn_conf = reinterpret_cast<OverridableHttpConfigParams *>(_my_txn_conf);
         memcpy(_my_txn_conf, &http_config_param->oride, sizeof(_my_txn_conf));
       }
-    }
-
-    void
-    free_internal_msg_buffer()
-    {
-      if (internal_msg_buffer) {
-        if (internal_msg_buffer_fast_allocator_size >= 0) {
-          ioBufAllocator[internal_msg_buffer_fast_allocator_size].free_void(internal_msg_buffer);
-        } else {
-          ats_free(internal_msg_buffer);
-        }
-        internal_msg_buffer = nullptr;
-      }
-      internal_msg_buffer_size = 0;
     }
 
     NetVConnection::ProxyProtocol pp_info;

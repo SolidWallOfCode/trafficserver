@@ -28,6 +28,7 @@
 
 **************************************************************************/
 #include "tscore/ink_platform.h"
+#include "tscore/BufferWriterForward.h"
 
 #include "P_Net.h"
 
@@ -51,10 +52,17 @@ get_listen_backlog()
 //
 // Functions
 //
-char const *
+
+std::string_view
 NetVCOptions::toString(addr_bind_style s)
 {
   return ANY_ADDR == s ? "any" : INTF_ADDR == s ? "interface" : "foreign";
+}
+
+ts::BufferWriter &
+bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, NetVCOptions::addr_bind_style style)
+{
+  return bwformat(w, spec, NetVCOptions::toString(style));
 }
 
 Connection::Connection() : fd(NO_FD)

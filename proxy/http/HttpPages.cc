@@ -419,12 +419,13 @@ HttpPagesHandler::handle_callback(int /* event ATS_UNUSED */, void * /* edata AT
 
   if (!action.cancelled) {
     if (response) {
-      StatPageData data;
+      MIOBuffer mb;
+      std::string ct;
+      StatPageData data{&mb, ct};
 
-      data.data   = response;
-      data.type   = ats_strdup("text/html");
-      data.length = response_length;
-      response    = nullptr;
+      mb.write(response, response_length);
+      data.type.assign("text/html");
+      response = nullptr;
 
       action.continuation->handleEvent(STAT_PAGE_SUCCESS, &data);
     } else {

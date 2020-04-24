@@ -5861,15 +5861,16 @@ TSHttpTxnErrorBodySet(TSHttpTxn txnp, char *buf, size_t buflength, char *mimetyp
   HttpSM *sm             = (HttpSM *)txnp;
   HttpTransact::State *s = &(sm->t_state);
 
-  // Cleanup anything already set.
-  s->free_internal_msg_buffer();
-  ats_free(s->internal_msg_buffer_type);
+  s->clear_internal_msg_buffer(buflength);
+  if (buf != nullptr) {
+    s->internal_msg_buffer.write(buf, buflength);
+  }
 
-  s->internal_msg_buffer                     = buf;
-  s->internal_msg_buffer_size                = buf ? buflength : 0;
-  s->internal_msg_buffer_fast_allocator_size = -1;
-
-  s->internal_msg_buffer_type = mimetype;
+  if (mimetype != nullptr) {
+    s->internal_msg_buffer_type = mimetype;
+  } else {
+    s->internal_msg_buffer_type.clear();
+  }
 }
 
 void
@@ -5881,18 +5882,13 @@ TSHttpTxnServerRequestBodySet(TSHttpTxn txnp, char *buf, int64_t buflength)
   HttpTransact::State *s = &(sm->t_state);
 
   // Cleanup anything already set.
-  s->free_internal_msg_buffer();
+  s->api_server_request_body_set = false;
+  s->clear_internal_msg_buffer(buflength);
 
   if (buf) {
     s->api_server_request_body_set = true;
-    s->internal_msg_buffer         = buf;
-    s->internal_msg_buffer_size    = buflength;
-  } else {
-    s->api_server_request_body_set = false;
-    s->internal_msg_buffer         = nullptr;
-    s->internal_msg_buffer_size    = 0;
+    s->internal_msg_buffer.write(buf, buflength);
   }
-  s->internal_msg_buffer_fast_allocator_size = -1;
 }
 
 TSReturnCode

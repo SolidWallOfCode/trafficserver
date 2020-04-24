@@ -64,13 +64,10 @@
 typedef Action *(*StatPagesFunc)(Continuation *cont, HTTPHdr *header);
 
 struct StatPageData {
-  char *data = nullptr;
-  char *type = nullptr;
-  int length = 0;
+  MIOBuffer *mbuf;
+  std::string &type;
 
-  StatPageData() {}
-  StatPageData(char *adata) : data(adata) { length = strlen(adata); }
-  StatPageData(char *adata, int alength) : data(adata), length(alength) {}
+  StatPageData(MIOBuffer *b, std::string &t_string) : mbuf(b), type(t_string) {}
 };
 
 struct StatPagesManager {

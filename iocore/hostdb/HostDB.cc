@@ -28,6 +28,8 @@
 #include "Show.h"
 #include "tscore/Tokenizer.h"
 #include "tscore/ink_apidefs.h"
+#include "tscore/BufferWriter.h"
+#include "tscore/ink_inet.h"
 
 #include <utility>
 #include <vector>
@@ -1775,7 +1777,7 @@ HostDBInfo::rr()
 struct ShowHostDB;
 using ShowHostDBEventHandler = int (ShowHostDB::*)(int, Event *);
 struct ShowHostDB : public ShowCont {
-  char *name;
+  ts::TextView name;
   uint16_t port;
   IpEndpoint ip;
   bool force;
@@ -1785,20 +1787,20 @@ struct ShowHostDB : public ShowCont {
   int
   showMain(int event, Event *e)
   {
-    CHECK_SHOW(begin("HostDB"));
-    CHECK_SHOW(show("<a href=\"./showall\">Show all HostDB records<a/><hr>"));
-    CHECK_SHOW(show("<form method = GET action = \"./name\">\n"
-                    "Lookup by name (e.g. trafficserver.apache.org):<br>\n"
-                    "<input type=text name=name size=64 maxlength=256>\n"
-                    "</form>\n"
-                    "<form method = GET action = \"./ip\">\n"
-                    "Lookup by IP (e.g. 127.0.0.1):<br>\n"
-                    "<input type=text name=ip size=64 maxlength=256>\n"
-                    "</form>\n"
-                    "<form method = GET action = \"./nameforce\">\n"
-                    "Force DNS by name (e.g. trafficserver.apache.org):<br>\n"
-                    "<input type=text name=name size=64 maxlength=256>\n"
-                    "</form>\n"));
+    this->begin("HostDB");
+    mbw.write("<a href=\"./showall\">Show all HostDB records<a/><hr>");
+    mbw.write("<form method = GET action = \"./name\">\n"
+              "Lookup by name (e.g. trafficserver.apache.org):<br>\n"
+              "<input type=text name=name size=64 maxlength=256>\n"
+              "</form>\n"
+              "<form method = GET action = \"./ip\">\n"
+              "Lookup by IP (e.g. 127.0.0.1):<br>\n"
+              "<input type=text name=ip size=64 maxlength=256>\n"
+              "</form>\n"
+              "<form method = GET action = \"./nameforce\">\n"
+              "Force DNS by name (e.g. trafficserver.apache.org):<br>\n"
+              "<input type=text name=name size=64 maxlength=256>\n"
+              "</form>\n");
     return complete(event, e);
   }
 
@@ -1810,7 +1812,7 @@ struct ShowHostDB : public ShowCont {
       HostDBProcessor::Options opts;
       opts.port  = port;
       opts.flags = HostDBProcessor::HOSTDB_DO_NOT_FORCE_DNS;
-      hostDBProcessor.getbynameport_re(this, name, strlen(name), opts);
+      hostDBProcessor.getbynameport_re(this, name.data(), name.size(), opts);
     } else {
       hostDBProcessor.getbyaddr_re(this, &ip.sa);
     }
@@ -1821,10 +1823,10 @@ struct ShowHostDB : public ShowCont {
   showAll(int event, Event *e)
   {
     if (!output_json) {
-      CHECK_SHOW(begin("HostDB All Records"));
-      CHECK_SHOW(show("<hr>"));
+      this->begin("HostDB All Records");
+      mbw.write("<hr>");
     } else {
-      CHECK_SHOW(show("["));
+      mbw.write('[');
     }
     SET_HANDLER(&ShowHostDB::showAllEvent);
     hostDBProcessor.iterate(this);
@@ -1837,49 +1839,50 @@ struct ShowHostDB : public ShowCont {
     if (event == EVENT_INTERVAL) {
       HostDBInfo *r = reinterpret_cast<HostDBInfo *>(e);
       if (output_json && records_seen++ > 0) {
-        CHECK_SHOW(show(",")); // we need to separate records
+        mbw.write(','); // record separator
       }
       showOne(r, false, event, e);
       if (r->round_robin) {
         HostDBRoundRobin *rr_data = r->rr();
         if (rr_data) {
           if (!output_json) {
-            CHECK_SHOW(show("<table border=1>\n"));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", rr_data->rrcount));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", rr_data->good));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", rr_data->current));
-            CHECK_SHOW(show("</table>\n"));
+            mbw.write("<table border=1>\n")
+              .print("<tr><td>Total</td><td>{}</td></tr>\n", rr_data->rrcount)
+              .print("<tr><td>Good</td><td>{}</td></tr>\n", rr_data->good)
+              .print("<tr><td>Current</td><td>{}</td></tr>\n", rr_data->current)
+              .write("</table>\n");
           } else {
-            CHECK_SHOW(show(",\"%s\":\"%d\",", "rr_total", rr_data->rrcount));
-            CHECK_SHOW(show("\"%s\":\"%d\",", "rr_good", rr_data->good));
-            CHECK_SHOW(show("\"%s\":\"%d\",", "rr_current", rr_data->current));
-            CHECK_SHOW(show("\"rr_records\":["));
+            mbw.print(R"(, "rr_total":"{}",)", rr_data->rrcount)
+              .print(R"("rr_good":"{}",)", rr_data->good)
+              .print(R"("rr_current":"{}",)", rr_data->current)
+              .print(R"("rr_records":[)");
           }
 
           for (int i = 0; i < rr_data->rrcount; i++) {
             showOne(&rr_data->info(i), true, event, e, rr_data);
             if (output_json) {
-              CHECK_SHOW(show("}")); // we need to separate records
-              if (i < (rr_data->rrcount - 1))
-                CHECK_SHOW(show(","));
+              mbw.write('}');
+              if (i < (rr_data->rrcount - 1)) {
+                mbw.write(',');
+              }
             }
           }
 
           if (!output_json) {
-            CHECK_SHOW(show("<br />\n<br />\n"));
+            mbw.write("<br />\n<br />\n");
           } else {
-            CHECK_SHOW(show("]"));
+            mbw.write(']');
           }
         }
       }
 
       if (output_json) {
-        CHECK_SHOW(show("}"));
+        mbw.write('}');
       }
 
     } else if (event == EVENT_DONE) {
       if (output_json) {
-        CHECK_SHOW(show("]"));
+        mbw.write(']');
         return completeJson(event, e);
       } else {
         return complete(event, e);
@@ -1893,65 +1896,64 @@ struct ShowHostDB : public ShowCont {
   int
   showOne(HostDBInfo *r, bool rr, int event, Event *e, HostDBRoundRobin *hostdb_rr = nullptr)
   {
-    ip_text_buffer b;
     if (!output_json) {
-      CHECK_SHOW(show("<table border=1>\n"));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%s%s %s</td></tr>\n", "Type", r->round_robin ? "Round-Robin" : "",
-                      r->reverse_dns ? "Reverse DNS" : "", r->is_srv ? "SRV" : "DNS"));
+      mbw.print("<table border=1>\n");
+      mbw.print("<tr><td>Type</td><td>{}{} {}</td></tr>\n", r->round_robin ? "Round-Robin" : "",
+                r->reverse_dns ? " Reverse DNS" : "", r->is_srv ? "SRV" : "DNS");
 
       if (r->perm_hostname()) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Hostname", r->perm_hostname()));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Hostname", r->perm_hostname());
       } else if (rr && r->is_srv && hostdb_rr) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Hostname", r->srvname(hostdb_rr)));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Hostname", r->srvname(hostdb_rr));
       }
 
       // Let's display the hash.
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", r->app.allotment.application1));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", r->app.allotment.application2));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure));
+      mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "App1", r->app.allotment.application1);
+      mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "App2", r->app.allotment.application2);
+      mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "LastFailure", unsigned(r->app.http_data.last_failure));
       if (!rr) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No"));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No"));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "TTL", r->ip_time_remaining()));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No");
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No");
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "TTL", r->ip_time_remaining());
       }
 
       if (rr && r->is_srv) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Weight", r->data.srv.srv_weight));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Priority", r->data.srv.srv_priority));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Port", r->data.srv.srv_port));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%x</td></tr>\n", "Key", r->data.srv.key));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Weight", unsigned(r->data.srv.srv_weight));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Priority", unsigned(r->data.srv.srv_priority));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Port", unsigned(r->data.srv.srv_port));
+        mbw.print("<tr><td>%{}</td><td>{:x}</td></tr>\n", "Key", r->data.srv.key);
       } else if (!r->is_srv) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "IP", ats_ip_ntop(r->ip(), b, sizeof b)));
+        mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "IP", r->ip());
       }
 
-      CHECK_SHOW(show("</table>\n"));
+      mbw.print("</table>\n");
     } else {
-      CHECK_SHOW(show("{"));
-      CHECK_SHOW(show("\"%s\":\"%s%s%s\",", "type", (r->round_robin && !r->is_srv) ? "roundrobin" : "",
-                      r->reverse_dns ? "reversedns" : "", r->is_srv ? "srv" : "dns"));
+      mbw.print("{");
+      mbw.print(R"("{}":"{}{}{}",)", "type", (r->round_robin && !r->is_srv) ? "roundrobin" : "", r->reverse_dns ? "reversedns" : "",
+                r->is_srv ? "srv" : "dns");
 
       if (r->perm_hostname()) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", r->perm_hostname()));
+        mbw.print(R"("{}":"{}",)", "hostname", r->perm_hostname());
       } else if (rr && r->is_srv && hostdb_rr) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", r->srvname(hostdb_rr)));
+        mbw.print(R"("{}":"{}",)", "hostname", r->srvname(hostdb_rr));
       }
 
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app1", r->app.allotment.application1));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app2", r->app.allotment.application2));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure));
+      mbw.print(R"("{}":"{}",)", "app1", r->app.allotment.application1);
+      mbw.print(R"("{}":"{}",)", "app2", r->app.allotment.application2);
+      mbw.print(R"("{}":"{}",)", "lastfailure", unsigned(r->app.http_data.last_failure));
       if (!rr) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "stale", r->is_ip_stale() ? "yes" : "no"));
-        CHECK_SHOW(show("\"%s\":\"%s\",", "timedout", r->is_ip_timeout() ? "yes" : "no"));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "ttl", r->ip_time_remaining()));
+        mbw.print(R"("{}":"{}",)", "stale", r->is_ip_stale() ? "yes" : "no");
+        mbw.print(R"("{}":"{}",)", "timedout", r->is_ip_timeout() ? "yes" : "no");
+        mbw.print(R"("{}":"{}",)", "ttl", r->ip_time_remaining());
       }
 
       if (rr && r->is_srv) {
-        CHECK_SHOW(show("\"%s\":\"%d\",", "weight", r->data.srv.srv_weight));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "priority", r->data.srv.srv_priority));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "port", r->data.srv.srv_port));
-        CHECK_SHOW(show("\"%s\":\"%x\",", "key", r->data.srv.key));
+        mbw.print(R"("{}":"{}",)", "weight", unsigned(r->data.srv.srv_weight));
+        mbw.print(R"("{}":"{}",)", "priority", unsigned(r->data.srv.srv_priority));
+        mbw.print(R"("{}":"{}",)", "port", unsigned(r->data.srv.srv_port));
+        mbw.print(R"("{}":"{}",)", "key", r->data.srv.key);
       } else if (!r->is_srv) {
-        CHECK_SHOW(show("\"%s\":\"%s\"", "ip", ats_ip_ntop(r->ip(), b, sizeof b)));
+        mbw.print(R"("{}":"{}")", "ip", r->ip());
       }
     }
     return EVENT_CONT;
@@ -1962,22 +1964,22 @@ struct ShowHostDB : public ShowCont {
   {
     HostDBInfo *r = reinterpret_cast<HostDBInfo *>(e);
 
-    CHECK_SHOW(begin("HostDB Lookup"));
+    this->begin("HostDB Lookup");
     if (name) {
-      CHECK_SHOW(show("<H2>%s</H2>\n", name));
+      mbw.print("<H2>{}</H2>\n", name);
     } else {
-      CHECK_SHOW(show("<H2>%u.%u.%u.%u</H2>\n", PRINT_IP(ip)));
+      mbw.print("<H2>{}</H2>\n", ip);
     }
     if (r) {
       showOne(r, false, event, e);
       if (r->round_robin) {
         HostDBRoundRobin *rr_data = r->rr();
         if (rr_data) {
-          CHECK_SHOW(show("<table border=1>\n"));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", rr_data->rrcount));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", rr_data->good));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", rr_data->current));
-          CHECK_SHOW(show("</table>\n"));
+          mbw.print("<table border=1>\n");
+          mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Total", rr_data->rrcount);
+          mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Good", rr_data->good);
+          mbw.print("<tr><td>{}</td><td>{}</td></tr>\n", "Current", rr_data->current);
+          mbw.print("</table>\n");
 
           for (int i = 0; i < rr_data->rrcount; i++) {
             showOne(&rr_data->info(i), true, event, e, rr_data);
@@ -1986,10 +1988,9 @@ struct ShowHostDB : public ShowCont {
       }
     } else {
       if (!name) {
-        ip_text_buffer b;
-        CHECK_SHOW(show("<H2>%s Not Found</H2>\n", ats_ip_ntop(&ip.sa, b, sizeof b)));
+        mbw.print("<H2>{::a} Not Found</H2>\n", &ip.sa);
       } else {
-        CHECK_SHOW(show("<H2>%s Not Found</H2>\n", name));
+        mbw.print("<H2>{} Not Found</H2>\n", name);
       }
     }
     return complete(event, e);
@@ -2003,53 +2004,51 @@ struct ShowHostDB : public ShowCont {
   }
 };
 
-#define STR_LEN_EQ_PREFIX(_x, _l, _s) (!ptr_len_ncasecmp(_x, _l, _s, sizeof(_s) - 1))
-
 static Action *
 register_ShowHostDB(Continuation *c, HTTPHdr *h)
 {
   ShowHostDB *s = new ShowHostDB(c, h);
-  int path_len;
-  const char *path = h->url_get()->path_get(&path_len);
+  int str_len;
+  const char *str = h->url_get()->path_get(&str_len);
+  ts::TextView path{str, str_len};
+  static constexpr ts::TextView IP_TAG{"ip"};
+  static constexpr ts::TextView NAME_TAG{"name"};
+  static constexpr ts::TextView SHOWALL_TAG{"showall"};
+  static constexpr ts::TextView FORCE_TAG{"force"};
 
   SET_CONTINUATION_HANDLER(s, &ShowHostDB::showMain);
-  if (STR_LEN_EQ_PREFIX(path, path_len, "ip")) {
-    s->force = !ptr_len_ncasecmp(path + 3, path_len - 3, "force", 5);
+  if (IP_TAG.isNoCasePrefixOf(path)) {
+    s->force = FORCE_TAG.isNoCasePrefixOf(path.substr(IP_TAG.size() + 1));
     int query_len;
     const char *query = h->url_get()->query_get(&query_len);
-    s->sarg           = ats_strndup(query, query_len);
-    char *gn          = nullptr;
-    if (s->sarg) {
-      gn = static_cast<char *>(memchr(s->sarg, '=', strlen(s->sarg)));
-    }
+    s->sarg.assign(query, query_len);
+    ts::TextView gn = ts::TextView(s->sarg).split_prefix_at('=');
     if (gn) {
-      ats_ip_pton(gn + 1, &s->ip); // hope that's null terminated.
+      ats_ip_pton(gn, &s->ip); // hope that's null terminated.
     }
     SET_CONTINUATION_HANDLER(s, &ShowHostDB::showLookup);
-  } else if (STR_LEN_EQ_PREFIX(path, path_len, "name")) {
-    s->force = !ptr_len_ncasecmp(path + 5, path_len - 5, "force", 5);
+  } else if (NAME_TAG.isNoCasePrefixOf(path)) {
+    s->force = FORCE_TAG.isNoCasePrefixOf(path.substr(NAME_TAG.size() + 1));
     int query_len;
     const char *query = h->url_get()->query_get(&query_len);
-    s->sarg           = ats_strndup(query, query_len);
-    char *gn          = nullptr;
-    if (s->sarg) {
-      gn = static_cast<char *>(memchr(s->sarg, '=', strlen(s->sarg)));
-    }
+    s->sarg.assign(query, query_len);
+    ts::TextView gn = ts::TextView(s->sarg).split_prefix_at('=');
     if (gn) {
-      s->name   = gn + 1;
-      char *pos = strstr(s->name, "%3A");
-      if (pos != nullptr) {
-        s->port = atoi(pos + 3);
-        *pos    = '\0'; // Null terminate name
-      } else {
+      auto off = gn.find("%3A");
+      if (off == gn.npos) {
+        s->name = gn;
         s->port = 0;
+      } else {
+        s->name = gn.prefix(off);
+        s->port = svtoi(gn.remove_prefix(off + 3));
       }
     }
     SET_CONTINUATION_HANDLER(s, &ShowHostDB::showLookup);
-  } else if (STR_LEN_EQ_PREFIX(path, path_len, "showall")) {
-    int query_len     = 0;
-    const char *query = h->url_get()->query_get(&query_len);
-    if (query && query_len && strstr(query, "json")) {
+  } else if (SHOWALL_TAG.isNoCasePrefixOf(path)) {
+    int str_len     = 0;
+    const char *str = h->url_get()->query_get(&str_len);
+    ts::TextView query{str, str_len};
+    if (query.find("json")) {
       s->output_json = true;
     }
     Debug("hostdb", "dumping all hostdb records");
@@ -2081,7 +2080,7 @@ struct HostDBTestReverse : public Continuation {
       if (i) {
         rprintf(test, "HostDBTestReverse: reversed %s\n", i->hostname());
       }
-      outstanding--;
+      --outstanding;
     }
     while (outstanding < HOSTDB_TEST_MAX_OUTSTANDING && total < HOSTDB_TEST_LENGTH) {
       IpEndpoint ip;

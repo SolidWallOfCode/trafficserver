@@ -38,6 +38,7 @@ include_directories(
         proxy/http
         proxy/http/remap
         proxy/shared
+        iocore
         iocore/eventsystem
         iocore/net
         iocore/dns

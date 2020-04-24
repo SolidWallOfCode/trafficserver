@@ -1214,9 +1214,10 @@ UnixNetVConnection::connectUp(EThread *t, int fd)
   //
   if (is_debug_tag_set("iocore_net")) {
     char addrbuf[INET6_ADDRSTRLEN];
-    Debug("iocore_net", "connectUp:: local_addr=%s:%d [%s]",
+    auto binding = NetVCOptions::toString(options.addr_binding);
+    Debug("iocore_net", "connectUp:: local_addr=%s:%d [%*.s]",
           options.local_ip.isValid() ? options.local_ip.toString(addrbuf, sizeof(addrbuf)) : "*", options.local_port,
-          NetVCOptions::toString(options.addr_binding));
+          int(binding.size()), binding.data());
   }
 
   // If this is getting called from the TS API, then we are wiring up a file descriptor

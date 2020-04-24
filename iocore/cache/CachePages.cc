@@ -212,88 +212,88 @@ register_ShowCache(Continuation *c, HTTPHdr *h)
 int
 ShowCache::showMain(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache"));
-  CHECK_SHOW(show("<H3><A HREF=\"./lookup_url_form\">Lookup url</A></H3>\n"
-                  "<H3><A HREF=\"./delete_url_form\">Delete url</A></H3>\n"
-                  "<H3><A HREF=\"./lookup_regex_form\">Regex lookup</A></H3>\n"
-                  "<H3><A HREF=\"./delete_regex_form\">Regex delete</A></H3>\n"
-                  "<H3><A HREF=\"./invalidate_regex_form\">Regex invalidate</A></H3>\n\n"));
+  this->begin("Cache");
+  mbw.write("<H3><A HREF=\"./lookup_url_form\">Lookup url</A></H3>\n"
+            "<H3><A HREF=\"./delete_url_form\">Delete url</A></H3>\n"
+            "<H3><A HREF=\"./lookup_regex_form\">Regex lookup</A></H3>\n"
+            "<H3><A HREF=\"./delete_regex_form\">Regex delete</A></H3>\n"
+            "<H3><A HREF=\"./invalidate_regex_form\">Regex invalidate</A></H3>\n\n");
   return complete(event, e);
 }
 
 int
 ShowCache::lookup_url_form(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Lookup"));
-  CHECK_SHOW(show("<FORM METHOD=\"GET\" ACTION=\"./lookup_url\">\n"
-                  "<H3>Lookup</H3>\n"
-                  "<INPUT TYPE=\"TEXT\" NAME=\"url\" value=\"http://\">\n"
-                  "<INPUT TYPE=\"SUBMIT\" value=\"Lookup\">\n"
-                  "</FORM>\n\n"));
+  this->begin("Cache Lookup");
+  mbw.write("<FORM METHOD=\"GET\" ACTION=\"./lookup_url\">\n"
+            "<H3>Lookup</H3>\n"
+            "<INPUT TYPE=\"TEXT\" NAME=\"url\" value=\"http://\">\n"
+            "<INPUT TYPE=\"SUBMIT\" value=\"Lookup\">\n"
+            "</FORM>\n\n");
   return complete(event, e);
 }
 
 int
 ShowCache::delete_url_form(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Delete"));
-  CHECK_SHOW(show("<FORM METHOD=\"GET\" ACTION=\"./delete_url\">\n"
-                  "<P><B>Type the list urls that you want to delete\n"
-                  "in the box below. The urls MUST be separated by\n"
-                  "new lines</B></P>\n\n"
-                  "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
-                  "http://"
-                  "</TEXTAREA>\n"
-                  "<INPUT TYPE=\"SUBMIT\" value=\"Delete\">\n"
-                  "</FORM>\n\n"));
+  this->begin("Cache Delete");
+  mbw.write("<FORM METHOD=\"GET\" ACTION=\"./delete_url\">\n"
+            "<P><B>Type the list urls that you want to delete\n"
+            "in the box below. The urls MUST be separated by\n"
+            "new lines</B></P>\n\n"
+            "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
+            "http://"
+            "</TEXTAREA>\n"
+            "<INPUT TYPE=\"SUBMIT\" value=\"Delete\">\n"
+            "</FORM>\n\n");
   return complete(event, e);
 }
 
 int
 ShowCache::lookup_regex_form(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Regex Lookup"));
-  CHECK_SHOW(show("<FORM METHOD=\"GET\" ACTION=\"./lookup_regex\">\n"
-                  "<P><B>Type the list of regular expressions that you want to lookup\n"
-                  "in the box below. The regular expressions MUST be separated by\n"
-                  "new lines</B></P>\n\n"
-                  "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
-                  "http://"
-                  "</TEXTAREA>\n"
-                  "<INPUT TYPE=\"SUBMIT\" value=\"Lookup\">\n"
-                  "</FORM>\n\n"));
+  this->begin("Cache Regex Lookup");
+  mbw.write("<FORM METHOD=\"GET\" ACTION=\"./lookup_regex\">\n"
+            "<P><B>Type the list of regular expressions that you want to lookup\n"
+            "in the box below. The regular expressions MUST be separated by\n"
+            "new lines</B></P>\n\n"
+            "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
+            "http://"
+            "</TEXTAREA>\n"
+            "<INPUT TYPE=\"SUBMIT\" value=\"Lookup\">\n"
+            "</FORM>\n\n");
   return complete(event, e);
 }
 
 int
 ShowCache::delete_regex_form(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Regex delete"));
-  CHECK_SHOW(show("<FORM METHOD=\"GET\" ACTION=\"./delete_regex\">\n"
-                  "<P><B>Type the list of regular expressions that you want to delete\n"
-                  "in the box below. The regular expressions MUST be separated by\n"
-                  "new lines</B></P>\n\n"
-                  "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
-                  "http://"
-                  "</TEXTAREA>\n"
-                  "<INPUT TYPE=\"SUBMIT\" value=\"Delete\">\n"
-                  "</FORM>\n\n"));
+  this->begin("Cache Regex delete");
+  mbw.write("<FORM METHOD=\"GET\" ACTION=\"./delete_regex\">\n"
+            "<P><B>Type the list of regular expressions that you want to delete\n"
+            "in the box below. The regular expressions MUST be separated by\n"
+            "new lines</B></P>\n\n"
+            "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
+            "http://"
+            "</TEXTAREA>\n"
+            "<INPUT TYPE=\"SUBMIT\" value=\"Delete\">\n"
+            "</FORM>\n\n");
   return complete(event, e);
 }
 
 int
 ShowCache::invalidate_regex_form(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Regex Invalidate"));
-  CHECK_SHOW(show("<FORM METHOD=\"GET\" ACTION=\"./invalidate_regex\">\n"
-                  "<P><B>Type the list of regular expressions that you want to invalidate\n"
-                  "in the box below. The regular expressions MUST be separated by\n"
-                  "new lines</B></P>\n\n"
-                  "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
-                  "http://"
-                  "</TEXTAREA>\n"
-                  "<INPUT TYPE=\"SUBMIT\" value=\"Invalidate\">\n"
-                  "</FORM>\n"));
+  this->begin("Cache Regex Invalidate");
+  mbw.write("<FORM METHOD=\"GET\" ACTION=\"./invalidate_regex\">\n"
+            "<P><B>Type the list of regular expressions that you want to invalidate\n"
+            "in the box below. The regular expressions MUST be separated by\n"
+            "new lines</B></P>\n\n"
+            "<TEXTAREA NAME=\"url\" rows=10 cols=50>"
+            "http://"
+            "</TEXTAREA>\n"
+            "<INPUT TYPE=\"SUBMIT\" value=\"Invalidate\">\n"
+            "</FORM>\n");
   return complete(event, e);
 }
 
@@ -305,18 +305,18 @@ ShowCache::handleCacheEvent(int event, Event *e)
   case VC_EVENT_EOS:
   case VC_EVENT_READ_COMPLETE: {
     // cluster read done, we just print hit in cluster
-    CHECK_SHOW(show("<P><TABLE border=1 width=100%%>"));
-    CHECK_SHOW(show("<TR><TH bgcolor=\"#FFF0E0\" colspan=2>Doc Hit from Cluster</TH></TR>\n"));
-    CHECK_SHOW(show("<tr><td>Size</td><td>%" PRId64 "</td>\n", content_length));
+    mbw.print("<P><TABLE border=1 width=100%%>");
+    mbw.print("<TR><TH bgcolor=\"#FFF0E0\" colspan=2>Doc Hit from Cluster</TH></TR>\n");
+    mbw.print("<tr><td>Size</td><td>{}</td>\n", content_length);
 
     // delete button
-    CHECK_SHOW(show("<tr><td>Action</td>\n"
-                    "<td><FORM action=\"./delete_url\" method=get>\n"
-                    "<Input type=HIDDEN name=url value=\"%s\">\n"
-                    "<input type=submit value=\"Delete URL\">\n"
-                    "</FORM></td></tr>\n",
-                    show_cache_urlstrs[0]));
-    CHECK_SHOW(show("</TABLE></P>"));
+    mbw.print("<tr><td>Action</td>\n"
+              "<td><FORM action=\"./delete_url\" method=get>\n"
+              "<Input type=HIDDEN name=url value=\"{}\">\n"
+              "<input type=submit value=\"Delete URL\">\n"
+              "</FORM></td></tr>\n",
+              show_cache_urlstrs[0]);
+    mbw.print("</TABLE></P>");
 
     if (buffer_reader) {
       buffer->dealloc_reader(buffer_reader);
@@ -340,7 +340,7 @@ ShowCache::handleCacheEvent(int event, Event *e)
       // check cache_vc->first_buf is NULL, response cache lookup busy.
       if (cache_vc->first_buf == nullptr) {
         cache_vc->do_io_close(-1);
-        CHECK_SHOW(show("<H3>Cache Lookup Busy, please try again</H3>\n"));
+        mbw.print("<H3>Cache Lookup Busy, please try again</H3>\n");
         return complete(event, e);
       }
 
@@ -349,30 +349,29 @@ ShowCache::handleCacheEvent(int event, Event *e)
       char tmpstr[4096];
 
       // print the Doc
-      CHECK_SHOW(show("<P><TABLE border=1 width=100%%>"));
-      CHECK_SHOW(show("<TR><TH bgcolor=\"#FFF0E0\" colspan=2>Doc</TH></TR>\n"));
-      CHECK_SHOW(
-        show("<TR><TD>Volume</td> <td>#%d - store='%s'</td></tr>\n", cache_vc->vol->cache_vol->vol_number, cache_vc->vol->path));
-      CHECK_SHOW(show("<TR><TD>first key</td> <td>%s</td></tr>\n", d->first_key.toHexStr(tmpstr)));
-      CHECK_SHOW(show("<TR><TD>key</td> <td>%s</td></tr>\n", d->key.toHexStr(tmpstr)));
-      CHECK_SHOW(show("<tr><td>sync_serial</td><td>%lu</tr>\n", d->sync_serial));
-      CHECK_SHOW(show("<tr><td>write_serial</td><td>%lu</tr>\n", d->write_serial));
-      CHECK_SHOW(show("<tr><td>header length</td><td>%lu</tr>\n", d->hlen));
-      CHECK_SHOW(show("<tr><td>fragment type</td><td>%lu</tr>\n", d->doc_type));
-      CHECK_SHOW(show("<tr><td>No of Alternates</td><td>%d</td></tr>\n", alt_count));
+      mbw.print("<P><TABLE border=1 width=100%%>");
+      mbw.print("<TR><TH bgcolor=\"#FFF0E0\" colspan=2>Doc</TH></TR>\n");
+      mbw.print("<TR><TD>Volume</td> <td>#{} - store='{}'</td></tr>\n", cache_vc->vol->cache_vol->vol_number, cache_vc->vol->path);
+      mbw.print("<TR><TD>first key</td> <td>{}</td></tr>\n", ts::bwf::Hex_Dump(d->first_key));
+      mbw.print("<TR><TD>key</td> <td>{}</td></tr>\n", ts::bwf::Hex_Dump(d->key));
+      mbw.print("<tr><td>sync_serial</td><td>{}</tr>\n", d->sync_serial);
+      mbw.print("<tr><td>write_serial</td><td>{}</tr>\n", d->write_serial);
+      mbw.print("<tr><td>header length</td><td>{}</tr>\n", d->hlen);
+      mbw.print("<tr><td>fragment type</td><td>{}</tr>\n", unsigned(d->doc_type));
+      mbw.print("<tr><td>No of Alternates</td><td>{}</td></tr>\n", alt_count);
 
-      CHECK_SHOW(show("<tr><td>Action</td>\n"
-                      "<td><FORM action=\"./delete_url\" method=get>\n"
-                      "<Input type=HIDDEN name=url value=\"%s\">\n"
-                      "<input type=submit value=\"Delete URL\">\n"
-                      "</FORM></td></tr>\n",
-                      show_cache_urlstrs[0]));
-      CHECK_SHOW(show("</TABLE></P>"));
+      mbw.print("<tr><td>Action</td>\n"
+                "<td><FORM action=\"./delete_url\" method=get>\n"
+                "<Input type=HIDDEN name=url value=\"{}\">\n"
+                "<input type=submit value=\"Delete URL\">\n"
+                "</FORM></td></tr>\n",
+                show_cache_urlstrs[0]);
+      mbw.print("</TABLE></P>");
 
       for (int i = 0; i < alt_count; i++) {
         // unmarshal the alternate??
-        CHECK_SHOW(show("<p><table border=1>\n"));
-        CHECK_SHOW(show("<tr><th bgcolor=\"#FFF0E0\" colspan=2>Alternate %d</th></tr>\n", i + 1));
+        mbw.print("<p><table border=1>\n");
+        mbw.print("<tr><th bgcolor=\"#FFF0E0\" colspan=2>Alternate {}</th></tr>\n", i + 1);
         CacheHTTPInfo *obj       = vec->get(i);
         CacheKey obj_key         = obj->object_key_get();
         HTTPHdr *cached_request  = obj->request_get();
@@ -382,40 +381,38 @@ ShowCache::handleCacheEvent(int event, Event *e)
         char b[4096];
 
         // print request header
-        CHECK_SHOW(show("<tr><td>Request Header</td><td><PRE>"));
+        mbw.print("<tr><td>Request Header</td><td><PRE>");
         offset = 0;
         do {
           used = 0;
           tmp  = offset;
-          done = cached_request->print(b, 4095, &used, &tmp);
+          done = cached_request->print(b, sizeof(b), &used, &tmp);
           offset += used;
-          b[used] = '\0';
-          CHECK_SHOW(show("%s", b));
+          mbw.write(b, used);
         } while (!done);
-        CHECK_SHOW(show("</PRE></td><tr>\n"));
+        mbw.print("</PRE></td><tr>\n");
 
         // print response header
-        CHECK_SHOW(show("<tr><td>Response Header</td><td><PRE>"));
+        mbw.print("<tr><td>Response Header</td><td><PRE>");
         offset = 0;
         do {
           used = 0;
           tmp  = offset;
           done = cached_response->print(b, 4095, &used, &tmp);
           offset += used;
-          b[used] = '\0';
-          CHECK_SHOW(show("%s", b));
+          mbw.write(b, used);
         } while (!done);
-        CHECK_SHOW(show("</PRE></td></tr>\n"));
-        CHECK_SHOW(show("<tr><td>Size</td><td>%" PRId64 "</td>\n", obj_size));
-        CHECK_SHOW(show("<tr><td>Key</td><td>%s</td>\n", obj_key.toHexStr(tmpstr)));
+        mbw.print("</PRE></td></tr>\n");
+        mbw.print("<tr><td>Size</td><td>{}</td>\n", obj_size);
+        mbw.print("<tr><td>Key</td><td>{}</td>\n", ts::bwf::Hex_Dump(obj_key));
         t = obj->request_sent_time_get();
         ink_ctime_r(&t, tmpstr);
-        CHECK_SHOW(show("<tr><td>Request sent time</td><td>%s</td></tr>\n", tmpstr));
+        mbw.print("<tr><td>Request sent time</td><td>{}</td></tr>\n", tmpstr);
         t = obj->response_received_time_get();
         ink_ctime_r(&t, tmpstr);
 
-        CHECK_SHOW(show("<tr><td>Response received time</td><td>%s</td></tr>\n", tmpstr));
-        CHECK_SHOW(show("</TABLE></P>"));
+        mbw.print("<tr><td>Response received time</td><td>{}</td></tr>\n", tmpstr);
+        mbw.print("</TABLE></P>");
       }
 
       cache_vc->do_io_close(-1);
@@ -437,10 +434,10 @@ ShowCache::handleCacheEvent(int event, Event *e)
     return EVENT_DONE;
   case CACHE_EVENT_OPEN_READ_FAILED:
     // something strange happen, or cache miss in cluster mode.
-    CHECK_SHOW(show("<H3>Cache Lookup Failed, or missing in cluster</H3>\n"));
+    mbw.print("<H3>Cache Lookup Failed, or missing in cluster</H3>\n");
     return complete(event, e);
   default:
-    CHECK_SHOW(show("<H3>Cache Miss</H3>\n"));
+    mbw.print("<H3>Cache Miss</H3>\n");
     return complete(event, e);
   }
 }
@@ -448,12 +445,12 @@ ShowCache::handleCacheEvent(int event, Event *e)
 int
 ShowCache::lookup_url(int event, Event *e)
 {
-  char header_str[300];
+  ts::LocalBufferWriter<300> lw;
   HttpCacheKey key;
   cache_generation_t generation = -1;
 
-  snprintf(header_str, sizeof(header_str), "<font color=red>%s</font>", show_cache_urlstrs[0]);
-  CHECK_SHOW(begin(header_str));
+  lw.print("<font color=red>{}</font>", show_cache_urlstrs[0]);
+  this->begin(lw.view());
   url.create(nullptr);
   const char *s;
   s = show_cache_urlstrs[0];
@@ -482,20 +479,20 @@ ShowCache::delete_url(int event, Event *e)
 {
   if (urlstrs_index == 0) {
     // print the header the first time delete_url is called
-    CHECK_SHOW(begin("Delete URL"));
-    CHECK_SHOW(show("<B><TABLE border=1>\n"));
+    this->begin("Delete URL");
+    mbw.print("<B><TABLE border=1>\n");
   }
 
   if (strcmp(show_cache_urlstrs[urlstrs_index], "") == 0) {
     // close the page when you reach the end of the
     // url list
-    CHECK_SHOW(show("</TABLE></B>\n"));
+    mbw.print("</TABLE></B>\n");
     return complete(event, e);
   }
   url.create(nullptr);
   const char *s;
   s = show_cache_urlstrs[urlstrs_index];
-  CHECK_SHOW(show("<TR><TD>%s</TD>", s));
+  mbw.print("<TR><TD>{}</TD>", s);
   url.parse(&s, s + strlen(s));
   SET_HANDLER(&ShowCache::handleCacheDeleteComplete);
   // increment the index so that the next time
@@ -513,9 +510,9 @@ int
 ShowCache::handleCacheDeleteComplete(int event, Event *e)
 {
   if (event == CACHE_EVENT_REMOVE) {
-    CHECK_SHOW(show("<td>Delete <font color=green>succeeded</font></td></tr>\n"));
+    mbw.print("<td>Delete <font color=green>succeeded</font></td></tr>\n");
   } else {
-    CHECK_SHOW(show("<td>Delete <font color=red>failed</font></td></tr>\n"));
+    mbw.print("<td>Delete <font color=red>failed</font></td></tr>\n");
   }
   return delete_url(event, e);
 }
@@ -523,43 +520,43 @@ ShowCache::handleCacheDeleteComplete(int event, Event *e)
 int
 ShowCache::lookup_regex(int event, Event *e)
 {
-  CHECK_SHOW(begin("Regex Lookup"));
-  CHECK_SHOW(show("<SCRIPT LANGIAGE=\"Javascript1.2\">\n"
-                  "urllist = new Array(100);\n"
-                  "index = 0;\n"
-                  "function addToUrlList(input) {\n"
-                  "	for (c=0; c < index; c++) {\n"
-                  "		if (urllist[c] == encodeURIComponent(input.name)) {\n"
-                  "			urllist.splice(c,1);\n"
-                  "			index--;\n"
-                  "			return true;\n"
-                  "		}\n"
-                  "	}\n"
-                  "	urllist[index++] = encodeURIComponent(input.name);\n"
-                  "	return true;\n"
-                  "}\n"
-                  "function setUrls(form) {\n"
-                  "	form.elements[0].value=\"\";\n"
-                  "   if (index > 10) {\n"
-                  "           alert(\"Can't choose more than 10 urls for deleting\");\n"
-                  "           return true;\n"
-                  "}\n"
-                  "	for (c=0; c < index; c++){\n"
-                  "		form.elements[0].value += urllist[c]+ \"%%0D%%0A\";\n"
-                  "	}\n"
-                  "   if (form.elements[0].value == \"\"){\n"
-                  "	    alert(\"Please select at least one url before clicking delete\");\n"
-                  "       return true;\n"
-                  "}\n"
-                  "   srcfile=\"./delete_url?url=\" + form.elements[0].value;\n"
-                  "   document.location=srcfile;\n "
-                  "	return true;\n"
-                  "}\n"
-                  "</SCRIPT>\n"));
+  this->begin("Regex Lookup");
+  mbw.write("<SCRIPT LANGIAGE=\"Javascript1.2\">\n"
+            "urllist = new Array(100);\n"
+            "index = 0;\n"
+            "function addToUrlList(input) {\n"
+            "	for (c=0; c < index; c++) {\n"
+            "		if (urllist[c] == encodeURIComponent(input.name)) {\n"
+            "			urllist.splice(c,1);\n"
+            "			index--;\n"
+            "			return true;\n"
+            "		}\n"
+            "	}\n"
+            "	urllist[index++] = encodeURIComponent(input.name);\n"
+            "	return true;\n"
+            "}\n"
+            "function setUrls(form) {\n"
+            "	form.elements[0].value=\"\";\n"
+            "   if (index > 10) {\n"
+            "           alert(\"Can't choose more than 10 urls for deleting\");\n"
+            "           return true;\n"
+            "}\n"
+            "	for (c=0; c < index; c++){\n"
+            "		form.elements[0].value += urllist[c]+ \"%%0D%%0A\";\n"
+            "	}\n"
+            "   if (form.elements[0].value == \"\"){\n"
+            "	    alert(\"Please select at least one url before clicking delete\");\n"
+            "       return true;\n"
+            "}\n"
+            "   srcfile=\"./delete_url?url=\" + form.elements[0].value;\n"
+            "   document.location=srcfile;\n "
+            "	return true;\n"
+            "}\n"
+            "</SCRIPT>\n");
 
-  CHECK_SHOW(show("<FORM NAME=\"f\" ACTION=\"./delete_url\" METHOD=GET> \n"
-                  "<INPUT TYPE=HIDDEN NAME=\"url\">\n"
-                  "<B><TABLE border=1>\n"));
+  mbw.print("<FORM NAME=\"f\" ACTION=\"./delete_url\" METHOD=GET> \n"
+            "<INPUT TYPE=HIDDEN NAME=\"url\">\n"
+            "<B><TABLE border=1>\n");
 
   scan_flag = scan_type_lookup; // lookup
   SET_HANDLER(&ShowCache::handleCacheScanCallback);
@@ -570,8 +567,8 @@ ShowCache::lookup_regex(int event, Event *e)
 int
 ShowCache::delete_regex(int event, Event *e)
 {
-  CHECK_SHOW(begin("Regex Delete"));
-  CHECK_SHOW(show("<B><TABLE border=1>\n"));
+  this->begin("Regex Delete");
+  mbw.print("<B><TABLE border=1>\n");
   scan_flag = scan_type_delete; // delete
   SET_HANDLER(&ShowCache::handleCacheScanCallback);
   cacheProcessor.scan(this);
@@ -581,8 +578,8 @@ ShowCache::delete_regex(int event, Event *e)
 int
 ShowCache::invalidate_regex(int event, Event *e)
 {
-  CHECK_SHOW(begin("Regex Invalidate"));
-  CHECK_SHOW(show("<B><TABLE border=1>\n"));
+  this->begin("Regex Invalidate");
+  mbw.print("<B><TABLE border=1>\n");
   scan_flag = scan_type_invalidate; // invalidate
   SET_HANDLER(&ShowCache::handleCacheScanCallback);
   cacheProcessor.scan(this);
@@ -626,24 +623,24 @@ ShowCache::handleCacheScanCallback(int event, Event *e)
         if (r != -1) {
           linecount++;
           if ((linecount % 5) == 0) {
-            CHECK_SHOW(show("<TR bgcolor=\"#FFF0E0\">"));
+            mbw.print("<TR bgcolor=\"#FFF0E0\">");
           } else {
-            CHECK_SHOW(show("<TR>"));
+            mbw.print("<TR>");
           }
 
           switch (scan_flag) {
           case scan_type_lookup:
             /*Y! Bug: 2249781: using onClick() because i need encodeURIComponent() and YTS doesn't have something like that */
-            CHECK_SHOW(show("<TD><INPUT TYPE=CHECKBOX NAME=\"%s\" "
-                            "onClick=\"addToUrlList(this)\"></TD>"
-                            "<TD><A onClick='window.location.href=\"./lookup_url?url=\"+ encodeURIComponent(\"%s\");' HREF=\"#\">"
-                            "<B>%s</B></A></br></TD></TR>\n",
-                            xx, xx, xx));
+            mbw.print("<TD><INPUT TYPE=CHECKBOX NAME=\"{0}\" "
+                      "onClick=\"addToUrlList(this)\"></TD>"
+                      "<TD><A onClick='window.location.href=\"./lookup_url?url=\"+ encodeURIComponent(\"{0}\");' HREF=\"#\">"
+                      "<B>{0}</B></A></br></TD></TR>\n",
+                      xx);
             break;
           case scan_type_delete:
-            CHECK_SHOW(show("<TD><B>%s</B></TD>"
-                            "<TD><font color=red>deleted</font></TD></TR>\n",
-                            xx));
+            mbw.print("<TD><B>{}</B></TD>"
+                      "<TD><font color=red>deleted</font></TD></TR>\n",
+                      xx);
             res = CACHE_SCAN_RESULT_DELETE;
             break;
           case scan_type_invalidate:
@@ -651,10 +648,10 @@ ShowCache::handleCacheScanCallback(int event, Event *e)
             res = CACHE_SCAN_RESULT_UPDATE;
             new_info.copy(alt);
             new_info.response_get()->set_cooked_cc_need_revalidate_once();
-            CHECK_SHOW(show("<TD><B>%s</B></TD>"
-                            "<TD><font color=red>Invalidate</font></TD>"
-                            "</TR>\n",
-                            xx));
+            mbw.print("<TD><B>{}</B></TD>"
+                      "<TD><font color=red>Invalidate</font></TD>"
+                      "</TR>\n",
+                      xx);
             cache_vc->set_http_info(&new_info);
           }
 
@@ -668,21 +665,21 @@ ShowCache::handleCacheScanCallback(int event, Event *e)
     return res;
   }
   case CACHE_EVENT_SCAN_DONE:
-    CHECK_SHOW(show("</TABLE></B>\n"));
+    mbw.print("</TABLE></B>\n");
     if (scan_flag == 0) {
       if (linecount) {
-        CHECK_SHOW(show("<P><INPUT TYPE=button value=\"Delete\" "
-                        "onClick=\"setUrls(window.document.f)\"></P>"
-                        "</FORM>\n"));
+        mbw.write("<P><INPUT TYPE=button value=\"Delete\" "
+                  "onClick=\"setUrls(window.document.f)\"></P>"
+                  "</FORM>\n");
       }
     }
-    CHECK_SHOW(show("<H3>Done</H3>\n"));
+    mbw.print("<H3>Done</H3>\n");
     Debug("cache_inspector", "scan done");
     complete(event, e);
     return EVENT_DONE;
   case CACHE_EVENT_SCAN_FAILED:
   default:
-    CHECK_SHOW(show("<H3>Error while scanning disk</H3>\n"));
+    mbw.print("<H3>Error while scanning disk</H3>\n");
     return EVENT_DONE;
   }
 }

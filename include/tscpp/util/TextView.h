@@ -1223,6 +1223,11 @@ template <> struct iterator_traits<ts::TextView> {
 
 } // namespace std
 
+constexpr ts::TextView operator"" _tv(const char *s, size_t n)
+{
+  return {s, n};
+}
+
 // @c constexpr literal constructor for @c std::string_view
 // For unknown reasons, this enables creating @c constexpr constructs using @c std::string_view while the standard
 // one (""sv) does not.

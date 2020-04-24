@@ -212,10 +212,12 @@ public:
    * although data inside the groups is volatile.
    */
   static void get(std::vector<Group const *> &groups);
-  /** Write the connection tracking data to JSON.
+
+  /** Write the connection tracking data to @a w in JSON format.
    * @return string containing a JSON encoding of the table.
    */
-  static std::string to_json_string();
+  static void write_as_json(ts::BufferWriter &w);
+
   /** Write the groups to @a f.
    * @param f Output file.
    */

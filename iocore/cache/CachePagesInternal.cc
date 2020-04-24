@@ -92,14 +92,14 @@ register_ShowCacheInternal(Continuation *c, HTTPHdr *h)
 int
 ShowCacheInternal::showMain(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache"));
+  this->begin("Cache");
 #ifdef CACHE_STAT_PAGES
-  CHECK_SHOW(show("<H3>Show <A HREF=\"./connections\">Connections</A></H3>\n"
-                  "<H3>Show <A HREF=\"./evacuations\">Evacuations</A></H3>\n"
-                  "<H3>Show <A HREF=\"./volumes\">Volumes</A></H3>\n"));
+  mbw.write("<H3>Show <A HREF=\"./connections\">Connections</A></H3>\n"
+            "<H3>Show <A HREF=\"./evacuations\">Evacuations</A></H3>\n"
+            "<H3>Show <A HREF=\"./volumes\">Volumes</A></H3>\n");
 #else
-  CHECK_SHOW(show("<H3>Show <A HREF=\"./evacuations\">Evacuations</A></H3>\n"
-                  "<H3>Show <A HREF=\"./volumes\">Volumes</A></H3>\n"));
+  mbw.write("<H3>Show <A HREF=\"./evacuations\">Evacuations</A></H3>\n"
+            "<H3>Show <A HREF=\"./volumes\">Volumes</A></H3>\n");
 #endif
   return complete(event, e);
 }
@@ -108,16 +108,16 @@ ShowCacheInternal::showMain(int event, Event *e)
 int
 ShowCacheInternal::showConnections(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache VConnections"));
-  CHECK_SHOW(show("<H3>Cache Connections</H3>\n"
-                  "<table border=1><tr>"
-                  "<th>Operation</th>"
-                  "<th>Volume</th>"
-                  "<th>URL/Hash</th>"
-                  "<th>Bytes Done</th>"
-                  "<th>Total Bytes</th>"
-                  "<th>Bytes Todo</th>"
-                  "</tr>\n"));
+  this->begin("Cache VConnections");
+  mbw.write("<H3>Cache Connections</H3>\n"
+            "<table border=1><tr>"
+            "<th>Operation</th>"
+            "<th>Volume</th>"
+            "<th>URL/Hash</th>"
+            "<th>Bytes Done</th>"
+            "<th>Total Bytes</th>"
+            "<th>Bytes Todo</th>"
+            "</tr>\n");
 
   SET_HANDLER(&ShowCacheInternal::showVolConnections);
   CONT_SCHED_LOCK_RETRY_RET(this);
@@ -152,22 +152,22 @@ ShowCacheInternal::showVolConnections(int event, Event *e)
       url[ib] = 0;
     } else
       vc->key.string(url);
-    CHECK_SHOW(show("<tr>"
-                    "<td>%s</td>" // operation
-                    "<td>%s</td>" // Vol
-                    "<td>%s</td>" // URL/Hash
-                    "<td>%d</td>"
-                    "<td>%s</td>"
-                    "<td>%s</td>"
-                    "</tr>\n",
-                    ((vc->vio.op == VIO::READ) ? "Read" : "Write"), vc->vol->hash_id, url, vc->vio.ndone,
-                    vc->vio.nbytes == INT64_MAX ? "all" : nbytes, vc->vio.nbytes == INT64_MAX ? "all" : todo));
+    mbw.print("<tr>"
+              "<td>%s</td>" // operation
+              "<td>%s</td>" // Vol
+              "<td>%s</td>" // URL/Hash
+              "<td>%d</td>"
+              "<td>%s</td>"
+              "<td>%s</td>"
+              "</tr>\n",
+              ((vc->vio.op == VIO::READ) ? "Read" : "Write"), vc->vol->hash_id, url, vc->vio.ndone,
+              vc->vio.nbytes == INT64_MAX ? "all" : nbytes, vc->vio.nbytes == INT64_MAX ? "all" : todo);
   }
   vol_index++;
   if (vol_index < gnvol)
     CONT_SCHED_LOCK_RETRY(this);
   else {
-    CHECK_SHOW(show("</table>\n"));
+    mbw.write("</table>\n");
     return complete(event, e);
   }
   return EVENT_CONT;
@@ -178,14 +178,14 @@ ShowCacheInternal::showVolConnections(int event, Event *e)
 int
 ShowCacheInternal::showEvacuations(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Pending Evacuations"));
-  CHECK_SHOW(show("<H3>Cache Evacuations</H3>\n"
-                  "<table border=1><tr>"
-                  "<th>Offset</th>"
-                  "<th>Estimated Size</th>"
-                  "<th>Reader Count</th>"
-                  "<th>Done</th>"
-                  "</tr>\n"));
+  this->begin("Cache Pending Evacuations");
+  mbw.write("<H3>Cache Evacuations</H3>\n"
+            "<table border=1><tr>"
+            "<th>Offset</th>"
+            "<th>Estimated Size</th>"
+            "<th>Reader Count</th>"
+            "<th>Done</th>"
+            "</tr>\n");
 
   SET_HANDLER(&ShowCacheInternal::showVolEvacuations);
   CONT_SCHED_LOCK_RETRY_RET(this);
@@ -204,22 +204,20 @@ ShowCacheInternal::showVolEvacuations(int event, Event *e)
   int last = (p->len - (p->start - p->skip)) / EVACUATION_BUCKET_SIZE;
   for (int i = 0; i < last; i++) {
     for (b = p->evacuate[i].head; b; b = b->link.next) {
-      char offset[60];
-      sprintf(offset, "%" PRIu64 "", static_cast<uint64_t>(p->vol_offset(&b->dir)));
-      CHECK_SHOW(show("<tr>"
-                      "<td>%s</td>" // offset
-                      "<td>%d</td>" // estimated size
-                      "<td>%d</td>" // reader count
-                      "<td>%s</td>" // done
-                      "</tr>\n",
-                      offset, (int)dir_approx_size(&b->dir), b->readers, b->f.done ? "yes" : "no"));
+      mbw.print("<tr>"
+                "<td>{}</td>" // offset
+                "<td>{}</td>" // estimated size
+                "<td>{}</td>" // reader count
+                "<td>{}</td>" // done
+                "</tr>\n",
+                p->vol_offset(&b->dir), (int)dir_approx_size(&b->dir), b->readers, b->f.done ? "yes" : "no");
     }
   }
   vol_index++;
   if (vol_index < gnvol) {
     CONT_SCHED_LOCK_RETRY(this);
   } else {
-    CHECK_SHOW(show("</table>\n"));
+    mbw.write("</table>\n");
     return complete(event, e);
   }
   return EVENT_CONT;
@@ -228,21 +226,21 @@ ShowCacheInternal::showVolEvacuations(int event, Event *e)
 int
 ShowCacheInternal::showVolumes(int event, Event *e)
 {
-  CHECK_SHOW(begin("Cache Volumes"));
-  CHECK_SHOW(show("<H3>Cache Volumes</H3>\n"
-                  "<table border=1><tr>"
-                  "<th>ID</th>"
-                  "<th>Blocks</th>"
-                  "<th>Directory Entries</th>"
-                  "<th>Write Position</th>"
-                  "<th>Write Agg Todo</th>"
-                  "<th>Write Agg Todo Size</th>"
-                  "<th>Write Agg Done</th>"
-                  "<th>Phase</th>"
-                  "<th>Create Time</th>"
-                  "<th>Sync Serial</th>"
-                  "<th>Write Serial</th>"
-                  "</tr>\n"));
+  this->begin("Cache Volumes");
+  mbw.write("<H3>Cache Volumes</H3>\n"
+            "<table border=1><tr>"
+            "<th>ID</th>"
+            "<th>Blocks</th>"
+            "<th>Directory Entries</th>"
+            "<th>Write Position</th>"
+            "<th>Write Agg Todo</th>"
+            "<th>Write Agg Todo Size</th>"
+            "<th>Write Agg Done</th>"
+            "<th>Phase</th>"
+            "<th>Create Time</th>"
+            "<th>Sync Serial</th>"
+            "<th>Write Serial</th>"
+            "</tr>\n");
 
   SET_HANDLER(&ShowCacheInternal::showVolVolumes);
   CONT_SCHED_LOCK_RETRY_RET(this);
@@ -266,24 +264,23 @@ ShowCacheInternal::showVolVolumes(int event, Event *e)
   for (c = p->agg.head; c; c = (CacheVC *)c->link.next) {
     agg_todo++;
   }
-  CHECK_SHOW(show("<tr>"
-                  "<td>%s</td>"          // ID
-                  "<td>%" PRId64 "</td>" // blocks
-                  "<td>%" PRId64 "</td>" // directory entries
-                  "<td>%" PRId64 "</td>" // write position
-                  "<td>%d</td>"          // write agg to do
-                  "<td>%d</td>"          // write agg to do size
-                  "<td>%d</td>"          // write agg done
-                  "<td>%d</td>"          // phase
-                  "<td>%s</td>"          // create time
-                  "<td>%u</td>"          // sync serial
-                  "<td>%u</td>"          // write serial
-                  "</tr>\n",
-                  p->hash_text.get(), (uint64_t)((p->len - (p->start - p->skip)) / CACHE_BLOCK_SIZE),
-                  (uint64_t)(p->buckets * DIR_DEPTH * p->segments),
-                  (uint64_t)((p->header->write_pos - p->start) / CACHE_BLOCK_SIZE), agg_todo, p->agg_todo_size, agg_done,
-                  p->header->phase, ctime, p->header->sync_serial, p->header->write_serial));
-  CHECK_SHOW(show("</table>\n"));
+  mbw.print("<tr>"
+            "<td>{}</td>"  // ID
+            "<td>{}}</td>" // blocks
+            "<td>{}}</td>" // directory entries
+            "<td>{}}</td>" // write position
+            "<td>{}</td>"  // write agg to do
+            "<td>{}</td>"  // write agg to do size
+            "<td>{}</td>"  // write agg done
+            "<td>{}</td>"  // phase
+            "<td>{}</td>"  // create time
+            "<td>{}</td>"  // sync serial
+            "<td>{}</td>"  // write serial
+            "</tr>\n",
+            p->hash_text.get(), (uint64_t)((p->len - (p->start - p->skip)) / CACHE_BLOCK_SIZE),
+            (uint64_t)(p->buckets * DIR_DEPTH * p->segments), (uint64_t)((p->header->write_pos - p->start) / CACHE_BLOCK_SIZE),
+            agg_todo, p->agg_todo_size, agg_done, p->header->phase, ctime, p->header->sync_serial, p->header->write_serial);
+  mbw.write("</table>\n");
   SET_HANDLER(&ShowCacheInternal::showSegments);
   return showSegments(event, e);
 }
@@ -291,15 +288,15 @@ ShowCacheInternal::showVolVolumes(int event, Event *e)
 int
 ShowCacheInternal::showSegments(int event, Event *e)
 {
-  CHECK_SHOW(show("<H3>Cache Volume Segments</H3>\n"
-                  "<table border=1><tr>"
-                  "<th>Free</th>"
-                  "<th>Used</th>"
-                  "<th>Empty</th>"
-                  "<th>Valid</th>"
-                  "<th>Agg Valid</th>"
-                  "<th>Avg Size</th>"
-                  "</tr>\n"));
+  mbw.write("<H3>Cache Volume Segments</H3>\n"
+            "<table border=1><tr>"
+            "<th>Free</th>"
+            "<th>Used</th>"
+            "<th>Empty</th>"
+            "<th>Valid</th>"
+            "<th>Agg Valid</th>"
+            "<th>Avg Size</th>"
+            "</tr>\n");
 
   SET_HANDLER(&ShowCacheInternal::showSegSegment);
   seg_index = 0;
@@ -316,20 +313,20 @@ ShowCacheInternal::showSegSegment(int event, Event *e)
   }
   int free = 0, used = 0, empty = 0, valid = 0, agg_valid = 0, avg_size = 0;
   dir_segment_accounted(seg_index, p, 0, &free, &used, &empty, &valid, &agg_valid, &avg_size);
-  CHECK_SHOW(show("<tr>"
-                  "<td>%d</td>"
-                  "<td>%d</td>"
-                  "<td>%d</td>"
-                  "<td>%d</td>"
-                  "<td>%d</td>"
-                  "<td>%d</td>"
-                  "</tr>\n",
-                  free, used, empty, valid, agg_valid, avg_size));
+  mbw.print("<tr>"
+            "<td>{}</td>"
+            "<td>{}</td>"
+            "<td>{}</td>"
+            "<td>{}</td>"
+            "<td>{}</td>"
+            "<td>{}</td>"
+            "</tr>\n",
+            free, used, empty, valid, agg_valid, avg_size);
   seg_index++;
   if (seg_index < p->segments) {
     CONT_SCHED_LOCK_RETRY(this);
   } else {
-    CHECK_SHOW(show("</table>\n"));
+    mbw.write("</table>\n");
     seg_index = 0;
     vol_index++;
     if (vol_index < gnvol) {

@@ -58,6 +58,12 @@ public:
     return this->write(&c, 1);
   }
 
+  self_type &
+  write(std::string_view const &view)
+  {
+    return this->write(view.data(), view.size());
+  }
+
   bool
   error() const override
   {
@@ -112,7 +118,7 @@ public:
   size_t
   capacity() const override
   {
-    return (~size_t(0));
+    return ~size_t(0);
   }
 
   size_t

@@ -261,64 +261,46 @@ OutboundConnTrack::get(std::vector<Group const *> &groups)
   }
 }
 
-std::string
-OutboundConnTrack::to_json_string()
+void
+OutboundConnTrack::write_as_json(ts::BufferWriter &w)
 {
-  std::string text;
-  size_t extent = 0;
-  static const ts::BWFormat header_fmt{R"({{"count": {}, "list": [
+  static const ts::TextView header_fmt{R"({{"list": [
 )"};
   static const ts::BWFormat item_fmt{
     R"(  {{"type": "{}", "ip": "{}", "fqdn": "{}", "current": {}, "max": {}, "blocked": {}, "queued": {}, "alert": {}}},
 )"};
-  static const std::string_view trailer{" \n]}"};
 
-  static const auto printer = [](ts::BufferWriter &w, Group const *g) -> ts::BufferWriter & {
-    w.print(item_fmt, g->_match_type, g->_addr, g->_fqdn, g->_count.load(), g->_count_max.load(), g->_blocked.load(),
-            g->_rescheduled.load(), g->get_last_alert_epoch_time());
-    return w;
-  };
-
-  ts::FixedBufferWriter null_bw{nullptr}; // Empty buffer for sizing work.
-  std::vector<Group const *> groups;
-
-  self_type::get(groups);
-
-  null_bw.print(header_fmt, groups.size()).extent();
-  for (auto g : groups) {
-    printer(null_bw, g);
+  w.write(header_fmt);
+  auto spot = _imp._table.begin();
+  while (spot != _imp._table.end()) {
+    auto const &g = *spot;
+    w.print(item_fmt, g._match_type, g._addr, g._fqdn, g._count.load(), g._count_max.load(), g._blocked.load(),
+            g._rescheduled.load(), g.get_last_alert_epoch_time());
+    std::unique_lock l{_imp._mutex}; // lock for increment.
+    ++spot;
   }
-  extent = null_bw.extent() + trailer.size() - 2; // 2 for the trailing comma newline that will get clipped.
-
-  text.resize(extent);
-  ts::FixedBufferWriter w(const_cast<char *>(text.data()), text.size());
-  w.clip(trailer.size());
-  w.print(header_fmt, groups.size());
-  for (auto g : groups) {
-    printer(w, g);
-  }
-  w.extend(trailer.size());
-  w.write(trailer);
-  return text;
+  w.write(" \n]}");
 }
 
 void
 OutboundConnTrack::dump(FILE *f)
 {
-  std::vector<Group const *> groups;
-
-  self_type::get(groups);
-
-  if (groups.size()) {
+  if (_imp._table.count() > 0) {
+    auto spot = _imp._table.begin();
     fprintf(f, "\nUpstream Connection Tracking\n%7s | %5s | %10s | %24s | %33s | %8s |\n", "Current", "Block", "Queue", "Address",
             "Hostname Hash", "Match");
     fprintf(f, "------|-------|---------|--------------------------|-----------------------------------|----------|\n");
 
-    for (Group const *g : groups) {
+    while (spot != _imp._table.end()) {
+      Group &g = *spot;
+
       ts::LocalBufferWriter<128> w;
-      w.print("{:7} | {:5} | {:5} | {:24} | {:33} | {:8} |\n", g->_count.load(), g->_blocked.load(), g->_rescheduled.load(),
-              g->_addr, g->_hash, g->_match_type);
+      w.print("{:7} | {:5} | {:5} | {:24} | {:33} | {:8} |\n", g._count.load(), g._blocked.load(), g._rescheduled.load(), g._addr,
+              g._hash, g._match_type);
       fwrite(w.data(), w.size(), 1, f);
+      // Need a lock for increment, in case of insertion.
+      std::unique_lock l{_imp._mutex};
+      ++spot;
     }
 
     fprintf(f, "------|-------|-------|--------------------------|-----------------------------------|----------|\n");
@@ -330,7 +312,7 @@ struct ShowConnectionCount : public ShowCont {
   int
   showHandler(int event, Event *e)
   {
-    CHECK_SHOW(show(OutboundConnTrack::to_json_string().c_str()));
+    OutboundConnTrack::write_as_json(mbw);
     return completeJson(event, e);
   }
 };

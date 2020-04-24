@@ -2126,6 +2126,7 @@ AC_SUBST([default_stack_size], [$with_default_stack_size])
 # use modular IOCORE
 #
 iocore_include_dirs="\
+-I\$(abs_top_srcdir)/iocore \
 -I\$(abs_top_srcdir)/iocore/eventsystem \
 -I\$(abs_top_srcdir)/iocore/net \
 -I\$(abs_top_srcdir)/iocore/net/quic \

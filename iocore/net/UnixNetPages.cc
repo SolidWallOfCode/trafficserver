@@ -35,17 +35,16 @@ struct ShowNet : public ShowCont {
   int
   showMain(int event, Event *e)
   {
-    CHECK_SHOW(begin("Net"));
-    CHECK_SHOW(show("<H3>Show <A HREF=\"./connections\">Connections</A></H3>\n"
-                    //"<H3>Show <A HREF=\"./threads\">Net Threads</A></H3>\n"
-                    "<form method = GET action = \"./ips\">\n"
-                    "Show Connections to/from IP (e.g. 127.0.0.1):<br>\n"
-                    "<input type=text name=ip size=64 maxlength=256>\n"
-                    "</form>\n"
-                    "<form method = GET action = \"./ports\">\n"
-                    "Show Connections to/from Port (e.g. 80):<br>\n"
-                    "<input type=text name=name size=64 maxlength=256>\n"
-                    "</form>\n"));
+    this->begin("Net");
+    mbw.print("<H3>Show <A HREF=\"./connections\">Connections</A></H3>\n"
+              "<form method = GET action = \"./ips\">\n"
+              "Show Connections to/from IP (e.g. 127.0.0.1):<br>\n"
+              "<input type=text name=ip size=64 maxlength=256>\n"
+              "</form>\n"
+              "<form method = GET action = \"./ports\">\n"
+              "Show Connections to/from Port (e.g. 80):<br>\n"
+              "<input type=text name=name size=64 maxlength=256>\n"
+              "</form>\n");
     return complete(event, e);
   }
 
@@ -68,47 +67,36 @@ struct ShowNet : public ShowCont {
       if (vc == nullptr || (ats_is_ip(&addr) && !ats_ip_addr_port_eq(&addr.sa, vc->get_remote_addr()))) {
         continue;
       }
-      //      if (port && port != ats_ip_port_host_order(&vc->server_addr.sa) && port != vc->accept_port)
-      //        continue;
-      char ipbuf[INET6_ADDRSTRLEN];
-      ats_ip_ntop(vc->get_remote_addr(), ipbuf, sizeof(ipbuf));
-      char opt_ipbuf[INET6_ADDRSTRLEN];
-      char interbuf[80];
-      snprintf(interbuf, sizeof(interbuf), "[%s] %s:%d", vc->options.toString(vc->options.addr_binding),
-               vc->options.local_ip.toString(opt_ipbuf, sizeof(opt_ipbuf)), vc->options.local_port);
-      CHECK_SHOW(show("<tr>"
-                      //"<td><a href=\"/connection/%d\">%d</a></td>"
-                      "<td>%d</td>"          // ID
-                      "<td>%s</td>"          // ipbuf
-                      "<td>%d</td>"          // port
-                      "<td>%d</td>"          // fd
-                      "<td>%s</td>"          // interbuf
-                                             //                      "<td>%d</td>"     // accept port
-                      "<td>%d secs ago</td>" // start time
-                      "<td>%d</td>"          // thread id
-                      "<td>%d</td>"          // read enabled
-                      "<td>%" PRId64 "</td>" // read NBytes
-                      "<td>%" PRId64 "</td>" // read NDone
-                      "<td>%d</td>"          // write enabled
-                      "<td>%" PRId64 "</td>" // write nbytes
-                      "<td>%" PRId64 "</td>" // write ndone
-                      "<td>%d secs</td>"     // Inactivity timeout at
-                      "<td>%d secs</td>"     // Activity timeout at
-                      "<td>%d</td>"          // shutdown
-                      "<td>-%s</td>"         // comments
-                      "</tr>\n",
-                      vc->id, ipbuf, ats_ip_port_host_order(vc->get_remote_addr()), vc->con.fd, interbuf,
-                      //                      vc->accept_port,
-                      (int)((now - vc->submit_time) / HRTIME_SECOND), ethread->id, vc->read.enabled, vc->read.vio.nbytes,
-                      vc->read.vio.ndone, vc->write.enabled, vc->write.vio.nbytes, vc->write.vio.ndone,
-                      (int)(vc->inactivity_timeout_in / HRTIME_SECOND), (int)(vc->active_timeout_in / HRTIME_SECOND),
-                      vc->f.shutdown, vc->closed ? "closed " : ""));
+      mbw.print("<tr>"
+                "<td>{}</td>"          // ID
+                "<td>{::a}</td>"       // ipbuf
+                "<td>{1::p}</td>"      // port
+                "<td>{}</td>"          // fd
+                "<td>[{}] {::ap}</td>" // interbuf
+                                       //                      "<td>{}</td>"     // accept port
+                "<td>{} secs ago</td>" // start time
+                "<td>{}</td>"          // thread id
+                "<td>{}</td>"          // read enabled
+                "<td>{}</td>"          // read NBytes
+                "<td>{}</td>"          // read NDone
+                "<td>{}</td>"          // write enabled
+                "<td>{}</td>"          // write nbytes
+                "<td>{}</td>"          // write ndone
+                "<td>{} secs</td>"     // Inactivity timeout at
+                "<td>{} secs</td>"     // Activity timeout at
+                "<td>{}</td>"          // shutdown
+                "<td>-{}</td>"         // comments
+                "</tr>\n",
+                vc->id, vc->get_remote_addr(), vc->con.fd, vc->options.addr_binding, vc->options.local_ip,
+                ((now - vc->submit_time) / HRTIME_SECOND), ethread->id, vc->read.enabled, vc->read.vio.nbytes, vc->read.vio.ndone,
+                vc->write.enabled, vc->write.vio.nbytes, vc->write.vio.ndone, (vc->inactivity_timeout_in / HRTIME_SECOND),
+                (vc->active_timeout_in / HRTIME_SECOND), vc->f.shutdown ? "shutdown" : "", vc->closed ? "closed " : "");
     }
     ithread++;
     if (ithread < eventProcessor.thread_group[ET_NET]._count) {
       eventProcessor.thread_group[ET_NET]._thread[ithread]->schedule_imm(this);
     } else {
-      CHECK_SHOW(show("</table>\n"));
+      mbw.write("</table>\n");
       return complete(event, e);
     }
     return EVENT_CONT;
@@ -117,28 +105,28 @@ struct ShowNet : public ShowCont {
   int
   showConnections(int event, Event *e)
   {
-    CHECK_SHOW(begin("Net Connections"));
-    CHECK_SHOW(show("<H3>Connections</H3>\n"
-                    "<table border=1><tr>"
-                    "<th>ID</th>"
-                    "<th>IP</th>"
-                    "<th>Port</th>"
-                    "<th>FD</th>"
-                    "<th>Interface</th>"
-                    "<th>Accept Port</th>"
-                    "<th>Time Started</th>"
-                    "<th>Thread</th>"
-                    "<th>Read Enabled</th>"
-                    "<th>Read NBytes</th>"
-                    "<th>Read NDone</th>"
-                    "<th>Write Enabled</th>"
-                    "<th>Write NBytes</th>"
-                    "<th>Write NDone</th>"
-                    "<th>Inactive Timeout</th>"
-                    "<th>Active   Timeout</th>"
-                    "<th>Shutdown</th>"
-                    "<th>Comments</th>"
-                    "</tr>\n"));
+    this->begin("Net Connections");
+    mbw.write("<H3>Connections</H3>\n"
+              "<table border=1><tr>"
+              "<th>ID</th>"
+              "<th>IP</th>"
+              "<th>Port</th>"
+              "<th>FD</th>"
+              "<th>Interface</th>"
+              "<th>Accept Port</th>"
+              "<th>Time Started</th>"
+              "<th>Thread</th>"
+              "<th>Read Enabled</th>"
+              "<th>Read NBytes</th>"
+              "<th>Read NDone</th>"
+              "<th>Write Enabled</th>"
+              "<th>Write NBytes</th>"
+              "<th>Write NDone</th>"
+              "<th>Inactive Timeout</th>"
+              "<th>Active   Timeout</th>"
+              "<th>Shutdown</th>"
+              "<th>Comments</th>"
+              "</tr>\n");
     SET_HANDLER(&ShowNet::showConnectionsOnThread);
     eventProcessor.thread_group[ET_NET]._thread[0]->schedule_imm(this); // This can not use ET_TASK.
     return EVENT_CONT;
@@ -156,8 +144,8 @@ struct ShowNet : public ShowCont {
       return EVENT_DONE;
     }
 
-    CHECK_SHOW(show("<H3>Thread: %d</H3>\n", ithread));
-    CHECK_SHOW(show("<table border=1>\n"));
+    mbw.write("<H3>Thread: %d</H3>\n", ithread);
+    mbw.write("<table border=1>\n");
     int connections = 0;
     forl_LL(NetEvent, ne, nh->open_list)
     {
@@ -165,14 +153,13 @@ struct ShowNet : public ShowCont {
         ++connections;
       }
     }
-    CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Connections", connections));
-    // CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Last Poll Size", pollDescriptor->nfds));
-    CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Last Poll Ready", pollDescriptor->result));
-    CHECK_SHOW(show("</table>\n"));
-    CHECK_SHOW(show("<table border=1>\n"));
-    CHECK_SHOW(show("<tr><th>#</th><th>Read Priority</th><th>Read Bucket</th><th>Write Priority</th><th>Write Bucket</th></tr>\n"));
-    CHECK_SHOW(show("</table>\n"));
-    ithread++;
+    mbw.print("<tr><td>Connections</td><td>{}</td></tr>\n", connections);
+    mbw.print("<tr><td>Last Pool Ready</td><td>%d</td></tr>\n", pollDescriptor->result);
+    mbw.write("</table>\n");
+    mbw.write("<table border=1>\n");
+    mbw.write("<tr><th>#</th><th>Read Priority</th><th>Read Bucket</th><th>Write Priority</th><th>Write Bucket</th></tr>\n");
+    mbw.write("</table>\n");
+    ++ithread;
     if (ithread < eventProcessor.thread_group[ET_NET]._count) {
       eventProcessor.thread_group[ET_NET]._thread[ithread]->schedule_imm(this);
     } else {
@@ -184,7 +171,7 @@ struct ShowNet : public ShowCont {
   int
   showThreads(int event, Event *e)
   {
-    CHECK_SHOW(begin("Net Threads"));
+    this->begin("Net Threads");
     SET_HANDLER(&ShowNet::showSingleThread);
     eventProcessor.thread_group[ET_NET]._thread[0]->schedule_imm(this); // This can not use ET_TASK
     return EVENT_CONT;
@@ -192,7 +179,7 @@ struct ShowNet : public ShowCont {
   int
   showHostnames(int event, Event *e)
   {
-    CHECK_SHOW(begin("Net Connections to/from Host"));
+    this->begin("Net Connections to/from Host");
     return complete(event, e);
   }
 
@@ -203,42 +190,35 @@ struct ShowNet : public ShowCont {
   }
 };
 
-#undef STREQ_PREFIX
-#define STREQ_PREFIX(_x, _n, _s) (!ptr_len_ncasecmp(_x, _n, _s, sizeof(_s) - 1))
 Action *
 register_ShowNet(Continuation *c, HTTPHdr *h)
 {
   ShowNet *s = new ShowNet(c, h);
-  int path_len;
-  const char *path = h->url_get()->path_get(&path_len);
+  int str_len;
+  const char *str = h->url_get()->path_get(&str_len);
+  ts::TextView path{str, str_len};
 
   SET_CONTINUATION_HANDLER(s, &ShowNet::showMain);
-  if (STREQ_PREFIX(path, path_len, "connections")) {
+  if ("connections"_tv.isNoCasePrefixOf(path)) {
     SET_CONTINUATION_HANDLER(s, &ShowNet::showConnections);
-  } else if (STREQ_PREFIX(path, path_len, "threads")) {
+  } else if ("threads"_tv.isNoCasePrefixOf(path)) {
     SET_CONTINUATION_HANDLER(s, &ShowNet::showThreads);
-  } else if (STREQ_PREFIX(path, path_len, "ips")) {
+  } else if ("ips"_tv.isNoCasePrefixOf(path)) {
     int query_len;
     const char *query = h->url_get()->query_get(&query_len);
-    s->sarg           = ats_strndup(query, query_len);
-    char *gn          = nullptr;
-    if (s->sarg) {
-      gn = static_cast<char *>(memchr(s->sarg, '=', strlen(s->sarg)));
-    }
+    s->sarg.assign(query, query_len);
+    ts::TextView gn = ts::TextView{s->sarg}.split_suffix_at('=');
     if (gn) {
-      ats_ip_pton(gn + 1, &s->addr);
+      ats_ip_pton(gn, &s->addr);
     }
     SET_CONTINUATION_HANDLER(s, &ShowNet::showConnections);
-  } else if (STREQ_PREFIX(path, path_len, "ports")) {
+  } else if ("ports"_tv.isNoCasePrefixOf(path)) {
     int query_len;
     const char *query = h->url_get()->query_get(&query_len);
-    s->sarg           = ats_strndup(query, query_len);
-    char *gn          = nullptr;
-    if (s->sarg) {
-      gn = static_cast<char *>(memchr(s->sarg, '=', strlen(s->sarg)));
-    }
+    s->sarg.assign(query, query_len);
+    ts::TextView gn = ts::TextView{s->sarg}.split_suffix_at('=');
     if (gn) {
-      ats_ip_port_cast(&s->addr.sa) = htons(atoi(gn + 1));
+      ats_ip_port_cast(&s->addr.sa) = htons(svtoi(gn));
     }
     SET_CONTINUATION_HANDLER(s, &ShowNet::showConnections);
   }

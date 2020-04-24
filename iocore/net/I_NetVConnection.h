@@ -319,12 +319,13 @@ struct NetVCOptions {
   /// @name Debugging
   //@{
   /// Convert @a s to its string equivalent.
-  static const char *toString(addr_bind_style s);
+  static std::string_view toString(addr_bind_style s);
   //@}
 
   // noncopyable
   NetVCOptions(const NetVCOptions &) = delete;
 };
+ts::BufferWriter &bwformat(ts::BufferWriter &w, ts::BWFSpec const &spec, NetVCOptions::addr_bind_style style);
 
 /**
   A VConnection for a network socket. Abstraction for a net connection.

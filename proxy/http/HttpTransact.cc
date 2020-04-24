@@ -3481,7 +3481,7 @@ HttpTransact::HandleStatPage(State *s)
 {
   HTTPStatus status;
 
-  if (s->internal_msg_buffer) {
+  if (s->internal_msg_buffer.is_max_read_avail_more_than(0)) {
     status = HTTP_STATUS_OK;
   } else {
     status = HTTP_STATUS_NOT_FOUND;
@@ -3492,14 +3492,11 @@ HttpTransact::HandleStatPage(State *s)
   ///////////////////////////
   // insert content-length //
   ///////////////////////////
-  s->hdr_info.client_response.set_content_length(s->internal_msg_buffer_size);
+  s->hdr_info.client_response.set_content_length(s->internal_msg_buffer.max_read_avail());
 
-  if (s->internal_msg_buffer_type) {
-    int len = strlen(s->internal_msg_buffer_type);
-
-    if (len > 0) {
-      s->hdr_info.client_response.value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, s->internal_msg_buffer_type, len);
-    }
+  if (!s->internal_msg_buffer_type.empty()) {
+    s->hdr_info.client_response.value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, s->internal_msg_buffer_type.data(),
+                                          s->internal_msg_buffer_type.size());
   } else {
     s->hdr_info.client_response.value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, "text/plain", 10);
   }
@@ -3937,7 +3934,7 @@ HttpTransact::handle_server_connection_not_open(State *s)
   if (serve_from_cache) {
     ink_assert(s->cache_info.object_read != nullptr);
     ink_assert(s->cache_info.action == CACHE_DO_UPDATE || s->cache_info.action == CACHE_DO_SERVE);
-    ink_assert(s->internal_msg_buffer == nullptr);
+    ink_assert(s->internal_msg_buffer.is_max_read_avail_more_than(0) == false);
     s->source = SOURCE_CACHE;
     TxnDebug("http_trans", "[hscno] serving stale doc to client");
     build_response_from_cache(s, HTTP_WARNING_CODE_REVALIDATION_FAILED);
@@ -5544,32 +5541,11 @@ HttpTransact::handle_trace_and_options_requests(State *s, HTTPHdr *incoming_hdr)
     ////////////////////////////////////////
     if (s->method == HTTP_WKSIDX_TRACE) {
       TxnDebug("http_trans", "[handle_trace] inserting request in body.");
-      int req_length = incoming_hdr->length_get();
-      HTTP_RELEASE_ASSERT(req_length > 0);
 
-      s->free_internal_msg_buffer();
-      s->internal_msg_buffer_size = req_length * 2;
-
-      if (s->internal_msg_buffer_size <= max_iobuffer_size) {
-        s->internal_msg_buffer_fast_allocator_size = buffer_size_to_index(s->internal_msg_buffer_size);
-        s->internal_msg_buffer = static_cast<char *>(ioBufAllocator[s->internal_msg_buffer_fast_allocator_size].alloc_void());
-      } else {
-        s->internal_msg_buffer_fast_allocator_size = -1;
-        s->internal_msg_buffer                     = static_cast<char *>(ats_malloc(s->internal_msg_buffer_size));
-      }
-
-      // clear the stupid buffer
-      memset(s->internal_msg_buffer, '\0', s->internal_msg_buffer_size);
-
-      int offset = 0;
-      int used   = 0;
-      int done;
-      done = incoming_hdr->print(s->internal_msg_buffer, s->internal_msg_buffer_size, &used, &offset);
-      HTTP_RELEASE_ASSERT(done);
-      s->internal_msg_buffer_size = used;
-      s->internal_msg_buffer_type = ats_strdup("message/http");
-
+      s->clear_internal_msg_buffer(HTTP_HEADER_BUFFER_SIZE_INDEX);
+      auto used = HttpSM::write_header_into_buffer(incoming_hdr, &s->internal_msg_buffer);
       s->hdr_info.client_response.set_content_length(used);
+      s->internal_msg_buffer_type = "message/http";
     } else {
       // For OPTIONS request insert supported methods in ALLOW field
       TxnDebug("http_trans", "[handle_options] inserting methods in Allow.");
@@ -8105,20 +8081,20 @@ HttpTransact::build_error_response(State *s, HTTPStatus status_code, const char 
   int64_t len;
   char *new_msg;
 
-  new_msg = body_factory->fabricate_with_old_api(
+  auto reader = s->internal_msg_buffer.alloc_reader();
+  new_msg     = body_factory->fabricate_with_old_api(
     error_body_type, s, s->http_config_param->body_factory_response_max_size, &len, body_language, sizeof(body_language), body_type,
-    sizeof(body_type), s->internal_msg_buffer_size, s->internal_msg_buffer_size ? s->internal_msg_buffer : nullptr);
+    sizeof(body_type), reader->block_read_avail(), reader->block_read_avail() ? reader->start() : nullptr);
 
   // After the body factory is called, a new "body" is allocated, and we must replace it. It is
   // unfortunate that there's no way to avoid this fabrication even when there is no substitutions...
-  s->free_internal_msg_buffer();
+  s->internal_msg_buffer.clear();
   if (len == 0) {
     // If the file is empty, we may have a malloc(1) buffer. Release it.
-    new_msg = static_cast<char *>(ats_free_null(new_msg));
+    ats_free(new_msg);
+  } else {
+    s->internal_msg_buffer.append_xmalloced(new_msg, len);
   }
-  s->internal_msg_buffer                     = new_msg;
-  s->internal_msg_buffer_size                = len;
-  s->internal_msg_buffer_fast_allocator_size = -1;
 
   if (len > 0) {
     s->hdr_info.client_response.value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, body_type, strlen(body_type));
@@ -8178,14 +8154,13 @@ HttpTransact::build_redirect_response(State *s)
   //////////////////////////
   // set descriptive text //
   //////////////////////////
-  s->free_internal_msg_buffer();
-  s->internal_msg_buffer_fast_allocator_size = -1;
-  // template redirect#temporarily can not be used here since there is no way to pass the computed url to the template.
-  s->internal_msg_buffer = body_factory->getFormat(8192, &s->internal_msg_buffer_size, "%s <a href=\"%s\">%s</a>.  %s.",
-                                                   "The document you requested is now", new_url, new_url,
-                                                   "Please update your documents and bookmarks accordingly", nullptr);
+  s->internal_msg_buffer.clear();
+  s->internal_msg_buffer.alloc(BUFFER_SIZE_INDEX_8K);
+  ts::FixedBufferWriter w(s->internal_msg_buffer.start(), s->internal_msg_buffer.first_write_block()->size());
+  w.print(R"(The document you requested is now <a href="{}">{}</a>.  Please update your documents and bookmarks accordingly.)",
+          new_url, new_url);
 
-  h->set_content_length(s->internal_msg_buffer_size);
+  h->set_content_length(s->internal_msg_buffer.max_read_avail());
   h->value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, "text/html", 9);
 
   s->arena.str_free(to_free);

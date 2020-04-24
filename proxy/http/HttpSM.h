@@ -478,7 +478,7 @@ protected:
   void mark_server_down_on_client_abort();
   void release_server_session(bool serve_from_cache = false);
   void set_ua_abort(HttpTransact::AbortState_t ua_abort, int event);
-  int write_header_into_buffer(HTTPHdr *h, MIOBuffer *b);
+  static int write_header_into_buffer(HTTPHdr *h, MIOBuffer *b);
   int write_response_header_into_buffer(HTTPHdr *h, MIOBuffer *b);
   void setup_blind_tunnel_port();
   void setup_client_header_nca();
@@ -637,6 +637,8 @@ private:
   int _client_connection_id = -1, _client_transaction_id = -1;
   int _client_transaction_priority_weight = -1, _client_transaction_priority_dependence = -1;
   bool _from_early_data = false;
+
+  friend class HttpTransact;
 };
 
 // Function to get the cache_sm object - YTS Team, yamsat
