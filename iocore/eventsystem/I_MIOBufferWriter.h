@@ -39,6 +39,79 @@
 #include <I_IOBuffer.h>
 #endif
 
+/** BufferWriter on top of IO Buffer Blocks.
+ * This is intended for use as a base class for various other structures that are
+ * based on IOBufferBlocks.
+ */
+class IOBlockWriter : public ts::BufferWriter
+{
+  using self_type = IOBlockWriter;
+
+public:
+  /// Default constructor.
+  IOBlockWriter() = default;
+
+  /** Constructor.
+   *
+   * @param b Initial block to write.
+   */
+  IOBlockWriter(IOBufferBlock *b) : _tail(b), _block(b) {}
+
+  /** Write a single character.
+   *
+   * @param c Character to write.
+   * @return @a this
+   */
+  self_type &write(char c) override;
+
+  /** Write a block of @a data.
+   *
+   * @param data Content to write.
+   * @param length Number of bytes to write in @a data.
+   * @return @a this.
+   */
+  self_type &write(void const *data, size_t length) override;
+
+protected:
+  Ptr<IOBufferBlock> _tail;
+  IOBufferBlock *_block;
+};
+
+auto
+IOBlockWriter::write(const void *data, size_t length) -> self_type &
+{
+  while (length > 0) {
+    if (!_block) {
+    }
+  }
+}
+
+auto
+IOBlockWriter::write(char c) -> self_type &
+{
+  this->write(&c, 1);
+}
+
+/// BufferWriter for IOBufferChain.
+class IOChainWriter : public IOBlockWriter
+{
+  using self_type = IOChainWriter;
+
+public:
+  IOChainWriter(IOBufferChain *chain) : _chain(chain) {}
+
+  /** Write a block of @a data.
+   *
+   * @param data Content to write.
+   * @param length Number of bytes to write in @a data.
+   * @return @a this.
+   */
+  self_type &write(void const *data, size_t length) override;
+
+protected:
+  IOBufferChain *_chain;
+};
+
 /** BufferWriter interface on top of IOBuffer blocks.
 
     @internal This should be changed to IOBufferChain once I port that to open source.
