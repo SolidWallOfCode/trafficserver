@@ -309,10 +309,10 @@ main(int argc, const char *argv[])
     h_type = RESPONSE_HDR;
   } else if (strcasecmp(argv[1], "hinfo") == 0) {
     h_type = HTTP_INFO_HDR;
-  } else if (strcasecmp(argv[1], "mbuf") == 0) {
+  } else if (strcasecmp(argv[1], "bug") == 0) {
     h_type = RAW_MBUFFER;
   } else {
-    fprintf(stderr, "Usage: %s req|resp|hinfo|mbuf <file>\n", argv[0]);
+    fprintf(stderr, "Usage: %s req|resp|hinfo|bug <file>\n", argv[0]);
     exit(1);
   }
 

@@ -373,7 +373,7 @@ CacheVC::reenable(VIO *avio)
   if (!trigger) {
 #ifndef USELESS_REENABLES
     if (vio.op == VIO::READ) {
-      if (vio.buffer.mbuf->max_read_avail() > vio.buffer.writer()->water_mark)
+      if (vio.buffer.bug->max_read_avail() > vio.buffer.writer()->water_mark)
         ink_assert(!"useless reenable of cache read");
     } else if (!vio.buffer.reader()->read_avail())
       ink_assert(!"useless reenable of cache write");

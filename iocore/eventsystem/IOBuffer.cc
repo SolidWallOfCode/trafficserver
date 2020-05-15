@@ -298,8 +298,35 @@ IOBufferChain::write(IOBufferData *data, int64_t length, int64_t offset)
   return zret;
 }
 
-void
-IOBufferChain::append(IOBufferBlock *block)
+ts::MemSpan<char>
+IOBufferChain::writable()
+{
+  if (_tail) {
+    return {_tail->end(), size_t(_tail->write_avail())};
+  }
+  return {};
+}
+
+auto
+IOBufferChain::fill(int64_t n) -> self_type &
+{
+  if (_tail) {
+    _tail->fill(n);
+    _len += n;
+  }
+  return *this;
+}
+
+auto
+IOBufferChain::add_block(int64_t size) -> self_type &
+{
+  auto block = new_IOBufferBlock_internal(_location);
+  block->alloc(size);
+  return this->append(block);
+}
+
+auto
+IOBufferChain::append(IOBufferBlock *block) -> self_type &
 {
   if (nullptr == _tail) {
     _head = block;
@@ -308,6 +335,7 @@ IOBufferChain::append(IOBufferBlock *block)
     _tail->next = block;
     _tail       = block;
   }
+  return *this;
 }
 
 int64_t

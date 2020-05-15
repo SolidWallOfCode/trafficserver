@@ -6079,7 +6079,7 @@ HttpSM::setup_server_send_request()
   server_entry->write_buffer = new_MIOBuffer(HTTP_HEADER_BUFFER_SIZE_INDEX);
 
   if (t_state.api_server_request_body_set) {
-    msg_len = t_state.internal_msg_buffer.max_read_avail();
+    msg_len = t_state.internal_msg_buffer.length();
     t_state.hdr_info.server_request.value_set_int64(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH, msg_len);
   }
 
@@ -6093,9 +6093,7 @@ HttpSM::setup_server_send_request()
   // the plugin decided to append a message to the request
   if (t_state.api_server_request_body_set) {
     SMDebug("http", "[%" PRId64 "] appending msg of %" PRId64 " bytes to request.", sm_id, msg_len);
-    auto reader = t_state.internal_msg_buffer.alloc_reader();
-    hdr_length += server_entry->write_buffer->write(reader);
-    t_state.internal_msg_buffer.dealloc_reader(reader);
+    hdr_length += server_entry->write_buffer->write(&t_state.internal_msg_buffer);
     server_request_body_bytes = msg_len;
   }
 
@@ -6301,7 +6299,7 @@ HttpSM::setup_100_continue_transfer()
 void
 HttpSM::setup_error_transfer()
 {
-  if (t_state.internal_msg_buffer.is_max_read_avail_more_than(0) || is_response_body_precluded(t_state.http_return_code)) {
+  if (t_state.internal_msg_buffer.length() > 0 || is_response_body_precluded(t_state.http_return_code)) {
     // Since we need to send the error message, call the API
     //   function
     t_state.api_next_action = HttpTransact::SM_ACTION_API_SEND_RESPONSE_HDR;
@@ -6321,12 +6319,12 @@ HttpSM::setup_internal_transfer(HttpSMHandler handler_arg)
 {
   bool is_msg_buf_present;
 
-  if (t_state.internal_msg_buffer.is_max_read_avail_more_than(0)) {
+  if (t_state.internal_msg_buffer.length() > 0) {
     is_msg_buf_present = true;
 
     // Set the content length here since a plugin
     //   may have changed the error body
-    t_state.hdr_info.client_response.set_content_length(t_state.internal_msg_buffer.max_read_avail());
+    t_state.hdr_info.client_response.set_content_length(t_state.internal_msg_buffer.length());
     t_state.hdr_info.client_response.field_delete(MIME_FIELD_TRANSFER_ENCODING, MIME_LEN_TRANSFER_ENCODING);
 
     // set internal_msg_buffer_type if available
@@ -6371,8 +6369,7 @@ HttpSM::setup_internal_transfer(HttpSMHandler handler_arg)
   // to it so that it can be freed.
 
   if (is_msg_buf_present && t_state.method != HTTP_WKSIDX_HEAD) {
-    auto reader = t_state.internal_msg_buffer.alloc_reader();
-    nbytes += buf->write(reader);
+    nbytes += buf->write(&t_state.internal_msg_buffer);
     t_state.internal_msg_buffer.clear();
   }
 

@@ -727,7 +727,7 @@ public:
     bool did_upgrade_succeed = false;
 
     /// Internal buffer to serve instead of upstream or cache.
-    MIOBuffer internal_msg_buffer{DEFAULT_SMALL_BUFFER_SIZE, "internal msg buffer"};
+    IOBufferChain internal_msg_buffer{"internal msg buffer"};
     /// Content type for @a internal_msg_buffer
     std::string internal_msg_buffer_type;
 
@@ -862,12 +862,9 @@ public:
      * larger values are clipped to that size.
      */
     void
-    clear_internal_msg_buffer(size_t size = default_small_iobuffer_size)
+    clear_internal_msg_buffer()
     {
       internal_msg_buffer.clear();
-      // Gah. If the size is smaller than the smallest buffer, treat it as an index.
-      // Otherwise assume it's a size and get the index.
-      internal_msg_buffer.size_index = (size < MAX_BUFFER_SIZE_INDEX) ? size : buffer_size_to_index(size);
       internal_msg_buffer_type.clear();
     }
 

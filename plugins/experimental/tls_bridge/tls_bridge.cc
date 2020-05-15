@@ -42,7 +42,7 @@ const std::string TS_CONFIG_DIR{TSConfigDirGet()};
 // Utility functions
 
 /** Remove a field from a header.
-    @a field is the name of the field, which is removed from the header specified by @a mbuf and @a hdr_loc.
+    @a field is the name of the field, which is removed from the header specified by @a bug and @a hdr_loc.
 */
 void
 Hdr_Remove_Field(TSMBuffer mbuf, TSMLoc hdr_loc, TextView field)

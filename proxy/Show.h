@@ -33,16 +33,14 @@
 #include "eventsystem/I_MIOBufferWriter.h"
 #include "StatPages.h"
 
-//#define STREQ_PREFIX(_x, _s) (!strncasecmp(_x, _s, sizeof(_s) - 1))
-
 struct ShowCont;
 using ShowContEventHandler = int (ShowCont::*)(int event, Event *data);
 struct ShowCont : public Continuation {
 private:
-  MIOBuffer mbuf;
+  IOBufferChain buf;
 
 public:
-  MIOBufferWriter mbw{&mbuf};
+  IOChainWriter mbw{buf};
   Action action;
   std::string sarg;
 
@@ -50,16 +48,16 @@ public:
   finishConn(int event, Event *e)
   {
     if (!action.cancelled) {
-      action.continuation->handleEvent(STAT_PAGE_SUCCESS, &mbuf);
+      action.continuation->handleEvent(STAT_PAGE_SUCCESS, &buf);
     }
-    mbuf.clear();
+    buf.clear();
     return done(VIO::CLOSE, event, e);
   }
 
   int
   complete(int event, Event *e)
   {
-    MIOBufferWriter{&mbuf}.print("</BODY>\n</HTML>\n");
+    mbw.print("</BODY>\n</HTML>\n");
     return finishConn(event, e);
   }
 
@@ -75,7 +73,7 @@ public:
     if (!action.cancelled) {
       action.continuation->handleEvent(STAT_PAGE_FAILURE, nullptr);
     }
-    mbuf.clear();
+    buf.clear();
     return done(VIO::ABORT, event, e);
   }
 
@@ -105,8 +103,8 @@ public:
   {
     mutex  = c->mutex;
     action = c;
-    mbuf.clear(); // make sure it's empty.
+    buf.clear(); // make sure it's empty.
   }
 
-  ~ShowCont() override { mbuf.clear(); }
+  ~ShowCont() override { buf.clear(); }
 };

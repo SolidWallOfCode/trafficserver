@@ -45,6 +45,7 @@
 #include "tscore/Ptr.h"
 #include "tscore/ink_assert.h"
 #include "tscore/ink_resource.h"
+#include "tscpp/util/MemSpan.h"
 
 struct MIOBufferAccessor;
 
@@ -503,7 +504,7 @@ class IOBufferChain
 
 public:
   /// Default constructor - construct empty chain.
-  IOBufferChain() = default;
+  IOBufferChain(const char *location = "IOBufferChain") : _location(location) {}
   /// Shallow copy.
   self_type &operator=(self_type const &that);
 
@@ -526,6 +527,30 @@ public:
   /// The buffer block is unchanged.
   int64_t write(IOBufferData *data, int64_t length = 0, int64_t offset = 0);
 
+  /** Retrieve the currently writable output memory.
+   *
+   * @return A span covering the memory to which to write output.
+   *
+   * The return span may be empty.
+   */
+  ts::MemSpan<char> writable();
+
+  /** Commit @a n bytes of writable memory.
+   *
+   * @param n Number of bytes to commit.
+   *
+   * This marks @a n bytes of the writable area as consumed / written.
+   * @return @a this.
+   */
+  self_type &fill(int64_t n);
+
+  /** Add a new block to the end of the chain.
+   *
+   * @param size Size or index of the block.
+   * @return @a this.
+   */
+  self_type &add_block(int64_t size);
+
   /// Remove @a size bytes of content from the front of the chain.
   /// @return The actual number of bytes removed.
   int64_t consume(int64_t size);
@@ -536,6 +561,10 @@ public:
   /// Get the first block.
   IOBufferBlock *head();
   IOBufferBlock const *head() const;
+
+  /// Get the last block.
+  IOBufferBlock *tail();
+  IOBufferBlock const *tail() const;
 
   /// STL Container support.
 
@@ -591,16 +620,25 @@ public:
   const_iterator end() const;
 
 protected:
-  /// Append @a block.
-  void append(IOBufferBlock *block);
+  /** Append @a block.
+   *
+   * @param block Block to append.
+   *
+   * @a block is added after the last block (@a _tail ).
+   */
+  self_type &append(IOBufferBlock *block);
 
   /// Head of buffer block chain.
+  /// This anchors the chain.
   Ptr<IOBufferBlock> _head;
   /// Tail of the block chain.
+  /// Additional blocks are added after this block.
   IOBufferBlock *_tail = nullptr;
   /// The amount of data of interest.
   /// Not necessarily the amount of data in the chain of blocks.
   int64_t _len = 0;
+  /// Allocation source for debugging.
+  const char *_location;
 };
 
 /**
@@ -1438,6 +1476,18 @@ inline IOBufferBlock *
 IOBufferChain::head()
 {
   return _head.get();
+}
+
+inline IOBufferBlock const *
+IOBufferChain::tail() const
+{
+  return _tail;
+}
+
+inline IOBufferBlock *
+IOBufferChain::tail()
+{
+  return _tail;
 }
 
 inline void

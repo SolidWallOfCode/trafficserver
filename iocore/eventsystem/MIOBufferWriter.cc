@@ -28,41 +28,30 @@
 
 #include "I_MIOBufferWriter.h"
 
-//
-// MIOBufferWriter
-//
-MIOBufferWriter &
-MIOBufferWriter::write(const void *data_, size_t length)
+auto
+IOBlockWriter::write(const void *data, size_t length) -> self_type &
 {
-  const char *data = static_cast<const char *>(data_);
-
-  while (length) {
-    IOBufferBlock *iobbPtr = _miob->first_write_block();
-
-    if (!iobbPtr) {
-      addBlock();
-
-      iobbPtr = _miob->first_write_block();
-
-      ink_assert(iobbPtr);
-    }
-
-    size_t writeSize = iobbPtr->write_avail();
-
-    if (length < writeSize) {
-      writeSize = length;
-    }
-
-    std::memcpy(iobbPtr->end(), data, writeSize);
-    iobbPtr->fill(writeSize);
-
-    data += writeSize;
-    length -= writeSize;
-
-    _numWritten += writeSize;
+  while (length > 0) {
+    auto span = this->writable();
+    auto n    = std::min(span.size(), length);
+    memcpy(span.data(), data, n);
+    length -= n;
+    this->commit(n);
   }
-
   return *this;
+}
+
+ts::MemSpan<char>
+IOChainWriter::writable()
+{
+  auto span = _chain.writable();
+  if (span.empty()) {
+    // Get bigger blocks if more space is needed, up to the max block size.
+    _block_size_idx = std::min<int64_t>(_block_size_idx + 1, MAX_BUFFER_SIZE_INDEX);
+    _chain.add_block(_block_size_idx);
+    span = _chain.writable();
+  }
+  return span;
 }
 
 #if defined(UNIT_TEST_BUFFER_WRITER)
