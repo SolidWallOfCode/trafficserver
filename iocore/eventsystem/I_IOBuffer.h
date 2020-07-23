@@ -569,7 +569,8 @@ public:
   /// STL Container support.
 
   /// Block iterator.
-  /// @internal The reason for this is to override the increment operator.
+  /// @internal The reason for this is to override the increment operator to
+  /// skip over block boundaries smoothly.
   class const_iterator : public std::forward_iterator_tag
   {
     using self_type = const_iterator; ///< Self reference type.

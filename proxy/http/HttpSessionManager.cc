@@ -267,7 +267,6 @@ ServerSessionPool::eventHandler(int event, void *data)
           s->conn_track_group) {
         Debug("http_ss", "s->conn_track_group->min_keep_alive_conns : %d", s->conn_track_group->min_keep_alive_conns);
         bool connection_count_below_min = s->conn_track_group->_count <= s->conn_track_group->min_keep_alive_conns;
-
         if (connection_count_below_min) {
           Debug("http_ss",
                 "[%" PRId64 "] [session_bucket] session received io notice [%s], "

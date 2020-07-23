@@ -3481,7 +3481,7 @@ HttpTransact::HandleStatPage(State *s)
 {
   HTTPStatus status;
 
-  if (s->internal_msg_buffer.is_max_read_avail_more_than(0)) {
+  if (s->internal_msg_buffer.length() > 0) {
     status = HTTP_STATUS_OK;
   } else {
     status = HTTP_STATUS_NOT_FOUND;
@@ -3492,7 +3492,7 @@ HttpTransact::HandleStatPage(State *s)
   ///////////////////////////
   // insert content-length //
   ///////////////////////////
-  s->hdr_info.client_response.set_content_length(s->internal_msg_buffer.max_read_avail());
+  s->hdr_info.client_response.set_content_length(s->internal_msg_buffer.length());
 
   if (!s->internal_msg_buffer_type.empty()) {
     s->hdr_info.client_response.value_set(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE, s->internal_msg_buffer_type.data(),
@@ -5542,7 +5542,6 @@ HttpTransact::handle_trace_and_options_requests(State *s, HTTPHdr *incoming_hdr)
     if (s->method == HTTP_WKSIDX_TRACE) {
       TxnDebug("http_trans", "[handle_trace] inserting request in body.");
 
-      s->clear_internal_msg_buffer(HTTP_HEADER_BUFFER_SIZE_INDEX);
       auto used = HttpSM::write_header_into_buffer(incoming_hdr, &s->internal_msg_buffer);
       s->hdr_info.client_response.set_content_length(used);
       s->internal_msg_buffer_type = "message/http";

@@ -60,7 +60,7 @@ ink_code_incr_md5_init(INK_DIGEST_CTX *context)
 /**
   @brief Wrapper around MD5_Update
 */
-int
+N int
 ink_code_incr_md5_update(INK_DIGEST_CTX *context, const char *input, int input_length)
 {
   return MD5_Update(context, input, input_length);
