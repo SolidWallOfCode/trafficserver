@@ -846,8 +846,8 @@ public:
       via_string[VIA_DETAIL_SERVER_DESCRIPTOR] = VIA_DETAIL_SERVER_DESCRIPTOR_STRING;
       via_string[MAX_VIA_INDICES]              = '\0';
 
-//      memset(user_args, 0, sizeof(user_args));
-//      memset((void *)&host_db_info, 0, sizeof(host_db_info));
+      //      memset(user_args, 0, sizeof(user_args));
+      //      memset((void *)&host_db_info, 0, sizeof(host_db_info));
     }
 
     void

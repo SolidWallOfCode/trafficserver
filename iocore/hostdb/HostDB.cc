@@ -70,8 +70,8 @@ ClassAllocator<HostDBContinuation> hostDBContAllocator("hostDBContAllocator");
 /// Configuration / API conversion.
 extern const MgmtConverter HostDBDownServerCacheTimeConv;
 const MgmtConverter HostDBDownServerCacheTimeConv(
-  [](void *data) -> MgmtInt {
-    return static_cast<MgmtInt>(static_cast<decltype(OverridableHttpConfigParams::down_server_timeout) *>(data)->count());
+  [](void const *data) -> MgmtInt {
+    return static_cast<MgmtInt>(static_cast<decltype(OverridableHttpConfigParams::down_server_timeout) const *>(data)->count());
   },
   [](void *data, MgmtInt i) -> void {
     using timer_type                 = decltype(OverridableHttpConfigParams::down_server_timeout);

@@ -2218,7 +2218,7 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
     HostDBRoundRobin *rr = r->round_robin ? r->rr() : nullptr;
     if (rr) {
       // if use_client_target_addr is set, make sure the client addr is in the results pool
-      if (use_client_addr && rr->find_ip(client_addr) == nullptr) {
+      if (use_client_addr && rr->find_ip(t_state.dns_info.client_target_addr) == nullptr) {
         SMDebug("http", "use_client_target_addr == 1. Client specified address is not in the pool, not validated.");
         t_state.dns_info.lookup_validated = false;
       } else {
@@ -2245,7 +2245,7 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
         }
       }
     } else {
-      if (use_client_addr && !ats_ip_addr_eq(client_addr, &r->data.ip.sa)) {
+      if (use_client_addr && !ats_ip_addr_eq(t_state.dns_info.client_target_addr, &r->data.ip.sa)) {
         SMDebug("http", "use_client_target_addr == 1. Comparing single addresses failed, not validated.");
         t_state.dns_info.lookup_validated = false;
       } else {
@@ -2253,9 +2253,9 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
       }
     }
     if (ret) {
-      t_state.host_db_info = *ret;
-      ink_release_assert(!t_state.host_db_info.reverse_dns);
-      ink_release_assert(ats_is_ip(t_state.host_db_info.ip()));
+      //      t_state.host_db_info = *ret;
+      //      ink_release_assert(!t_state.host_db_info.reverse_dns);
+      //      ink_release_assert(ats_is_ip(t_state.host_db_info.ip()));
     }
   } else {
     SMDebug("http", "[%" PRId64 "] DNS lookup failed for '%s'", sm_id, t_state.dns_info.lookup_name);
@@ -2263,9 +2263,9 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
     if (!use_client_addr) {
       t_state.dns_info.lookup_success = false;
     }
-    t_state.host_db_info.app.allotment.application1 = 0;
-    t_state.host_db_info.app.allotment.application2 = 0;
-    ink_assert(!t_state.host_db_info.round_robin);
+    //    t_state.host_db_info.app.allotment.application1 = 0;
+    //    t_state.host_db_info.app.allotment.application2 = 0;
+    //    ink_assert(!t_state.host_db_info.round_robin);
   }
 
   milestones[TS_MILESTONE_DNS_LOOKUP_END] = Thread::get_hrtime();

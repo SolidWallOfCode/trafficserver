@@ -399,11 +399,11 @@ struct HostDBInfo : public RefCountObj {
     return _iobuffer_index >= 0;
   }
 
+  HostDBInfo *select_best_http(ResolveInfo *info, ts_clock_time now);
+
 private:
   // The value of this will be -1 for objects that are not created by the alloc() static member function.
   int _iobuffer_index;
-
-  HostDBInfo *select_best_http(ResolveInfo *info, ts_clock_time now);
 };
 
 struct HostDBRoundRobin {
