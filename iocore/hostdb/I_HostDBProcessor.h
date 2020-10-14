@@ -94,54 +94,52 @@ makeHostHash(const char *string)
 //
 
 union HostDBApplicationInfo {
-  struct application_data_allotment {
-    unsigned int application1;
-    unsigned int application2;
-  } allotment;
-
-  //////////////////////////////////////////////////////////
-  // http server attributes in the host database          //
-  //                                                      //
-  // http_version       - one of HttpVersion_t            //
-  // keep_alive_timeout - in seconds. (up to 63 seconds). //
-  // last_failure       - UNIX time for the last time     //
-  //                      we tried the server & failed    //
-  // fail_count         - Number of times we tried and    //
-  //                       and failed to contact the host //
-  //////////////////////////////////////////////////////////
-  struct http_server_attr {
-    std::atomic<uint64_t> last_failure;
-    unsigned int http_version : 3;
-    unsigned int keepalive_timeout : 6;
-    unsigned int fail_count : 8;
-    unsigned int unused1 : 8;
-  } http_data;
-
-  enum HttpVersion_t {
+  enum HttpVersion : uint8_t {
     HTTP_VERSION_UNDEFINED = 0,
     HTTP_VERSION_09        = 1,
     HTTP_VERSION_10        = 2,
     HTTP_VERSION_11        = 3,
   };
 
+  //////////////////////////////////////////////////////////
+  // http server attributes in the host database          //
+  //                                                      //
+  // http_version       - one of HttpVersion_t            //
+  // last_failure       - UNIX time for the last time     //
+  //                      we tried the server & failed    //
+  // fail_count         - Number of times we tried and    //
+  //                       and failed to contact the host //
+  //////////////////////////////////////////////////////////
+  struct http_server_attr {
+    std::atomic<ts_clock_time> last_failure{TS_TIME_ZERO};
+    HttpVersion http_version;
+    uint8_t fail_count;
+  } http_data;
+
   struct application_data_rr {
-    unsigned int offset;
+    unsigned int offset; ///< Offset of round robin records (from base pointer).
   } rr;
 
   ts_clock_time
   last_fail_time() const
   {
-    return ts_clock_time{ts_seconds(http_data.last_failure)};
+    return http_data.last_failure;
   }
 
-  HostDBApplicationInfo() { ink_zero(*this); }
+  void
+  clear()
+  {
+    ink_zero(*this);
+  }
 
-  HostDBApplicationInfo(HostDBApplicationInfo const &that) { memcpy(this, &that, sizeof(that)); }
+  HostDBApplicationInfo() { this->clear(); }
+
+  HostDBApplicationInfo(HostDBApplicationInfo const &that) { memcpy(static_cast<void *>(this), &that, sizeof(that)); }
 
   HostDBApplicationInfo &
   operator=(HostDBApplicationInfo const &that)
   {
-    memcpy(this, &that, sizeof(that));
+    memcpy(static_cast<void *>(this), &that, sizeof(that));
     return *this;
   }
 };
@@ -179,14 +177,14 @@ struct HostDBInfo : public RefCountObj {
   {
     ink_release_assert(from_alloc());
     Debug("hostdb", "freeing %d bytes at [%p]", (1 << (7 + _iobuffer_index)), this);
-    ioBufAllocator[_iobuffer_index].free_void((void *)(this));
+    ioBufAllocator[_iobuffer_index].free_void(static_cast<void *>(this));
   }
 
   // return a version number-- so we can manage compatibility with the marshal/unmarshal
   static ts::VersionNumber
   version()
   {
-    return ts::VersionNumber(1, 0);
+    return ts::VersionNumber(3, 0);
   }
 
   static HostDBInfo *
@@ -197,7 +195,7 @@ struct HostDBInfo : public RefCountObj {
     }
     HostDBInfo *ret = HostDBInfo::alloc(size - sizeof(HostDBInfo));
     int buf_index   = ret->_iobuffer_index;
-    memcpy((void *)ret, buf, size);
+    memcpy(static_cast<void *>(ret), buf, size);
     // Reset the refcount back to 0, this is a bit ugly-- but I'm not sure we want to expose a method
     // to mess with the refcount, since this is a fairly unique use case
     ret                  = new (ret) HostDBInfo();
@@ -297,36 +295,33 @@ struct HostDBInfo : public RefCountObj {
     return false;
   }
 
-  /*
-   * Given the current time `now` and the fail_window, determine if this real is alive
-   */
+  /// Server is alive if the last failure time is zero.
   bool
-  is_alive(ts_clock_time now, ts_seconds fail_window)
+  is_alive()
   {
-    return ts_time_zero == app.last_fail_time();
+    return app.last_fail_time() != TS_TIME_ZERO;
   }
 
   bool
   is_zombie(ts_clock_time now, ts_seconds fail_window)
   {
     auto last_fail = app.last_fail_time();
-    return last_fail != ts_time_zero && last_fail + fail_window >= now;
+    return last_fail != TS_TIME_ZERO && last_fail + fail_window >= now;
   }
 
   bool
   is_dead(ts_clock_time now, ts_seconds fail_window)
   {
     auto last_fail = app.last_fail_time();
-    return last_fail != ts_time_zero && last_fail + fail_window < now;
+    return (last_fail != TS_TIME_ZERO) && (last_fail + fail_window < now);
   }
 
   bool
   select(ts_clock_time now, ts_seconds fail_window)
   {
-    auto last_failure = app.http_data.last_failure.load();
-    if (last_failure != 0) {
-      return ts_clock::from_time_t(last_failure) + fail_window >= now &&
-             app.http_data.last_failure.compare_exchange_strong(last_failure, ts_clock::to_time_t(now));
+    auto last_failure = app.last_fail_time();
+    if (last_failure != TS_TIME_ZERO) {
+      return (last_failure + fail_window >= now) && app.http_data.last_failure.compare_exchange_strong(last_failure, now);
     }
     return true; // Ready to go!
   }
@@ -349,6 +344,28 @@ struct HostDBInfo : public RefCountObj {
     }
   }
 
+  /** Mark the entry as down.
+   *
+   * @param now Time of the failure.
+   * @return @c true if @a this was marked down, @c false if not.
+   *
+   * This can return @c false if the entry is already marked down, in which case the failure time is not updated.
+   */
+  bool
+  mark_down(ts_clock_time now)
+  {
+    auto t0{TS_TIME_ZERO};
+    return app.http_data.last_failure.compare_exchange_strong(t0, now);
+  }
+
+  bool
+  mark_up()
+  {
+    bool zret                  = this->is_alive();
+    app.http_data.last_failure = TS_TIME_ZERO;
+    return zret;
+  }
+
   uint64_t key;
 
   // Application specific data. NOTE: We need an integral number of
@@ -358,11 +375,12 @@ struct HostDBInfo : public RefCountObj {
 
   union {
     IpEndpoint ip;                ///< IP address / port data.
-    unsigned int hostname_offset; ///< Some hostname thing.
+    unsigned int hostname_offset; ///< Offset to hostname result for reverse DNS lookups. 0 -> failure.
     SRVInfo srv;
   } data;
 
-  unsigned int hostname_offset; // always maintain a permanent copy of the hostname for non-rev dns records.
+  /// Offset from base object to original query name.
+  unsigned int hostname_offset;
 
   unsigned int ip_timestamp;
 
@@ -399,7 +417,7 @@ struct HostDBInfo : public RefCountObj {
     return _iobuffer_index >= 0;
   }
 
-  HostDBInfo *select_best_http(ResolveInfo *info, ts_clock_time now);
+  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_clock_time now);
 
 private:
   // The value of this will be -1 for objects that are not created by the alloc() static member function.
@@ -461,7 +479,7 @@ struct HostDBRoundRobin {
    *
    * The returned host record will be down iff all hosts in the record are down.
    */
-  HostDBInfo *select_best_http(sockaddr const *client_ip, ts_clock_time now, ts_seconds fail_window);
+  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_clock_time now);
   HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_clock_time now, ts_seconds fail_window);
 };
 
@@ -474,11 +492,12 @@ typedef void (Continuation::*cb_process_result_pfn)(HostDBInfo *r);
 
 Action *iterate(Continuation *cont);
 
-/** Information for doing host resolution.
+/** Information for doing host resolution for a requst.
  *
- * This is effectively a state object for an upstream resolution / connection.
+ * This is effectively a state object for a request attempting to connect upstream. Information about its attempt
+ * that are local to the request are kept here, while shared data is accessed via the @c HostDBInfo pointers.
+ *
  * A primitive version of the IP address generator concept.
- *
  */
 struct ResolveInfo {
   using self_type = ResolveInfo; ///< Self reference type.
@@ -508,19 +527,20 @@ struct ResolveInfo {
 
   /// Keep a reference to the base HostDB object, so it doesn't get GC'd.
   Ptr<HostDBInfo> entry;
+  HostDBInfo *active = nullptr; ///< Active host record.
 
-  /// The currently resolved address.
+  /// Working address. The meaning / source of the value depends on other elements.
   IpEndpoint addr;
 
   int attempts = 0;            ///< Number of connection attempts.
-  ts_seconds fail_window{300}; ///< Down server blackout time.
+  ts_seconds fail_window{300}; ///< Down server blackout time (txn overridable)
 
-  char *lookup_name                  = nullptr;
-  char srv_hostname[MAXDNAME]        = {0};
-  const sockaddr *client_remote_addr = nullptr; ///< Client IP address for round robin selection.
-  const sockaddr *client_target_addr = nullptr; ///< Set if trying a transparent connection.
-  HostDBApplicationInfo srv_app;
-  in_port_t srv_port = 0;
+  char *lookup_name                   = nullptr;
+  char srv_hostname[MAXDNAME]         = {0};
+  const sockaddr *inbound_remote_addr = nullptr; ///< Remote address of inbound client - used for hashing.
+  const sockaddr *client_target_addr  = nullptr; ///< Set if trying a transparent connection.
+  HostDBApplicationInfo srv_app;                 ///< SRV informatoin.
+  in_port_t srv_port = 0;                        ///< Port from SRV lookup.
 
   OS_Addr os_addr_style           = OS_Addr::TRY_DEFAULT;
   HostResStyle host_res_style     = HOST_RES_IPV4;
@@ -544,6 +564,13 @@ struct ResolveInfo {
 
   ResolveInfo() = default;
 
+  /** Force the address to resolve.
+   *
+   * @param sa Address to use for the upstream.
+   * @return @c true if successful, @c false if error.
+   *
+   * This fails if @a sa isn't a valid IP address.
+   */
   bool
   set_upstream_address(const sockaddr *sa)
   {
@@ -551,6 +578,29 @@ struct ResolveInfo {
       api_addr_set_p = true;
       return true;
     }
+    return false;
+  }
+
+  /** Mark the current active record as dead.
+   *
+   * @param now Time of failure.
+   * @return @c true if the server was marked as dead, @c false if not.
+   *
+   *
+   */
+  bool
+  mark_active_server_dead(ts_clock_time now)
+  {
+    return active ? active->mark_down(now) : false;
+  }
+
+  bool
+  mark_active_server_alive()
+  {
+    if (is_zombie && active) {
+      active->mark_up();
+    }
+    is_zombie = false;
     return false;
   }
 };

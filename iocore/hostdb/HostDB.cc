@@ -876,8 +876,7 @@ do_setby(HostDBInfo *r, HostDBApplicationInfo *app, const char *hostname, IpAddr
       for (int i = 0; i < rr->rrcount; i++) {
         if (key == rr->info(i).data.srv.key && !strcmp(hostname, rr->info(i).srvname(rr))) {
           Debug("hostdb", "immediate setby for %s", hostname);
-          rr->info(i).app.allotment.application1 = app->allotment.application1;
-          rr->info(i).app.allotment.application2 = app->allotment.application2;
+          rr->info(i).app = *app;
           return;
         }
       }
@@ -885,8 +884,7 @@ do_setby(HostDBInfo *r, HostDBApplicationInfo *app, const char *hostname, IpAddr
       for (int i = 0; i < rr->rrcount; i++) {
         if (rr->info(i).ip() == ip) {
           Debug("hostdb", "immediate setby for %s", hostname ? hostname : "<addr>");
-          rr->info(i).app.allotment.application1 = app->allotment.application1;
-          rr->info(i).app.allotment.application2 = app->allotment.application2;
+          rr->info(i).app = *app;
           return;
         }
       }
@@ -894,8 +892,7 @@ do_setby(HostDBInfo *r, HostDBApplicationInfo *app, const char *hostname, IpAddr
   } else {
     if (r->reverse_dns || (!r->round_robin && ip == r->ip())) {
       Debug("hostdb", "immediate setby for %s", hostname ? hostname : "<addr>");
-      r->app.allotment.application1 = app->allotment.application1;
-      r->app.allotment.application2 = app->allotment.application2;
+      r->app = *app;
     }
   }
 }
@@ -931,8 +928,7 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const *ip, HostDB
 
   HostDBContinuation *c = hostDBContAllocator.alloc();
   c->init(hash);
-  c->app.allotment.application1 = app->allotment.application1;
-  c->app.allotment.application2 = app->allotment.application2;
+  c->app = *app;
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::setbyEvent);
   thread->schedule_in(c, MUTEX_RETRY_DELAY);
 }
@@ -955,8 +951,7 @@ HostDBProcessor::setby_srv(const char *hostname, int len, const char *target, Ho
   HostDBContinuation *c = hostDBContAllocator.alloc();
   c->init(hash);
   ink_strlcpy(c->srv_target_name, target, MAXDNAME);
-  c->app.allotment.application1 = app->allotment.application1;
-  c->app.allotment.application2 = app->allotment.application2;
+  c->app = *app;
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::setbyEvent);
   eventProcessor.schedule_imm(c);
 }
@@ -1389,8 +1384,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
 
           skip += t->host_len;
 
-          item.app.allotment.application1 = 0;
-          item.app.allotment.application2 = 0;
+          item.app.clear();
           Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %d seconds", t->host, ttl_seconds);
         }
 
@@ -1419,8 +1413,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
           item.reverse_dns     = 0;
           item.is_srv          = 0;
           if (!restore_info(&item, old_r.get(), old_info, old_rr_data)) {
-            item.app.allotment.application1 = 0;
-            item.app.allotment.application2 = 0;
+            item.app.clear();
           }
         }
       }
@@ -1810,22 +1803,23 @@ HostDBInfo::rr()
 }
 
 HostDBInfo *
-HostDBInfo::select_best_http(ResolveInfo *info, ts_clock_time now)
+HostDBInfo::select_best_http(ResolveInfo *resolve_info, ts_clock_time now)
 {
   if (this->round_robin) {
     auto rr = this->rr();
-    if (info->client_target_addr) {
-      info->lookup_validated = rr->find_ip(info->client_target_addr) != nullptr;
+    if (resolve_info->client_target_addr) {
+      resolve_info->lookup_validated = rr->find_ip(resolve_info->client_target_addr) != nullptr;
       return this;
     }
-    info->lookup_validated = (info->client_target_addr == nullptr) || nullptr != rr->find_ip(info->client_target_addr);
-    return rr->select_best_http(info->client_remote_addr, now, info->fail_window);
+    resolve_info->lookup_validated =
+      (resolve_info->client_target_addr == nullptr) || nullptr != rr->find_ip(resolve_info->client_target_addr);
+    return rr->select_best_http(resolve_info, now);
   }
   return this;
 }
 
 HostDBInfo *
-HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ts_clock_time now, ts_seconds fail_window)
+HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_clock_time now)
 {
   bool bad = (rrcount <= 0 || static_cast<unsigned int>(rrcount) > hostdb_round_robin_max_count || good <= 0 ||
               static_cast<unsigned>(good) > hostdb_round_robin_max_count);
@@ -1844,7 +1838,7 @@ HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ts_clock_time now,
     // Check that the host we selected is alive
     for (int i = 0; i < good; i++) {
       best_any = current++ % good;
-      if (!info(best_any).is_dead(now, fail_window)) {
+      if (!info(best_any).is_dead(now, resolve_info->fail_window)) {
         best_up = best_any;
         break;
       }
@@ -1858,7 +1852,7 @@ HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ts_clock_time now,
     }
     for (int i = 0; i < good; i++) {
       best_any = (current + i) % good;
-      if (!info(best_any).is_dead(now, fail_window)) {
+      if (!info(best_any).is_dead(now, resolve_info->fail_window)) {
         best_up = best_any;
         break;
       }
@@ -1870,12 +1864,12 @@ HostDBRoundRobin::select_best_http(sockaddr const *client_ip, ts_clock_time now,
     unsigned int best_hash_up  = 0;
     for (int i = 0; i < good; i++) {
       sockaddr const *ip = info(i).ip();
-      unsigned int h     = HOSTDB_CLIENT_IP_HASH(client_ip, ip);
+      unsigned int h     = HOSTDB_CLIENT_IP_HASH(resolve_info->inbound_remote_addr, ip);
       if (best_hash_any <= h) {
         best_any      = i;
         best_hash_any = h;
       }
-      if (best_hash_up <= h && !info(i).is_dead(now, fail_window)) {
+      if (best_hash_up <= h && !info(i).is_dead(now, resolve_info->fail_window)) {
         best_up      = i;
         best_hash_up = h;
       }
@@ -2024,9 +2018,11 @@ struct ShowHostDB : public ShowCont {
       }
 
       // Let's display the hash.
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", r->app.allotment.application1));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", r->app.allotment.application2));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure.load()));
+      ts::MemSpan<uint32_t> allotment{reinterpret_cast<uint32_t *>(&r->app), 2};
+      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", allotment[0]));
+      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", allotment[1]));
+      CHECK_SHOW(
+        show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure.load().time_since_epoch().count()));
       if (!rr) {
         CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No"));
         CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No"));
@@ -2054,9 +2050,10 @@ struct ShowHostDB : public ShowCont {
         CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", r->srvname(hostdb_rr)));
       }
 
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app1", r->app.allotment.application1));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app2", r->app.allotment.application2));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure.load()));
+      ts::MemSpan<uint32_t> allotment{reinterpret_cast<uint32_t *>(&r->app), 2};
+      CHECK_SHOW(show("\"%s\":\"%u\",", "app1", allotment[0]));
+      CHECK_SHOW(show("\"%s\":\"%u\",", "app2", allotment[1]));
+      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure.load().time_since_epoch().count()));
       if (!rr) {
         CHECK_SHOW(show("\"%s\":\"%s\",", "stale", r->is_ip_stale() ? "yes" : "no"));
         CHECK_SHOW(show("\"%s\":\"%s\",", "timedout", r->is_ip_timeout() ? "yes" : "no"));
@@ -2499,3 +2496,4 @@ REGRESSION_TEST(HostDBProcessor)(RegressionTest *t, int atype, int *pstatus)
 }
 
 #endif
+// -----

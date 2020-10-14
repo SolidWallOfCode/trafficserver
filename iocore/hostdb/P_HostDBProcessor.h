@@ -262,11 +262,10 @@ HostDBRoundRobin::find_target(const char *target)
 }
 
 inline HostDBInfo *
-HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, std::chrono::system_clock::time_point now,
-                                  std::chrono::seconds fail_window)
+HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ts_clock_time now, ts_seconds fail_window)
 {
-  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
-              (unsigned int)good > hostdb_round_robin_max_count);
+  bool bad = (rrcount <= 0 || static_cast<unsigned int>(rrcount) > hostdb_round_robin_max_count || good <= 0 ||
+              static_cast<unsigned int>(good) > hostdb_round_robin_max_count);
 
   if (bad) {
     ink_assert(!"bad round robin size");
@@ -285,8 +284,8 @@ HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, std::chrono::syst
   HostDBInfo *result = nullptr;
   HostDBInfo *infos[good];
   do {
-    // if the real isn't alive-- exclude it from selection
-    if (!info(i).is_alive(now, fail_window)) {
+    // skip dead upstreams.
+    if (info(i).is_dead(now, fail_window)) {
       continue;
     }
 

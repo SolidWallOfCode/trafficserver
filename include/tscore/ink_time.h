@@ -50,7 +50,7 @@ using ts_hr_clock   = std::chrono::high_resolution_clock;
 using ts_clock_time = ts_clock::time_point;
 using ts_seconds    = std::chrono::seconds;
 /// Equivalent of zero for @a ts_clock_time.
-static constexpr ts_clock_time ts_time_zero;
+static constexpr ts_clock_time TS_TIME_ZERO;
 
 /*===========================================================================*
 
