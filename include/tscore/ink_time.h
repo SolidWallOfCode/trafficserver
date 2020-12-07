@@ -44,13 +44,15 @@
 
  *===========================================================================*/
 
-using ink_time_t    = time_t;
-using ts_clock      = std::chrono::system_clock;
-using ts_hr_clock   = std::chrono::high_resolution_clock;
-using ts_clock_time = ts_clock::time_point;
-using ts_seconds    = std::chrono::seconds;
-/// Equivalent of zero for @a ts_clock_time.
-static constexpr ts_clock_time TS_TIME_ZERO;
+using ink_time_t  = time_t;
+using ts_clock    = std::chrono::system_clock;
+using ts_time     = ts_clock::time_point;
+using ts_hr_clock = std::chrono::high_resolution_clock;
+using ts_hr_time  = ts_hr_clock::time_point;
+
+using ts_seconds = std::chrono::seconds;
+/// Equivalent of zero for @a ts_time.
+static constexpr ts_time TS_TIME_ZERO;
 
 /*===========================================================================*
 

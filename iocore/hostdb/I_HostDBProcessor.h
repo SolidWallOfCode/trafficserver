@@ -59,7 +59,7 @@ struct ResolveInfo;
 // disk representation to decrease # of seeks.
 //
 extern int hostdb_enable;
-extern ink_time_t hostdb_current_interval;
+extern ts_time hostdb_current_interval;
 extern unsigned int hostdb_ip_stale_interval;
 extern unsigned int hostdb_ip_timeout_interval;
 extern unsigned int hostdb_ip_fail_timeout_interval;
@@ -87,63 +87,6 @@ makeHostHash(const char *string)
 // Types
 //
 
-//
-// This structure contains the host information required by
-// the application.  Except for the initial fields it
-// is treated as opaque by the database.
-//
-
-union HostDBApplicationInfo {
-  enum HttpVersion : uint8_t {
-    HTTP_VERSION_UNDEFINED = 0,
-    HTTP_VERSION_09        = 1,
-    HTTP_VERSION_10        = 2,
-    HTTP_VERSION_11        = 3,
-  };
-
-  //////////////////////////////////////////////////////////
-  // http server attributes in the host database          //
-  //                                                      //
-  // http_version       - one of HttpVersion_t            //
-  // last_failure       - UNIX time for the last time     //
-  //                      we tried the server & failed    //
-  // fail_count         - Number of times we tried and    //
-  //                       and failed to contact the host //
-  //////////////////////////////////////////////////////////
-  struct http_server_attr {
-    std::atomic<ts_clock_time> last_failure{TS_TIME_ZERO};
-    HttpVersion http_version;
-    uint8_t fail_count;
-  } http_data;
-
-  struct application_data_rr {
-    unsigned int offset; ///< Offset of round robin records (from base pointer).
-  } rr;
-
-  ts_clock_time
-  last_fail_time() const
-  {
-    return http_data.last_failure;
-  }
-
-  void
-  clear()
-  {
-    ink_zero(*this);
-  }
-
-  HostDBApplicationInfo() { this->clear(); }
-
-  HostDBApplicationInfo(HostDBApplicationInfo const &that) { memcpy(static_cast<void *>(this), &that, sizeof(that)); }
-
-  HostDBApplicationInfo &
-  operator=(HostDBApplicationInfo const &that)
-  {
-    memcpy(static_cast<void *>(this), &that, sizeof(that));
-    return *this;
-  }
-};
-
 struct HostDBRoundRobin;
 
 struct SRVInfo {
@@ -154,194 +97,68 @@ struct SRVInfo {
   unsigned int key;
 };
 
-struct HostDBInfo : public RefCountObj {
-  /** Internal IP address data.
-      This is at least large enough to hold an IPv6 address.
-  */
+/** Information about a single target.
+ *
+ * - *valid* means data was retrieved successfully. Invalid info had a retrieval error.
+ * - *failed* means the target has failed. The opposite of failed is *alive*.
+ * - *alive* means not failed.
+ * - *dead* means failed more recently than the failure window.
+ * - *zombie* means failed longer ago than the failure window.
+ */
+struct HostDBInfo {
+  /// Expected HTTP version.
+  enum HttpVersion : uint8_t {
+    HTTP_VERSION_UNDEFINED = 0,
+    HTTP_VERSION_09        = 1,
+    HTTP_VERSION_10        = 2,
+    HTTP_VERSION_11        = 3,
+  };
 
-  static HostDBInfo *
-  alloc(int size = 0)
+  /// Default constructor.
+  HostDBInfo() = default;
+
+  /// Absolute time of when this target failed.
+  /// A value of zero (@c TS_TIME_ZERO ) indicates no failure.
+  ts_time last_fail_time() const;
+
+  /// Network address of target.
+  sockaddr *addr();
+
+  /// Network address of target.
+  sockaddr const *addr() const;
+
+  /// Target is alive - no known failure.
+  bool is_alive();
+
+  /// Target is failed but a connection attempt is active.
+  bool is_zombie(ts_time now, ts_seconds fail_window);
+
+  /// Target has failed and is still in the blocked time window.
+  bool is_dead(ts_time now, ts_seconds fail_window);
+
+  /** Mark as selected for connection.
+   *
+   * @param now Current time.
+   * @param fail_window Failure window.
+   * @return @c true if this target can be used for a connection, @c false otherwise.
+   *
+   * If a zombie is selected the failure time is updated to make it look dead to other threads in a thread safe
+   * manner.
+   */
+  bool select(ts_time now, ts_seconds fail_window);
+
+  /// Check if this info is valid.
+  bool
+  is_valid() const
   {
-    size += sizeof(HostDBInfo);
-    int iobuffer_index = iobuffer_size_to_index(size, hostdb_max_iobuf_index);
-    ink_release_assert(iobuffer_index >= 0);
-    void *ptr = ioBufAllocator[iobuffer_index].alloc_void();
-    memset(ptr, 0, size);
-    HostDBInfo *ret      = new (ptr) HostDBInfo();
-    ret->_iobuffer_index = iobuffer_index;
-    return ret;
+    return valid_p;
   }
 
+  /// Mark this info as invalid.
   void
-  free() override
+  invalidate()
   {
-    ink_release_assert(from_alloc());
-    Debug("hostdb", "freeing %d bytes at [%p]", (1 << (7 + _iobuffer_index)), this);
-    ioBufAllocator[_iobuffer_index].free_void(static_cast<void *>(this));
-  }
-
-  // return a version number-- so we can manage compatibility with the marshal/unmarshal
-  static ts::VersionNumber
-  version()
-  {
-    return ts::VersionNumber(3, 0);
-  }
-
-  static HostDBInfo *
-  unmarshall(char *buf, unsigned int size)
-  {
-    if (size < sizeof(HostDBInfo)) {
-      return nullptr;
-    }
-    HostDBInfo *ret = HostDBInfo::alloc(size - sizeof(HostDBInfo));
-    int buf_index   = ret->_iobuffer_index;
-    memcpy(static_cast<void *>(ret), buf, size);
-    // Reset the refcount back to 0, this is a bit ugly-- but I'm not sure we want to expose a method
-    // to mess with the refcount, since this is a fairly unique use case
-    ret                  = new (ret) HostDBInfo();
-    ret->_iobuffer_index = buf_index;
-    return ret;
-  }
-
-  // return expiry time (in seconds since epoch)
-  ink_time_t
-  expiry_time() const
-  {
-    return ip_timestamp + ip_timeout_interval + hostdb_serve_stale_but_revalidate;
-  }
-
-  sockaddr *
-  ip()
-  {
-    return &data.ip.sa;
-  }
-
-  sockaddr const *
-  ip() const
-  {
-    return &data.ip.sa;
-  }
-
-  char *hostname() const;
-  char *perm_hostname() const;
-  char *srvname(HostDBRoundRobin *rr) const;
-
-  /// Check if this entry is an element of a round robin entry.
-  /// If @c true then this entry is part of and was obtained from a round robin root. This is useful if the
-  /// address doesn't work - a retry can probably get a new address by doing another lookup and resolving to
-  /// a different element of the round robin.
-  bool
-  is_rr_elt() const
-  {
-    return 0 != round_robin_elt;
-  }
-
-  HostDBRoundRobin *rr();
-
-  unsigned int
-  ip_interval() const
-  {
-    return (hostdb_current_interval - ip_timestamp) & 0x7FFFFFFF;
-  }
-
-  int
-  ip_time_remaining() const
-  {
-    return static_cast<int>(ip_timeout_interval) - static_cast<int>(this->ip_interval());
-  }
-
-  bool
-  is_ip_stale() const
-  {
-    return ip_timeout_interval >= 2 * hostdb_ip_stale_interval && ip_interval() >= hostdb_ip_stale_interval;
-  }
-
-  bool
-  is_ip_timeout() const
-  {
-    return ip_interval() >= ip_timeout_interval;
-  }
-
-  bool
-  is_ip_fail_timeout() const
-  {
-    return ip_interval() >= hostdb_ip_fail_timeout_interval;
-  }
-
-  void
-  refresh_ip()
-  {
-    ip_timestamp = hostdb_current_interval;
-  }
-
-  bool
-  serve_stale_but_revalidate() const
-  {
-    // the option is disabled
-    if (hostdb_serve_stale_but_revalidate <= 0) {
-      return false;
-    }
-
-    // ip_timeout_interval == DNS TTL
-    // hostdb_serve_stale_but_revalidate == number of seconds
-    // ip_interval() is the number of seconds between now() and when the entry was inserted
-    if ((ip_timeout_interval + hostdb_serve_stale_but_revalidate) > ip_interval()) {
-      Debug("hostdb", "serving stale entry %d | %d | %d as requested by config", ip_timeout_interval,
-            hostdb_serve_stale_but_revalidate, ip_interval());
-      return true;
-    }
-
-    // otherwise, the entry is too old
-    return false;
-  }
-
-  /// Server is alive if the last failure time is zero.
-  bool
-  is_alive()
-  {
-    return app.last_fail_time() != TS_TIME_ZERO;
-  }
-
-  bool
-  is_zombie(ts_clock_time now, ts_seconds fail_window)
-  {
-    auto last_fail = app.last_fail_time();
-    return last_fail != TS_TIME_ZERO && last_fail + fail_window >= now;
-  }
-
-  bool
-  is_dead(ts_clock_time now, ts_seconds fail_window)
-  {
-    auto last_fail = app.last_fail_time();
-    return (last_fail != TS_TIME_ZERO) && (last_fail + fail_window < now);
-  }
-
-  bool
-  select(ts_clock_time now, ts_seconds fail_window)
-  {
-    auto last_failure = app.last_fail_time();
-    if (last_failure != TS_TIME_ZERO) {
-      return (last_failure + fail_window >= now) && app.http_data.last_failure.compare_exchange_strong(last_failure, now);
-    }
-    return true; // Ready to go!
-  }
-
-  bool
-  is_failed() const
-  {
-    return !((is_srv && data.srv.srv_offset) || (reverse_dns && data.hostname_offset) || ats_is_ip(ip()));
-  }
-
-  void
-  set_failed()
-  {
-    if (is_srv) {
-      data.srv.srv_offset = 0;
-    } else if (reverse_dns) {
-      data.hostname_offset = 0;
-    } else {
-      ats_ip_invalidate(ip());
-    }
+    valid_p = false;
   }
 
   /** Mark the entry as down.
@@ -351,99 +168,132 @@ struct HostDBInfo : public RefCountObj {
    *
    * This can return @c false if the entry is already marked down, in which case the failure time is not updated.
    */
-  bool
-  mark_down(ts_clock_time now)
-  {
-    auto t0{TS_TIME_ZERO};
-    return app.http_data.last_failure.compare_exchange_strong(t0, now);
-  }
+  bool mark_down(ts_time now);
 
-  bool
-  mark_up()
-  {
-    bool zret                  = this->is_alive();
-    app.http_data.last_failure = TS_TIME_ZERO;
-    return zret;
-  }
-
-  uint64_t key;
-
-  // Application specific data. NOTE: We need an integral number of
-  // these per block. This structure is 32 bytes. (at 200k hosts =
-  // 8 Meg). Which gives us 7 bytes of application information.
-  HostDBApplicationInfo app;
-
-  union {
-    IpEndpoint ip;                ///< IP address / port data.
-    unsigned int hostname_offset; ///< Offset to hostname result for reverse DNS lookups. 0 -> failure.
-    SRVInfo srv;
-  } data;
-
-  /// Offset from base object to original query name.
-  unsigned int hostname_offset;
-
-  unsigned int ip_timestamp;
-
-  unsigned int ip_timeout_interval; // bounded between 1 and HOST_DB_MAX_TTL (0x1FFFFF, 24 days)
-
-  unsigned int is_srv : 1;
-  unsigned int reverse_dns : 1;
-
-  unsigned int round_robin : 1;     // This is the root of a round robin block
-  unsigned int round_robin_elt : 1; // This is an address in a round robin block
-
-  HostDBInfo() : _iobuffer_index{-1} {}
-
-  HostDBInfo(HostDBInfo const &src) : RefCountObj()
-  {
-    memcpy(static_cast<void *>(this), static_cast<const void *>(&src), sizeof(*this));
-    _iobuffer_index = -1;
-  }
+  /** Mark the target as up / alive.
+   *
+   * @return Previous alive state of the target.
+   */
+  bool mark_up();
 
   HostDBInfo &
   operator=(HostDBInfo const &src)
   {
     if (this != &src) {
-      int iob_idx = _iobuffer_index;
       memcpy(static_cast<void *>(this), static_cast<const void *>(&src), sizeof(*this));
-      _iobuffer_index = iob_idx;
     }
     return *this;
   }
 
-  bool
-  from_alloc() const
-  {
-    return _iobuffer_index >= 0;
-  }
+  /// A target is either an IP address or an SRV record.
+  /// The type is determined by the owning @c HostDBRecord.
+  union {
+    IpEndpoint ip; ///< IP address / port data.
+    SRVInfo srv;   ///< SRV record.
+  } data;
 
-  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_clock_time now);
+  /// Last time a failure was recorded.
+  std::atomic<ts_time> last_failure{TS_TIME_ZERO};
+  /// Expected HTTP version of the target based on earlier transactions.
+  HttpVersion http_version;
 
-private:
-  // The value of this will be -1 for objects that are not created by the alloc() static member function.
-  int _iobuffer_index;
+protected:
+  /// Valid data.
+  bool valid_p : 1 = true;
+  /// Contained data is round robin.
+  bool round_robin : 1 = false;
+  /// Contained data is SRV records.
+  bool is_srv : 1 = false;
+  /// Result is from reverse DNS.
+  bool reverse_dns : 1 = false;
 };
+
+inline ts_time
+HostDBInfo::last_fail_time() const
+{
+  return last_failure;
+}
+
+inline sockaddr *
+HostDBInfo::addr()
+{
+  return &data.ip.sa;
+}
+
+inline sockaddr const *
+HostDBInfo::addr() const
+{
+  return &data.ip.sa;
+}
+
+inline bool
+HostDBInfo::is_alive()
+{
+  return this->last_fail_time() != TS_TIME_ZERO;
+}
+
+inline bool
+HostDBInfo::is_zombie(ts_time now, ts_seconds fail_window)
+{
+  auto last_fail = this->last_fail_time();
+  return last_fail != TS_TIME_ZERO && last_fail + fail_window >= now;
+}
+
+inline bool
+HostDBInfo::is_dead(ts_time now, ts_seconds fail_window)
+{
+  auto last_fail = this->last_fail_time();
+  return (last_fail != TS_TIME_ZERO) && (last_fail + fail_window < now);
+}
+
+inline bool
+HostDBInfo::mark_up()
+{
+  bool zret    = this->is_alive();
+  last_failure = TS_TIME_ZERO;
+  return zret;
+}
+
+inline bool
+HostDBInfo::mark_down(ts_time now)
+{
+  auto t0{TS_TIME_ZERO};
+  return last_failure.compare_exchange_strong(t0, now);
+}
+
+inline bool
+HostDBInfo::select(ts_time now, ts_seconds fail_window)
+{
+  auto t0 = this->last_fail_time();
+  if (t0 != TS_TIME_ZERO) {
+    // Success means this is a zombie and this thread updated the failure time.
+    return (t0 + fail_window >= now) && last_failure.compare_exchange_strong(t0, now);
+  }
+  return true; // Ready to go!
+}
+
+// ----
 
 struct HostDBRoundRobin {
   HostDBRoundRobin() = default;
 
+  /// Offset from @a this to the VLA.
+  unsigned offset = 0;
+
   /** Total number (to compute space used). */
-  short rrcount = 0;
+  unsigned short count = 0;
 
   /** Number which have not failed a connect. */
-  short good = 0;
+  unsigned short good = 0;
 
   unsigned short current = 0;
-  ts_clock_time timed_rr_ctime;
+  ts_time timed_rr_ctime;
 
   // This is the equivalent of a variable length array, we can't use a VLA because
   // HostDBInfo is a non-POD type-- so this is the best we can do.
-  HostDBInfo &
-  info(short n)
-  {
-    ink_assert(n < rrcount && n >= 0);
-    return *((HostDBInfo *)((char *)this + sizeof(HostDBRoundRobin)) + n);
-  }
+  HostDBInfo &operator[](unsigned n);
+
+  ts::MemSpan<HostDBInfo> rr_info();
 
   // Return the allocation size of a HostDBRoundRobin struct suitable for storing
   // "count" HostDBInfo records.
@@ -479,8 +329,164 @@ struct HostDBRoundRobin {
    *
    * The returned host record will be down iff all hosts in the record are down.
    */
-  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_clock_time now);
-  HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_clock_time now, ts_seconds fail_window);
+  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_time now);
+  HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window);
+
+protected:
+  HostDBInfo *
+  data()
+  {
+    return reinterpret_cast<HostDBInfo *>(reinterpret_cast<char *>(this) + offset);
+  }
+};
+
+// ----
+
+inline HostDBInfo &
+HostDBRoundRobin::operator[](unsigned int n)
+{
+  ink_assert(n < count);
+  return this->data()[n];
+}
+
+inline ts::MemSpan<HostDBInfo>
+HostDBRoundRobin::rr_info()
+{
+  return {this->data(), size_t(count)};
+}
+
+/** Root item for HostDB.
+ * This is the container for HostDB data.
+ *
+ * The union data can be
+ * - An IP address record (A or AAAA)
+ * - An SRV record.
+ * - A reverse DNS result.
+ * - A header for a variable length array of IP adddress records.
+ *
+ * IP address records are stored in a HostDBInfo instance. The other types are directly stored in the union.
+ */
+class HostDBRecord : public RefCountObj
+{
+  using self_type = HostDBRecord;
+
+  /// Size of the IO buffer block owned by @a this.
+  /// If negative @a this is in not allocated memory.
+  int _iobuffer_index{-1};
+
+public:
+  enum class DataType : uint8_t {
+    INVALID, ///< No valid data.
+    ADDR,    ///< IP address.
+    SRV,     ///< SRV record.
+    HOST     ///< Hostname (reverse DNS)
+  } data_type;
+
+  /// Whether the record is valid or failed.
+  unsigned failed_p : 1 = true;
+  /// Whether this is multiple / round robin record.
+  unsigned rr_p : 1 = false;
+
+  /// IP family of this record.
+  sa_family_t af_family = AF_UNSPEC;
+
+  /// Offset from @a this to query name.
+  struct {
+    unsigned offset; ///< Offset to hostname from @a this.
+    unsigned length; ///< Hostname length.
+  } hostname_data;
+
+  bool
+  is_rr() const
+  {
+    return rr_p;
+  }
+  bool
+  is_srv() const
+  {
+    return DataType::SRV == data_type;
+  }
+
+  ts::TextView
+  hostname() const
+  {
+    ts::TextView zret;
+    if (hostname_data.length > 0) {
+      zret.assign(reinterpret_cast<char const *>(this) + hostname_data.offset, hostname_data.length);
+    }
+    return zret;
+  }
+
+  ts::MemSpan<HostDBInfo> rr_info();
+
+  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_time now);
+
+  /// Hash key.
+  uint64_t key;
+
+  /// When the data was received.
+  ts_time ip_timestamp;
+
+  /// Valid duration of the data.
+  ts_seconds ip_timeout_interval;
+
+  /// Records, singleton or variable length array.
+  union {
+    HostDBInfo info;     ///< Single record, @c round_robin == 0
+    HostDBRoundRobin rr; ///< VLA header, @c round_robin == 1
+  } data;
+
+  HostDBRecord()                      = default;
+  HostDBRecord(self_type const &that) = delete;
+
+  bool
+  is_failed() const
+  {
+    return failed_p;
+  }
+  void
+  set_failed()
+  {
+    failed_p = true;
+  }
+
+  /// @return The time point when the item expires.
+  ts_time expiry_time() const;
+
+  ts_seconds ip_interval() const;
+
+  ts_seconds ip_time_remaining() const;
+
+  bool is_ip_stale() const;
+
+  bool is_ip_timeout() const;
+
+  bool is_ip_fail_timeout() const;
+
+  void refresh_ip();
+
+  bool serve_stale_but_revalidate() const;
+
+  /// Deallocate @a this.
+  void free() override;
+
+  /** Allocate an instance.
+   *
+   * @param extra Additional space required for the record.
+   * @return An initialized instance with a zero reference count.
+   */
+  static self_type *alloc(size_t extra = 0);
+
+  /** Allocation and initialize an instance from a serialized buffer.
+   *
+   * @param buff Serialization data.
+   * @param size Size of @a buff.
+   * @return An instance initialized from @a buff.
+   */
+  static self_type *unmarshall(char *buff, size_t size);
+
+  /// Database version.
+  static constexpr ts::VersionNumber Version{3, 0};
 };
 
 struct HostDBCache;
@@ -488,7 +494,7 @@ struct HostDBHash;
 
 // Prototype for inline completion function or
 //  getbyname_imm()
-typedef void (Continuation::*cb_process_result_pfn)(HostDBInfo *r);
+using cb_process_result_pfn = void (Continuation::*)(HostDBInfo *r);
 
 Action *iterate(Continuation *cont);
 
@@ -589,7 +595,7 @@ struct ResolveInfo {
    *
    */
   bool
-  mark_active_server_dead(ts_clock_time now)
+  mark_active_server_dead(ts_time now)
   {
     return active ? active->mark_down(now) : false;
   }
@@ -722,3 +728,47 @@ void run_HostDBTest();
 extern inkcoreapi HostDBProcessor hostDBProcessor;
 
 void ink_hostdb_init(ts::ModuleVersion version);
+
+inline ts_time
+HostDBRecord::expiry_time() const
+{
+  return ip_timestamp + ip_timeout_interval + ts_seconds(hostdb_serve_stale_but_revalidate);
+}
+
+inline ts_seconds
+HostDBRecord::ip_interval() const
+{
+  static constexpr ts_seconds ZERO{0};
+  static constexpr ts_seconds MAX{0x7FFFFFFF};
+  return std::clamp(std::chrono::duration_cast<ts_seconds>((hostdb_current_interval - ip_timestamp)), ZERO, MAX);
+}
+
+inline ts_seconds
+HostDBRecord::ip_time_remaining() const
+{
+  return ip_timeout_interval - this->ip_interval();
+}
+
+inline bool
+HostDBRecord::is_ip_stale() const
+{
+  return ip_timeout_interval >= ts_seconds(2 * hostdb_ip_stale_interval) && ip_interval() >= ts_seconds(hostdb_ip_stale_interval);
+}
+
+inline bool
+HostDBRecord::is_ip_timeout() const
+{
+  return ip_interval() >= ip_timeout_interval;
+}
+
+inline bool
+HostDBRecord::is_ip_fail_timeout() const
+{
+  return ip_interval() >= ts_seconds(hostdb_ip_fail_timeout_interval);
+}
+
+inline void
+HostDBRecord::refresh_ip()
+{
+  ip_timestamp = hostdb_current_interval;
+}

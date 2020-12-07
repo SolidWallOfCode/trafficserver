@@ -193,7 +193,7 @@ struct HostDBCache {
   // Map to contain all of the host file overrides, initialize it to empty
   Ptr<RefCountedHostsFileMap> hosts_file_ptr;
   // TODO: make ATS call a close() method or something on shutdown (it does nothing of the sort today)
-  RefCountCache<HostDBInfo> *refcountcache = nullptr;
+  RefCountCache<HostDBRecord> *refcountcache = nullptr;
 
   // TODO configurable number of items in the cache
   Queue<HostDBContinuation, Continuation::Link_link> *pending_dns = nullptr;
@@ -262,7 +262,7 @@ HostDBRoundRobin::find_target(const char *target)
 }
 
 inline HostDBInfo *
-HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ts_clock_time now, ts_seconds fail_window)
+HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window)
 {
   bool bad = (rrcount <= 0 || static_cast<unsigned int>(rrcount) > hostdb_round_robin_max_count || good <= 0 ||
               static_cast<unsigned int>(good) > hostdb_round_robin_max_count);
@@ -360,8 +360,7 @@ typedef int (HostDBContinuation::*HostDBContHandler)(int, void *);
 struct HostDBContinuation : public Continuation {
   Action action;
   HostDBHash hash;
-  //  IpEndpoint ip;
-  unsigned int ttl = 0;
+  ts_seconds ttl{0};
   //  HostDBMark db_mark; ///< Target type.
   /// Original IP address family style. Note this will disagree with
   /// @a hash.db_mark when doing a retry on an alternate family. The retry
@@ -370,9 +369,8 @@ struct HostDBContinuation : public Continuation {
   int dns_lookup_timeout      = DEFAULT_OPTIONS.timeout;
   Event *timeout              = nullptr;
   Continuation *from_cont     = nullptr;
-  HostDBApplicationInfo app;
-  int probe_depth            = 0;
-  size_t current_iterate_pos = 0;
+  int probe_depth             = 0;
+  size_t current_iterate_pos  = 0;
   //  char name[MAXDNAME];
   //  int namelen;
   char hash_host_name_store[MAXDNAME + 1]; // used as backing store for @a hash
@@ -412,7 +410,7 @@ struct HostDBContinuation : public Continuation {
   void remove_trigger_pending_dns();
   int set_check_pending_dns();
 
-  HostDBInfo *insert(unsigned int attl);
+  HostDBRecord *insert(ts_seconds ttl);
 
   /** Optional values for @c init.
    */

@@ -2228,15 +2228,14 @@ HttpSM::process_hostdb_info(HostDBInfo *r)
         ret = rr->select_best_http(&t_state.dns_info, now);
         // set the srv target`s last_failure
         if (t_state.dns_info.srv_lookup_success) {
-          ts_clock_time last_failure{ts_clock_time::duration(std::numeric_limits<ts_clock_time::rep>::max())};
+          ts_time last_failure{ts_time::duration(std::numeric_limits<ts_time::rep>::max())};
           for (int i = 0; i < rr->rrcount && last_failure != TS_TIME_ZERO; ++i) {
             if (last_failure > rr->info(i).app.http_data.last_failure.load()) {
               last_failure = rr->info(i).app.http_data.last_failure;
             }
           }
 
-          if (last_failure != TS_TIME_ZERO &&
-              now < ts_clock_time(last_failure) + ts_seconds(t_state.txn_conf->down_server_timeout)) {
+          if (last_failure != TS_TIME_ZERO && now < ts_time(last_failure) + ts_seconds(t_state.txn_conf->down_server_timeout)) {
             HostDBApplicationInfo app;
             app.allotment.application1 = 0;
             app.allotment.application2 = 0;
@@ -5317,7 +5316,7 @@ HttpSM::do_transform_open()
 }
 
 void
-HttpSM::mark_host_failure(ResolveInfo *info, ts_clock_time time_down)
+HttpSM::mark_host_failure(ResolveInfo *info, ts_time time_down)
 {
   char addrbuf[INET6_ADDRPORTSTRLEN];
 
