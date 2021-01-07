@@ -579,60 +579,18 @@ public:
   };
 
   typedef struct _CurrentInfo {
-    ProxyMode_t mode = UNDEFINED_MODE;
-    //    ResolveInfo::UpstreamResolveStyle request_to                     = ResolveInfo::UNDEFINED_LOOKUP;
-    ConnectionAttributes *server               = nullptr;
-    ink_time_t now                             = 0;
-    ServerState_t state                        = STATE_UNDEFINED;
-    unsigned attempts                          = 1;
-    unsigned simple_retry_attempts             = 0;
-    unsigned unavailable_server_retry_attempts = 0;
-    ParentRetry_t retry_type                   = PARENT_RETRY_NONE;
+    ProxyMode_t mode                             = UNDEFINED_MODE;
+    ResolveInfo::UpstreamResolveStyle request_to = ResolveInfo::UNDEFINED_LOOKUP;
+    ConnectionAttributes *server                 = nullptr;
+    ink_time_t now                               = 0;
+    ServerState_t state                          = STATE_UNDEFINED;
+    unsigned attempts                            = 1;
+    unsigned simple_retry_attempts               = 0;
+    unsigned unavailable_server_retry_attempts   = 0;
+    ParentRetry_t retry_type                     = PARENT_RETRY_NONE;
 
     _CurrentInfo() {}
   } CurrentInfo;
-
-  typedef struct _DNSLookupInfo {
-    int attempts = 0;
-    /** Origin server address source selection.
-
-        If config says to use CTA (client target addr) state is
-        OS_ADDR_TRY_CLIENT, otherwise it remains the default. If the
-        connect fails then we switch to a USE. We go to USE_HOSTDB if
-        (1) the HostDB lookup is successful and (2) some address other
-        than the CTA is available to try. Otherwise we keep retrying
-        on the CTA (USE_CLIENT) up to the max retry value.  In essence
-        we try to treat the CTA as if it were another RR value in the
-        HostDB record.
-     */
-    enum class OS_Addr {
-      OS_ADDR_TRY_DEFAULT, ///< Initial state, use what config says.
-      OS_ADDR_TRY_HOSTDB,  ///< Try HostDB data.
-      OS_ADDR_TRY_CLIENT,  ///< Try client target addr.
-      OS_ADDR_USE_HOSTDB,  ///< Force use of HostDB target address.
-      OS_ADDR_USE_CLIENT   ///< Use client target addr, no fallback.
-    };
-
-    OS_Addr os_addr_style = OS_Addr::OS_ADDR_TRY_DEFAULT;
-
-    bool lookup_success         = false;
-    char *lookup_name           = nullptr;
-    char srv_hostname[MAXDNAME] = {0};
-    //    ResolveInfo::UpstreamResolveStyle looking_up      = ResolveInfo::UNDEFINED_LOOKUP;
-    bool srv_lookup_success = false;
-    short srv_port          = 0;
-    HostDBApplicationInfo srv_app;
-
-    /*** Set to true by default.  If use_client_target_address is set
-     * to 1, this value will be set to false if the client address is
-     * not in the DNS pool */
-    bool lookup_validated = true;
-
-    /// Lookup token, used when reporting on connection results.
-    void *lookup_token = nullptr;
-
-    _DNSLookupInfo() {}
-  } DNSLookupInfo;
 
   // Conversion handling for DNS host resolution type.
   static const MgmtConverter HOST_RES_CONV;
@@ -677,10 +635,10 @@ public:
     ResolveInfo dns_info;
     RedirectInfo redirect_info;
     OutboundConnTrack::TxnState outbound_conn_track_state;
-    HostDBApplicationInfo::HttpVersion updated_server_version = HostDBApplicationInfo::HTTP_VERSION_UNDEFINED;
-    bool force_dns                                            = false;
-    MgmtByte cache_open_write_fail_action                     = 0;
-    bool is_revalidation_necessary = false; // Added to check if revalidation is necessary - YTS Team, yamsat
+    HostDBInfo::HttpVersion updated_server_version = HostDBInfo::HTTP_VERSION_UNDEFINED;
+    bool force_dns                                 = false;
+    MgmtByte cache_open_write_fail_action          = 0;
+    bool is_revalidation_necessary                 = false; // Added to check if revalidation is necessary - YTS Team, yamsat
     ConnectionAttributes client_info;
     ConnectionAttributes parent_info;
     ConnectionAttributes server_info;

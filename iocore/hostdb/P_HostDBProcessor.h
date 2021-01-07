@@ -169,16 +169,15 @@ extern RecRawStatBlock *hostdb_rsb;
 
 #define HOSTDB_DECREMENT_THREAD_DYN_STAT(_s, _t) RecIncrRawStatSum(hostdb_rsb, _t, (int)_s, -1);
 
-struct CmpConstBuffferCaseInsensitive {
+struct HostsFileCompare {
   bool
-  operator()(ts::ConstBuffer a, ts::ConstBuffer b) const
+  operator()(ts::TextView const &lhs, ts::TextView const &rhs) const
   {
-    return ptr_len_casecmp(a._ptr, a._size, b._ptr, b._size) < 0;
+    return strcasecmp(lhs, rhs) < 0;
   }
 };
 
-// Our own typedef for the host file mapping
-typedef std::map<ts::ConstBuffer, IpAddr, CmpConstBuffferCaseInsensitive> HostsFileMap;
+using HostsFileMap = std::map<ts::TextView, IpAddr, HostsFileCompare>;
 // A to hold a ref-counted map
 struct RefCountedHostsFileMap : public RefCountObj {
   HostsFileMap hosts_file_map;
@@ -202,119 +201,6 @@ struct HostDBCache {
   HostDBCache();
   bool is_pending_dns_for_hash(const CryptoHash &hash);
 };
-
-inline int
-HostDBRoundRobin::index_of(sockaddr const *ip)
-{
-  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
-              (unsigned int)good > hostdb_round_robin_max_count);
-  if (bad) {
-    ink_assert(!"bad round robin size");
-    return -1;
-  }
-
-  for (int i = 0; i < good; i++) {
-    if (ats_ip_addr_eq(ip, info(i).ip())) {
-      return i;
-    }
-  }
-
-  return -1;
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::find_ip(sockaddr const *ip)
-{
-  int idx = this->index_of(ip);
-  return idx < 0 ? nullptr : &info(idx);
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::select_next(sockaddr const *ip)
-{
-  HostDBInfo *zret = nullptr;
-  if (good > 1) {
-    int idx = this->index_of(ip);
-    if (idx >= 0) {
-      idx  = (idx + 1) % good;
-      zret = &info(idx);
-    }
-  }
-  return zret;
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::find_target(const char *target)
-{
-  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
-              (unsigned int)good > hostdb_round_robin_max_count);
-  if (bad) {
-    ink_assert(!"bad round robin size");
-    return nullptr;
-  }
-
-  uint32_t key = makeHostHash(target);
-  for (int i = 0; i < good; i++) {
-    if (info(i).data.srv.key == key && !strcmp(target, info(i).srvname(this)))
-      return &info(i);
-  }
-  return nullptr;
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window)
-{
-  bool bad = (rrcount <= 0 || static_cast<unsigned int>(rrcount) > hostdb_round_robin_max_count || good <= 0 ||
-              static_cast<unsigned int>(good) > hostdb_round_robin_max_count);
-
-  if (bad) {
-    ink_assert(!"bad round robin size");
-    return nullptr;
-  }
-
-#ifdef DEBUG
-  for (int i = 1; i < good; ++i) {
-    ink_assert(info(i).data.srv.srv_priority >= info(i - 1).data.srv.srv_priority);
-  }
-#endif
-
-  int i           = 0;
-  int len         = 0;
-  uint32_t weight = 0, p = INT32_MAX;
-  HostDBInfo *result = nullptr;
-  HostDBInfo *infos[good];
-  do {
-    // skip dead upstreams.
-    if (info(i).is_dead(now, fail_window)) {
-      continue;
-    }
-
-    if (info(i).data.srv.srv_priority <= p) {
-      p = info(i).data.srv.srv_priority;
-      weight += info(i).data.srv.srv_weight;
-      infos[len++] = &info(i);
-    } else
-      break;
-  } while (++i < good);
-
-  if (len == 0) { // all failed
-    result = &info(current++ % good);
-  } else if (weight == 0) { // srv weight is 0
-    result = &info(current++ % len);
-  } else {
-    uint32_t xx = rand->random() % weight;
-    for (i = 0; i < len - 1 && xx >= infos[i]->data.srv.srv_weight; ++i)
-      xx -= infos[i]->data.srv.srv_weight;
-
-    result = infos[i];
-  }
-
-  if (result) {
-    ink_strlcpy(target, result->srvname(this), MAXDNAME);
-    return result;
-  }
-  return nullptr;
-}
 
 //
 // Types
@@ -380,7 +266,6 @@ struct HostDBContinuation : public Continuation {
 
   unsigned int missing : 1;
   unsigned int force_dns : 1;
-  unsigned int round_robin : 1;
 
   int probeEvent(int event, Event *e);
   int iterateEvent(int event, Event *e);
@@ -388,7 +273,6 @@ struct HostDBContinuation : public Continuation {
   int dnsPendingEvent(int event, Event *e);
   int backgroundEvent(int event, Event *e);
   int retryEvent(int event, Event *e);
-  int removeEvent(int event, Event *e);
   int setbyEvent(int event, Event *e);
 
   /// Recompute the hash and update ancillary values.
@@ -404,8 +288,8 @@ struct HostDBContinuation : public Continuation {
   {
     return hash.db_mark == HOSTDB_MARK_SRV;
   }
-  HostDBInfo *lookup_done(IpAddr const &ip, const char *aname, bool round_robin, unsigned int attl, SRVHosts *s = nullptr,
-                          HostDBInfo *r = nullptr);
+  Ptr<HostDBRecord> lookup_done(const char *aname, ts_seconds attl, SRVHosts *s = nullptr,
+                                Ptr<HostDBRecord> record = Ptr<HostDBRecord>{});
   int key_partition();
   void remove_trigger_pending_dns();
   int set_check_pending_dns();
@@ -415,8 +299,6 @@ struct HostDBContinuation : public Continuation {
   /** Optional values for @c init.
    */
   struct Options {
-    typedef Options self; ///< Self reference type.
-
     int timeout                 = 0;             ///< Timeout value. Default 0
     HostResStyle host_res_style = HOST_RES_NONE; ///< IP address family fallback. Default @c HOST_RES_NONE
     bool force_dns              = false;         ///< Force DNS lookup. Default @c false
@@ -429,7 +311,7 @@ struct HostDBContinuation : public Continuation {
   int make_get_message(char *buf, int len);
   int make_put_message(HostDBInfo *r, Continuation *c, char *buf, int len);
 
-  HostDBContinuation() : missing(false), force_dns(DEFAULT_OPTIONS.force_dns), round_robin(false)
+  HostDBContinuation() : missing(false), force_dns(DEFAULT_OPTIONS.force_dns)
   {
     ink_zero(hash_host_name_store);
     ink_zero(hash.hash);
@@ -441,12 +323,6 @@ inline unsigned int
 master_hash(CryptoHash const &hash)
 {
   return static_cast<int>(hash[1] >> 32);
-}
-
-inline bool
-is_dotted_form_hostname(const char *c)
-{
-  return -1 != (int)ink_inet_addr(c);
 }
 
 inline Queue<HostDBContinuation> &

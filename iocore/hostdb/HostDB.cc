@@ -55,17 +55,33 @@ unsigned int hostdb_hostfile_check_interval    = 86400; // 1 day
 // Epoch timestamp of the current hosts file check.
 ts_time hostdb_current_interval{TS_TIME_ZERO};
 // Epoch timestamp of the last time we actually checked for a hosts file update.
-static ink_time_t hostdb_last_interval = 0;
+static ts_time hostdb_last_interval{TS_TIME_ZERO};
 // Epoch timestamp when we updated the hosts file last.
-static ink_time_t hostdb_hostfile_update_timestamp = 0;
-static char hostdb_filename[PATH_NAME_MAX]         = DEFAULT_HOST_DB_FILENAME;
-int hostdb_max_count                               = DEFAULT_HOST_DB_SIZE;
-char hostdb_hostfile_path[PATH_NAME_MAX]           = "";
-int hostdb_sync_frequency                          = 0;
-int hostdb_disable_reverse_lookup                  = 0;
-int hostdb_max_iobuf_index                         = BUFFER_SIZE_INDEX_32K;
+static ts_time hostdb_hostfile_update_timestamp{TS_TIME_ZERO};
+static char hostdb_filename[PATH_NAME_MAX] = DEFAULT_HOST_DB_FILENAME;
+int hostdb_max_count                       = DEFAULT_HOST_DB_SIZE;
+char hostdb_hostfile_path[PATH_NAME_MAX]   = "";
+int hostdb_sync_frequency                  = 0;
+int hostdb_disable_reverse_lookup          = 0;
+int hostdb_max_iobuf_index                 = BUFFER_SIZE_INDEX_32K;
 
 ClassAllocator<HostDBContinuation> hostDBContAllocator("hostDBContAllocator");
+
+char const *
+name_of(HostDBType t)
+{
+  switch (t) {
+  case HostDBType::UNSPEC:
+    return "*";
+  case HostDBType::ADDR:
+    return "Address";
+  case HostDBType::SRV:
+    return "SRV";
+  case HostDBType::HOST:
+    return "Reverse DNS";
+  }
+  return "";
+}
 
 /// Configuration / API conversion.
 extern const MgmtConverter HostDBDownServerCacheTimeConv;
@@ -100,13 +116,10 @@ HostDBCache hostDB;
 
 void ParseHostFile(const char *path, unsigned int interval);
 
-char *
-HostDBInfo::srvname(HostDBRoundRobin *rr) const
+char const *
+HostDBInfo::srvname() const
 {
-  if (!is_srv || !data.srv.srv_offset) {
-    return nullptr;
-  }
-  return reinterpret_cast<char *>(rr) + data.srv.srv_offset;
+  return data.srv.srv_offset ? reinterpret_cast<char const *>(this) + data.srv.srv_offset : nullptr;
 }
 
 static inline bool
@@ -322,8 +335,8 @@ struct HostDBSync : public HostDBBackgroundTask {
     SET_HANDLER(&HostDBSync::wait_event);
     start_time = Thread::get_hrtime();
 
-    new RefCountCacheSerializer<HostDBInfo>(this, hostDBProcessor.cache()->refcountcache, this->frequency, this->storage_path,
-                                            this->full_path);
+    new RefCountCacheSerializer<HostDBRecord>(this, hostDBProcessor.cache()->refcountcache, this->frequency, this->storage_path,
+                                              this->full_path);
     return EVENT_DONE;
   }
 };
@@ -361,8 +374,8 @@ HostDBCache::start(int flags)
   }
 
   // Setup the ref-counted cache (this must be done regardless of syncing or not).
-  this->refcountcache = new RefCountCache<HostDBInfo>(hostdb_partitions, hostdb_max_size, hostdb_max_count, HostDBInfo::version(),
-                                                      "proxy.process.hostdb.cache.");
+  this->refcountcache = new RefCountCache<HostDBRecord>(hostdb_partitions, hostdb_max_size, hostdb_max_count, HostDBRecord::Version,
+                                                        "proxy.process.hostdb.cache.");
 
   //
   // Load and sync HostDB, if we've asked for it.
@@ -390,7 +403,7 @@ HostDBCache::start(int flags)
 
     Debug("hostdb", "Opening %s, partitions=%d storage_size=%" PRIu64 " items=%d", full_path, hostdb_partitions, hostdb_max_size,
           hostdb_max_count);
-    int load_ret = LoadRefCountCacheFromPath<HostDBInfo>(*this->refcountcache, storage_path, full_path, HostDBInfo::unmarshall);
+    int load_ret = LoadRefCountCacheFromPath<HostDBRecord>(*this->refcountcache, storage_path, full_path, HostDBRecord::unmarshall);
     if (load_ret != 0) {
       Warning("Error loading cache from %s: %d", full_path, load_ret);
     }
@@ -496,32 +509,20 @@ HostDBContinuation::refresh_hash()
 static bool
 reply_to_cont(Continuation *cont, HostDBRecord *r, bool is_srv = false)
 {
-  if (r == nullptr || (HostDBRecord::DataType::SRV == r->data_type) != is_srv || r->is_failed()) {
+  if (r == nullptr || r->is_srv() != is_srv || r->is_failed()) {
     cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, nullptr);
     return false;
   }
 
-  if (r->data_type != HostDBRecord::DataType::HOST) {
-    if (!r->hostname()) {
+  if (r->record_type != HostDBType::HOST) {
+    if (!r->name()) {
       ink_assert(!"missing hostname");
       cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, nullptr);
       Warning("bogus entry deleted from HostDB: missing hostname");
       hostDB.refcountcache->erase(r->key);
       return false;
     }
-    Debug("hostdb", "hostname = %s", r->hostname());
-  }
-
-  if (r->is_rr()) {
-    if (!r->rr()) {
-      ink_assert(!"missing round-robin");
-      cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, nullptr);
-      Warning("bogus entry deleted from HostDB: missing round-robin");
-      hostDB.refcountcache->erase(r->key);
-      return false;
-    }
-    ip_text_buffer ipb;
-    Debug("hostdb", "RR of %d with %d good, 1st IP = %s", r->rr()->rrcount, r->rr()->good, ats_ip_ntop(r->ip(), ipb, sizeof ipb));
+    Debug("hostdb", "hostname = %s", r->name());
   }
 
   cont->handleEvent(is_srv ? EVENT_SRV_LOOKUP : EVENT_HOST_DB_LOOKUP, r);
@@ -579,39 +580,39 @@ probe(const Ptr<ProxyMutex> &mutex, HostDBHash const &hash, bool ignore_timeout)
   ink_assert(this_ethread() == hostDB.refcountcache->lock_for_key(hash.hash.fold())->thread_holding);
   uint64_t folded_hash = hash.hash.fold();
 
-  // get the item from cache
-  Ptr<HostDBRecord> item = hostDB.refcountcache->get(folded_hash);
+  // get the record from cache
+  Ptr<HostDBRecord> record = hostDB.refcountcache->get(folded_hash);
   // If there was nothing in the cache-- this is a miss
-  if (item.get() == nullptr) {
-    return item;
+  if (record.get() == nullptr) {
+    return record;
   }
 
   // If the dns response was failed, and we've hit the failed timeout, lets stop returning it
-  if (item->is_failed() && item->is_ip_fail_timeout()) {
+  if (record->is_failed() && record->is_ip_fail_timeout()) {
     return NO_RECORD;
-    // if we aren't ignoring timeouts, and we are past it-- then remove the item
-  } else if (!ignore_timeout && item->is_ip_timeout() && !item->serve_stale_but_revalidate()) {
+    // if we aren't ignoring timeouts, and we are past it-- then remove the record
+  } else if (!ignore_timeout && record->is_ip_timeout() && !record->serve_stale_but_revalidate()) {
     HOSTDB_INCREMENT_DYN_STAT(hostdb_ttl_expires_stat);
     return NO_RECORD;
   }
 
   // If the record is stale, but we want to revalidate-- lets start that up
-  if ((!ignore_timeout && item->is_ip_stale() && item->data_type != HostDBRecord::DataType::HOST) ||
-      (item->is_ip_timeout() && item->serve_stale_but_revalidate())) {
+  if ((!ignore_timeout && record->is_ip_stale() && record->record_type != HostDBType::HOST) ||
+      (record->is_ip_timeout() && record->serve_stale_but_revalidate())) {
     if (hostDB.is_pending_dns_for_hash(hash.hash)) {
-      Debug("hostdb", "stale %u %u %u, using it and pending to refresh it", item->ip_interval(), item->ip_timestamp,
-            item->ip_timeout_interval);
-      return item;
+      Debug("hostdb", "stale %lu %lu %lu, using it and pending to refresh it", record->ip_interval().count(),
+            record->ip_timestamp.time_since_epoch().count(), record->ip_timeout_interval.count());
+      return record;
     }
-    Debug("hostdb", "stale %u %u %u, using it and refreshing it", item->ip_interval(), item->ip_timestamp,
-          item->ip_timeout_interval);
+    Debug("hostdb", "stale %lu %lu %lu, using it and refreshing it", record->ip_interval().count(),
+          record->ip_timestamp.time_since_epoch().count(), record->ip_timeout_interval.count());
     HostDBContinuation *c = hostDBContAllocator.alloc();
     HostDBContinuation::Options copt;
-    copt.host_res_style = item->af_family == AF_INET6 ? HOST_RES_IPV6_ONLY : HOST_RES_IPV4_ONLY;
+    copt.host_res_style = record->af_family == AF_INET6 ? HOST_RES_IPV6_ONLY : HOST_RES_IPV4_ONLY;
     c->init(hash, copt);
     c->do_dns();
   }
-  return item;
+  return record;
 }
 
 //
@@ -631,8 +632,8 @@ HostDBContinuation::insert(ts_seconds ttl)
   item->ip_timestamp        = hostdb_current_interval;
   item->ip_timeout_interval = std::clamp(ttl, ts_seconds(1), ts_seconds(HOST_DB_MAX_TTL));
 
-  Debug("hostdb", "inserting for: %.*s: (hash: %" PRIx64 ") now: %u timeout: %u ttl: %u", hash.host_len, hash.host_name,
-        folded_hash, item->ip_timestamp, item->ip_timeout_interval, ttl.count());
+  Debug("hostdb", "inserting for: %.*s: (hash: %" PRIx64 ") now: %lu timeout: %lu ttl: %lu", hash.host_len, hash.host_name,
+        folded_hash, item->ip_timestamp.time_since_epoch().count(), item->ip_timeout_interval.count(), ttl.count());
 
   hostDB.refcountcache->put(folded_hash, item, 0,
                             std::chrono::duration_cast<ts_seconds>(item->expiry_time().time_since_epoch()).count());
@@ -687,7 +688,7 @@ HostDBProcessor::getby(Continuation *cont, cb_process_result_pfn cb_process_resu
       MUTEX_TRY_LOCK(lock2, bucket_mutex, thread);
       if (lock2.is_locked()) {
         // If we can get the lock and a level 1 probe succeeds, return
-        Ptr<HostDBInfo> r = probe(bucket_mutex, hash, false);
+        Ptr<HostDBRecord> r = probe(bucket_mutex, hash, false);
         if (r) {
           // fail, see if we should retry with alternate
           if (hash.db_mark != HOSTDB_MARK_SRV && r->is_failed() && hash.host_name) {
@@ -866,6 +867,7 @@ HostDBProcessor::iterate(Continuation *cont)
   return &c->action;
 }
 
+#if 0
 static void
 do_setby(HostDBInfo *r, HostDBApplicationInfo *app, const char *hostname, IpAddr const &ip, bool is_srv = false)
 {
@@ -903,7 +905,7 @@ do_setby(HostDBInfo *r, HostDBApplicationInfo *app, const char *hostname, IpAddr
 }
 
 void
-HostDBProcessor::setby(const char *hostname, int len, sockaddr const *ip, HostDBApplicationInfo *app)
+HostDBProcessor::setby(const char *hostname, int len, sockaddr const *ip)
 {
   if (!hostdb_enable) {
     return;
@@ -923,7 +925,7 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const *ip, HostDB
   MUTEX_TRY_LOCK(lock, mutex, thread);
 
   if (lock.is_locked()) {
-    Ptr<HostDBInfo> r = probe(mutex, hash, false);
+    Ptr<HostDBRecord> r = probe(mutex, hash, false);
     if (r) {
       do_setby(r.get(), app, hostname, hash.ip);
     }
@@ -933,7 +935,6 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const *ip, HostDB
 
   HostDBContinuation *c = hostDBContAllocator.alloc();
   c->init(hash);
-  c->app = *app;
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler)&HostDBContinuation::setbyEvent);
   thread->schedule_in(c, MUTEX_RETRY_DELAY);
 }
@@ -973,89 +974,17 @@ HostDBContinuation::setbyEvent(int /* event ATS_UNUSED */, Event * /* e ATS_UNUS
   return EVENT_DONE;
 }
 
-static bool
-remove_round_robin(HostDBInfo *r, const char *hostname, IpAddr const &ip)
-{
-  if (r) {
-    if (!r->round_robin) {
-      return false;
-    }
-    HostDBRoundRobin *rr = r->rr();
-    if (!rr) {
-      return false;
-    }
-    for (int i = 0; i < rr->good; i++) {
-      if (ip == rr->info(i).ip()) {
-        ip_text_buffer b;
-        Debug("hostdb", "Deleting %s from '%s' round robin DNS entry", ip.toString(b, sizeof b), hostname);
-        HostDBInfo tmp         = rr->info(i);
-        rr->info(i)            = rr->info(rr->good - 1);
-        rr->info(rr->good - 1) = tmp;
-        rr->good--;
-        if (rr->good <= 0) {
-          hostDB.refcountcache->erase(r->key);
-          return false;
-        } else {
-          if (is_debug_tag_set("hostdb")) {
-            int bufsize      = rr->good * INET6_ADDRSTRLEN;
-            char *rr_ip_list = static_cast<char *>(alloca(bufsize));
-            char *p          = rr_ip_list;
-            for (int n = 0; n < rr->good; ++n) {
-              ats_ip_ntop(rr->info(n).ip(), p, bufsize);
-              int nbytes = strlen(p);
-              p += nbytes;
-              bufsize -= nbytes;
-            }
-            Note("'%s' round robin DNS entry updated, entries=%d, IP list: %s", hostname, rr->good, rr_ip_list);
-          }
-        }
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-int
-HostDBContinuation::removeEvent(int /* event ATS_UNUSED */, Event *e)
-{
-  Continuation *cont = action.continuation;
-  Ptr<ProxyMutex> proxy_mutex;
-  if (cont) {
-    proxy_mutex = cont->mutex;
-  }
-  WEAK_MUTEX_TRY_LOCK(lock, proxy_mutex, e->ethread);
-  if (!lock.is_locked()) {
-    e->schedule_in(HOST_DB_RETRY_PERIOD);
-    return EVENT_CONT;
-  }
-  if (!action.cancelled) {
-    if (!hostdb_enable) {
-      if (cont) {
-        cont->handleEvent(EVENT_HOST_DB_IP_REMOVED, (void *)nullptr);
-      }
-    } else {
-      Ptr<HostDBInfo> r = probe(mutex, hash, false);
-      bool res          = remove_round_robin(r.get(), hash.host_name, hash.ip);
-      if (cont) {
-        cont->handleEvent(EVENT_HOST_DB_IP_REMOVED, res ? static_cast<void *>(&hash.ip) : static_cast<void *>(nullptr));
-      }
-    }
-  }
-  hostdb_cont_free(this);
-  return EVENT_DONE;
-}
+#endif
 
 // Lookup done, insert into the local table, return data to the
 // calling continuation.
 // NOTE: if "i" exists it means we already allocated the space etc, just return
 //
-HostDBRecord *
-HostDBContinuation::lookup_done(IpAddr const &ip, const char *aname, bool around_robin, unsigned int ttl_seconds, SRVHosts *srv,
-                                HostDBRecord *item)
+Ptr<HostDBRecord>
+HostDBContinuation::lookup_done(const char *aname, ts_seconds ttl_seconds, SRVHosts *srv, Ptr<HostDBRecord> record)
 {
   ink_assert(this_ethread() == hostDB.refcountcache->lock_for_key(hash.hash.fold())->thread_holding);
-  if (!ip.isValid() || !aname || !aname[0]) {
+  if (!aname || !aname[0]) {
     if (is_byname()) {
       Debug("hostdb", "lookup_done() failed for '%.*s'", hash.host_len, hash.host_name);
     } else if (is_srv()) {
@@ -1064,21 +993,21 @@ HostDBContinuation::lookup_done(IpAddr const &ip, const char *aname, bool around
       ip_text_buffer b;
       Debug("hostdb", "failed for %s", hash.ip.toString(b, sizeof b));
     }
-    if (item == nullptr) {
-      item = insert(hostdb_ip_fail_timeout_interval);
+    if (record == nullptr) {
+      record = insert(ts_seconds(hostdb_ip_fail_timeout_interval));
     } else {
-      item->ip_timestamp        = hostdb_current_interval;
-      item->ip_timeout_interval = std::clamp(hostdb_ip_fail_timeout_interval, 1u, HOST_DB_MAX_TTL);
+      record->ip_timestamp        = hostdb_current_interval;
+      record->ip_timeout_interval = ts_seconds(std::clamp(hostdb_ip_fail_timeout_interval, 1u, HOST_DB_MAX_TTL));
     }
 
     if (is_srv()) {
-      item->data_type = HostDBRecord::DataType::SRV;
+      record->record_type = HostDBType::SRV;
     } else if (!is_byname()) {
-      item->data_type = HostDBRecord::DataType::HOST;
+      record->record_type = HostDBType::HOST;
     }
 
-    item->set_failed();
-    return item;
+    record->set_failed();
+    return record;
 
   } else {
     switch (hostdb_ttl_mode) {
@@ -1087,62 +1016,50 @@ HostDBContinuation::lookup_done(IpAddr const &ip, const char *aname, bool around
     case TTL_OBEY:
       break;
     case TTL_IGNORE:
-      ttl_seconds = hostdb_ip_timeout_interval;
+      ttl_seconds = ts_seconds(hostdb_ip_timeout_interval);
       break;
     case TTL_MIN:
-      if (hostdb_ip_timeout_interval < ttl_seconds) {
-        ttl_seconds = hostdb_ip_timeout_interval;
+      if (ts_seconds(hostdb_ip_timeout_interval) < ttl_seconds) {
+        ttl_seconds = ts_seconds(hostdb_ip_timeout_interval);
       }
       break;
     case TTL_MAX:
-      if (hostdb_ip_timeout_interval > ttl_seconds) {
-        ttl_seconds = hostdb_ip_timeout_interval;
+      if (ts_seconds(hostdb_ip_timeout_interval) > ttl_seconds) {
+        ttl_seconds = ts_seconds(hostdb_ip_timeout_interval);
       }
       break;
     }
-    HOSTDB_SUM_DYN_STAT(hostdb_ttl_stat, ttl_seconds);
+    HOSTDB_SUM_DYN_STAT(hostdb_ttl_stat, ttl_seconds.count());
 
-    if (item == nullptr) {
-      item = insert(ttl_seconds);
+    if (record == nullptr) {
+      record = insert(ts_seconds(ttl_seconds));
     } else {
       // update the TTL
-      item->ip_timestamp        = hostdb_current_interval;
-      item->ip_timeout_interval = std::clamp(ttl_seconds, 1u, HOST_DB_MAX_TTL);
+      record->ip_timestamp        = hostdb_current_interval;
+      record->ip_timeout_interval = std::clamp(ttl_seconds, ts_seconds(1), ts_seconds(HOST_DB_MAX_TTL));
     }
 
     if (is_byname()) {
-      ip_text_buffer b;
-      Debug("hostdb", "done %s TTL %d", ip.toString(b, sizeof b), ttl_seconds);
-      ats_ip_set(item->ip(), ip);
-      item->round_robin = around_robin;
+      Debug("hostdb", "done %s TTL %ld", hash.host_name, ttl_seconds.count());
       if (hash.host_name != aname) {
         ink_strlcpy(hash_host_name_store, aname, sizeof(hash_host_name_store));
       }
     } else if (is_srv()) {
-      ink_assert(srv && srv->hosts.size() && srv->hosts.size() <= hostdb_round_robin_max_count && around_robin);
+      ink_assert(srv && srv->hosts.size() && srv->hosts.size() <= hostdb_round_robin_max_count);
 
-      r->data.srv.srv_offset = srv->hosts.size();
-      r->reverse_dns         = false;
-      r->is_srv              = true;
-      r->round_robin         = around_robin;
+      record->record_type = HostDBType::SRV;
 
       if (hash.host_name != aname) {
         ink_strlcpy(hash_host_name_store, aname, sizeof(hash_host_name_store));
       }
 
     } else {
-      Debug("hostdb", "done '%s' TTL %d", aname, ttl_seconds);
-      // TODO: check that this is right, it seems that the 2 hostnames are always the same
-      r->data.hostname_offset = r->hostname_offset;
-      // TODO: consolidate into a single "item type" field?
-      r->round_robin = false;
-      r->reverse_dns = true;
-      r->is_srv      = false;
+      Debug("hostdb", "done '%s' TTL %ld", aname, ttl_seconds.count());
+      record->record_type = HostDBType::HOST;
     }
   }
 
-  ink_assert(!r->round_robin || !r->reverse_dns);
-  return r;
+  return record;
 }
 
 int
@@ -1172,28 +1089,7 @@ HostDBContinuation::dnsPendingEvent(int event, Event *e)
   }
 }
 
-// for a new HostDBInfo `r`, "inherit" from the old version of yourself if it exists in `old_rr_data`
-static int
-restore_info(HostDBInfo *r, HostDBInfo *old_r, HostDBInfo &old_info, HostDBRoundRobin *old_rr_data)
-{
-  if (old_rr_data) {
-    for (int j = 0; j < old_rr_data->rrcount; j++) {
-      if (ats_ip_addr_eq(old_rr_data->info(j).ip(), r->ip())) {
-        r->app = old_rr_data->info(j).app;
-        return true;
-      }
-    }
-  } else if (old_r) {
-    if (ats_ip_addr_eq(old_info.ip(), r->ip())) {
-      r->app = old_info.app;
-      return true;
-    }
-  }
-  return false;
-}
-
 // DNS lookup result state
-//
 int
 HostDBContinuation::dnsEvent(int event, HostEnt *e)
 {
@@ -1229,15 +1125,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
   } else {
     bool failed = !e || !e->good;
 
-    bool is_rr     = false;
     pending_action = nullptr;
-
-    if (is_srv()) {
-      is_rr = !failed && (e->srv_hosts.hosts.size() > 0);
-    } else if (!failed) {
-      is_rr = nullptr != e->ent.h_addr_list[1];
-    } else {
-    }
 
     ttl = ts_seconds(failed ? 0 : e->ttl);
 
@@ -1248,18 +1136,14 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
       old_r = nullptr;
       Debug("hostdb", "Removing the old record when the DNS lookup failed with NXDOMAIN");
     }
-    HostDBInfo old_info;
-    if (old_r) {
-      old_info = *old_r.get();
-    }
-    HostDBRoundRobin *old_rr_data = old_r ? old_r->rr() : nullptr;
-    int valid_records             = 0;
-    void *first_record            = nullptr;
-    uint8_t af                    = e ? e->ent.h_addrtype : AF_UNSPEC; // address family
-    // if this is an RR response, we need to find the first record, as well as the
-    // total number of records
-    if (is_rr) {
-      if (is_srv() && !failed) {
+
+    int valid_records  = 0;
+    void *first_record = nullptr;
+    uint8_t af         = e ? e->ent.h_addrtype : AF_UNSPEC; // address family
+
+    // Find the first record and total number of records.
+    if (!failed) {
+      if (is_srv()) {
         valid_records = e->srv_hosts.hosts.size();
       } else {
         void *ptr; // tmp for current entry.
@@ -1279,156 +1163,120 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
 
             ++valid_records;
           } else {
-            Warning("Zero address removed from round-robin list for '%s'", hash.host_name);
+            Warning("Invalid address removed for '%s'", hash.host_name);
           }
         }
         if (!first_record) {
           failed = true;
-          is_rr  = false;
         }
       }
-    } else if (!failed) {
-      first_record = e->ent.h_addr_list[0];
-    } // else first is 0.
-
-    IpAddr tip; // temp storage if needed.
+    } // else first is nullptr
 
     // In the event that the lookup failed (SOA response-- for example) we want to use hash.host_name, since it'll be ""
     const char *aname = (failed || strlen(hash.host_name)) ? hash.host_name : e->ent.h_name;
 
     const size_t s_size = strlen(aname) + 1;
-    const size_t rrsize = is_rr ? HostDBRoundRobin::size(valid_records, e->srv_hosts.srv_hosts_length) : 0;
+    const size_t rrsize = INK_ALIGN(valid_records * sizeof(HostDBInfo) + e->srv_hosts.srv_hosts_length, 8);
     // where in our block of memory we are
-    int offset = sizeof(HostDBInfo);
+    int offset = sizeof(HostDBRecord);
 
     int allocSize = s_size + rrsize; // The extra space we need for the rest of the things
 
-    HostDBInfo *r = HostDBInfo::alloc(allocSize);
-    Debug("hostdb", "allocating %d bytes for %s with %d RR records at [%p]", allocSize, aname, valid_records, r);
+    Ptr<HostDBRecord> r{HostDBRecord::alloc(allocSize)};
+    Debug("hostdb", "allocating %d bytes for %s with %d RR records at [%p]", allocSize, aname, valid_records, r.get());
     // set up the record
     r->key = hash.hash.fold(); // always set the key
 
-    r->hostname_offset = offset;
-    ink_strlcpy(r->perm_hostname(), aname, s_size);
+    r->name_offset = offset;
+    ink_strlcpy(r->name_ptr(), aname, s_size);
     offset += s_size;
+    r->rr_offset = offset;
+    r->rr_good = r->rr_count = valid_records;
 
     // If the DNS lookup failed (errors such as SERVFAIL, etc.) but we have an old record
     // which is okay with being served stale-- lets continue to serve the stale record as long as
     // the record is willing to be served.
     bool serve_stale = false;
     if (failed && old_r && old_r->serve_stale_but_revalidate()) {
-      r->free();
-      r           = old_r.get();
+      r           = old_r;
       serve_stale = true;
+      // Should return here? No point in doing initialization, it's the old data.
     } else if (is_byname()) {
-      if (first_record) {
-        ip_addr_set(tip, af, first_record);
-      }
-      r = lookup_done(tip, hash.host_name, is_rr, ttl_seconds, failed ? nullptr : &e->srv_hosts, r);
+      lookup_done(hash.host_name, ttl, failed ? nullptr : &e->srv_hosts, r);
     } else if (is_srv()) {
-      if (!failed) {
-        tip._family = AF_INET; // force the tip valid, or else the srv will fail
-      }
-      r = lookup_done(tip,            /* junk: FIXME: is the code in lookup_done() wrong to NEED this? */
-                      hash.host_name, /* hostname */
-                      is_rr,          /* is round robin, doesnt matter for SRV since we recheck getCount() inside lookup_done() */
-                      ttl_seconds,    /* ttl in seconds */
-                      failed ? nullptr : &e->srv_hosts, r);
+      lookup_done(hash.host_name, /* hostname */
+                  ttl,            /* ttl in seconds */
+                  failed ? nullptr : &e->srv_hosts, r);
     } else if (failed) {
-      r = lookup_done(tip, hash.host_name, false, ttl_seconds, nullptr, r);
+      lookup_done(hash.host_name, ttl, nullptr, r);
     } else {
-      r = lookup_done(hash.ip, e->ent.h_name, false, ttl_seconds, &e->srv_hosts, r);
+      lookup_done(e->ent.h_name, ttl, &e->srv_hosts, r);
     }
 
-    // Conditionally make rr record entries
-    if (is_rr) {
-      r->app.rr.offset = offset;
-      // This will only be set if is_rr
-      HostDBRoundRobin *rr_data = static_cast<HostDBRoundRobin *>(r->rr());
-      ;
-      if (is_srv()) {
-        int skip  = 0;
-        char *pos = reinterpret_cast<char *>(rr_data) + sizeof(HostDBRoundRobin) + valid_records * sizeof(HostDBInfo);
-        SRV *q[valid_records];
-        ink_assert(valid_records <= (int)hostdb_round_robin_max_count);
-        // sort
-        for (int i = 0; i < valid_records; ++i) {
-          q[i] = &e->srv_hosts.hosts[i];
-        }
-        for (int i = 0; i < valid_records; ++i) {
-          for (int ii = i + 1; ii < valid_records; ++ii) {
-            if (*q[ii] < *q[i]) {
-              SRV *tmp = q[i];
-              q[i]     = q[ii];
-              q[ii]    = tmp;
+    auto rr_info = r->rr_info();
+    // Construct the instances to create a valid initial state.
+    for (auto &item : rr_info) {
+      new (&item) std::remove_reference_t<decltype(item)>;
+    }
+    // Fill in record type specific data.
+    if (is_srv()) {
+      char *pos = rr_info.rebind<char>().end();
+      SRV *q[valid_records];
+      ink_assert(valid_records <= (int)hostdb_round_robin_max_count);
+      for (int i = 0; i < valid_records; ++i) {
+        q[i] = &e->srv_hosts.hosts[i];
+      }
+      std::sort(q, q + valid_records, [](SRV *lhs, SRV *rhs) -> bool { return *lhs < *rhs; });
+
+      SRV **cur_srv = q;
+      for (auto &item : rr_info) {
+        auto t                     = *cur_srv++; // get next SRV record pointer.
+        item.data.srv.srv_weight   = t->weight;
+        item.data.srv.srv_priority = t->priority;
+        item.data.srv.srv_port     = t->port;
+        item.data.srv.key          = t->key;
+
+        memcpy(pos, t->host, t->host_len); // Append the name to the overall record.
+        // Offset is relative to the info instance.
+        item.data.srv.srv_offset = pos - reinterpret_cast<char *>(&item);
+
+        pos += t->host_len;
+        Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %ld seconds", t->host, ttl.count());
+      }
+
+      // migrate state data from the old record to the new record.
+      if (old_r) {
+        auto old_rr_info{old_r->rr_info()};
+        for (auto &new_item : rr_info) {
+          for (auto &old_item : old_rr_info) {
+            if (new_item.data.srv.key == old_item.data.srv.key && 0 == strcmp(new_item.srvname(), old_item.srvname())) {
+              new_item.migrate_from(old_item);
+              break;
             }
           }
         }
-
-        rr_data->good = rr_data->rrcount = valid_records;
-        rr_data->current                 = 0;
-        for (int i = 0; i < valid_records; ++i) {
-          SRV *t                     = q[i];
-          HostDBInfo &item           = rr_data->info(i);
-          item.round_robin           = 0;
-          item.round_robin_elt       = 1;
-          item.reverse_dns           = 0;
-          item.is_srv                = 1;
-          item.data.srv.srv_weight   = t->weight;
-          item.data.srv.srv_priority = t->priority;
-          item.data.srv.srv_port     = t->port;
-          item.data.srv.key          = t->key;
-
-          ink_assert((skip + t->host_len) <= e->srv_hosts.srv_hosts_length);
-
-          memcpy(pos + skip, t->host, t->host_len);
-          item.data.srv.srv_offset = (pos - reinterpret_cast<char *>(rr_data)) + skip;
-
-          skip += t->host_len;
-
-          item.app.clear();
-          Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %d seconds", t->host, ttl_seconds);
-        }
-
-        // restore
-        if (old_rr_data) {
-          for (int i = 0; i < rr_data->rrcount; ++i) {
-            for (int ii = 0; ii < old_rr_data->rrcount; ++ii) {
-              if (rr_data->info(i).data.srv.key == old_rr_data->info(ii).data.srv.key) {
-                char *new_host = rr_data->info(i).srvname(rr_data);
-                char *old_host = old_rr_data->info(ii).srvname(old_rr_data);
-                if (!strcmp(new_host, old_host)) {
-                  rr_data->info(i).app = old_rr_data->info(ii).app;
-                }
-              }
+      }
+    } else { // Otherwise this is a regular dns response
+      unsigned idx = 0;
+      for (auto &item : rr_info) {
+        ip_addr_set(item.data.ip, af, e->ent.h_addr_list[idx++]);
+        // Migrate data as needed.
+        if (old_r) {
+          auto old_rr_info{old_r->rr_info()};
+          for (auto &old_item : old_rr_info) {
+            if (ats_ip_addr_eq(item.data.ip, old_item.data.ip)) {
+              item.migrate_from(old_item);
+              break;
             }
-          }
-        }
-      } else { // Otherwise this is a regular dns response
-        rr_data->good = rr_data->rrcount = valid_records;
-        rr_data->current                 = 0;
-        for (int i = 0; i < valid_records; ++i) {
-          HostDBInfo &item = rr_data->info(i);
-          ip_addr_set(item.ip(), af, e->ent.h_addr_list[i]);
-          item.round_robin     = 0;
-          item.round_robin_elt = 1;
-          item.reverse_dns     = 0;
-          item.is_srv          = 0;
-          if (!restore_info(&item, old_r.get(), old_info, old_rr_data)) {
-            item.app.clear();
           }
         }
       }
     }
-
-    if (!failed && !is_rr && !is_srv()) {
-      restore_info(r, old_r.get(), old_info, old_rr_data);
-    }
-    ink_assert(!r || !r->round_robin || !r->reverse_dns);
-    ink_assert(failed || !r->round_robin || r->app.rr.offset);
 
     if (!serve_stale) {
-      hostDB.refcountcache->put(hash.hash.fold(), r, allocSize, r->expiry_time());
+      hostDB.refcountcache->put(
+        hash.hash.fold(), r.get(), allocSize,
+        (r->ip_timestamp + r->ip_timeout_interval + ts_seconds(hostdb_serve_stale_but_revalidate)).time_since_epoch().count());
     } else {
       Warning("Fallback to serving stale record, skip re-update of hostdb for %s", aname);
     }
@@ -1455,7 +1303,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
           if (action.continuation->mutex) {
             ink_release_assert(action.continuation->mutex == action.mutex);
           }
-          reply_to_cont(action.continuation, r, is_srv());
+          reply_to_cont(action.continuation, r.get(), is_srv());
         }
         need_to_reschedule = false;
       }
@@ -1515,7 +1363,7 @@ HostDBContinuation::iterateEvent(int event, Event *e)
 
     IntrusiveHashMap<RefCountCacheLinkage> &partMap = hostDB.refcountcache->get_partition(current_iterate_pos).get_map();
     for (const auto &it : partMap) {
-      HostDBInfo *r = static_cast<HostDBInfo *>(it.item.get());
+      auto *r = static_cast<HostDBRecord *>(it.item.get());
       if (r && !r->is_failed()) {
         action.continuation->handleEvent(EVENT_INTERVAL, static_cast<void *>(r));
       }
@@ -1581,7 +1429,7 @@ HostDBContinuation::probeEvent(int /* event ATS_UNUSED */, Event *e)
   if (!force_dns) {
     // Do the probe
     //
-    Ptr<HostDBInfo> r = probe(mutex, hash, false);
+    Ptr<HostDBRecord> r = probe(mutex, hash, false);
 
     if (r) {
       HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
@@ -1670,21 +1518,21 @@ HostDBContinuation::do_dns()
     if (0 == tip.load(hash.host_name)) {
       // check 127.0.0.1 format // What the heck does that mean? - AMC
       if (action.continuation) {
-        HostDBInfo *r = lookup_done(tip, hash.host_name, false, HOST_DB_MAX_TTL, nullptr);
+        Ptr<HostDBRecord> r = lookup_done(hash.host_name, ts_seconds(HOST_DB_MAX_TTL), nullptr);
 
-        reply_to_cont(action.continuation, r);
+        reply_to_cont(action.continuation, r.get());
       }
       hostdb_cont_free(this);
       return;
     }
-    ts::ConstBuffer hname(hash.host_name, hash.host_len);
+    ts::TextView hname(hash.host_name, hash.host_len);
     Ptr<RefCountedHostsFileMap> current_host_file_map = hostDB.hosts_file_ptr;
     HostsFileMap::iterator find_result                = current_host_file_map->hosts_file_map.find(hname);
     if (find_result != current_host_file_map->hosts_file_map.end()) {
       if (action.continuation) {
         // Set the TTL based on how often we stat() the host file
-        HostDBInfo *r = lookup_done(IpAddr(find_result->second), hash.host_name, false, hostdb_hostfile_check_interval, nullptr);
-        reply_to_cont(action.continuation, r);
+        Ptr<HostDBRecord> r = lookup_done(hash.host_name, ts_seconds(hostdb_hostfile_check_interval), nullptr);
+        reply_to_cont(action.continuation, r.get());
       }
       hostdb_cont_free(this);
       return;
@@ -1733,7 +1581,7 @@ HostDBContinuation::backgroundEvent(int /* event ATS_UNUSED */, Event * /* e ATS
 
   hostdb_current_interval = ts_clock::now();
 
-  if ((hostdb_current_interval - hostdb_last_interval) > hostdb_hostfile_check_interval) {
+  if ((hostdb_current_interval - hostdb_last_interval) > ts_seconds(hostdb_hostfile_check_interval)) {
     bool update_p = false; // do we need to reparse the file and update?
     struct stat info;
     char path[sizeof(hostdb_hostfile_path)];
@@ -1743,7 +1591,7 @@ HostDBContinuation::backgroundEvent(int /* event ATS_UNUSED */, Event * /* e ATS
       Debug("hostdb", "Update host file '%s' -> '%s'", (*hostdb_hostfile_path ? hostdb_hostfile_path : "*-none-*"),
             (*path ? path : "*-none-*"));
       // path to hostfile changed
-      hostdb_hostfile_update_timestamp = 0; // never updated from this file
+      hostdb_hostfile_update_timestamp = TS_TIME_ZERO; // never updated from this file
       if ('\0' != *path) {
         memcpy(hostdb_hostfile_path, path, sizeof(hostdb_hostfile_path));
       } else {
@@ -1754,7 +1602,7 @@ HostDBContinuation::backgroundEvent(int /* event ATS_UNUSED */, Event * /* e ATS
       hostdb_last_interval = hostdb_current_interval;
       if (*hostdb_hostfile_path) {
         if (0 == stat(hostdb_hostfile_path, &info)) {
-          if (info.st_mtime > static_cast<time_t>(hostdb_hostfile_update_timestamp)) {
+          if (info.st_mtime > ts_clock::to_time_t(hostdb_hostfile_update_timestamp)) {
             update_p = true; // same file but it's changed.
           }
         } else {
@@ -1771,35 +1619,10 @@ HostDBContinuation::backgroundEvent(int /* event ATS_UNUSED */, Event * /* e ATS
   return EVENT_CONT;
 }
 
-ts::MemSpan<HostDBInfo>
-HostDBRoundRobin::rr_info()
-{
-  return {reinterpret_cast<HostDBInfo *>(reinterpret_cast<char *>(this + 1) + data.rr.offset), size_t(data.rr.rrcount)};
-}
-
 HostDBInfo *
 HostDBRecord::select_best_http(ResolveInfo *resolve_info, ts_time now)
 {
-  if (this->is_rr()) {
-    return data.rr.select_best_http(resolve_info, now);
-#if 0
-    auto rr = this->rr();
-    if (resolve_info->client_target_addr) {
-      resolve_info->lookup_validated = rr->find_ip(resolve_info->client_target_addr) != nullptr;
-      return this;
-    }
-    resolve_info->lookup_validated =
-      (resolve_info->client_target_addr == nullptr) || nullptr != rr->find_ip(resolve_info->client_target_addr);
-    return rr->select_best_http(resolve_info, now);
-#endif
-  }
-  return &data.info;
-}
-
-HostDBInfo *
-HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_time now)
-{
-  bool bad = (count <= 0 || count > hostdb_round_robin_max_count || good <= 0 || good > hostdb_round_robin_max_count);
+  bool bad = (rr_count <= 0 || rr_count > hostdb_round_robin_max_count || rr_good <= 0 || rr_good > hostdb_round_robin_max_count);
 
   if (bad) {
     ink_assert(!"bad round robin size");
@@ -1814,8 +1637,8 @@ HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_time now)
   if (HostDBProcessor::hostdb_strict_round_robin) {
     Debug("hostdb", "Using strict round robin");
     // Check that the host we selected is alive
-    for (int i = 0; i < good; ++i) {
-      best_any = current++ % good;
+    for (int i = 0; i < rr_good; ++i) {
+      best_any = rr_idx++ % rr_good;
       if (!info[best_any].is_dead(now, resolve_info->fail_window)) {
         best_up = best_any;
         break;
@@ -1823,13 +1646,13 @@ HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_time now)
     }
   } else if (HostDBProcessor::hostdb_timed_round_robin > 0) {
     Debug("hostdb", "Using timed round-robin for HTTP");
-    if (now > timed_rr_ctime + ts_seconds(HostDBProcessor::hostdb_timed_round_robin)) {
+    if (now > rr_ctime.load() + ts_seconds(HostDBProcessor::hostdb_timed_round_robin)) {
       Debug("hostdb", "Timed interval expired.. rotating");
-      ++current;
-      timed_rr_ctime = now;
+      ++rr_idx;
+      rr_ctime = now;
     }
-    for (int i = 0; i < good; i++) {
-      best_any = (current + i) % good;
+    for (int i = 0; i < rr_good; i++) {
+      best_any = (rr_idx + i) % rr_good;
       if (!info[best_any].is_dead(now, resolve_info->fail_window)) {
         best_up = best_any;
         break;
@@ -1840,8 +1663,8 @@ HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_time now)
     Debug("hostdb", "Using default round robin");
     unsigned int best_hash_any = 0;
     unsigned int best_hash_up  = 0;
-    for (int i = 0; i < good; i++) {
-      sockaddr const *ip = info[i].ip();
+    for (int i = 0; i < rr_good; i++) {
+      sockaddr const *ip = info[i].addr();
       unsigned int h     = HOSTDB_CLIENT_IP_HASH(resolve_info->inbound_remote_addr, ip);
       if (best_hash_any <= h) {
         best_any      = i;
@@ -1855,10 +1678,10 @@ HostDBRoundRobin::select_best_http(ResolveInfo *resolve_info, ts_time now)
   }
 
   if (best_up != -1) {
-    ink_assert(best_up >= 0 && best_up < good);
+    ink_assert(best_up >= 0 && best_up < rr_good);
     return &info[best_up];
   }
-  ink_assert(best_any >= 0 && best_any < good);
+  ink_assert(best_any >= 0 && best_any < rr_good);
   return &info[best_any];
 }
 
@@ -1925,41 +1748,44 @@ struct ShowHostDB : public ShowCont {
   showAllEvent(int event, Event *e)
   {
     if (event == EVENT_INTERVAL) {
-      HostDBInfo *r = reinterpret_cast<HostDBInfo *>(e);
+      auto *r = reinterpret_cast<HostDBRecord *>(e);
       if (output_json && records_seen++ > 0) {
         CHECK_SHOW(show(",")); // we need to separate records
       }
-      showOne(r, false, event, e);
-      if (r->is_rr()) {
-        HostDBRoundRobin *rr_data = r->rr();
-        if (rr_data) {
-          if (!output_json) {
-            CHECK_SHOW(show("<table border=1>\n"));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", rr_data->rrcount));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", rr_data->good));
-            CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", rr_data->current));
-            CHECK_SHOW(show("</table>\n"));
-          } else {
-            CHECK_SHOW(show(",\"%s\":\"%d\",", "rr_total", rr_data->rrcount));
-            CHECK_SHOW(show("\"%s\":\"%d\",", "rr_good", rr_data->good));
-            CHECK_SHOW(show("\"%s\":\"%d\",", "rr_current", rr_data->current));
-            CHECK_SHOW(show("\"rr_records\":["));
-          }
+      auto rr_info{r->rr_info()};
+      if (rr_info.count()) {
+        if (!output_json) {
+          CHECK_SHOW(show("<table border=1>\n"));
+          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", r->rr_count));
+          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", r->rr_good));
+          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", r->rr_idx.load()));
+          CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No"));
+          CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No"));
+          CHECK_SHOW(show("</table>\n"));
+        } else {
+          CHECK_SHOW(show(",\"%s\":\"%d\",", "rr_total", r->rr_count));
+          CHECK_SHOW(show("\"%s\":\"%d\",", "rr_good", r->rr_good));
+          CHECK_SHOW(show("\"%s\":\"%d\",", "rr_current", r->rr_idx.load()));
+          CHECK_SHOW(show("\"rr_records\":["));
+        }
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "TTL", r->ip_time_remaining()));
 
-          for (int i = 0; i < rr_data->rrcount; i++) {
-            showOne(&rr_data->info(i), true, event, e, rr_data);
-            if (output_json) {
-              CHECK_SHOW(show("}")); // we need to separate records
-              if (i < (rr_data->rrcount - 1))
-                CHECK_SHOW(show(","));
+        bool need_separator = false;
+        for (auto &item : rr_info) {
+          showOne(&item, r->record_type, event, e);
+          if (output_json) {
+            CHECK_SHOW(show("}")); // we need to separate records
+            if (need_separator) {
+              CHECK_SHOW(show(","));
             }
+            need_separator = true;
           }
+        }
 
-          if (!output_json) {
-            CHECK_SHOW(show("<br />\n<br />\n"));
-          } else {
-            CHECK_SHOW(show("]"));
-          }
+        if (!output_json) {
+          CHECK_SHOW(show("<br />\n<br />\n"));
+        } else {
+          CHECK_SHOW(show("]"));
         }
       }
 
@@ -1981,70 +1807,47 @@ struct ShowHostDB : public ShowCont {
   }
 
   int
-  showOne(HostDBInfo *r, bool rr, int event, Event *e, HostDBRoundRobin *hostdb_rr = nullptr)
+  showOne(HostDBInfo *info, HostDBType record_type, int event, Event *e)
   {
     ip_text_buffer b;
     if (!output_json) {
       CHECK_SHOW(show("<table border=1>\n"));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%s%s %s</td></tr>\n", "Type", r->round_robin ? "Round-Robin" : "",
-                      r->reverse_dns ? "Reverse DNS" : "", r->is_srv ? "SRV" : "DNS"));
+      CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Type", name_of(record_type)));
 
-      if (r->perm_hostname()) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Hostname", r->perm_hostname()));
-      } else if (rr && r->is_srv && hostdb_rr) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Hostname", r->srvname(hostdb_rr)));
+      if (HostDBType::SRV == record_type) {
+        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Hostname", info->srvname()));
       }
 
       // Let's display the hash.
-      ts::MemSpan<uint32_t> allotment{reinterpret_cast<uint32_t *>(&r->app), 2};
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App1", allotment[0]));
-      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "App2", allotment[1]));
-      CHECK_SHOW(
-        show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", r->app.http_data.last_failure.load().time_since_epoch().count()));
-      if (!rr) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Stale", r->is_ip_stale() ? "Yes" : "No"));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "Timed-Out", r->is_ip_timeout() ? "Yes" : "No"));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "TTL", r->ip_time_remaining()));
-      }
+      CHECK_SHOW(show("<tr><td>%s</td><td>%u</td></tr>\n", "LastFailure", info->last_failure.load().time_since_epoch().count()));
 
-      if (rr && r->is_srv) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Weight", r->data.srv.srv_weight));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Priority", r->data.srv.srv_priority));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Port", r->data.srv.srv_port));
-        CHECK_SHOW(show("<tr><td>%s</td><td>%x</td></tr>\n", "Key", r->data.srv.key));
-      } else if (!r->is_srv) {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "IP", ats_ip_ntop(r->ip(), b, sizeof b)));
+      if (HostDBType::SRV == record_type) {
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Weight", info->data.srv.srv_weight));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Priority", info->data.srv.srv_priority));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Port", info->data.srv.srv_port));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%x</td></tr>\n", "Key", info->data.srv.key));
+      } else {
+        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "IP", ats_ip_ntop(info->data.ip, b, sizeof b)));
       }
 
       CHECK_SHOW(show("</table>\n"));
     } else {
       CHECK_SHOW(show("{"));
-      CHECK_SHOW(show("\"%s\":\"%s%s%s\",", "type", (r->round_robin && !r->is_srv) ? "roundrobin" : "",
-                      r->reverse_dns ? "reversedns" : "", r->is_srv ? "srv" : "dns"));
+      CHECK_SHOW(show("\"%s\":\"%s\",", "type", name_of(record_type)));
 
-      if (r->perm_hostname()) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", r->perm_hostname()));
-      } else if (rr && r->is_srv && hostdb_rr) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", r->srvname(hostdb_rr)));
+      if (HostDBType::SRV == record_type) {
+        CHECK_SHOW(show("\"%s\":\"%s\",", "hostname", info->srvname()));
       }
 
-      ts::MemSpan<uint32_t> allotment{reinterpret_cast<uint32_t *>(&r->app), 2};
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app1", allotment[0]));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "app2", allotment[1]));
-      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", r->app.http_data.last_failure.load().time_since_epoch().count()));
-      if (!rr) {
-        CHECK_SHOW(show("\"%s\":\"%s\",", "stale", r->is_ip_stale() ? "yes" : "no"));
-        CHECK_SHOW(show("\"%s\":\"%s\",", "timedout", r->is_ip_timeout() ? "yes" : "no"));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "ttl", r->ip_time_remaining()));
-      }
+      CHECK_SHOW(show("\"%s\":\"%u\",", "lastfailure", info->last_failure.load().time_since_epoch().count()));
 
-      if (rr && r->is_srv) {
-        CHECK_SHOW(show("\"%s\":\"%d\",", "weight", r->data.srv.srv_weight));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "priority", r->data.srv.srv_priority));
-        CHECK_SHOW(show("\"%s\":\"%d\",", "port", r->data.srv.srv_port));
-        CHECK_SHOW(show("\"%s\":\"%x\",", "key", r->data.srv.key));
-      } else if (!r->is_srv) {
-        CHECK_SHOW(show("\"%s\":\"%s\"", "ip", ats_ip_ntop(r->ip(), b, sizeof b)));
+      if (HostDBType::SRV == record_type) {
+        CHECK_SHOW(show("\"%s\":\"%d\",", "weight", info->data.srv.srv_weight));
+        CHECK_SHOW(show("\"%s\":\"%d\",", "priority", info->data.srv.srv_priority));
+        CHECK_SHOW(show("\"%s\":\"%d\",", "port", info->data.srv.srv_port));
+        CHECK_SHOW(show("\"%s\":\"%x\",", "key", info->data.srv.key));
+      } else {
+        CHECK_SHOW(show("\"%s\":\"%s\"", "ip", ats_ip_ntop(info->data.ip, b, sizeof b)));
       }
     }
     return EVENT_CONT;
@@ -2053,7 +1856,7 @@ struct ShowHostDB : public ShowCont {
   int
   showLookupDone(int event, Event *e)
   {
-    HostDBInfo *r = reinterpret_cast<HostDBInfo *>(e);
+    auto *r = reinterpret_cast<HostDBRecord *>(e);
 
     CHECK_SHOW(begin("HostDB Lookup"));
     if (name) {
@@ -2062,19 +1865,16 @@ struct ShowHostDB : public ShowCont {
       CHECK_SHOW(show("<H2>%u.%u.%u.%u</H2>\n", PRINT_IP(ip)));
     }
     if (r) {
-      showOne(r, false, event, e);
-      if (r->round_robin) {
-        HostDBRoundRobin *rr_data = r->rr();
-        if (rr_data) {
-          CHECK_SHOW(show("<table border=1>\n"));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", rr_data->rrcount));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", rr_data->good));
-          CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", rr_data->current));
-          CHECK_SHOW(show("</table>\n"));
+      auto rr_data = r->rr_info();
+      if (rr_data.count()) {
+        CHECK_SHOW(show("<table border=1>\n"));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Total", r->rr_count));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Good", r->rr_good));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Current", r->rr_idx.load()));
+        CHECK_SHOW(show("</table>\n"));
 
-          for (int i = 0; i < rr_data->rrcount; i++) {
-            showOne(&rr_data->info(i), true, event, e, rr_data);
-          }
+        for (auto &item : rr_data) {
+          showOne(&item, r->record_type, event, e);
         }
       }
     } else {
@@ -2170,9 +1970,9 @@ struct HostDBTestReverse : public Continuation {
   mainEvent(int event, Event *e)
   {
     if (event == EVENT_HOST_DB_LOOKUP) {
-      HostDBInfo *i = reinterpret_cast<HostDBInfo *>(e);
+      auto *i = reinterpret_cast<HostDBRecord *>(e);
       if (i) {
-        rprintf(test, "HostDBTestReverse: reversed %s\n", i->hostname());
+        rprintf(test, "HostDBTestReverse: reversed %s\n", i->name());
       }
       outstanding--;
     }
@@ -2302,7 +2102,7 @@ ParseHostLine(Ptr<RefCountedHostsFileMap> &map, char *l)
   IpAddr ip;
   if (n_elts > 1 && 0 == ip.load(elts[0])) {
     for (int i = 1; i < n_elts; ++i) {
-      ts::ConstBuffer name(elts[i], strlen(elts[i]));
+      ts::TextView name(elts[i], strlen(elts[i]));
       // If we don't have an entry already (host files only support single IPs for a given name)
       //                                    ^-- lies. Should fix this at some point.
       if (map->hosts_file_map.find(name) == map->hosts_file_map.end()) {
@@ -2399,7 +2199,7 @@ struct HostDBRegressionContinuation : public Continuation {
   int i;
 
   int
-  mainEvent(int event, HostDBInfo *r)
+  mainEvent(int event, HostDBRecord *r)
   {
     (void)event;
 
@@ -2408,23 +2208,16 @@ struct HostDBRegressionContinuation : public Continuation {
     }
     if (event == EVENT_HOST_DB_LOOKUP) {
       --outstanding;
-      // since this is a lookup done, data is either hostdbInfo or nullptr
       if (r) {
-        rprintf(test, "hostdbinfo r=%x\n", r);
-        rprintf(test, "hostdbinfo hostname=%s\n", r->perm_hostname());
-        rprintf(test, "hostdbinfo rr %x\n", r->rr());
+        rprintf(test, "HostDBRecord r=%x\n", r);
+        rprintf(test, "HostDBRecord hostname=%s\n", r->name());
         // If RR, print all of the enclosed records
-        if (r->rr()) {
-          rprintf(test, "hostdbinfo good=%d\n", r->rr()->good);
-          for (int x = 0; x < r->rr()->good; x++) {
-            ip_port_text_buffer ip_buf;
-            ats_ip_ntop(r->rr()->info(x).ip(), ip_buf, sizeof(ip_buf));
-            rprintf(test, "hostdbinfo RR%d ip=%s\n", x, ip_buf);
-          }
-        } else { // Otherwise, just the one will do
+        rprintf(test, "HostDBInfo %d / %d\n", r->rr_good, r->rr_count);
+        auto rr_info{r->rr_info()};
+        for (int x = 0; x < r->rr_good; ++x) {
           ip_port_text_buffer ip_buf;
-          ats_ip_ntop(r->ip(), ip_buf, sizeof(ip_buf));
-          rprintf(test, "hostdbinfo A ip=%s\n", ip_buf);
+          ats_ip_ntop(rr_info[i].data.ip, ip_buf, sizeof(ip_buf));
+          rprintf(test, "hostdbinfo RR%d ip=%s\n", x, ip_buf);
         }
         ++success;
       } else {
@@ -2491,17 +2284,17 @@ HostDBRecord::alloc(size_t extra)
   size_t size        = sizeof(self_type) + extra;
   int iobuffer_index = iobuffer_size_to_index(size, hostdb_max_iobuf_index);
   ink_release_assert(iobuffer_index >= 0);
-  auto ptr        = ioBufAllocator[iobuffer_index].alloc_void();
-  _iobuffer_index = iobuffer_index;
+  auto ptr = ioBufAllocator[iobuffer_index].alloc_void();
   // Zero out allocated data.
   memset(ptr, 0, size);
+  static_cast<self_type *>(ptr)->_iobuffer_index = iobuffer_index;
   // CLear reference count by construction.
   new (static_cast<RefCountObj *>(ptr)) RefCountObj();
   return static_cast<self_type *>(ptr);
 }
 
 HostDBRecord::self_type *
-HostDBRecord::unmarshall(char *buff, size_t size)
+HostDBRecord::unmarshall(char *buff, unsigned size)
 {
   if (size < sizeof(self_type)) {
     return nullptr;
@@ -2532,4 +2325,124 @@ HostDBRecord::serve_stale_but_revalidate() const
 
   // otherwise, the entry is too old
   return false;
+}
+
+#if 0
+int
+HostDBRecord::index_of(sockaddr const *ip)
+{
+  if (count <= 0 ||
+      uint32_t(count) > hostdb_round_robin_max_count ||
+      good <= 0 ||
+      uint32_t(good) > hostdb_round_robin_max_count
+      ) {
+    ink_assert(!"bad round robin size");
+    return -1;
+  }
+
+  auto infos = this->rr_info();
+  auto spot = std::find_if(infos.begin(), infos.end(), [&](HostDBInfo& info) { return ats_ip_addr_eq(ip, info.addr()); });
+  return spot == infos.end() ? -1 : spot - infos.begin();
+}
+
+inline HostDBInfo *
+HostDBRoundRobin::find_ip(sockaddr const *ip)
+{
+  int idx = this->index_of(ip);
+  return idx < 0 ? nullptr : &info(idx);
+}
+
+inline HostDBInfo *
+HostDBRoundRobin::select_next(sockaddr const *ip)
+{
+  HostDBInfo *zret = nullptr;
+  if (good > 1) {
+    int idx = this->index_of(ip);
+    if (idx >= 0) {
+      idx  = (idx + 1) % good;
+      zret = &info(idx);
+    }
+  }
+  return zret;
+}
+
+inline HostDBInfo *
+HostDBRoundRobin::find_target(const char *target)
+{
+  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
+              (unsigned int)good > hostdb_round_robin_max_count);
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return nullptr;
+  }
+
+  uint32_t key = makeHostHash(target);
+  for (int i = 0; i < good; i++) {
+    if (info(i).data.srv.key == key && !strcmp(target, info(i).srvname(this)))
+      return &info(i);
+  }
+  return nullptr;
+}
+#endif
+
+HostDBInfo *
+HostDBRecord::select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window)
+{
+  bool bad = (rr_count <= 0 || static_cast<unsigned int>(rr_count) > hostdb_round_robin_max_count || rr_good <= 0 ||
+              static_cast<unsigned int>(rr_good) > hostdb_round_robin_max_count);
+
+  if (bad) {
+    ink_assert(!"bad round robin size");
+    return nullptr;
+  }
+
+  int i           = 0;
+  int len         = 0;
+  uint32_t weight = 0, p = INT32_MAX;
+  HostDBInfo *result = nullptr;
+  HostDBInfo *infos[rr_good];
+  auto rr = this->rr_info();
+  do {
+    // skip dead upstreams.
+    if (rr[i].is_dead(now, fail_window)) {
+      continue;
+    }
+
+    if (rr[i].data.srv.srv_priority <= p) {
+      p = rr[i].data.srv.srv_priority;
+      weight += rr[i].data.srv.srv_weight;
+      infos[len++] = &rr[i];
+    } else
+      break;
+  } while (++i < rr_good);
+
+  if (len == 0) { // all failed
+    result = &rr[rr_idx++ % rr_good];
+  } else if (weight == 0) { // srv weight is 0
+    result = &rr[rr_idx++ % len];
+  } else {
+    uint32_t xx = rand->random() % weight;
+    for (i = 0; i < len - 1 && xx >= infos[i]->data.srv.srv_weight; ++i)
+      xx -= infos[i]->data.srv.srv_weight;
+
+    result = infos[i];
+  }
+
+  if (result) {
+    ink_strlcpy(target, this->name(), MAXDNAME);
+    return result;
+  }
+  return nullptr;
+}
+
+HostDBInfo *
+HostDBRecord::select_next(sockaddr const *addr)
+{
+  auto rr   = this->rr_info();
+  auto spot = std::find_if(rr.begin(), rr.end(), [=](auto const &item) { return ats_ip_addr_eq(item.addr(), addr); });
+  if (spot == rr.end()) {
+    return nullptr;
+  }
+  ++spot;
+  return spot == rr.end() ? &(*(rr.begin())) : &*spot;
 }

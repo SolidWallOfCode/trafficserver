@@ -7312,7 +7312,7 @@ TSHostLookupResultAddrGet(TSHostLookupResult lookup_result)
 {
   sdk_assert(sdk_sanity_check_hostlookup_structure(lookup_result) == TS_SUCCESS);
   HostDBInfo *di = reinterpret_cast<HostDBInfo *>(lookup_result);
-  return di->ip();
+  return di->addr();
 }
 
 /*

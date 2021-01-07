@@ -260,8 +260,8 @@ public:
   // Handles the setting of all state necessary before
   //   calling transact to process the hostdb lookup
   // A NULL 'r' argument indicates the hostdb lookup failed
-  void process_hostdb_info(HostDBInfo *r);
-  void process_srv_info(HostDBInfo *r);
+  void process_hostdb_info(HostDBRecord *record);
+  void process_srv_info(HostDBRecord *record);
 
   // Called by transact.  Synchronous.
   VConnection *do_transform_open();
