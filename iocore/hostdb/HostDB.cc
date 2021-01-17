@@ -1230,40 +1230,27 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
 
       SRV **cur_srv = q;
       for (auto &item : rr_info) {
-        auto t                     = *cur_srv++; // get next SRV record pointer.
-        item.data.srv.srv_weight   = t->weight;
-        item.data.srv.srv_priority = t->priority;
-        item.data.srv.srv_port     = t->port;
-        item.data.srv.key          = t->key;
-
+        auto t = *cur_srv++;               // get next SRV record pointer.
         memcpy(pos, t->host, t->host_len); // Append the name to the overall record.
-        // Offset is relative to the info instance.
-        item.data.srv.srv_offset = pos - reinterpret_cast<char *>(&item);
-
+        item.assign(t, pos);
         pos += t->host_len;
-        Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %ld seconds", t->host, ttl.count());
-      }
-
-      // migrate state data from the old record to the new record.
-      if (old_r) {
-        auto old_rr_info{old_r->rr_info()};
-        for (auto &new_item : rr_info) {
-          for (auto &old_item : old_rr_info) {
-            if (new_item.data.srv.key == old_item.data.srv.key && 0 == strcmp(new_item.srvname(), old_item.srvname())) {
-              new_item.migrate_from(old_item);
+        if (old_r) { // migrate as needed.
+          for (auto &old_item : old_r->rr_info()) {
+            if (item.data.srv.key == old_item.data.srv.key && 0 == strcmp(item.srvname(), old_item.srvname())) {
+              item.migrate_from(old_item);
               break;
             }
           }
         }
+
+        Debug("dns_srv", "inserted SRV RR record [%s] into HostDB with TTL: %ld seconds", t->host, ttl.count());
       }
     } else { // Otherwise this is a regular dns response
       unsigned idx = 0;
       for (auto &item : rr_info) {
-        ip_addr_set(item.data.ip, af, e->ent.h_addr_list[idx++]);
-        // Migrate data as needed.
-        if (old_r) {
-          auto old_rr_info{old_r->rr_info()};
-          for (auto &old_item : old_rr_info) {
+        item.assign(af, e->ent.h_addr_list[idx++]);
+        if (old_r) { // migrate as needed.
+          for (auto &old_item : old_r->rr_info()) {
             if (ats_ip_addr_eq(item.data.ip, old_item.data.ip)) {
               item.migrate_from(old_item);
               break;
@@ -2326,64 +2313,6 @@ HostDBRecord::serve_stale_but_revalidate() const
   // otherwise, the entry is too old
   return false;
 }
-
-#if 0
-int
-HostDBRecord::index_of(sockaddr const *ip)
-{
-  if (count <= 0 ||
-      uint32_t(count) > hostdb_round_robin_max_count ||
-      good <= 0 ||
-      uint32_t(good) > hostdb_round_robin_max_count
-      ) {
-    ink_assert(!"bad round robin size");
-    return -1;
-  }
-
-  auto infos = this->rr_info();
-  auto spot = std::find_if(infos.begin(), infos.end(), [&](HostDBInfo& info) { return ats_ip_addr_eq(ip, info.addr()); });
-  return spot == infos.end() ? -1 : spot - infos.begin();
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::find_ip(sockaddr const *ip)
-{
-  int idx = this->index_of(ip);
-  return idx < 0 ? nullptr : &info(idx);
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::select_next(sockaddr const *ip)
-{
-  HostDBInfo *zret = nullptr;
-  if (good > 1) {
-    int idx = this->index_of(ip);
-    if (idx >= 0) {
-      idx  = (idx + 1) % good;
-      zret = &info(idx);
-    }
-  }
-  return zret;
-}
-
-inline HostDBInfo *
-HostDBRoundRobin::find_target(const char *target)
-{
-  bool bad = (rrcount <= 0 || (unsigned int)rrcount > hostdb_round_robin_max_count || good <= 0 ||
-              (unsigned int)good > hostdb_round_robin_max_count);
-  if (bad) {
-    ink_assert(!"bad round robin size");
-    return nullptr;
-  }
-
-  uint32_t key = makeHostHash(target);
-  for (int i = 0; i < good; i++) {
-    if (info(i).data.srv.key == key && !strcmp(target, info(i).srvname(this)))
-      return &info(i);
-  }
-  return nullptr;
-}
-#endif
 
 HostDBInfo *
 HostDBRecord::select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window)

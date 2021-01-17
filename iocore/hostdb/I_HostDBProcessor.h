@@ -30,6 +30,7 @@
 #include "tscore/ink_time.h"
 #include "tscore/CryptoHash.h"
 #include "tscore/ink_align.h"
+#include "tscore/ink_inet.h"
 #include "tscore/ink_resolver.h"
 #include "I_EventSystem.h"
 #include "SRV.h"
@@ -97,6 +98,15 @@ struct SRVInfo {
   unsigned int key;
 };
 
+/// Type of data stored in a @c HostDBRecord.
+enum class HostDBType : uint8_t {
+  UNSPEC, ///< No valid data.
+  ADDR,   ///< IP address.
+  SRV,    ///< SRV record.
+  HOST    ///< Hostname (reverse DNS)
+};
+
+char const *name_of(HostDBType t);
 /** Information about a single target.
  *
  * - *valid* means data was retrieved successfully. Invalid info had a retrieval error.
@@ -118,6 +128,8 @@ struct HostDBInfo {
 
   /// Default constructor.
   HostDBInfo() = default;
+
+  HostDBInfo &operator=(HostDBInfo const &that);
 
   /// Absolute time of when this target failed.
   /// A value of zero (@c TS_TIME_ZERO ) indicates no failure.
@@ -147,21 +159,13 @@ struct HostDBInfo {
    * If a zombie is selected the failure time is updated to make it look dead to other threads in a thread safe
    * manner.
    */
-  bool select(ts_time now, ts_seconds fail_window);
+  bool select_for_revival(ts_time now, ts_seconds fail_window);
 
   /// Check if this info is valid.
-  bool
-  is_valid() const
-  {
-    return flags.f.is_valid;
-  }
+  bool is_valid() const;
 
   /// Mark this info as invalid.
-  void
-  invalidate()
-  {
-    flags.f.is_valid = false;
-  }
+  void invalidate();
 
   /** Mark the entry as down.
    *
@@ -180,14 +184,13 @@ struct HostDBInfo {
 
   char const *srvname() const;
 
-  HostDBInfo &
-  operator=(HostDBInfo const &src)
-  {
-    if (this != &src) {
-      memcpy(static_cast<void *>(this), static_cast<const void *>(&src), sizeof(*this));
-    }
-    return *this;
-  }
+  /** Migrate data after a DNS update.
+   *
+   * @param that Source item.
+   *
+   * This moves only specific state information, it is not a generic copy.
+   */
+  void migrate_from(self_type const &that);
 
   /// A target is either an IP address or an SRV record.
   /// The type should be indicated by @c flags.f.is_srv;
@@ -196,7 +199,8 @@ struct HostDBInfo {
     SRVInfo srv;   ///< SRV record.
   } data;
 
-  /// Migrating data.
+  /// Data that migrates after updated DNS records are processed.
+  /// @see migrate_from
   /// @{
   /// Last time a failure was recorded.
   std::atomic<ts_time> last_failure{TS_TIME_ZERO};
@@ -204,22 +208,46 @@ struct HostDBInfo {
   HttpVersion http_version = HttpVersion::HTTP_VERSION_UNDEFINED;
   /// @}
 
-  void
-  migrate_from(self_type const &that)
+protected:
+  self_type &
+  assign(sa_family_t af, void const *addr)
   {
-    this->last_failure = that.last_failure.load();
-    this->http_version = that.http_version;
+    ip_addr_set(data.ip, af, addr);
+    flags.f.type = HostDBType::ADDR;
+    return *this;
   }
 
-protected:
+  self_type &
+  assign(SRV const *srv, char const *name)
+  {
+    data.srv.srv_weight   = srv->weight;
+    data.srv.srv_priority = srv->priority;
+    data.srv.srv_port     = srv->port;
+    data.srv.key          = srv->key;
+    data.srv.srv_offset   = reinterpret_cast<char const *>(this) - name;
+    flags.f.type          = HostDBType::SRV;
+    return *this;
+  }
+
   union {
     uint8_t all = 0;
     struct {
-      /// Valid data.
-      bool is_valid;
+      HostDBType type : 4; ///< type of record.
+      bool is_valid : 1;   ///< Data is valid.
     } f;
   } flags;
+
+  friend HostDBContinuation;
 };
+
+inline HostDBInfo &
+HostDBInfo::operator=(HostDBInfo const &that)
+{
+  if (this != &that) {
+    memcpy(static_cast<void *>(this), static_cast<const void *>(&that), sizeof(*this));
+  }
+  return *this;
+}
 
 inline ts_time
 HostDBInfo::last_fail_time() const
@@ -242,14 +270,14 @@ HostDBInfo::addr() const
 inline bool
 HostDBInfo::is_alive()
 {
-  return this->last_fail_time() != TS_TIME_ZERO;
+  return this->last_fail_time() == TS_TIME_ZERO;
 }
 
 inline bool
 HostDBInfo::is_zombie(ts_time now, ts_seconds fail_window)
 {
   auto last_fail = this->last_fail_time();
-  return last_fail != TS_TIME_ZERO && last_fail + fail_window >= now;
+  return (last_fail != TS_TIME_ZERO) && (last_fail + fail_window >= now);
 }
 
 inline bool
@@ -262,9 +290,8 @@ HostDBInfo::is_dead(ts_time now, ts_seconds fail_window)
 inline bool
 HostDBInfo::mark_up()
 {
-  bool zret    = this->is_alive();
-  last_failure = TS_TIME_ZERO;
-  return zret;
+  auto t = last_failure.exchange(TS_TIME_ZERO);
+  return t != TS_TIME_ZERO;
 }
 
 inline bool
@@ -275,7 +302,7 @@ HostDBInfo::mark_down(ts_time now)
 }
 
 inline bool
-HostDBInfo::select(ts_time now, ts_seconds fail_window)
+HostDBInfo::select_for_revival(ts_time now, ts_seconds fail_window)
 {
   auto t0 = this->last_fail_time();
   if (t0 != TS_TIME_ZERO) {
@@ -285,88 +312,25 @@ HostDBInfo::select(ts_time now, ts_seconds fail_window)
   return true; // Ready to go!
 }
 
-// ----
-
-#if 0
-struct HostDBRoundRobin {
-  HostDBRoundRobin() = default;
-
-  // This is the equivalent of a variable length array, we can't use a VLA because
-  // HostDBInfo is a non-POD type -- this is the best we can do.
-  HostDBInfo &operator[](unsigned n);
-
-  ts::MemSpan<HostDBInfo> rr_info();
-
-  // Return the allocation size of a HostDBRoundRobin struct suitable for storing
-  // "count" HostDBInfo records.
-  static unsigned
-  size(unsigned count, unsigned srv_len = 0)
-  {
-    ink_assert(count > 0);
-    return INK_ALIGN((sizeof(HostDBRoundRobin) + (count * sizeof(HostDBInfo)) + srv_len), 8);
-  }
-
-  /** Find the index of @a addr in member @a info.
-      @return The index if found, -1 if not found.
-  */
-  int index_of(sockaddr const *addr);
-  HostDBInfo *find_ip(sockaddr const *addr);
-  // Find the srv target
-  HostDBInfo *find_target(const char *target);
-  /** Select the next entry after @a addr.
-      @note If @a addr isn't an address in the round robin nothing is updated.
-      @return The selected entry or @c nullptr if @a addr wasn't present.
-   */
-  HostDBInfo *select_next(sockaddr const *addr);
-
-  /** Select the best upstream address from the round robin record.
-   *
-   * @param client_ip Remote inbound IP address.
-   * @param now Current time.
-   * @param fail_window Down server window.
-   * @return The selected host record, or @c nullptr if there are no host records.
-   *
-   * @a client_ip is used to do hashing on the upstream addresses such that different clients
-   * get different permutations of the hosts in the record.
-   *
-   * The returned host record will be down iff all hosts in the record are down.
-   */
-  HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_time now);
-  HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window);
-
-protected:
-  HostDBInfo *
-  data()
-  {
-    return reinterpret_cast<HostDBInfo *>(reinterpret_cast<char *>(this) + offset);
-  }
-};
-
-// ----
-
-inline HostDBInfo &
-HostDBRoundRobin::operator[](unsigned int n)
+inline void
+HostDBInfo::migrate_from(HostDBInfo::self_type const &that)
 {
-  ink_assert(n < count);
-  return this->data()[n];
+  this->last_failure = that.last_failure.load();
+  this->http_version = that.http_version;
 }
 
-inline ts::MemSpan<HostDBInfo>
-HostDBRoundRobin::rr_info()
+inline bool
+HostDBInfo::is_valid() const
 {
-  return {this->data(), size_t(count)};
+  return flags.f.is_valid;
 }
-#endif
 
-/// Type of data stored in a @c HostDBRecord.
-enum class HostDBType : uint8_t {
-  UNSPEC, ///< No valid data.
-  ADDR,   ///< IP address.
-  SRV,    ///< SRV record.
-  HOST    ///< Hostname (reverse DNS)
-};
+inline void
+HostDBInfo::invalidate()
+{
+  flags.f.is_valid = false;
+}
 
-char const *name_of(HostDBType t);
 // ----
 /** Root item for HostDB.
  * This is the container for HostDB data. It is always an array of @c HostDBInfo instances plus metadata.
@@ -542,7 +506,7 @@ using cb_process_result_pfn = void (Continuation::*)(HostDBRecord *r);
 
 Action *iterate(Continuation *cont);
 
-/** Information for doing host resolution for a requst.
+/** Information for doing host resolution for a request.
  *
  * This is effectively a state object for a request attempting to connect upstream. Information about its attempt
  * that are local to the request are kept here, while shared data is accessed via the @c HostDBInfo pointers.
@@ -570,6 +534,8 @@ struct ResolveInfo {
     USE_HOSTDB,  ///< Force use of HostDB target address.
     USE_CLIENT   ///< Use client target addr, no fallback.
   };
+
+  ResolveInfo() = default;
 
   /// Keep a reference to the base HostDB object, so it doesn't get GC'd.
   Ptr<HostDBRecord> record;
@@ -606,8 +572,6 @@ struct ResolveInfo {
   /// If upstream was in zombie mode.
   bool is_zombie = false;
 
-  ResolveInfo() = default;
-
   /** Force the address to resolve.
    *
    * @param sa Address to use for the upstream.
@@ -625,11 +589,10 @@ struct ResolveInfo {
     return false;
   }
 
-  /** Mark the current active record as dead.
+  /** Mark the active target as dead.
    *
    * @param now Time of failure.
    * @return @c true if the server was marked as dead, @c false if not.
-   *
    *
    */
   bool
@@ -638,6 +601,10 @@ struct ResolveInfo {
     return active ? active->mark_down(now) : false;
   }
 
+  /** Mark the active target as alive.
+   *
+   * @return @c true if the target changed state.
+   */
   bool
   mark_active_server_alive()
   {
