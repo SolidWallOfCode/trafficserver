@@ -74,26 +74,6 @@ enum HostDBMark {
  */
 extern const char *string_for(HostDBMark mark);
 
-inline unsigned int
-HOSTDB_CLIENT_IP_HASH(sockaddr const *lhs, sockaddr const *rhs)
-{
-  unsigned int zret = ~static_cast<unsigned int>(0);
-  if (ats_ip_are_compatible(lhs, rhs)) {
-    if (ats_is_ip4(lhs)) {
-      in_addr_t ip1 = ats_ip4_addr_cast(lhs);
-      in_addr_t ip2 = ats_ip4_addr_cast(rhs);
-      zret          = (ip1 >> 16) ^ ip1 ^ ip2 ^ (ip2 >> 16);
-    } else if (ats_is_ip6(lhs)) {
-      uint32_t const *ip1 = ats_ip_addr32_cast(lhs);
-      uint32_t const *ip2 = ats_ip_addr32_cast(rhs);
-      for (int i = 0; i < 4; ++i, ++ip1, ++ip2) {
-        zret ^= (*ip1 >> 16) ^ *ip1 ^ *ip2 ^ (*ip2 >> 16);
-      }
-    }
-  }
-  return zret & 0xFFFF;
-}
-
 //
 // Constants
 //

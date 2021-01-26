@@ -463,6 +463,21 @@ IpAddr::toString(char *dest, size_t len) const
   return dest;
 }
 
+sockaddr *
+IpAddr::toSockAddr(sockaddr *dest) const
+{
+  if (AF_INET == _family) {
+    dest->sa_family         = AF_INET;
+    ats_ip4_addr_cast(dest) = _addr._ip4;
+  } else if (AF_INET6 == _family) {
+    dest->sa_family         = AF_INET6;
+    ats_ip6_addr_cast(dest) = _addr._ip6;
+  } else {
+    dest->sa_family = AF_UNSPEC;
+  }
+  return dest;
+}
+
 bool
 IpAddr::isMulticast() const
 {

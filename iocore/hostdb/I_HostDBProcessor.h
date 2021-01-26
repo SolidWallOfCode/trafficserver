@@ -136,10 +136,10 @@ struct HostDBInfo {
   ts_time last_fail_time() const;
 
   /// Network address of target.
-  sockaddr *addr();
+  //  sockaddr *addr();
 
   /// Network address of target.
-  sockaddr const *addr() const;
+  //  sockaddr const *addr() const;
 
   /// Target is alive - no known failure.
   bool is_alive();
@@ -195,9 +195,9 @@ struct HostDBInfo {
   /// A target is either an IP address or an SRV record.
   /// The type should be indicated by @c flags.f.is_srv;
   union {
-    IpEndpoint ip; ///< IP address / port data.
-    SRVInfo srv;   ///< SRV record.
-  } data;
+    IpAddr ip;   ///< IP address / port data.
+    SRVInfo srv; ///< SRV record.
+  } data{IpAddr{}};
 
   /// Data that migrates after updated DNS records are processed.
   /// @see migrate_from
@@ -209,25 +209,8 @@ struct HostDBInfo {
   /// @}
 
 protected:
-  self_type &
-  assign(sa_family_t af, void const *addr)
-  {
-    ip_addr_set(data.ip, af, addr);
-    flags.f.type = HostDBType::ADDR;
-    return *this;
-  }
-
-  self_type &
-  assign(SRV const *srv, char const *name)
-  {
-    data.srv.srv_weight   = srv->weight;
-    data.srv.srv_priority = srv->priority;
-    data.srv.srv_port     = srv->port;
-    data.srv.key          = srv->key;
-    data.srv.srv_offset   = reinterpret_cast<char const *>(this) - name;
-    flags.f.type          = HostDBType::SRV;
-    return *this;
-  }
+  self_type &assign(sa_family_t af, void const *addr);
+  self_type &assign(SRV const *srv, char const *name);
 
   union {
     uint8_t all = 0;
@@ -255,6 +238,7 @@ HostDBInfo::last_fail_time() const
   return last_failure;
 }
 
+#if 0
 inline sockaddr *
 HostDBInfo::addr()
 {
@@ -266,6 +250,7 @@ HostDBInfo::addr() const
 {
   return &data.ip.sa;
 }
+#endif
 
 inline bool
 HostDBInfo::is_alive()
@@ -350,6 +335,8 @@ public:
   HostDBRecord()                      = default;
   HostDBRecord(self_type const &that) = delete;
 
+  using Handle = Ptr<HostDBRecord>; ///< Shared pointer type to hold an instance.
+
   /// Type of data stored in this record.
   HostDBType record_type = HostDBType::UNSPEC;
 
@@ -407,7 +394,7 @@ public:
   find(sockaddr const *addr)
   {
     for (auto &item : this->rr_info()) {
-      if (ats_ip_addr_eq(addr, item.addr())) {
+      if (item.data.ip == addr) {
         return &item;
       }
     }
@@ -547,7 +534,7 @@ struct ResolveInfo {
   int attempts = 0;            ///< Number of connection attempts.
   ts_seconds fail_window{300}; ///< Down server blackout time (txn overridable)
 
-  char *lookup_name                   = nullptr;
+  char const *lookup_name             = nullptr;
   char srv_hostname[MAXDNAME]         = {0};
   const sockaddr *inbound_remote_addr = nullptr; ///< Remote address of inbound client - used for hashing.
   const sockaddr *client_target_addr  = nullptr; ///< Set if trying a transparent connection.

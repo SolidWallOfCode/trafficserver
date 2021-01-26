@@ -1805,7 +1805,7 @@ HttpTransact::ReDNSRoundRobin(State *s)
     // because we get here only after trying a connection. Remove for 6.2.
     ink_assert(s->current.server->dst_addr.isValid() && 0 != server_port);
 
-    ats_ip_copy(&s->server_info.dst_addr, s->dns_info.active->addr());
+    s->server_info.dst_addr.assign(s->dns_info.active->data.ip);
     s->server_info.dst_addr.port() = htons(server_port);
     ats_ip_copy(&s->request_data.dest_ip, &s->server_info.dst_addr);
     get_ka_info_from_host_db(s, &s->server_info, &s->client_info, s->dns_info.active);
@@ -1910,7 +1910,7 @@ HttpTransact::OSDNSLookup(State *s)
   // Check to see if can fullfill expect requests based on the cached
   // update some state variables with hostdb information that has
   // been provided.
-  ats_ip_copy(&s->server_info.dst_addr, s->dns_info.active->addr());
+  s->server_info.dst_addr.assign(s->dns_info.active->data.ip);
   // If the SRV response has a port number, we should honor it. Otherwise we do the port defined in remap
   if (s->dns_info.resolved_p) {
     s->server_info.dst_addr.port() = htons(s->dns_info.srv_port);
@@ -1929,14 +1929,14 @@ HttpTransact::OSDNSLookup(State *s)
   if (s->redirect_info.redirect_in_process) {
     // If dns lookup was not successful, the code below will handle the error.
     RedirectEnabled::Action action = RedirectEnabled::Action::INVALID;
-    if (true == Machine::instance()->is_self(s->dns_info.active->addr())) {
+    if (true == Machine::instance()->is_self(&s->dns_info.active->data.ip)) {
       action = s->http_config_param->redirect_actions_self_action;
     } else {
       // Make sure the return value from contains is big enough for a void*.
       intptr_t x{intptr_t(RedirectEnabled::Action::INVALID)};
       ink_release_assert(s->http_config_param->redirect_actions_map != nullptr);
       ink_release_assert(
-        s->http_config_param->redirect_actions_map->contains(s->dns_info.active->addr(), reinterpret_cast<void **>(&x)));
+        s->http_config_param->redirect_actions_map->contains(s->dns_info.active->data.ip, reinterpret_cast<void **>(&x)));
       action = static_cast<RedirectEnabled::Action>(x);
     }
 
@@ -6519,8 +6519,8 @@ HttpTransact::will_this_request_self_loop(State *s)
     in_port_t local_port = s->client_info.dst_addr.host_order_port();        // already connected proxy port.
     // It's a loop if connecting to the same port as it already connected to the proxy and
     // it's a proxy address or the same address it already connected to.
-    if (dst_port == local_port && (ats_ip_addr_eq(s->dns_info.active->addr(), &Machine::instance()->ip.sa) ||
-                                   ats_ip_addr_eq(s->dns_info.active->addr(), s->client_info.dst_addr))) {
+    if (dst_port == local_port && ((s->dns_info.active->data.ip == &Machine::instance()->ip.sa) ||
+                                   (s->dns_info.active->data.ip == s->client_info.dst_addr))) {
       switch (s->dns_info.looking_up) {
       case ResolveInfo::ORIGIN_SERVER:
         TxnDebug("http_transact", "host ip and port same as local ip and port - bailing");

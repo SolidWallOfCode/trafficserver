@@ -2158,23 +2158,21 @@ HttpSM::process_srv_info(HostDBRecord *record)
 
   /* we didn't get any SRV records, continue w normal lookup */
   if (!record || !record->is_srv()) {
-    t_state.dns_info.srv_hostname[0] = '\0';
-    //    t_state.dns_info.srv_lookup_success = false;
+    t_state.dns_info.srv_hostname[0]  = '\0';
+    t_state.dns_info.resolved_p       = false;
     t_state.my_txn_conf().srv_enabled = false;
     SMDebug("dns_srv", "No SRV records were available, continuing to lookup %s", t_state.dns_info.lookup_name);
   } else {
-    HostDBInfo *srv = record->select_best_srv(t_state.dns_info.srv_hostname, &mutex->thread_holding->generator,
-                                              std::chrono::system_clock::now(), t_state.txn_conf->down_server_timeout);
+    HostDBInfo *srv = record->select_best_srv(t_state.dns_info.srv_hostname, &mutex->thread_holding->generator, ts_clock::now(),
+                                              t_state.txn_conf->down_server_timeout);
     if (!srv) {
       //      t_state.dns_info.srv_lookup_success = false;
       t_state.dns_info.srv_hostname[0]  = '\0';
       t_state.my_txn_conf().srv_enabled = false;
       SMDebug("dns_srv", "SRV records empty for %s", t_state.dns_info.lookup_name);
     } else {
-      //      t_state.dns_info.srv_lookup_success = true;
-      t_state.dns_info.srv_port = srv->data.srv.srv_port;
-      //      t_state.dns_info.srv_app            = srv->app;
-      // t_state.dns_info.single_srv = (rr->good == 1);
+      t_state.dns_info.resolved_p = false;
+      t_state.dns_info.srv_port   = srv->data.srv.srv_port;
       ink_assert(srv->data.srv.key == makeHostHash(t_state.dns_info.srv_hostname));
       SMDebug("dns_srv", "select SRV records %s", t_state.dns_info.srv_hostname);
     }
@@ -4082,8 +4080,8 @@ HttpSM::do_hostdb_lookup()
       ink_assert(!pending_action);
       pending_action = srv_lookup_action_handle;
     } else {
-      char *host_name = t_state.dns_info.resolved_p ? t_state.dns_info.srv_hostname : t_state.dns_info.lookup_name;
-      opt.port        = t_state.dns_info.resolved_p ?
+      char const *host_name = t_state.dns_info.resolved_p ? t_state.dns_info.srv_hostname : t_state.dns_info.lookup_name;
+      opt.port              = t_state.dns_info.resolved_p ?
                    t_state.dns_info.srv_port :
                    t_state.server_info.dst_addr.isValid() ? t_state.server_info.dst_addr.host_order_port() :
                                                             t_state.hdr_info.client_request.port_get();

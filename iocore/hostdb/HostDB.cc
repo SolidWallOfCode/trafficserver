@@ -67,6 +67,51 @@ int hostdb_max_iobuf_index                 = BUFFER_SIZE_INDEX_32K;
 
 ClassAllocator<HostDBContinuation> hostDBContAllocator("hostDBContAllocator");
 
+namespace
+{
+/** Assign raw storage to an @c IpAddr
+ *
+ * @param ip Destination.
+ * @param af IP family.
+ * @param ptr Raw data for an address of family @a af.
+ */
+void
+ip_addr_set(IpAddr &ip,     ///< Target storage.
+            uint8_t af,     ///< Address format.
+            void const *ptr ///< Raw address data
+)
+{
+  if (AF_INET6 == af) {
+    ip = *static_cast<in6_addr const *>(ptr);
+  } else if (AF_INET == af) {
+    ip = *static_cast<in_addr_t const *>(ptr);
+  } else {
+    ip.invalidate();
+  }
+}
+
+unsigned int
+HOSTDB_CLIENT_IP_HASH(sockaddr const *lhs, IpAddr const &rhs)
+{
+  unsigned int zret = ~static_cast<unsigned int>(0);
+  if (lhs->sa_family == rhs.family()) {
+    if (rhs.isIp4()) {
+      in_addr_t ip1 = ats_ip4_addr_cast(lhs);
+      in_addr_t ip2 = rhs._addr._ip4;
+      zret          = (ip1 >> 16) ^ ip1 ^ ip2 ^ (ip2 >> 16);
+    } else if (rhs.isIp6()) {
+      uint32_t const *ip1 = ats_ip_addr32_cast(lhs);
+      uint32_t const *ip2 = rhs._addr._u32;
+      for (int i = 0; i < 4; ++i, ++ip1, ++ip2) {
+        zret ^= (*ip1 >> 16) ^ *ip1 ^ *ip2 ^ (*ip2 >> 16);
+      }
+    }
+  }
+  return zret & 0xFFFF;
+}
+
+} // namespace
+
 char const *
 name_of(HostDBType t)
 {
@@ -116,6 +161,26 @@ HostDBCache hostDB;
 
 void ParseHostFile(const char *path, unsigned int interval);
 
+auto
+HostDBInfo::assign(sa_family_t af, void const *addr) -> self_type &
+{
+  ip_addr_set(data.ip, af, addr);
+  flags.f.type = HostDBType::ADDR;
+  return *this;
+}
+
+auto
+HostDBInfo::assign(SRV const *srv, char const *name) -> self_type &
+{
+  data.srv.srv_weight   = srv->weight;
+  data.srv.srv_priority = srv->priority;
+  data.srv.srv_port     = srv->port;
+  data.srv.key          = srv->key;
+  data.srv.srv_offset   = reinterpret_cast<char const *>(this) - name;
+  flags.f.type          = HostDBType::SRV;
+  return *this;
+}
+
 char const *
 HostDBInfo::srvname() const
 {
@@ -129,36 +194,6 @@ is_addr_valid(uint8_t af, ///< Address family (format of data)
 {
   return (AF_INET == af && INADDR_ANY != *(reinterpret_cast<in_addr_t *>(ptr))) ||
          (AF_INET6 == af && !IN6_IS_ADDR_UNSPECIFIED(reinterpret_cast<in6_addr *>(ptr)));
-}
-
-static inline void
-ip_addr_set(sockaddr *ip, ///< Target storage, sockaddr compliant.
-            uint8_t af,   ///< Address format.
-            void *ptr     ///< Raw address data
-)
-{
-  if (AF_INET6 == af) {
-    ats_ip6_set(ip, *static_cast<in6_addr *>(ptr));
-  } else if (AF_INET == af) {
-    ats_ip4_set(ip, *static_cast<in_addr_t *>(ptr));
-  } else {
-    ats_ip_invalidate(ip);
-  }
-}
-
-static inline void
-ip_addr_set(IpAddr &ip, ///< Target storage.
-            uint8_t af, ///< Address format.
-            void *ptr   ///< Raw address data
-)
-{
-  if (AF_INET6 == af) {
-    ip = *static_cast<in6_addr *>(ptr);
-  } else if (AF_INET == af) {
-    ip = *static_cast<in_addr_t *>(ptr);
-  } else {
-    ip.invalidate();
-  }
 }
 
 inline void
@@ -1251,7 +1286,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt *e)
         item.assign(af, e->ent.h_addr_list[idx++]);
         if (old_r) { // migrate as needed.
           for (auto &old_item : old_r->rr_info()) {
-            if (ats_ip_addr_eq(item.data.ip, old_item.data.ip)) {
+            if (item.data.ip == old_item.data.ip) {
               item.migrate_from(old_item);
               break;
             }
@@ -1651,8 +1686,7 @@ HostDBRecord::select_best_http(ResolveInfo *resolve_info, ts_time now)
     unsigned int best_hash_any = 0;
     unsigned int best_hash_up  = 0;
     for (int i = 0; i < rr_good; i++) {
-      sockaddr const *ip = info[i].addr();
-      unsigned int h     = HOSTDB_CLIENT_IP_HASH(resolve_info->inbound_remote_addr, ip);
+      unsigned int h = HOSTDB_CLIENT_IP_HASH(resolve_info->inbound_remote_addr, info[i].data.ip);
       if (best_hash_any <= h) {
         best_any      = i;
         best_hash_any = h;
@@ -1814,7 +1848,7 @@ struct ShowHostDB : public ShowCont {
         CHECK_SHOW(show("<tr><td>%s</td><td>%d</td></tr>\n", "Port", info->data.srv.srv_port));
         CHECK_SHOW(show("<tr><td>%s</td><td>%x</td></tr>\n", "Key", info->data.srv.key));
       } else {
-        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "IP", ats_ip_ntop(info->data.ip, b, sizeof b)));
+        CHECK_SHOW(show("<tr><td>%s</td><td>%s</td></tr>\n", "IP", info->data.ip.toString(b, sizeof b)));
       }
 
       CHECK_SHOW(show("</table>\n"));
@@ -1834,7 +1868,7 @@ struct ShowHostDB : public ShowCont {
         CHECK_SHOW(show("\"%s\":\"%d\",", "port", info->data.srv.srv_port));
         CHECK_SHOW(show("\"%s\":\"%x\",", "key", info->data.srv.key));
       } else {
-        CHECK_SHOW(show("\"%s\":\"%s\"", "ip", ats_ip_ntop(info->data.ip, b, sizeof b)));
+        CHECK_SHOW(show("\"%s\":\"%s\"", "ip", info->data.ip.toString(b, sizeof b)));
       }
     }
     return EVENT_CONT;
@@ -2203,7 +2237,7 @@ struct HostDBRegressionContinuation : public Continuation {
         auto rr_info{r->rr_info()};
         for (int x = 0; x < r->rr_good; ++x) {
           ip_port_text_buffer ip_buf;
-          ats_ip_ntop(rr_info[i].data.ip, ip_buf, sizeof(ip_buf));
+          rr_info[i].data.ip.toString(ip_buf, sizeof(ip_buf));
           rprintf(test, "hostdbinfo RR%d ip=%s\n", x, ip_buf);
         }
         ++success;
@@ -2368,7 +2402,7 @@ HostDBInfo *
 HostDBRecord::select_next(sockaddr const *addr)
 {
   auto rr   = this->rr_info();
-  auto spot = std::find_if(rr.begin(), rr.end(), [=](auto const &item) { return ats_ip_addr_eq(item.addr(), addr); });
+  auto spot = std::find_if(rr.begin(), rr.end(), [=](auto const &item) { return item.data.ip == addr; });
   if (spot == rr.end()) {
     return nullptr;
   }

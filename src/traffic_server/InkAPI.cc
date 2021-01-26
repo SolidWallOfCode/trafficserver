@@ -7339,12 +7339,18 @@ TSHostLookup(TSCont contp, const char *hostname, size_t namelen)
   return (TSAction)hostDBProcessor.getbyname_re(i, hostname, namelen);
 }
 
-sockaddr const *
-TSHostLookupResultAddrGet(TSHostLookupResult lookup_result)
+TSReturnCode
+TSHostLookupResultAddrGet(TSHostLookupResult lookup_result, sockaddr *dst)
 {
   sdk_assert(sdk_sanity_check_hostlookup_structure(lookup_result) == TS_SUCCESS);
-  HostDBInfo *di = reinterpret_cast<HostDBInfo *>(lookup_result);
-  return di->addr();
+  HostDBRecord::Handle record{reinterpret_cast<HostDBRecord *>(lookup_result)};
+  if (record) {
+    auto info = record->rr_info();
+    sdk_assert(info.size() > 0);
+    info[0].data.ip.toSockAddr(dst);
+    return TS_SUCCESS;
+  }
+  return TS_ERROR;
 }
 
 /*

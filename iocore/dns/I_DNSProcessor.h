@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include "tscore/ink_resolver.h"
 #include "SRV.h"
 
 const int DOMAIN_SERVICE_PORT = NAMESERVER_PORT;
