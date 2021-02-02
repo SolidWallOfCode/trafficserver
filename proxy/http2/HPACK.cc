@@ -920,10 +920,9 @@ hpack_encode_header_block(HpackIndexingTable &indexing_table, uint8_t *out_buf, 
     cursor += written;
   }
 
-  MIMEFieldIter field_iter;
-  for (MIMEField *field = hdr->iter_get_first(&field_iter); field != nullptr; field = hdr->iter_get_next(&field_iter)) {
-    std::string_view name  = field->name_get();
-    std::string_view value = field->value_get();
+  for (auto &field : *hdr) {
+    std::string_view name  = field.name_get();
+    std::string_view value = field.value_get();
 
     // Choose field representation (See RFC7541 7.1.3)
     // - Authorization header obviously should not be indexed
