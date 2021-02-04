@@ -82,15 +82,6 @@ ink_microseconds(int which)
   elapsed since some fixed time in the past.
 
  *---------------------------------------------------------------------------*/
-double
-ink_time_wall_seconds()
-{
-  struct timeval s_val;
-
-  gettimeofday(&s_val, nullptr);
-  return (static_cast<double>(s_val.tv_sec) + 0.000001 * s_val.tv_usec);
-} /* End ink_time_wall_seconds */
-
 struct dtconv {
   char *abbrev_month_names[12];
   char *month_names[12];

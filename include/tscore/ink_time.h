@@ -69,7 +69,6 @@ static constexpr ts_time TS_TIME_ZERO;
 #define UNDEFINED_TIME ((time_t)0)
 
 uint64_t ink_microseconds(int which);
-double ink_time_wall_seconds();
 
 int cftime_replacement(char *s, int maxsize, const char *format, const time_t *clock);
 #define cftime(s, format, clock) cftime_replacement(s, 8192, format, clock)

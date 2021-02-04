@@ -29,6 +29,7 @@
 #include "tscore/HashFNV.h"
 #include "tscore/ink_args.h"
 #include "tscore/MatcherUtils.h"
+#include "tscore/ink_time.h"
 #include "tscore/runroot.h"
 
 // Includes and namespaces etc.
@@ -97,6 +98,12 @@ const int RSSp_AS_INT = 728986482;  // For "RSS+"
 const int PLAI_AS_INT = 1767992432; // For "plain"
 const int IMAG_AS_INT = 1734438249; // For "image"
 const int HTTP_AS_INT = 1886680168; // For "http" followed by "s://" or "://"
+
+inline auto
+epoch_seconds()
+{
+  return std::chrono::duration_cast<ts_seconds>(ts_clock::now().time_since_epoch()).count();
+}
 
 // Store our "state" (position in log file etc.)
 struct LastState {
@@ -389,9 +396,9 @@ public:
       _dump_url(u, as_object);
     }
     if (as_object) {
-      std::cout << "  \"_timestamp\" : \"" << static_cast<int>(ink_time_wall_seconds()) << "\"" << std::endl;
+      std::cout << "  \"_timestamp\" : \"" << epoch_seconds() << "\"" << std::endl;
     } else {
-      std::cout << "  { \"_timestamp\" : \"" << static_cast<int>(ink_time_wall_seconds()) << "\" }" << std::endl;
+      std::cout << "  { \"_timestamp\" : \"" << epoch_seconds() << "\" }" << std::endl;
     }
   }
 
@@ -2260,7 +2267,7 @@ print_detail_stats(const OriginStats *stat, bool json, bool concise)
     std::cout << std::endl;
     std::cout << std::setw(cl.line_len) << std::setfill('_') << '_' << std::setfill(' ') << std::endl;
   } else {
-    std::cout << "    \"_timestamp\" : \"" << static_cast<int>(ink_time_wall_seconds()) << '"' << std::endl;
+    std::cout << "    \"_timestamp\" : \"" << epoch_seconds() << '"' << std::endl;
   }
 }
 
