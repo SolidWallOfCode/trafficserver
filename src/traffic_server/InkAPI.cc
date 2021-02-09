@@ -8394,7 +8394,7 @@ static void *
 _conf_to_memberp(TSOverridableConfigKey conf, OverridableHttpConfigParams *overridableHttpConfig, MgmtConverter const *&conv)
 {
   // External converters.
-  extern const MgmtConverter HostDBDownServerCacheTimeConv;
+  extern MgmtConverter const &HostDBDownServerCacheTimeConv;
 
   void *ret = nullptr;
   conv      = nullptr;

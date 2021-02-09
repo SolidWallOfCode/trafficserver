@@ -90,6 +90,7 @@ makeHostHash(const char *string)
 
 struct HostDBRecord;
 
+/// Information for an SRV record.
 struct SRVInfo {
   unsigned int srv_offset : 16; ///< Memory offset from @c HostDBInfo to name.
   unsigned int srv_weight : 16;
@@ -98,15 +99,15 @@ struct SRVInfo {
   unsigned int key;
 };
 
-/// Type of data stored in a @c HostDBRecord.
+/// Type of data stored.
 enum class HostDBType : uint8_t {
   UNSPEC, ///< No valid data.
   ADDR,   ///< IP address.
   SRV,    ///< SRV record.
   HOST    ///< Hostname (reverse DNS)
 };
-
 char const *name_of(HostDBType t);
+
 /** Information about a single target.
  *
  * - *valid* means data was retrieved successfully. Invalid info had a retrieval error.
@@ -134,12 +135,6 @@ struct HostDBInfo {
   /// Absolute time of when this target failed.
   /// A value of zero (@c TS_TIME_ZERO ) indicates no failure.
   ts_time last_fail_time() const;
-
-  /// Network address of target.
-  //  sockaddr *addr();
-
-  /// Network address of target.
-  //  sockaddr const *addr() const;
 
   /// Target is alive - no known failure.
   bool is_alive();
@@ -210,15 +205,10 @@ struct HostDBInfo {
 
 protected:
   self_type &assign(sa_family_t af, void const *addr);
+  self_type &assign(IpAddr const &addr);
   self_type &assign(SRV const *srv, char const *name);
 
-  union {
-    uint8_t all = 0;
-    struct {
-      HostDBType type : 4; ///< type of record.
-      bool is_valid : 1;   ///< Data is valid.
-    } f;
-  } flags;
+  HostDBType type = HostDBType::UNSPEC; ///< Invalid data.
 
   friend HostDBContinuation;
 };
@@ -237,20 +227,6 @@ HostDBInfo::last_fail_time() const
 {
   return last_failure;
 }
-
-#if 0
-inline sockaddr *
-HostDBInfo::addr()
-{
-  return &data.ip.sa;
-}
-
-inline sockaddr const *
-HostDBInfo::addr() const
-{
-  return &data.ip.sa;
-}
-#endif
 
 inline bool
 HostDBInfo::is_alive()
@@ -307,13 +283,13 @@ HostDBInfo::migrate_from(HostDBInfo::self_type const &that)
 inline bool
 HostDBInfo::is_valid() const
 {
-  return flags.f.is_valid;
+  return type != HostDBType::UNSPEC;
 }
 
 inline void
 HostDBInfo::invalidate()
 {
-  flags.f.is_valid = false;
+  type = HostDBType::UNSPEC;
 }
 
 // ----
@@ -325,17 +301,31 @@ HostDBInfo::invalidate()
 class HostDBRecord : public RefCountObj
 {
   friend class HostDBContinuation;
+  friend struct ShowHostDB;
   using self_type = HostDBRecord;
 
   /// Size of the IO buffer block owned by @a this.
   /// If negative @a this is in not allocated memory.
   int _iobuffer_index{-1};
+  /// Actual size of the data.
+  unsigned _record_size = sizeof(self_type);
 
 public:
   HostDBRecord()                      = default;
   HostDBRecord(self_type const &that) = delete;
 
   using Handle = Ptr<HostDBRecord>; ///< Shared pointer type to hold an instance.
+
+  /** Allocate an instance from the IOBuffers.
+   *
+   * @param query_name Name of the query for the record.
+   * @param rr_count Number of info instances.
+   * @param srv_name_size Storage for SRV names, if any.
+   * @return An instance sufficient to hold the specified data.
+   *
+   * The query name will stored and initialized, and the info instances initialized.
+   */
+  static self_type *alloc(ts::TextView query_name, unsigned rr_count, size_t srv_name_size = 0);
 
   /// Type of data stored in this record.
   HostDBType record_type = HostDBType::UNSPEC;
@@ -352,11 +342,20 @@ public:
   /** Number which have not failed a connect. */
   unsigned short rr_good = 0;
 
-  /// Current active info.
-  std::atomic<unsigned short> rr_idx = 0;
-
   /// Timing data for switch records in the RR.
-  std::atomic<ts_time> rr_ctime;
+  std::atomic<ts_time> rr_ctime{TS_TIME_ZERO};
+
+  /// Hash key.
+  uint64_t key;
+
+  /// When the data was received.
+  ts_time ip_timestamp;
+
+  /// Valid duration of the data.
+  ts_seconds ip_timeout_interval;
+
+  /// Atomically select the next round robin index.
+  unsigned next_rr();
 
   bool
   is_srv() const
@@ -364,23 +363,12 @@ public:
     return HostDBType::SRV == record_type;
   }
 
-  char const *
-  name() const
-  {
-    return static_cast<char const *>(this->apply_offset(name_offset));
-  }
-
-  void *
-  apply_offset(unsigned offset)
-  {
-    return reinterpret_cast<char *>(this) + offset;
-  }
-
-  void const *
-  apply_offset(unsigned offset) const
-  {
-    return reinterpret_cast<char const *>(this) + offset;
-  }
+  /** Query name for the record.
+   * @return A C-string.
+   * If this is a @c HOST record, this is the resolved named and the query was based on the IP address.
+   * Otherwise this is the name used in the DNS query.
+   */
+  char const *name() const;
 
   /// Get the array of info instances.
   ts::MemSpan<HostDBInfo>
@@ -404,15 +392,6 @@ public:
   HostDBInfo *select_best_http(ResolveInfo *resolve_info, ts_time now);
   HostDBInfo *select_best_srv(char *target, InkRand *rand, ts_time now, ts_seconds fail_window);
   HostDBInfo *select_next(sockaddr const *addr);
-
-  /// Hash key.
-  uint64_t key;
-
-  /// When the data was received.
-  ts_time ip_timestamp;
-
-  /// Valid duration of the data.
-  ts_seconds ip_timeout_interval;
 
   bool
   is_failed() const
@@ -446,13 +425,6 @@ public:
   /// Deallocate @a this.
   void free() override;
 
-  /** Allocate an instance.
-   *
-   * @param extra Additional space required for the record.
-   * @return An initialized instance with a zero reference count.
-   */
-  static self_type *alloc(size_t extra = 0);
-
   /** Allocation and initialize an instance from a serialized buffer.
    *
    * @param buff Serialization data.
@@ -465,10 +437,20 @@ public:
   static constexpr ts::VersionNumber Version{3, 0};
 
 protected:
-  /// Location of name relative to @a this.
-  /// If this is a @c HOST record, this is the resolved named and the query was based on the IP address.
-  /// Otherwise this is the name used in the query.
-  unsigned name_offset;
+  /// Current active info.
+  std::atomic<unsigned short> rr_idx = 0;
+
+  void *
+  apply_offset(unsigned offset)
+  {
+    return reinterpret_cast<char *>(this) + offset;
+  }
+
+  void const *
+  apply_offset(unsigned offset) const
+  {
+    return reinterpret_cast<char const *>(this) + offset;
+  }
 
   union {
     uint16_t all;
@@ -476,12 +458,6 @@ protected:
       unsigned failed_p : 1; ///< DNS error.
     } f;
   } flags{0};
-
-  char *
-  name_ptr()
-  {
-    return static_cast<char *>(this->apply_offset(name_offset));
-  }
 };
 
 struct HostDBCache;
@@ -519,7 +495,8 @@ struct ResolveInfo {
     TRY_HOSTDB,  ///< Try HostDB data.
     TRY_CLIENT,  ///< Try client target addr.
     USE_HOSTDB,  ///< Force use of HostDB target address.
-    USE_CLIENT   ///< Use client target addr, no fallback.
+    USE_CLIENT,  ///< Force client target addr.
+    USE_API      ///< Use the API provided address.
   };
 
   ResolveInfo() = default;
@@ -529,6 +506,7 @@ struct ResolveInfo {
   HostDBInfo *active = nullptr; ///< Active host record.
 
   /// Working address. The meaning / source of the value depends on other elements.
+  /// This is the "resolved" address if @a resolved_p is @c true.
   IpEndpoint addr;
 
   int attempts = 0;            ///< Number of connection attempts.
@@ -537,8 +515,8 @@ struct ResolveInfo {
   char const *lookup_name             = nullptr;
   char srv_hostname[MAXDNAME]         = {0};
   const sockaddr *inbound_remote_addr = nullptr; ///< Remote address of inbound client - used for hashing.
-  const sockaddr *client_target_addr  = nullptr; ///< Set if trying a transparent connection.
-  in_port_t srv_port                  = 0;       ///< Port from SRV lookup.
+  //  const sockaddr *client_target_addr  = nullptr; ///< Set if trying a transparent connection.
+  in_port_t srv_port = 0; ///< Port from SRV lookup or API call.
 
   OS_Addr os_addr_style           = OS_Addr::TRY_DEFAULT;
   HostResStyle host_res_style     = HOST_RES_IPV4;
@@ -549,7 +527,7 @@ struct ResolveInfo {
   bool resolved_p = false; ///< If there is a valid, resolved address in @a addr.
 
   /// Flag for @a addr being set externally.
-  bool api_addr_set_p = false;
+  //  bool api_addr_set_p = false;
 
   /*** Set to true by default.  If use_client_target_address is set
    * to 1, this value will be set to false if the client address is
@@ -570,11 +548,27 @@ struct ResolveInfo {
   set_upstream_address(const sockaddr *sa)
   {
     if (ats_ip_copy(&addr, sa)) {
-      api_addr_set_p = true;
+      resolved_p = true;
       return true;
     }
     return false;
   }
+
+  void
+  set_upstream_port(in_port_t port)
+  {
+    srv_port = port;
+  }
+
+  /** Check and (if possible) immediately resolve the upstream address without consulting the HostDB.
+   * The cases where this is successful are
+   * - The address is already resolved (@a resolved_p is @c true).
+   * - The upstream was set explicitly.
+   * - The hostname is a valid IP address.
+   *
+   * @return @c true if the upstream address was resolved, @c false if not.
+   */
+  bool resolve_immediate();
 
   /** Mark the active target as dead.
    *
@@ -697,6 +691,13 @@ void run_HostDBTest();
 extern inkcoreapi HostDBProcessor hostDBProcessor;
 
 void ink_hostdb_init(ts::ModuleVersion version);
+
+inline char const *
+HostDBRecord::name() const
+{
+  // THe query
+  return static_cast<char const *>(this->apply_offset(sizeof(self_type)));
+}
 
 inline ts_time
 HostDBRecord::expiry_time() const

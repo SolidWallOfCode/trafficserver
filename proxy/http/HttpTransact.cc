@@ -1907,14 +1907,11 @@ HttpTransact::OSDNSLookup(State *s)
     }
   }
 
-  // Check to see if can fullfill expect requests based on the cached
-  // update some state variables with hostdb information that has
-  // been provided.
-  s->server_info.dst_addr.assign(s->dns_info.active->data.ip);
+  s->server_info.dst_addr.assign(s->dns_info.addr);
   // If the SRV response has a port number, we should honor it. Otherwise we do the port defined in remap
-  if (s->dns_info.resolved_p) {
+  if (s->dns_info.resolved_p && s->dns_info.srv_port) {
     s->server_info.dst_addr.port() = htons(s->dns_info.srv_port);
-  } else if (!s->dns_info.api_addr_set_p) {
+  } else {
     s->server_info.dst_addr.port() = htons(s->hdr_info.client_request.port_get()); // now we can set the port.
   }
   ats_ip_copy(&s->request_data.dest_ip, &s->server_info.dst_addr);
@@ -3722,10 +3719,9 @@ HttpTransact::handle_response_from_server(State *s)
       // If this is a round robin DNS entry & we're tried configured
       //    number of times, we should try another node
       if (ResolveInfo::OS_Addr::TRY_CLIENT == s->dns_info.os_addr_style) {
-        // attempt was based on client supplied server address. Try again
-        // using HostDB.
+        // attempt was based on client supplied server address. Try again using HostDB.
         // Allow DNS attempt
-        s->dns_info.active = nullptr;
+        s->dns_info.resolved_p = false;
         // See if we can get data from HostDB for this.
         s->dns_info.os_addr_style = ResolveInfo::OS_Addr::TRY_HOSTDB;
         // Force host resolution to have the same family as the client.
@@ -3741,17 +3737,6 @@ HttpTransact::handle_response_from_server(State *s)
         retry_server_connection_not_open(s, s->current.state, max_connect_retries);
         TxnDebug("http_trans", "[handle_response_from_server] Error. Retrying...");
         s->next_action = how_to_open_connection(s);
-
-        if (s->dns_info.api_addr_set_p) {
-          // If the plugin set a server address, back up to the OS_DNS hook
-          // to let it try another one. Force OS_ADDR_USE_CLIENT so that
-          // in OSDNSLoopkup, we back up to how_to_open_connections which
-          // will tell HttpSM to connect the origin server.
-
-          s->dns_info.os_addr_style = ResolveInfo::OS_Addr::USE_CLIENT;
-          TRANSACT_RETURN(SM_ACTION_API_OS_DNS, OSDNSLookup);
-        }
-        return;
       }
     } else {
       TxnDebug("http_trans", "[handle_response_from_server] Error. No more retries.");

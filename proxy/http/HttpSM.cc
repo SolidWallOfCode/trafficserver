@@ -2187,23 +2187,23 @@ HttpSM::process_hostdb_info(HostDBRecord *record)
 
   bool use_client_addr = t_state.http_config_param->use_client_target_addr == 1 && t_state.client_info.is_transparent &&
                          t_state.dns_info.os_addr_style == ResolveInfo::OS_Addr::TRY_DEFAULT;
-  t_state.dns_info.client_target_addr = nullptr;
+  //  t_state.dns_info.client_target_addr = nullptr;
   if (use_client_addr) {
     NetVConnection *vc = ua_txn ? ua_txn->get_netvc() : nullptr;
     if (vc) {
-      t_state.dns_info.client_target_addr = vc->get_local_addr();
-      t_state.dns_info.os_addr_style      = ResolveInfo::OS_Addr::TRY_CLIENT;
+      t_state.dns_info.set_upstream_address(vc->get_local_addr());
+      t_state.dns_info.srv_port      = ats_ip_port_cast(vc->get_local_addr());
+      t_state.dns_info.os_addr_style = ResolveInfo::OS_Addr::TRY_CLIENT;
     }
   }
 
   if (record && !record->is_failed()) {
-    auto now                             = ts_clock::now();
     t_state.dns_info.cta_validated_p     = true;
     t_state.dns_info.inbound_remote_addr = &t_state.client_info.src_addr.sa;
-    t_state.dns_info.active              = record->select_best_http(&t_state.dns_info, now);
+    t_state.dns_info.active              = record->select_best_http(&t_state.dns_info, ts_clock::now());
 
     // if use_client_target_addr is set, make sure the client addr is in the results pool
-    if (use_client_addr && record->find(t_state.dns_info.client_target_addr) == nullptr) {
+    if (use_client_addr == 1 && record->find(t_state.dns_info.addr) == nullptr) {
       SMDebug("http", "use_client_target_addr == 1. Client specified address is not in the pool, not validated.");
       t_state.dns_info.cta_validated_p = false;
     }
@@ -7307,31 +7307,13 @@ HttpSM::set_next_state()
   }
 
   case HttpTransact::SM_ACTION_DNS_LOOKUP: {
-    sockaddr const *addr;
-
-    if (t_state.dns_info.api_addr_set_p) {
-      /* If the API has set the server address before the OS DNS lookup
-       * then we can skip the lookup
-       */
-      ip_text_buffer ipb;
-      SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for API supplied target %s.",
-              ats_ip_ntop(&t_state.server_info.dst_addr, ipb, sizeof(ipb)));
-      // this seems wasteful as we will just copy it right back
-      ats_ip_copy(t_state.dns_info.addr, &t_state.server_info.dst_addr);
-      t_state.dns_info.resolved_p = true;
-      call_transact_and_set_next_state(nullptr);
-      break;
-    } else if (0 == ats_ip_pton(t_state.dns_info.lookup_name, t_state.dns_info.addr) && ats_is_ip_loopback(t_state.dns_info.addr)) {
-      // If it's 127.0.0.0/8 or ::1 don't bother with hostdb
-      SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for %s because it's loopback",
-              t_state.dns_info.lookup_name);
-      t_state.dns_info.resolved_p = true;
-      call_transact_and_set_next_state(nullptr);
-      break;
-    } else if (t_state.http_config_param->use_client_target_addr == 2 && !t_state.url_remap_success &&
-               t_state.parent_result.result != PARENT_SPECIFIED && t_state.client_info.is_transparent &&
-               t_state.dns_info.os_addr_style == ResolveInfo::OS_Addr::TRY_DEFAULT &&
-               ats_is_ip(addr = ua_txn->get_netvc()->get_local_addr())) {
+    if (sockaddr const *addr; t_state.http_config_param->use_client_target_addr == 2 &&              // no CTA verification
+                              !t_state.url_remap_success &&                                          // wasn't remapped
+                              t_state.parent_result.result != PARENT_SPECIFIED &&                    // no parent.
+                              t_state.client_info.is_transparent &&                                  // inbound transparent
+                              t_state.dns_info.os_addr_style == ResolveInfo::OS_Addr::TRY_DEFAULT && // haven't tried anything yet.
+                              ats_is_ip(addr = ua_txn->get_netvc()->get_local_addr()))               // valid inbound remote address
+    {
       /* If the connection is client side transparent and the URL was not remapped/directed to
        * parent proxy, we can use the client destination IP address instead of doing a DNS lookup.
        * This is controlled by the 'use_client_target_addr' configuration parameter.
@@ -7341,8 +7323,9 @@ HttpSM::set_next_state()
         SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup for client supplied target %s.",
                 ats_ip_ntop(addr, ipb, sizeof(ipb)));
       }
-      ats_ip_copy(t_state.dns_info.addr, addr);
-      t_state.dns_info.resolved_p    = true;
+      t_state.dns_info.set_upstream_address(addr);
+
+      // Make a note the CTA is being used - don't do this case again.
       t_state.dns_info.os_addr_style = ResolveInfo::OS_Addr::TRY_CLIENT;
 
       if (t_state.hdr_info.client_request.version_get() == HTTPVersion(0, 9)) {
@@ -7355,19 +7338,16 @@ HttpSM::set_next_state()
 
       call_transact_and_set_next_state(nullptr);
       break;
-    } else if (t_state.parent_result.result == PARENT_UNDEFINED && t_state.dns_info.resolved_p) {
-      // Already set, and we don't have a parent proxy to lookup
-      ink_assert(ats_is_ip(t_state.dns_info.addr));
-      SMDebug("dns", "[HttpTransact::HandleRequest] Skipping DNS lookup, provided by plugin");
-      call_transact_and_set_next_state(nullptr);
-      break;
     } else if (t_state.dns_info.looking_up == ResolveInfo::ORIGIN_SERVER && t_state.http_config_param->no_dns_forward_to_parent &&
                t_state.parent_result.result != PARENT_UNDEFINED) {
-      t_state.dns_info.resolved_p = true;
+      t_state.dns_info.resolved_p = true; // seems dangerous - where's the IP address?
+      call_transact_and_set_next_state(nullptr);
+      break;
+    } else if (t_state.dns_info.resolve_immediate()) {
       call_transact_and_set_next_state(nullptr);
       break;
     }
-
+    // else have to do DNS.
     HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_hostdb_lookup);
 
     // We need to close the previous attempt
@@ -7858,7 +7838,7 @@ HttpSM::redirect_request(const char *arg_redirect_url, const int arg_redirect_le
   t_state.parent_info.clear();
 
   // Must reset whether the InkAPI has set the destination address
-  t_state.dns_info.api_addr_set_p = false;
+  //  t_state.dns_info.api_addr_set_p = false;
 
   if (t_state.txn_conf->cache_http) {
     t_state.cache_info.object_read = nullptr;

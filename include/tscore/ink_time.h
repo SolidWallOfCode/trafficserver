@@ -50,7 +50,8 @@ using ts_time     = ts_clock::time_point;
 using ts_hr_clock = std::chrono::high_resolution_clock;
 using ts_hr_time  = ts_hr_clock::time_point;
 
-using ts_seconds = std::chrono::seconds;
+using ts_seconds      = std::chrono::seconds;
+using ts_milliseconds = std::chrono::milliseconds;
 /// Equivalent of zero for @a ts_time.
 static constexpr ts_time TS_TIME_ZERO;
 

@@ -478,7 +478,7 @@ state_dns_lookup(TSCont contp, TSEvent event, TSHostLookupResult host_info)
 {
   TxnSM *txn_sm = (TxnSM *)TSContDataGet(contp);
   struct sockaddr_storage q_server_addr;
-  struct sockadd_in *addr;
+  struct sockaddr_in *addr;
 
   TSDebug(PLUGIN_NAME, "enter state_dns_lookup");
 
@@ -489,7 +489,7 @@ state_dns_lookup(TSCont contp, TSEvent event, TSHostLookupResult host_info)
   txn_sm->q_pending_action = NULL;
 
   /* Get the server IP from data structure TSHostLookupResult. */
-  TSHostLookupResultAddrGet(host_info, &q_server_addr);
+  TSHostLookupResultAddrGet(host_info, (struct sockaddr *)&q_server_addr);
 
   /* Connect to the server using its IP. */
   set_handler(txn_sm->q_current_handler, (TxnSMHandler)&state_connect_to_server);
@@ -498,7 +498,7 @@ state_dns_lookup(TSCont contp, TSEvent event, TSHostLookupResult host_info)
   addr = (struct sockaddr_in *)(&q_server_addr);
 
   addr->sin_port           = txn_sm->q_server_port;
-  txn_sm->q_pending_action = TSNetConnect(contp, (struct sockaddr const *)&ip_addr);
+  txn_sm->q_pending_action = TSNetConnect(contp, (struct sockaddr const *)addr);
 
   return TS_SUCCESS;
 }
